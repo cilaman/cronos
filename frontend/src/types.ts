@@ -31,6 +31,14 @@ export interface TaskSummary {
   brief_preview: string;
 }
 
+export type AgentMode = "plan" | "auto" | "ask";
+
+export const AGENT_MODES: { value: AgentMode; label: string }[] = [
+  { value: "plan", label: "Planning" },
+  { value: "auto", label: "Auto" },
+  { value: "ask", label: "Ask only" },
+];
+
 export interface Task {
   id: string;
   title: string;
@@ -41,6 +49,8 @@ export interface Task {
   waiting_question: string | null;
   brief: string;
   history: string;
+  pending_messages: string[];
+  agent_mode: AgentMode;
 }
 
 export interface Board {
