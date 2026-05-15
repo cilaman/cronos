@@ -78,7 +78,7 @@ async def transition_task(
     task_id: str, body: TransitionBody, request: Request
 ) -> Task:
     try:
-        return await get_store(request).transition(
+        updated = await get_store(request).transition(
             task_id, body.state, allowed=USER_TRANSITIONS
         )
     except TaskNotFound:
@@ -87,6 +87,9 @@ async def transition_task(
         raise HTTPException(status_code=409, detail=str(e)) from None
     except StorageError as e:
         raise HTTPException(status_code=400, detail=str(e)) from None
+    if updated.state == TaskState.ACTIVE:
+        await get_worker(request).enqueue(task_id)
+    return updated
 
 
 @router.post("/{task_id}/start", response_model=Task)

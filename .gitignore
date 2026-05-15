@@ -1,0 +1,27 @@
+# Local env (contains basic-auth hash + domain). Use .env.example as the template.
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Node / frontend
+node_modules/
+dist/
+build/
+.vite/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Local runtime data (sqlite, caddy data volumes if ever bind-mounted)
+data/*.db
+data/*.sqlite*
