@@ -9,7 +9,7 @@ import {
   useUpdateTask,
 } from "../hooks/useTasks";
 import { STATE_BADGE } from "../state-badges";
-import type { AgentMode } from "../types";
+import type { AgentMode, AgentModel } from "../types";
 import { ChatInput } from "./ChatInput";
 import { LiveLog } from "./LiveLog";
 import { TaskForm } from "./TaskForm";
@@ -64,6 +64,11 @@ export function Detail({ taskId, onClose }: Props) {
   async function onModeChange(mode: AgentMode) {
     if (!task || task.agent_mode === mode) return;
     await updateTask.mutateAsync({ agent_mode: mode });
+  }
+
+  async function onModelChange(model: AgentModel) {
+    if (!task || task.agent_model === model) return;
+    await updateTask.mutateAsync({ agent_model: model });
   }
 
   const chatError =
@@ -140,6 +145,7 @@ export function Detail({ taskId, onClose }: Props) {
               <ChatInput
                 taskState={task.state}
                 agentMode={task.agent_mode}
+                agentModel={task.agent_model}
                 waitingQuestion={task.waiting_question}
                 pendingCount={task.pending_messages.length}
                 isSending={replyTask.isPending}
@@ -148,6 +154,7 @@ export function Detail({ taskId, onClose }: Props) {
                 onSend={onSend}
                 onStop={onStop}
                 onModeChange={onModeChange}
+                onModelChange={onModelChange}
               />
 
               <footer className="flex items-center justify-between gap-2 border-t border-slate-200 p-3">
@@ -179,6 +186,7 @@ export function Detail({ taskId, onClose }: Props) {
           heading="Edit task"
           initialTitle={task.title}
           initialBrief={task.brief}
+          showModel={false}
           submitting={updateTask.isPending}
           error={updateTask.error?.message ?? null}
           onCancel={() => setEditing(false)}

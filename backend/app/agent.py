@@ -146,12 +146,14 @@ async def run_agent(
         "--append-system-prompt",
         STATUS_CONTRACT,
     ]
+    if task.agent_model != "default":
+        cmd += ["--model", task.agent_model]
     if task.claude_session_id:
         cmd += ["--resume", task.claude_session_id]
 
     log.info(
-        "Spawning claude for task %s (resume=%s, mode=%s)",
-        task.id, bool(task.claude_session_id), task.agent_mode,
+        "Spawning claude for task %s (resume=%s, mode=%s, model=%s)",
+        task.id, bool(task.claude_session_id), task.agent_mode, task.agent_model,
     )
 
     proc = await asyncio.create_subprocess_exec(

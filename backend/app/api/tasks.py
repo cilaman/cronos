@@ -30,12 +30,14 @@ def get_worker(request: Request) -> Worker:
 class CreateTaskBody(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     brief: str = Field(default="", max_length=20_000)
+    agent_model: Literal["default", "sonnet", "opus", "haiku"] = "default"
 
 
 class UpdateTaskBody(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     brief: str | None = Field(default=None, max_length=20_000)
     agent_mode: Literal["plan", "auto", "ask"] | None = None
+    agent_model: Literal["default", "sonnet", "opus", "haiku"] | None = None
 
 
 class TransitionBody(BaseModel):
@@ -61,14 +63,25 @@ async def get_task(task_id: str, request: Request) -> Task:
 
 @router.post("", response_model=Task, status_code=status.HTTP_201_CREATED)
 async def create_task(body: CreateTaskBody, request: Request) -> Task:
-    return await get_store(request).create(title=body.title, brief=body.brief)
+    try:
+        return await get_store(request).create(
+            title=body.title, brief=body.brief, agent_model=body.agent_model
+        )
+    except StorageError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from None
 
 
 @router.patch("/{task_id}", response_model=Task)
 async def update_task(task_id: str, body: UpdateTaskBody, request: Request) -> Task:
-    if body.title is None and body.brief is None and body.agent_mode is None:
+    if (
+        body.title is None
+        and body.brief is None
+        and body.agent_mode is None
+        and body.agent_model is None
+    ):
         raise HTTPException(
-            status_code=400, detail="Provide title, brief, or agent_mode to update"
+            status_code=400,
+            detail="Provide title, brief, agent_mode, or agent_model to update",
         )
     try:
         return await get_store(request).update(
@@ -76,6 +89,7 @@ async def update_task(task_id: str, body: UpdateTaskBody, request: Request) -> T
             title=body.title,
             brief=body.brief,
             agent_mode=body.agent_mode,
+            agent_model=body.agent_model,
         )
     except TaskNotFound:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found") from None

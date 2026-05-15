@@ -1,4 +1,4 @@
-import type { AgentMode, Board, Task, TaskState } from "./types";
+import type { AgentMode, AgentModel, Board, Task, TaskState } from "./types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
@@ -16,11 +16,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   board: () => request<Board>("/api/tasks"),
   task: (id: string) => request<Task>(`/api/tasks/${id}`),
-  create: (body: { title: string; brief: string }) =>
+  create: (body: { title: string; brief: string; agent_model?: AgentModel }) =>
     request<Task>("/api/tasks", { method: "POST", body: JSON.stringify(body) }),
   update: (
     id: string,
-    body: { title?: string; brief?: string; agent_mode?: AgentMode },
+    body: {
+      title?: string;
+      brief?: string;
+      agent_mode?: AgentMode;
+      agent_model?: AgentModel;
+    },
   ) =>
     request<Task>(`/api/tasks/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   transition: (id: string, state: TaskState) =>
