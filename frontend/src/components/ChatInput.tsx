@@ -1,10 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import { AGENT_MODES, type AgentMode, type TaskState } from "../types";
+import {
+  AGENT_MODELS,
+  AGENT_MODES,
+  type AgentMode,
+  type AgentModel,
+  type TaskState,
+} from "../types";
 import { STATE_BADGE } from "../state-badges";
 
 interface Props {
   taskState: TaskState;
   agentMode: AgentMode;
+  agentModel: AgentModel;
   waitingQuestion: string | null;
   pendingCount: number;
   isSending: boolean;
@@ -13,6 +20,7 @@ interface Props {
   onSend: (message: string) => Promise<void>;
   onStop: () => Promise<void>;
   onModeChange: (mode: AgentMode) => Promise<void>;
+  onModelChange: (model: AgentModel) => Promise<void>;
 }
 
 function placeholderFor(state: TaskState): string {
@@ -31,6 +39,7 @@ function placeholderFor(state: TaskState): string {
 export function ChatInput({
   taskState,
   agentMode,
+  agentModel,
   waitingQuestion,
   pendingCount,
   isSending,
@@ -39,6 +48,7 @@ export function ChatInput({
   onSend,
   onStop,
   onModeChange,
+  onModelChange,
 }: Props) {
   const [draft, setDraft] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -94,6 +104,22 @@ export function ChatInput({
               className="bg-transparent text-xs font-medium focus:outline-none"
             >
               {AGENT_MODES.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-0.5 text-slate-700">
+            <span className="text-[10px] uppercase tracking-wide text-slate-500">
+              Model
+            </span>
+            <select
+              value={agentModel}
+              onChange={(e) => void onModelChange(e.target.value as AgentModel)}
+              className="bg-transparent text-xs font-medium focus:outline-none"
+            >
+              {AGENT_MODELS.map((m) => (
                 <option key={m.value} value={m.value}>
                   {m.label}
                 </option>

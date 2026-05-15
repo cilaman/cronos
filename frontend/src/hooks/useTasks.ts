@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
-import type { AgentMode, Board, TaskState } from "../types";
+import type { AgentMode, AgentModel, Board, TaskState } from "../types";
 
 export function useBoard() {
   return useQuery({
@@ -29,8 +29,12 @@ export function useCreateTask() {
 export function useUpdateTask(id: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { title?: string; brief?: string; agent_mode?: AgentMode }) =>
-      api.update(id, body),
+    mutationFn: (body: {
+      title?: string;
+      brief?: string;
+      agent_mode?: AgentMode;
+      agent_model?: AgentModel;
+    }) => api.update(id, body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["board"] });
       qc.invalidateQueries({ queryKey: ["task", id] });

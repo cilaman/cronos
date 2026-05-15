@@ -13,9 +13,10 @@ from pydantic import ValidationError
 
 from dataclasses import dataclass
 
-from .models import AgentMode, Board, Task, TaskState, TaskSummary
+from .models import AgentMode, AgentModel, Board, Task, TaskState, TaskSummary
 
 VALID_AGENT_MODES: tuple[AgentMode, ...] = ("plan", "auto", "ask")
+VALID_AGENT_MODELS: tuple[AgentModel, ...] = ("default", "sonnet", "opus", "haiku")
 
 
 @dataclass
@@ -86,6 +87,9 @@ def parse_file(path: Path) -> Task:
     agent_mode = meta.get("agent_mode") or "auto"
     if agent_mode not in VALID_AGENT_MODES:
         agent_mode = "auto"
+    agent_model = meta.get("agent_model") or "default"
+    if agent_model not in VALID_AGENT_MODELS:
+        agent_model = "default"
     try:
         return Task(
             id=meta.get("id") or path.stem,
@@ -99,6 +103,7 @@ def parse_file(path: Path) -> Task:
             history=history,
             pending_messages=pending,
             agent_mode=agent_mode,
+            agent_model=agent_model,
         )
     except (KeyError, ValidationError) as e:
         raise ValueError(f"Invalid task file {path.name}: {e}") from e
@@ -137,6 +142,7 @@ def dump_task(task: Task) -> str:
         "claude_session_id": task.claude_session_id,
         "waiting_question": task.waiting_question,
         "agent_mode": task.agent_mode,
+        "agent_model": task.agent_model,
         "pending_messages": list(task.pending_messages),
     }
     body_parts = ["# Brief", "", task.brief.strip() or ""]
@@ -261,7 +267,15 @@ class TaskStore:
 
     # ---- mutations ----
 
-    async def create(self, title: str, brief: str) -> Task:
+    async def create(
+        self,
+        title: str,
+        brief: str,
+        *,
+        agent_model: AgentModel = "default",
+    ) -> Task:
+        if agent_model not in VALID_AGENT_MODELS:
+            raise StorageError(f"Invalid agent_model: {agent_model}")
         now = datetime.now(tz=UTC)
         async with self._lock:
             task_id = generate_task_id(title, now, set(self._by_id.keys()))
@@ -273,6 +287,7 @@ class TaskStore:
                 updated_at=now,
                 brief=brief.strip(),
                 history="",
+                agent_model=agent_model,
             )
             path = self.tasks_dir / f"{task_id}.md"
             atomic_write(path, dump_task(task))
@@ -287,9 +302,12 @@ class TaskStore:
         title: str | None = None,
         brief: str | None = None,
         agent_mode: AgentMode | None = None,
+        agent_model: AgentModel | None = None,
     ) -> Task:
         if agent_mode is not None and agent_mode not in VALID_AGENT_MODES:
             raise StorageError(f"Invalid agent_mode: {agent_mode}")
+        if agent_model is not None and agent_model not in VALID_AGENT_MODELS:
+            raise StorageError(f"Invalid agent_model: {agent_model}")
         async with self._lock:
             task = self._by_id.get(task_id)
             if task is None:
@@ -299,6 +317,7 @@ class TaskStore:
                     "title": title.strip() if title is not None else task.title,
                     "brief": brief.strip() if brief is not None else task.brief,
                     "agent_mode": agent_mode if agent_mode is not None else task.agent_mode,
+                    "agent_model": agent_model if agent_model is not None else task.agent_model,
                     "updated_at": datetime.now(tz=UTC),
                 }
             )

@@ -39,6 +39,15 @@ export const AGENT_MODES: { value: AgentMode; label: string }[] = [
   { value: "ask", label: "Ask only" },
 ];
 
+export type AgentModel = "default" | "sonnet" | "opus" | "haiku";
+
+export const AGENT_MODELS: { value: AgentModel; label: string }[] = [
+  { value: "default", label: "Default" },
+  { value: "sonnet", label: "Sonnet" },
+  { value: "opus", label: "Opus" },
+  { value: "haiku", label: "Haiku" },
+];
+
 export interface Task {
   id: string;
   title: string;
@@ -51,6 +60,7 @@ export interface Task {
   history: string;
   pending_messages: string[];
   agent_mode: AgentMode;
+  agent_model: AgentModel;
 }
 
 export interface Board {

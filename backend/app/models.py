@@ -15,6 +15,7 @@ class TaskState(str, Enum):
 
 
 AgentMode = Literal["plan", "auto", "ask"]
+AgentModel = Literal["default", "sonnet", "opus", "haiku"]
 
 
 class Task(BaseModel):
@@ -31,6 +32,7 @@ class Task(BaseModel):
     history: str = ""
     pending_messages: list[str] = Field(default_factory=list)
     agent_mode: AgentMode = "auto"
+    agent_model: AgentModel = "default"
 
 
 class TaskSummary(BaseModel):
