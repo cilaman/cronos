@@ -291,6 +291,7 @@ docker compose \
   --env-file .env \
   -f docker-compose.yml -f docker-compose.prod.yml \
   up -d --build
+  sudo systemctl restart cronos.service
 ```
 
 `git pull` authenticates unattended via the deploy key set up in §5.1 — no
