@@ -11,7 +11,17 @@ from pathlib import Path
 import frontmatter
 from pydantic import ValidationError
 
-from .models import Board, Task, TaskState, TaskSummary
+from dataclasses import dataclass
+
+from .models import AgentMode, Board, Task, TaskState, TaskSummary
+
+VALID_AGENT_MODES: tuple[AgentMode, ...] = ("plan", "auto", "ask")
+
+
+@dataclass
+class ReplyOutcome:
+    task: Task
+    should_enqueue: bool
 
 log = logging.getLogger(__name__)
 
@@ -69,6 +79,13 @@ def parse_file(path: Path) -> Task:
     post = frontmatter.load(path)
     meta = dict(post.metadata)
     brief, history = split_body(post.content)
+    raw_pending = meta.get("pending_messages") or []
+    if not isinstance(raw_pending, list):
+        raw_pending = []
+    pending = [str(m) for m in raw_pending if isinstance(m, (str, int, float))]
+    agent_mode = meta.get("agent_mode") or "auto"
+    if agent_mode not in VALID_AGENT_MODES:
+        agent_mode = "auto"
     try:
         return Task(
             id=meta.get("id") or path.stem,
@@ -80,6 +97,8 @@ def parse_file(path: Path) -> Task:
             waiting_question=meta.get("waiting_question"),
             brief=brief,
             history=history,
+            pending_messages=pending,
+            agent_mode=agent_mode,
         )
     except (KeyError, ValidationError) as e:
         raise ValueError(f"Invalid task file {path.name}: {e}") from e
@@ -117,6 +136,8 @@ def dump_task(task: Task) -> str:
         "updated_at": _iso(task.updated_at),
         "claude_session_id": task.claude_session_id,
         "waiting_question": task.waiting_question,
+        "agent_mode": task.agent_mode,
+        "pending_messages": list(task.pending_messages),
     }
     body_parts = ["# Brief", "", task.brief.strip() or ""]
     if task.history.strip():
@@ -265,7 +286,10 @@ class TaskStore:
         *,
         title: str | None = None,
         brief: str | None = None,
+        agent_mode: AgentMode | None = None,
     ) -> Task:
+        if agent_mode is not None and agent_mode not in VALID_AGENT_MODES:
+            raise StorageError(f"Invalid agent_mode: {agent_mode}")
         async with self._lock:
             task = self._by_id.get(task_id)
             if task is None:
@@ -274,6 +298,7 @@ class TaskStore:
                 update={
                     "title": title.strip() if title is not None else task.title,
                     "brief": brief.strip() if brief is not None else task.brief,
+                    "agent_mode": agent_mode if agent_mode is not None else task.agent_mode,
                     "updated_at": datetime.now(tz=UTC),
                 }
             )
@@ -350,11 +375,14 @@ class TaskStore:
             self._reindex_locked(path)
             return self._by_id[task_id]
 
-    async def apply_reply(self, task_id: str, message: str) -> Task:
-        """Record the user's reply to a waiting task and flip it back to active.
+    async def apply_reply(self, task_id: str, message: str) -> ReplyOutcome:
+        """Record a user message on the task and return an outcome.
 
-        Appends a `[user]` entry to history, clears `waiting_question`, and
-        transitions state waiting -> active so the worker can resume.
+        - backlog | waiting | done -> append `[user]` history entry, transition
+          to active, clear `waiting_question`, `should_enqueue=True`.
+        - active -> append `[user]` history entry AND append to
+          `pending_messages` for the worker to drain on the next turn,
+          `should_enqueue=False` (worker auto-enqueues after finalize).
         """
         message = message.strip()
         if not message:
@@ -363,26 +391,80 @@ class TaskStore:
             task = self._by_id.get(task_id)
             if task is None:
                 raise TaskNotFound(task_id)
-            if task.state != TaskState.WAITING:
-                raise InvalidTransition(
-                    f"Can only reply to waiting tasks (current state: {task.state.value})"
-                )
             now = datetime.now(tz=UTC)
             entry = f"```\n{_iso(now)} [user]\n{message}\n```"
             history = task.history.strip()
             history = (history + "\n\n" + entry) if history else entry
+
+            if task.state == TaskState.ACTIVE:
+                updated = task.model_copy(
+                    update={
+                        "history": history,
+                        "pending_messages": [*task.pending_messages, message],
+                        "updated_at": now,
+                    }
+                )
+                should_enqueue = False
+            else:
+                updated = task.model_copy(
+                    update={
+                        "state": TaskState.ACTIVE,
+                        "waiting_question": None,
+                        "history": history,
+                        "updated_at": now,
+                    }
+                )
+                should_enqueue = True
+
+            path = self._path_by_id[task_id]
+            atomic_write(path, dump_task(updated))
+            self._reindex_locked(path)
+            return ReplyOutcome(task=self._by_id[task_id], should_enqueue=should_enqueue)
+
+    async def resume_with_message(self, task_id: str) -> Task:
+        """Force-transition any state -> ACTIVE so a queued follow-up turn can run.
+
+        Used by the worker after `_finalize` when pending_messages were queued
+        mid-run. Bypasses `WORKER_TRANSITIONS` because DONE -> ACTIVE is not
+        otherwise legal.
+        """
+        async with self._lock:
+            task = self._by_id.get(task_id)
+            if task is None:
+                raise TaskNotFound(task_id)
+            if task.state == TaskState.ACTIVE:
+                return task
             updated = task.model_copy(
                 update={
                     "state": TaskState.ACTIVE,
                     "waiting_question": None,
-                    "history": history,
-                    "updated_at": now,
+                    "updated_at": datetime.now(tz=UTC),
                 }
             )
             path = self._path_by_id[task_id]
             atomic_write(path, dump_task(updated))
             self._reindex_locked(path)
             return self._by_id[task_id]
+
+    async def drain_pending(self, task_id: str) -> list[str]:
+        """Atomically read-and-clear `pending_messages` on a task."""
+        async with self._lock:
+            task = self._by_id.get(task_id)
+            if task is None:
+                raise TaskNotFound(task_id)
+            if not task.pending_messages:
+                return []
+            messages = list(task.pending_messages)
+            updated = task.model_copy(
+                update={
+                    "pending_messages": [],
+                    "updated_at": datetime.now(tz=UTC),
+                }
+            )
+            path = self._path_by_id[task_id]
+            atomic_write(path, dump_task(updated))
+            self._reindex_locked(path)
+            return messages
 
     async def delete(self, task_id: str) -> None:
         """Soft-delete: move the file into `.trash/` so nothing is destroyed."""

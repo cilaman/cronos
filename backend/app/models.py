@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -11,6 +12,9 @@ class TaskState(str, Enum):
     ACTIVE = "active"
     WAITING = "waiting"
     DONE = "done"
+
+
+AgentMode = Literal["plan", "auto", "ask"]
 
 
 class Task(BaseModel):
@@ -25,6 +29,8 @@ class Task(BaseModel):
     waiting_question: str | None = None
     brief: str = ""
     history: str = ""
+    pending_messages: list[str] = Field(default_factory=list)
+    agent_mode: AgentMode = "auto"
 
 
 class TaskSummary(BaseModel):

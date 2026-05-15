@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -33,6 +35,7 @@ class CreateTaskBody(BaseModel):
 class UpdateTaskBody(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     brief: str | None = Field(default=None, max_length=20_000)
+    agent_mode: Literal["plan", "auto", "ask"] | None = None
 
 
 class TransitionBody(BaseModel):
@@ -63,14 +66,21 @@ async def create_task(body: CreateTaskBody, request: Request) -> Task:
 
 @router.patch("/{task_id}", response_model=Task)
 async def update_task(task_id: str, body: UpdateTaskBody, request: Request) -> Task:
-    if body.title is None and body.brief is None:
-        raise HTTPException(status_code=400, detail="Provide title or brief to update")
+    if body.title is None and body.brief is None and body.agent_mode is None:
+        raise HTTPException(
+            status_code=400, detail="Provide title, brief, or agent_mode to update"
+        )
     try:
         return await get_store(request).update(
-            task_id, title=body.title, brief=body.brief
+            task_id,
+            title=body.title,
+            brief=body.brief,
+            agent_mode=body.agent_mode,
         )
     except TaskNotFound:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found") from None
+    except StorageError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from None
 
 
 @router.patch("/{task_id}/state", response_model=Task)
@@ -114,15 +124,31 @@ async def start_task(task_id: str, request: Request) -> Task:
 async def reply_to_task(task_id: str, body: ReplyBody, request: Request) -> Task:
     store = get_store(request)
     try:
-        updated = await store.apply_reply(task_id, body.message)
+        outcome = await store.apply_reply(task_id, body.message)
     except TaskNotFound:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found") from None
     except InvalidTransition as e:
         raise HTTPException(status_code=409, detail=str(e)) from None
     except StorageError as e:
         raise HTTPException(status_code=400, detail=str(e)) from None
-    await get_worker(request).enqueue(task_id, user_message=body.message)
-    return updated
+    if outcome.should_enqueue:
+        await get_worker(request).enqueue(task_id, user_message=body.message)
+    return outcome.task
+
+
+@router.post("/{task_id}/stop", response_model=Task)
+async def stop_task(task_id: str, request: Request) -> Task:
+    store = get_store(request)
+    task = store.get(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+    worker = get_worker(request)
+    if not worker.stop_current(task_id):
+        raise HTTPException(
+            status_code=409,
+            detail="Task is not currently running",
+        )
+    return task
 
 
 @router.get("/{task_id}/stream")

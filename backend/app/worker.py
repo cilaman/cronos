@@ -30,6 +30,7 @@ class Worker:
         self._queue: asyncio.Queue[tuple[str, str | None]] = asyncio.Queue()
         self._subscribers: dict[str, list[asyncio.Queue[dict]]] = defaultdict(list)
         self._current_id: str | None = None
+        self._current_cancel: asyncio.Event | None = None
         self._loop_task: asyncio.Task[None] | None = None
         self._stop = asyncio.Event()
 
@@ -45,6 +46,17 @@ class Worker:
     def is_alive(self) -> bool:
         """True if the worker loop task is running (or pending start)."""
         return self._loop_task is not None and not self._loop_task.done()
+
+    def stop_current(self, task_id: str) -> bool:
+        """Request cancellation of the currently running task.
+
+        Returns True if the cancel event was raised; False if the task is
+        not the currently-active one (or nothing is running).
+        """
+        if self._current_id == task_id and self._current_cancel is not None:
+            self._current_cancel.set()
+            return True
+        return False
 
     def subscribe(self, task_id: str) -> asyncio.Queue[dict]:
         q: asyncio.Queue[dict] = asyncio.Queue(maxsize=256)
@@ -96,36 +108,51 @@ class Worker:
             return
 
         self._current_id = task_id
+        cancel_event = asyncio.Event()
+        self._current_cancel = cancel_event
         await self._publish(task_id, {"type": "run_start", "task_id": task_id})
 
         async def on_event(event: dict) -> None:
             await self._publish(task_id, event)
 
         try:
-            result = await run_agent(task, user_message=user_message, on_event=on_event)
+            result = await run_agent(
+                task,
+                user_message=user_message,
+                on_event=on_event,
+                cancel_event=cancel_event,
+            )
         except FileNotFoundError as e:
             await self._publish(
                 task_id,
                 {"type": "run_error", "error": f"claude binary not found: {e}"},
             )
             log.exception("Failed to spawn claude for %s", task_id)
+            self._current_cancel = None
             return
         except Exception as e:
             await self._publish(task_id, {"type": "run_error", "error": str(e)})
             log.exception("Agent error on %s", task_id)
+            self._current_cancel = None
             return
 
+        self._current_cancel = None
         await self._finalize(task_id, result)
 
     async def _finalize(self, task_id: str, result: AgentResult) -> None:
         timestamp = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         prefix = f"```\n{timestamp} [agent]\n"
         body = result.final_text.strip() or "(no assistant text)"
-        if result.exit_code != 0:
+        if result.stopped:
+            body += "\n\n(stopped by user)"
+        elif result.exit_code != 0:
             body += f"\n\n(exit code {result.exit_code}; stderr tail: {result.stderr_tail.strip()})"
         history_entry = prefix + body + "\n```"
 
-        if result.exit_code != 0 or result.status is None:
+        if result.stopped:
+            new_state = TaskState.WAITING
+            waiting_question = "Stopped by user."
+        elif result.exit_code != 0 or result.status is None:
             # Crash or missing STATUS marker — keep the task in waiting so a
             # human notices it and can decide how to recover.
             new_state = TaskState.WAITING
@@ -151,7 +178,9 @@ class Worker:
         # often emits a fresh session id that claude never actually stored on
         # disk — saving it would make every subsequent `--resume` fail with
         # "No conversation found with session ID …".
-        session_id_to_persist = result.session_id if result.exit_code == 0 else None
+        session_id_to_persist = (
+            result.session_id if result.exit_code == 0 and not result.stopped else None
+        )
         try:
             await self.store.finalize_run(
                 task_id,
@@ -178,6 +207,22 @@ class Worker:
                 q.put_nowait(_DONE_SENTINEL)
             except asyncio.QueueFull:
                 pass
+
+        # If messages were queued mid-run, flush them as a new turn.
+        try:
+            pending = await self.store.drain_pending(task_id)
+        except Exception:
+            log.exception("Failed to drain pending messages for %s", task_id)
+            pending = []
+        if pending and not result.stopped:
+            combined = "\n\n".join(pending)
+            try:
+                # Force back to active even from DONE so the next turn runs.
+                await self.store.resume_with_message(task_id)
+            except Exception:
+                log.exception("Failed to resume %s for pending messages", task_id)
+                return
+            await self.enqueue(task_id, user_message=combined)
 
     async def _publish(self, task_id: str, event: dict) -> None:
         for q in list(self._subscribers.get(task_id, [])):

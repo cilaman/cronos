@@ -4,19 +4,15 @@ import remarkGfm from "remark-gfm";
 import {
   useDeleteTask,
   useReplyToTask,
-  useStartTask,
+  useStopTask,
   useTask,
   useUpdateTask,
 } from "../hooks/useTasks";
+import { STATE_BADGE } from "../state-badges";
+import type { AgentMode } from "../types";
+import { ChatInput } from "./ChatInput";
 import { LiveLog } from "./LiveLog";
 import { TaskForm } from "./TaskForm";
-
-const STATE_BADGE: Record<string, string> = {
-  backlog: "bg-slate-200 text-slate-800",
-  active: "bg-emerald-200 text-emerald-900",
-  waiting: "bg-amber-200 text-amber-900",
-  done: "bg-blue-200 text-blue-900",
-};
 
 interface Props {
   taskId: string;
@@ -27,14 +23,22 @@ export function Detail({ taskId, onClose }: Props) {
   const { data: task, isLoading, error } = useTask(taskId);
   const updateTask = useUpdateTask(taskId);
   const deleteTask = useDeleteTask();
-  const startTask = useStartTask();
   const replyTask = useReplyToTask(taskId);
+  const stopTask = useStopTask(taskId);
   const [editing, setEditing] = useState(false);
-  const [reply, setReply] = useState("");
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape" && !editing) onClose();
+      if (e.key !== "Escape" || editing) return;
+      const active = document.activeElement;
+      if (
+        active instanceof HTMLTextAreaElement ||
+        active instanceof HTMLInputElement ||
+        active instanceof HTMLSelectElement
+      ) {
+        return;
+      }
+      onClose();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -49,16 +53,21 @@ export function Detail({ taskId, onClose }: Props) {
     onClose();
   }
 
-  async function onStart() {
-    if (!task) return;
-    await startTask.mutateAsync(task.id);
+  async function onSend(message: string) {
+    await replyTask.mutateAsync(message);
   }
 
-  async function onSendReply() {
-    if (!task || !reply.trim()) return;
-    await replyTask.mutateAsync(reply.trim());
-    setReply("");
+  async function onStop() {
+    await stopTask.mutateAsync();
   }
+
+  async function onModeChange(mode: AgentMode) {
+    if (!task || task.agent_mode === mode) return;
+    await updateTask.mutateAsync({ agent_mode: mode });
+  }
+
+  const chatError =
+    replyTask.error?.message ?? stopTask.error?.message ?? null;
 
   return (
     <>
@@ -101,39 +110,6 @@ export function Detail({ taskId, onClose }: Props) {
               </header>
 
               <div className="flex-1 space-y-6 overflow-y-auto p-4">
-                {task.state === "waiting" && (
-                  <section className="rounded border border-amber-200 bg-amber-50 p-3">
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-amber-900">
-                      Waiting on your reply
-                    </h3>
-                    {task.waiting_question && (
-                      <p className="mt-1 text-sm text-amber-900">{task.waiting_question}</p>
-                    )}
-                    <textarea
-                      value={reply}
-                      onChange={(e) => setReply(e.target.value)}
-                      rows={3}
-                      placeholder="Type your reply…"
-                      className="mt-2 block w-full rounded border border-amber-300 bg-white px-3 py-2 text-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
-                    />
-                    <div className="mt-2 flex items-center justify-end gap-2">
-                      {replyTask.error && (
-                        <span className="mr-auto text-xs text-red-700">
-                          {replyTask.error.message}
-                        </span>
-                      )}
-                      <button
-                        type="button"
-                        onClick={onSendReply}
-                        disabled={!reply.trim() || replyTask.isPending}
-                        className="rounded bg-amber-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-amber-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-                      >
-                        {replyTask.isPending ? "Sending…" : "Send reply"}
-                      </button>
-                    </div>
-                  </section>
-                )}
-
                 <section>
                   <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Brief
@@ -156,8 +132,23 @@ export function Detail({ taskId, onClose }: Props) {
                   )}
                 </section>
 
-                {task.state === "active" && <LiveLog taskId={task.id} />}
+                {(task.state === "active" || task.state === "waiting") && (
+                  <LiveLog taskId={task.id} />
+                )}
               </div>
+
+              <ChatInput
+                taskState={task.state}
+                agentMode={task.agent_mode}
+                waitingQuestion={task.waiting_question}
+                pendingCount={task.pending_messages.length}
+                isSending={replyTask.isPending}
+                isStopping={stopTask.isPending}
+                error={chatError}
+                onSend={onSend}
+                onStop={onStop}
+                onModeChange={onModeChange}
+              />
 
               <footer className="flex items-center justify-between gap-2 border-t border-slate-200 p-3">
                 <button
@@ -176,23 +167,8 @@ export function Detail({ taskId, onClose }: Props) {
                   >
                     Edit
                   </button>
-                  {task.state === "backlog" && (
-                    <button
-                      type="button"
-                      onClick={onStart}
-                      disabled={startTask.isPending}
-                      className="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-                    >
-                      {startTask.isPending ? "Starting…" : "Start agent"}
-                    </button>
-                  )}
                 </div>
               </footer>
-              {startTask.error && (
-                <p className="border-t border-red-100 bg-red-50 px-4 py-2 text-sm text-red-700">
-                  {startTask.error.message}
-                </p>
-              )}
             </>
           )}
         </div>

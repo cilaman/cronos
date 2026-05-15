@@ -71,13 +71,26 @@ def workspace_for(task_id: str) -> Path:
     return path
 
 
+PERMISSION_MODE: dict[str, str] = {
+    "plan": "plan",
+    "auto": "acceptEdits",
+    "ask": "default",
+}
+
+PLAN_MODE_TOOLS = "Read,Grep,Glob"
+DEFAULT_TOOLS = "Read,Edit,Write,Bash"
+
+
 def build_prompt(task: Task, user_message: str | None) -> str:
-    if user_message:
+    fresh = task.claude_session_id is None
+    if user_message and not fresh:
         return user_message
+    msg_section = f"\n# Message\n{user_message}\n" if user_message else ""
     return (
         f"You are working on task `{task.id}`.\n\n"
         f"# Title\n{task.title}\n\n"
-        f"# Brief\n{task.brief}\n\n"
+        f"# Brief\n{task.brief}\n"
+        f"{msg_section}\n"
         "A per-task workspace has been mounted as your working directory; create\n"
         "all files there. Begin work now, and remember the STATUS contract.\n"
     )
@@ -92,6 +105,7 @@ class AgentResult:
     status: Status | None = None
     context: str | None = None
     raw_events: list[dict] = field(default_factory=list)
+    stopped: bool = False
 
 
 EventCallback = Callable[[dict], Awaitable[None]]
@@ -102,14 +116,19 @@ async def run_agent(
     *,
     user_message: str | None,
     on_event: EventCallback,
+    cancel_event: asyncio.Event | None = None,
 ) -> AgentResult:
     """Spawn claude CLI for one turn of work on `task` and stream its events.
 
     `on_event` is awaited once per JSON event from claude's stream-json output.
+    If `cancel_event` is provided and set during the run, the subprocess is
+    terminated and the returned `AgentResult.stopped` is True.
     Returns once the process exits.
     """
     workspace = workspace_for(task.id)
     prompt = build_prompt(task, user_message)
+    permission_mode = PERMISSION_MODE.get(task.agent_mode, "acceptEdits")
+    allowed_tools = PLAN_MODE_TOOLS if task.agent_mode == "plan" else DEFAULT_TOOLS
 
     cmd = [
         "claude",
@@ -119,9 +138,9 @@ async def run_agent(
         "stream-json",
         "--verbose",
         "--permission-mode",
-        "acceptEdits",
+        permission_mode,
         "--allowedTools",
-        "Read,Edit,Write,Bash",
+        allowed_tools,
         "--add-dir",
         str(workspace),
         "--append-system-prompt",
@@ -130,7 +149,10 @@ async def run_agent(
     if task.claude_session_id:
         cmd += ["--resume", task.claude_session_id]
 
-    log.info("Spawning claude for task %s (resume=%s)", task.id, bool(task.claude_session_id))
+    log.info(
+        "Spawning claude for task %s (resume=%s, mode=%s)",
+        task.id, bool(task.claude_session_id), task.agent_mode,
+    )
 
     proc = await asyncio.create_subprocess_exec(
         *cmd,
@@ -143,6 +165,7 @@ async def run_agent(
     final_text_parts: list[str] = []
     raw_events: list[dict] = []
     stderr_chunks: list[bytes] = []
+    stopped = False
 
     async def drain_stderr() -> None:
         assert proc.stderr is not None
@@ -160,43 +183,69 @@ async def run_agent(
 
     stderr_task = asyncio.create_task(drain_stderr())
 
-    assert proc.stdout is not None
-    async for raw_line in proc.stdout:
-        line = raw_line.decode("utf-8", errors="replace").strip()
-        if not line:
-            continue
+    async def kill_on_cancel() -> None:
+        if cancel_event is None:
+            return
+        await cancel_event.wait()
+        nonlocal stopped
+        stopped = True
+        log.info("Cancellation requested for task %s; terminating claude", task.id)
         try:
-            event = json.loads(line)
-        except json.JSONDecodeError:
-            log.warning("Non-JSON line from claude: %s", line[:200])
-            continue
+            proc.terminate()
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=2.0)
+            except asyncio.TimeoutError:
+                log.warning("claude did not exit on SIGTERM for %s; killing", task.id)
+                proc.kill()
+        except ProcessLookupError:
+            pass
 
-        raw_events.append(event)
+    cancel_task = asyncio.create_task(kill_on_cancel())
 
-        # Capture session id from system/init and final result events.
-        if isinstance(event, dict):
-            if event.get("type") == "system" and event.get("subtype") == "init":
-                session_id = event.get("session_id") or session_id
-            elif event.get("type") == "result":
-                session_id = event.get("session_id") or session_id
+    assert proc.stdout is not None
+    try:
+        async for raw_line in proc.stdout:
+            line = raw_line.decode("utf-8", errors="replace").strip()
+            if not line:
+                continue
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                log.warning("Non-JSON line from claude: %s", line[:200])
+                continue
 
-        # Extract assistant text blocks for our final_text accumulation.
-        text = _extract_assistant_text(event)
-        if text:
-            final_text_parts.append(text)
+            raw_events.append(event)
 
-        await on_event(event)
+            # Capture session id from system/init and final result events.
+            if isinstance(event, dict):
+                if event.get("type") == "system" and event.get("subtype") == "init":
+                    session_id = event.get("session_id") or session_id
+                elif event.get("type") == "result":
+                    session_id = event.get("session_id") or session_id
 
-    exit_code = await proc.wait()
-    await stderr_task
+            # Extract assistant text blocks for our final_text accumulation.
+            text = _extract_assistant_text(event)
+            if text:
+                final_text_parts.append(text)
+
+            await on_event(event)
+    finally:
+        exit_code = await proc.wait()
+        cancel_task.cancel()
+        try:
+            await cancel_task
+        except (asyncio.CancelledError, Exception):
+            pass
+        await stderr_task
+
     stderr = b"".join(stderr_chunks).decode("utf-8", errors="replace")[-2000:]
 
     final_text = "\n\n".join(final_text_parts).strip()
     status, context = parse_status(final_text)
 
     log.info(
-        "claude exited code=%d status=%s session=%s text_len=%d",
-        exit_code, status, session_id, len(final_text),
+        "claude exited code=%d status=%s session=%s text_len=%d stopped=%s",
+        exit_code, status, session_id, len(final_text), stopped,
     )
 
     return AgentResult(
@@ -207,6 +256,7 @@ async def run_agent(
         status=status,
         context=context,
         raw_events=raw_events,
+        stopped=stopped,
     )
 
 
