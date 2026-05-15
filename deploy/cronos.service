@@ -1,0 +1,28 @@
+[Unit]
+Description=Cronos Kanban task manager (Docker Compose)
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/cronos
+User=cronos
+Group=cronos
+# The Claude OAuth token is loaded inside the backend container via
+# `env_file: ${HOME}/.config/claude/env` in docker-compose.prod.yml, so
+# systemd just needs to make HOME resolve correctly for compose's
+# variable substitution.
+Environment=HOME=/home/cronos
+ExecStart=/usr/bin/docker compose \
+  --env-file /opt/cronos/.env \
+  -f docker-compose.yml -f docker-compose.prod.yml \
+  up -d --remove-orphans
+ExecStop=/usr/bin/docker compose \
+  -f docker-compose.yml -f docker-compose.prod.yml \
+  down
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,43 @@
+# Local development stack. For production, layer
+# `docker-compose.prod.yml` on top of this file.
+#
+# In dev, the Claude OAuth token (if you have one) can be passed via shell:
+#   export CLAUDE_CODE_OAUTH_TOKEN=...
+#   docker compose up --build
+# Or by creating a `.env` file at the project root with the same key. Both
+# are optional: the app boots without a token, and only agent runs will fail.
+
+services:
+  backend:
+    build:
+      context: ./backend
+    environment:
+      CRONOS_DATA_DIR: /data
+    # Pass-through: if CLAUDE_CODE_OAUTH_TOKEN is set in the shell or in a
+    # project-root .env file, it lands in the container. Listing the bare
+    # name (no value) means we *don't* clobber whatever the prod overlay
+    # injects via env_file.
+    env_file:
+      - path: ./.env
+        required: false
+    expose:
+      - "8000"
+    restart: unless-stopped
+    volumes:
+      - ./data:/data
+      # Claude stores per-session conversation logs under /root/.claude.
+      # A named volume keeps them across container restarts so `--resume` works.
+      - claude_config:/root/.claude
+
+  caddy:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+
+volumes:
+  claude_config:

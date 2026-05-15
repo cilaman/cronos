@@ -1,0 +1,56 @@
+# Production overlay. Use with:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Required env (e.g. via .env file at project root):
+#   DOMAIN=cronos.example.com
+#   BASIC_AUTH_USER=admin
+#   BASIC_AUTH_HASH=$2a$14$...  (bcrypt; generate with `caddy hash-password`)
+#
+# The OAuth token lives in a separate chmod-600 file owned by the cronos user
+# and is loaded directly into the backend container at runtime via env_file
+# below. Keep it out of the project .env so it never lands in git history or
+# `docker compose config` dumps.
+
+services:
+  caddy:
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+      BASIC_AUTH_USER: ${BASIC_AUTH_USER}
+      BASIC_AUTH_HASH: ${BASIC_AUTH_HASH}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  backend:
+    env_file:
+      # chmod-600 file containing CLAUDE_CODE_OAUTH_TOKEN=...
+      # Created on the VPS by the operator; see deploy/VPS_SETUP.md §4.
+      # required:false lets the overlay parse on a fresh dev machine that
+      # has never run `claude setup-token` — the backend will still boot,
+      # but agent runs will fail at the CLI level until the file exists.
+      - path: ${HOME}/.config/claude/env
+        required: false
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/health', timeout=3).status == 200 else 1)\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  caddy_data:
+  caddy_config:

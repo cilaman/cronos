@@ -1,0 +1,9 @@
+[Unit]
+Description=Cronos data backup (tarball of /opt/cronos/data)
+After=cronos.service
+
+[Service]
+Type=oneshot
+User=cronos
+Group=cronos
+ExecStart=/opt/cronos/deploy/backup.sh

@@ -1,0 +1,20 @@
+# Local development: plain HTTP on :80, no auth.
+# Production config is in `Caddyfile` and is mounted via the prod compose overlay.
+
+{
+    auto_https off
+}
+
+:80 {
+    encode gzip
+
+    handle /api/* {
+        reverse_proxy backend:8000
+    }
+
+    handle {
+        root * /srv
+        try_files {path} /index.html
+        file_server
+    }
+}
