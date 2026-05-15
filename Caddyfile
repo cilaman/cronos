@@ -1,0 +1,28 @@
+# Production: TLS via Let's Encrypt + HTTP basic auth.
+# Required env: DOMAIN, BASIC_AUTH_USER, BASIC_AUTH_HASH (bcrypt).
+# Generate the hash with:
+#   docker run --rm caddy caddy hash-password --plaintext '<password>'
+
+{$DOMAIN} {
+    basicauth * {
+        {$BASIC_AUTH_USER} {$BASIC_AUTH_HASH}
+    }
+
+    encode gzip
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+
+    handle /api/* {
+        reverse_proxy backend:8000
+    }
+
+    handle {
+        root * /srv
+        try_files {path} /index.html
+        file_server
+    }
+}
