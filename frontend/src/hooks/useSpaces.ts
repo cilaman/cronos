@@ -60,6 +60,32 @@ export function useUpdateSpace(id: string) {
   });
 }
 
+export function useLinkSpaceRepo(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      repo_url: string;
+      branch: string;
+      share_cronos: boolean;
+    }) => api.linkSpaceRepo(id, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["spaces"] });
+      qc.invalidateQueries({ queryKey: ["space", id] });
+    },
+  });
+}
+
+export function useUnlinkSpaceRepo(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.unlinkSpaceRepo(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["spaces"] });
+      qc.invalidateQueries({ queryKey: ["space", id] });
+    },
+  });
+}
+
 export function useDeleteSpace() {
   const qc = useQueryClient();
   return useMutation({

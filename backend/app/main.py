@@ -13,7 +13,7 @@ from watchfiles import awatch
 from .api.activity import router as activity_router
 from .api.spaces import router as spaces_router
 from .api.tasks import router as tasks_router
-from .space_storage import RESERVED_SPACE_DIRS, SpaceStore
+from .space_storage import CRONOS_SUBDIR, RESERVED_SPACE_DIRS, SpaceStore
 from .storage import TaskStore
 from .worker import Worker
 
@@ -48,10 +48,50 @@ async def watch_spaces_dir(
             path = Path(raw_path)
             if _path_is_reserved(path, SPACES_DIR):
                 continue
+            # Only react to events inside `.cronos/` — repo files are not
+            # Cronos state and should not trigger reindex churn.
+            try:
+                rel = path.relative_to(SPACES_DIR)
+            except ValueError:
+                continue
+            if len(rel.parts) < 2 or rel.parts[1] != CRONOS_SUBDIR:
+                continue
             if path.suffix == ".md":
                 await task_store.reindex_path(path)
             elif path.name == "space.yml":
                 await space_store.reindex_path(path)
+
+
+def _migrate_legacy_spaces() -> None:
+    """Move any pre-`.cronos/` spaces aside on startup.
+
+    Cronos now expects `{spaces_dir}/{id}/.cronos/space.yml`. Earlier
+    versions stored everything at `{spaces_dir}/{id}/` directly. Per the
+    upgrade plan (user chose "delete old spaces"), we soft-delete legacy
+    spaces by moving them under `.trash/{id}.legacy-{stamp}/` so nothing
+    is destroyed silently.
+    """
+    if not SPACES_DIR.exists():
+        return
+    trash = SPACES_DIR / ".trash"
+    stamp = None
+    for child in sorted(SPACES_DIR.iterdir()):
+        if not child.is_dir() or child.name in RESERVED_SPACE_DIRS:
+            continue
+        if (child / CRONOS_SUBDIR / "space.yml").exists():
+            continue
+        if not (child / "space.yml").exists():
+            continue  # not a legacy space, skip
+        trash.mkdir(parents=True, exist_ok=True)
+        from datetime import UTC, datetime
+        stamp = stamp or datetime.now(tz=UTC).strftime("%Y%m%dT%H%M%SZ")
+        dest = trash / f"{child.name}.legacy-{stamp}"
+        log.warning(
+            "Migrating legacy-layout space %s -> %s (data preserved in .trash; "
+            "create a fresh space to continue)",
+            child.name, dest,
+        )
+        os.replace(child, dest)
 
 
 @asynccontextmanager
@@ -61,9 +101,11 @@ async def lifespan(app: FastAPI):
     if LEGACY_TASKS_DIR.exists() or LEGACY_WORKSPACES_DIR.exists():
         log.warning(
             "Legacy /data/tasks or /data/workspaces directories exist. They are "
-            "ignored by Cronos now that tasks live under /data/spaces/{id}/. "
+            "ignored by Cronos now that tasks live under /data/spaces/{id}/.cronos/. "
             "Remove them once you've confirmed no data is needed."
         )
+
+    _migrate_legacy_spaces()
 
     space_store = SpaceStore(SPACES_DIR)
     await space_store.reload_all()
@@ -82,7 +124,7 @@ async def lifespan(app: FastAPI):
     await task_store.reload_all()
     app.state.store = task_store
 
-    worker = Worker(task_store)
+    worker = Worker(task_store, space_store=space_store)
     worker.start()
     app.state.worker = worker
 

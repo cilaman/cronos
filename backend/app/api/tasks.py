@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import logging
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+log = logging.getLogger(__name__)
+
+from .. import git_ops
+from ..agent import space_dir_for
 from ..models import Board, Space, Task, TaskState, TaskSummary
 from ..space_storage import SpaceStore
 from ..storage import (
@@ -250,8 +255,19 @@ async def stream_task(task_id: str, request: Request) -> StreamingResponse:
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_task(task_id: str, request: Request) -> Response:
+    store = get_store(request)
+    task = store.get(task_id)
+    space = (
+        get_space_store(request).get(task.space_id) if task is not None else None
+    )
     try:
-        await get_store(request).delete(task_id)
+        await store.delete(task_id)
     except TaskNotFound:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found") from None
+    # Tear down the per-task worktree (keep the branch — soft delete only).
+    if task is not None and space is not None and space.git_repo_url:
+        try:
+            await git_ops.remove_task_worktree(space_dir_for(task.space_id), task_id)
+        except git_ops.GitError:
+            log.exception("Worktree cleanup failed for %s", task_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -32,6 +32,10 @@ MAX_SLUG_LEN = 40
 # Directory names under `/data/spaces/` that aren't real spaces.
 RESERVED_SPACE_DIRS: frozenset[str] = frozenset({".trash", ".imports"})
 
+# Subdir inside each space where Cronos state lives. Kept in sync with the
+# constant in space_storage.py (duplicated here to avoid a circular import).
+CRONOS_SUBDIR = ".cronos"
+
 USER_TRANSITIONS: set[tuple[TaskState, TaskState]] = {
     (TaskState.BACKLOG, TaskState.ACTIVE),
     (TaskState.ACTIVE, TaskState.BACKLOG),
@@ -223,27 +227,27 @@ class TaskStore:
     # ---- helpers ----
 
     def _space_for(self, path: Path) -> str | None:
-        """Return space_id if `path` is `{spaces_dir}/{space}/tasks/{file}.md`."""
+        """Return space_id if `path` is `{spaces_dir}/{space}/.cronos/tasks/{file}.md`."""
         try:
             rel = path.relative_to(self.spaces_dir)
         except ValueError:
             return None
-        if len(rel.parts) != 3:
+        if len(rel.parts) != 4:
             return None
-        space_id, subdir, _name = rel.parts
+        space_id, cronos, subdir, _name = rel.parts
         if space_id in RESERVED_SPACE_DIRS:
             return None
-        if subdir != "tasks":
+        if cronos != CRONOS_SUBDIR or subdir != "tasks":
             return None
         if path.suffix != ".md":
             return None
         return space_id
 
     def trash_dir_for(self, space_id: str) -> Path:
-        return self.spaces_dir / space_id / ".trash"
+        return self.spaces_dir / space_id / CRONOS_SUBDIR / ".trash"
 
     def tasks_dir_for(self, space_id: str) -> Path:
-        return self.spaces_dir / space_id / "tasks"
+        return self.spaces_dir / space_id / CRONOS_SUBDIR / "tasks"
 
     # ---- index ops ----
 
@@ -257,7 +261,7 @@ class TaskStore:
             for space_dir in sorted(self.spaces_dir.iterdir()):
                 if not space_dir.is_dir() or space_dir.name in RESERVED_SPACE_DIRS:
                     continue
-                tasks_dir = space_dir / "tasks"
+                tasks_dir = space_dir / CRONOS_SUBDIR / "tasks"
                 if not tasks_dir.is_dir():
                     continue
                 space_id = space_dir.name

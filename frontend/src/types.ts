@@ -104,6 +104,7 @@ export interface Space {
   updated_at: string;
   git_repo_url: string | null;
   git_branch: string | null;
+  git_share_cronos: boolean;
   agent_defaults: Record<string, string>;
 }
 
