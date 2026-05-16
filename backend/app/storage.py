@@ -29,6 +29,9 @@ log = logging.getLogger(__name__)
 BRIEF_PREVIEW_CHARS = 200
 MAX_SLUG_LEN = 40
 
+# Directory names under `/data/spaces/` that aren't real spaces.
+RESERVED_SPACE_DIRS: frozenset[str] = frozenset({".trash", ".imports"})
+
 USER_TRANSITIONS: set[tuple[TaskState, TaskState]] = {
     (TaskState.BACKLOG, TaskState.ACTIVE),
     (TaskState.ACTIVE, TaskState.BACKLOG),
@@ -55,6 +58,10 @@ class InvalidTransition(StorageError):
     pass
 
 
+class UnknownSpace(StorageError):
+    pass
+
+
 # ---------- parsing ----------
 
 
@@ -76,7 +83,8 @@ def split_body(body: str) -> tuple[str, str]:
     return parts.get("brief", "").strip(), parts.get("history", "").strip()
 
 
-def parse_file(path: Path) -> Task:
+def parse_file(path: Path, space_id: str) -> Task:
+    """Parse a task markdown file. `space_id` is authoritative (from path)."""
     post = frontmatter.load(path)
     meta = dict(post.metadata)
     brief, history = split_body(post.content)
@@ -93,6 +101,7 @@ def parse_file(path: Path) -> Task:
     try:
         return Task(
             id=meta.get("id") or path.stem,
+            space_id=space_id,
             title=meta["title"],
             state=meta.get("state", "backlog"),
             created_at=meta["created_at"],
@@ -110,11 +119,13 @@ def parse_file(path: Path) -> Task:
 
 
 def summarize(task: Task) -> TaskSummary:
+    """Build a TaskSummary from a Task. Space denorm fields are filled by the API layer."""
     preview = task.brief.replace("\n", " ").strip()
     if len(preview) > BRIEF_PREVIEW_CHARS:
         preview = preview[: BRIEF_PREVIEW_CHARS - 1].rstrip() + "…"
     return TaskSummary(
         id=task.id,
+        space_id=task.space_id,
         title=task.title,
         state=task.state,
         created_at=task.created_at,
@@ -135,6 +146,7 @@ def dump_task(task: Task) -> str:
     """Serialize a Task to its on-disk markdown form."""
     meta = {
         "id": task.id,
+        "space_id": task.space_id,
         "title": task.title,
         "state": task.state.value,
         "created_at": _iso(task.created_at),
@@ -192,18 +204,46 @@ def generate_task_id(title: str, now: datetime, taken: set[str]) -> str:
 class TaskStore:
     """Markdown-on-disk task store with an in-memory index.
 
+    Tasks live at `/data/spaces/{space_id}/tasks/*.md`. The directory name is
+    authoritative for a task's space (the frontmatter is denormalized for
+    self-describing files but is overridden by the path on reindex).
+
     Writes go through atomic tmpfile + os.replace. After every write we
     re-parse the file and update the in-memory index synchronously so the
     next API read reflects the change without waiting for the file watcher.
     The watcher then sees the same change and is a no-op.
     """
 
-    def __init__(self, tasks_dir: Path) -> None:
-        self.tasks_dir = tasks_dir
-        self.trash_dir = tasks_dir / ".trash"
+    def __init__(self, spaces_dir: Path) -> None:
+        self.spaces_dir = spaces_dir
         self._by_id: dict[str, Task] = {}
         self._path_by_id: dict[str, Path] = {}
         self._lock = asyncio.Lock()
+
+    # ---- helpers ----
+
+    def _space_for(self, path: Path) -> str | None:
+        """Return space_id if `path` is `{spaces_dir}/{space}/tasks/{file}.md`."""
+        try:
+            rel = path.relative_to(self.spaces_dir)
+        except ValueError:
+            return None
+        if len(rel.parts) != 3:
+            return None
+        space_id, subdir, _name = rel.parts
+        if space_id in RESERVED_SPACE_DIRS:
+            return None
+        if subdir != "tasks":
+            return None
+        if path.suffix != ".md":
+            return None
+        return space_id
+
+    def trash_dir_for(self, space_id: str) -> Path:
+        return self.spaces_dir / space_id / ".trash"
+
+    def tasks_dir_for(self, space_id: str) -> Path:
+        return self.spaces_dir / space_id / "tasks"
 
     # ---- index ops ----
 
@@ -211,23 +251,33 @@ class TaskStore:
         async with self._lock:
             self._by_id.clear()
             self._path_by_id.clear()
-            for path in sorted(self.tasks_dir.glob("*.md")):
-                try:
-                    task = parse_file(path)
-                except ValueError as e:
-                    log.warning("Skipping invalid task file: %s", e)
+            if not self.spaces_dir.exists():
+                log.info("Spaces dir %s does not exist yet", self.spaces_dir)
+                return
+            for space_dir in sorted(self.spaces_dir.iterdir()):
+                if not space_dir.is_dir() or space_dir.name in RESERVED_SPACE_DIRS:
                     continue
-                self._by_id[task.id] = task
-                self._path_by_id[task.id] = path
-            log.info("Loaded %d tasks from %s", len(self._by_id), self.tasks_dir)
+                tasks_dir = space_dir / "tasks"
+                if not tasks_dir.is_dir():
+                    continue
+                space_id = space_dir.name
+                for path in sorted(tasks_dir.glob("*.md")):
+                    try:
+                        task = parse_file(path, space_id)
+                    except ValueError as e:
+                        log.warning("Skipping invalid task file: %s", e)
+                        continue
+                    self._by_id[task.id] = task
+                    self._path_by_id[task.id] = path
+            log.info("Loaded %d tasks from %s", len(self._by_id), self.spaces_dir)
 
     async def reindex_path(self, path: Path) -> None:
         async with self._lock:
             self._reindex_locked(path)
 
     def _reindex_locked(self, path: Path) -> None:
-        # Ignore anything outside the top-level tasks dir (e.g. .trash/*.md).
-        if path.parent != self.tasks_dir:
+        space_id = self._space_for(path)
+        if space_id is None:
             return
         if not path.exists():
             stale_id = next(
@@ -239,7 +289,7 @@ class TaskStore:
                 log.info("Removed task %s (file deleted)", stale_id)
             return
         try:
-            task = parse_file(path)
+            task = parse_file(path, space_id)
         except ValueError as e:
             log.warning("Skipping invalid task file: %s", e)
             return
@@ -249,12 +299,36 @@ class TaskStore:
     def get(self, task_id: str) -> Task | None:
         return self._by_id.get(task_id)
 
-    def count(self) -> int:
-        return len(self._by_id)
+    def all(self) -> list[Task]:
+        return list(self._by_id.values())
 
-    def board(self) -> Board:
+    def count(self, space_id: str | None = None) -> int:
+        if space_id is None:
+            return len(self._by_id)
+        return sum(1 for t in self._by_id.values() if t.space_id == space_id)
+
+    def counts_by_space(self) -> dict[str, dict[TaskState, int]]:
+        out: dict[str, dict[TaskState, int]] = {}
+        for task in self._by_id.values():
+            buckets = out.setdefault(task.space_id, {s: 0 for s in TaskState})
+            buckets[task.state] = buckets.get(task.state, 0) + 1
+        return out
+
+    def last_activity_by_space(self) -> dict[str, datetime]:
+        out: dict[str, datetime] = {}
+        for task in self._by_id.values():
+            prev = out.get(task.space_id)
+            if prev is None or task.updated_at > prev:
+                out[task.space_id] = task.updated_at
+        return out
+
+    def board(self, space_id: str | None = None) -> Board:
+        """Return tasks grouped by state. `None` or "all" ⇒ cross-space."""
+        scope = None if space_id in (None, "all", "") else space_id
         lanes: dict[TaskState, list[TaskSummary]] = {s: [] for s in TaskState}
         for task in self._by_id.values():
+            if scope is not None and task.space_id != scope:
+                continue
             lanes[task.state].append(summarize(task))
         for items in lanes.values():
             items.sort(key=lambda t: t.updated_at, reverse=True)
@@ -269,18 +343,23 @@ class TaskStore:
 
     async def create(
         self,
+        *,
+        space_id: str,
         title: str,
         brief: str,
-        *,
         agent_model: AgentModel = "default",
     ) -> Task:
         if agent_model not in VALID_AGENT_MODELS:
             raise StorageError(f"Invalid agent_model: {agent_model}")
+        tasks_dir = self.tasks_dir_for(space_id)
+        if not tasks_dir.is_dir():
+            raise UnknownSpace(space_id)
         now = datetime.now(tz=UTC)
         async with self._lock:
             task_id = generate_task_id(title, now, set(self._by_id.keys()))
             task = Task(
                 id=task_id,
+                space_id=space_id,
                 title=title.strip(),
                 state=TaskState.BACKLOG,
                 created_at=now,
@@ -289,10 +368,10 @@ class TaskStore:
                 history="",
                 agent_model=agent_model,
             )
-            path = self.tasks_dir / f"{task_id}.md"
+            path = tasks_dir / f"{task_id}.md"
             atomic_write(path, dump_task(task))
             self._reindex_locked(path)
-            log.info("Created task %s", task_id)
+            log.info("Created task %s in space %s", task_id, space_id)
             return self._by_id[task_id]
 
     async def update(
@@ -486,15 +565,27 @@ class TaskStore:
             return messages
 
     async def delete(self, task_id: str) -> None:
-        """Soft-delete: move the file into `.trash/` so nothing is destroyed."""
+        """Soft-delete: move the file into the per-space `.trash/` so nothing is destroyed."""
         async with self._lock:
+            task = self._by_id.get(task_id)
             path = self._path_by_id.get(task_id)
-            if path is None:
+            if task is None or path is None:
                 raise TaskNotFound(task_id)
-            self.trash_dir.mkdir(parents=True, exist_ok=True)
+            trash = self.trash_dir_for(task.space_id)
+            trash.mkdir(parents=True, exist_ok=True)
             stamp = datetime.now(tz=UTC).strftime("%Y%m%dT%H%M%SZ")
-            dest = self.trash_dir / f"{path.stem}.{stamp}.md"
+            dest = trash / f"{path.stem}.{stamp}.md"
             os.replace(path, dest)
             self._by_id.pop(task_id, None)
             self._path_by_id.pop(task_id, None)
             log.info("Trashed task %s -> %s", task_id, dest.name)
+
+    async def drop_space(self, space_id: str) -> None:
+        """Drop all in-memory entries for a space (used after the space is trashed)."""
+        async with self._lock:
+            to_drop = [tid for tid, t in self._by_id.items() if t.space_id == space_id]
+            for tid in to_drop:
+                self._by_id.pop(tid, None)
+                self._path_by_id.pop(tid, None)
+            if to_drop:
+                log.info("Dropped %d tasks from in-memory index for space %s", len(to_drop), space_id)

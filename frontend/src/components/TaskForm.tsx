@@ -1,19 +1,23 @@
 import { useEffect, useState } from "react";
+import { useSpaces } from "../hooks/useSpaces";
 import { AGENT_MODELS, type AgentModel } from "../types";
 
 interface Props {
-  title?: string;
   heading: string;
   initialTitle?: string;
   initialBrief?: string;
   initialModel?: AgentModel;
+  initialSpaceId?: string | null;
   showModel?: boolean;
+  showSpacePicker?: boolean;
+  lockedSpaceId?: string | null;
   submitting?: boolean;
   error?: string | null;
   onSubmit: (body: {
     title: string;
     brief: string;
     agent_model?: AgentModel;
+    space_id?: string;
   }) => void;
   onCancel: () => void;
 }
@@ -23,7 +27,10 @@ export function TaskForm({
   initialTitle = "",
   initialBrief = "",
   initialModel = "default",
+  initialSpaceId = null,
   showModel = true,
+  showSpacePicker = false,
+  lockedSpaceId = null,
   submitting = false,
   error = null,
   onSubmit,
@@ -32,6 +39,18 @@ export function TaskForm({
   const [title, setTitle] = useState(initialTitle);
   const [brief, setBrief] = useState(initialBrief);
   const [model, setModel] = useState<AgentModel>(initialModel);
+  const [spaceId, setSpaceId] = useState<string | null>(
+    lockedSpaceId ?? initialSpaceId,
+  );
+  const { data: spacesData } = useSpaces();
+  const spaces = spacesData?.spaces ?? [];
+
+  useEffect(() => {
+    // If no space chosen yet and spaces just loaded, pick the first as default.
+    if (!spaceId && spaces.length > 0) {
+      setSpaceId(spaces[0].id);
+    }
+  }, [spaces, spaceId]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -41,7 +60,11 @@ export function TaskForm({
     return () => window.removeEventListener("keydown", onKey);
   }, [onCancel]);
 
-  const canSubmit = title.trim().length > 0 && !submitting;
+  const effectiveSpaceId = lockedSpaceId ?? spaceId;
+  const canSubmit =
+    title.trim().length > 0 &&
+    !submitting &&
+    (!showSpacePicker || !!effectiveSpaceId);
 
   return (
     <div
@@ -53,11 +76,17 @@ export function TaskForm({
         onSubmit={(e) => {
           e.preventDefault();
           if (!canSubmit) return;
-          const body: { title: string; brief: string; agent_model?: AgentModel } = {
+          const body: {
+            title: string;
+            brief: string;
+            agent_model?: AgentModel;
+            space_id?: string;
+          } = {
             title: title.trim(),
             brief: brief.trim(),
           };
           if (showModel) body.agent_model = model;
+          if (showSpacePicker && effectiveSpaceId) body.space_id = effectiveSpaceId;
           onSubmit(body);
         }}
         className="flex h-full w-full max-w-2xl flex-col overflow-hidden border border-hairline bg-surface-1 shadow-lift sm:h-auto sm:max-h-[90vh] sm:rounded-lg"
@@ -110,6 +139,27 @@ export function TaskForm({
               </label>
             )}
           </div>
+          {showSpacePicker && (
+            <label className="block">
+              <span className="font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
+                Space
+              </span>
+              <select
+                value={effectiveSpaceId ?? ""}
+                onChange={(e) => setSpaceId(e.target.value)}
+                disabled={!!lockedSpaceId}
+                className="mt-1 block w-full rounded border border-hairline-strong bg-canvas px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-60"
+              >
+                {spaces.length === 0 && <option value="">No spaces — create one first</option>}
+                {spaces.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.icon ? `${s.icon}  ` : ""}
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label className="block">
             <span className="font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
               Brief

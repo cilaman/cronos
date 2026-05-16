@@ -14,7 +14,7 @@ from .models import Task
 
 log = logging.getLogger("cronos.agent")
 
-WORKSPACES_DIR = Path(os.environ.get("CRONOS_DATA_DIR", "/data")) / "workspaces"
+DATA_DIR = Path(os.environ.get("CRONOS_DATA_DIR", "/data"))
 
 STATUS_CONTRACT = """\
 You are an autonomous task executor. The user is not watching the chat in
@@ -65,8 +65,8 @@ def parse_status(text: str) -> tuple[Status | None, str | None]:
     return status, context
 
 
-def workspace_for(task_id: str) -> Path:
-    path = WORKSPACES_DIR / task_id
+def workspace_for(task: Task) -> Path:
+    path = DATA_DIR / "spaces" / task.space_id / "workspaces" / task.id
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -125,7 +125,7 @@ async def run_agent(
     terminated and the returned `AgentResult.stopped` is True.
     Returns once the process exits.
     """
-    workspace = workspace_for(task.id)
+    workspace = workspace_for(task)
     prompt = build_prompt(task, user_message)
     permission_mode = PERMISSION_MODE.get(task.agent_mode, "acceptEdits")
     allowed_tools = PLAN_MODE_TOOLS if task.agent_mode == "plan" else DEFAULT_TOOLS
