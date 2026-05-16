@@ -37,9 +37,9 @@ const FAMILY_TONE: Record<
     rule: "border-warning/50",
   },
   web: {
-    name: "text-sky-300",
-    bracket: "text-sky-400/70",
-    rule: "border-sky-400/50",
+    name: "text-sky-700 dark:text-sky-300",
+    bracket: "text-sky-600/80 dark:text-sky-400/70",
+    rule: "border-sky-500/40 dark:border-sky-400/50",
   },
   task: {
     name: "text-ink",

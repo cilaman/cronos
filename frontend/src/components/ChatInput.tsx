@@ -59,7 +59,7 @@ export function ChatInput({
   return (
     <div className="border-t border-hairline bg-canvas">
       {waitingQuestion && taskState === "waiting" && (
-        <div className="border-b border-amber-400/30 bg-amber-400/10 px-4 py-2 text-sm text-amber-300">
+        <div className="border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-300">
           <span className="mr-2 font-display font-semibold uppercase tracking-[0.18em] text-[10px]">
             Agent asks
           </span>

@@ -186,7 +186,7 @@ export function Detail({ taskId, onClose }: Props) {
                       <h3 className="font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
                         Brief
                       </h3>
-                      <div className="prose prose-sm prose-invert mt-2 max-w-none prose-headings:text-ink prose-p:text-ink prose-strong:text-ink prose-a:text-accent-bright prose-code:text-accent-bright prose-pre:bg-canvas prose-pre:border prose-pre:border-hairline">
+                      <div className="prose prose-sm dark:prose-invert mt-2 max-w-none prose-headings:text-ink prose-p:text-ink prose-strong:text-ink prose-a:text-accent-bright prose-code:text-accent-bright prose-pre:bg-canvas prose-pre:border prose-pre:border-hairline">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>{task.brief}</ReactMarkdown>
                       </div>
                     </section>
