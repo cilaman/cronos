@@ -64,6 +64,17 @@ export function useStopTask(id: string) {
   });
 }
 
+export function useStartTask(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.start(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["board"] });
+      qc.invalidateQueries({ queryKey: ["task", id] });
+    },
+  });
+}
+
 export function useDeleteTask() {
   const qc = useQueryClient();
   return useMutation({
