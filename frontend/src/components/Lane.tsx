@@ -21,7 +21,7 @@ export function Lane({ state, label, tasks, onOpen, onAdd }: Props) {
           : "bg-surface-1"
       }`}
     >
-      <header className="sticky top-0 z-10 flex items-center justify-between rounded-t-lg border-b border-hairline bg-surface-1/95 px-3 py-2 backdrop-blur">
+      <header className="sticky top-0 z-10 flex h-10 items-center justify-between rounded-t-lg border-b border-hairline bg-surface-1/95 px-3 backdrop-blur">
         <div className="flex items-baseline gap-2">
           <h2 className="font-display text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-muted">
             {label}
