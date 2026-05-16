@@ -2,12 +2,175 @@ import { useRef, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { SpaceForm } from "../components/spaces/SpaceForm";
 import { api } from "../api";
+import type { Space } from "../types";
 import {
   useDeleteSpace,
   useImportSpace,
+  useLinkSpaceRepo,
   useSpace,
+  useUnlinkSpaceRepo,
   useUpdateSpace,
 } from "../hooks/useSpaces";
+
+function RepoPanel({ space }: { space: Space }) {
+  const linkMutation = useLinkSpaceRepo(space.id);
+  const unlinkMutation = useUnlinkSpaceRepo(space.id);
+  const [repoUrl, setRepoUrl] = useState("");
+  const [branch, setBranch] = useState("main");
+  const [shareCronos, setShareCronos] = useState(false);
+  const [confirmingUnlink, setConfirmingUnlink] = useState(false);
+
+  const linked = space.git_repo_url !== null;
+
+  async function doLink() {
+    await linkMutation.mutateAsync({
+      repo_url: repoUrl.trim(),
+      branch: branch.trim(),
+      share_cronos: shareCronos,
+    });
+    setRepoUrl("");
+    setBranch("main");
+    setShareCronos(false);
+  }
+
+  async function doUnlink() {
+    await unlinkMutation.mutateAsync();
+    setConfirmingUnlink(false);
+  }
+
+  return (
+    <div className="rounded-md border border-hairline bg-surface-1 p-4 shadow-inset-hairline">
+      <h3 className="font-display text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
+        Repository
+      </h3>
+      {linked ? (
+        <div className="mt-2 space-y-2 text-[12px] text-ink">
+          <p className="text-ink-muted">Linked to</p>
+          <p className="break-all rounded border border-hairline bg-canvas px-2 py-1.5 font-mono text-[11px] text-ink">
+            {space.git_repo_url}
+          </p>
+          <p className="text-ink-muted">
+            Base branch:{" "}
+            <code className="font-mono text-ink">{space.git_branch}</code>
+          </p>
+          <p className="text-ink-muted">
+            {space.git_share_cronos ? (
+              <>
+                <code className="font-mono text-ink">.cronos/</code> is shared via git.
+              </>
+            ) : (
+              <>
+                <code className="font-mono text-ink">.cronos/</code> is gitignored
+                (tasks are local).
+              </>
+            )}
+          </p>
+          {!confirmingUnlink ? (
+            <button
+              type="button"
+              onClick={() => setConfirmingUnlink(true)}
+              className="mt-2 rounded border border-hairline-strong bg-surface-2 px-3 py-1.5 text-[12px] text-ink transition hover:border-danger hover:text-danger"
+            >
+              Unlink repo
+            </button>
+          ) : (
+            <div className="mt-3 space-y-2 rounded border border-danger/40 bg-danger/5 p-3">
+              <p className="text-[12px] text-ink">
+                Removes the <code className="font-mono">.git/</code> directory and
+                all repo files. <code className="font-mono">.cronos/</code> (tasks)
+                stays intact. Task worktree branches are lost.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={doUnlink}
+                  disabled={unlinkMutation.isPending}
+                  className="rounded border border-danger bg-danger px-3 py-1.5 text-[12px] font-medium text-canvas transition hover:bg-danger/90 disabled:opacity-60"
+                >
+                  {unlinkMutation.isPending ? "Unlinking…" : "Confirm unlink"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmingUnlink(false)}
+                  className="rounded px-3 py-1.5 text-[12px] text-ink-muted transition hover:bg-surface-2 hover:text-ink"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+          {unlinkMutation.error && (
+            <p className="text-[12px] text-danger">
+              {unlinkMutation.error.message}
+            </p>
+          )}
+        </div>
+      ) : (
+        <div className="mt-2 space-y-3">
+          <p className="text-[12px] text-ink-muted">
+            Link a git repo so each task runs in its own worktree, with access to the
+            repo's <code className="font-mono text-ink">.claude/</code> agents and skills.
+          </p>
+          <label className="block">
+            <span className="font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
+              Repo URL
+            </span>
+            <input
+              type="text"
+              value={repoUrl}
+              onChange={(e) => setRepoUrl(e.target.value)}
+              spellCheck={false}
+              placeholder="git@github.com:org/repo.git"
+              className="mt-1 block w-full rounded border border-hairline-strong bg-canvas px-2.5 py-1.5 font-mono text-[12px] text-ink placeholder:text-ink-faint focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+            />
+          </label>
+          <label className="block">
+            <span className="font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
+              Base branch
+            </span>
+            <input
+              type="text"
+              value={branch}
+              onChange={(e) => setBranch(e.target.value)}
+              spellCheck={false}
+              placeholder="main"
+              className="mt-1 block w-full rounded border border-hairline-strong bg-canvas px-2.5 py-1.5 font-mono text-[12px] text-ink placeholder:text-ink-faint focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+            />
+          </label>
+          <label className="flex items-start gap-2">
+            <input
+              type="checkbox"
+              checked={shareCronos}
+              onChange={(e) => setShareCronos(e.target.checked)}
+              className="mt-0.5 h-3.5 w-3.5 cursor-pointer accent-accent"
+            />
+            <span className="text-[11px] text-ink-muted">
+              Commit <code className="font-mono text-ink">.cronos/</code> to the repo
+              (otherwise it's added to <code className="font-mono text-ink">.gitignore</code>)
+            </span>
+          </label>
+          <button
+            type="button"
+            onClick={doLink}
+            disabled={
+              !repoUrl.trim() ||
+              !branch.trim() ||
+              linkMutation.isPending
+            }
+            className="rounded border border-accent bg-accent px-3 py-1.5 text-[12px] font-medium text-canvas transition hover:bg-accent-bright disabled:cursor-not-allowed disabled:border-hairline disabled:bg-surface-2 disabled:text-ink-faint"
+          >
+            {linkMutation.isPending ? "Cloning…" : "Link repository"}
+          </button>
+          {linkMutation.error && (
+            <p className="text-[12px] text-danger">
+              {linkMutation.error.message}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function DataPanel({ spaceId }: { spaceId: string }) {
   const importMutation = useImportSpace();
@@ -200,6 +363,7 @@ export function SpaceSettingsPage() {
         }}
         rightSlot={
           <>
+            <RepoPanel space={space} />
             <DataPanel spaceId={space.id} />
             <DangerZone spaceId={space.id} spaceName={space.name} />
           </>

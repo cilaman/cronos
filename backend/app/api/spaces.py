@@ -53,6 +53,11 @@ class CreateSpaceBody(BaseModel):
     icon: str | None = Field(default=None, max_length=8)
     description: str = Field(default="", max_length=2000)
     space_id: str | None = Field(default=None, max_length=64)
+    # Optional repo binding on creation. If `repo_url` is set, `branch` is
+    # required; Cronos clones the repo into the new space dir.
+    repo_url: str | None = Field(default=None, max_length=2048)
+    branch: str | None = Field(default=None, max_length=200)
+    share_cronos: bool = False
 
 
 class UpdateSpaceBody(BaseModel):
@@ -61,6 +66,12 @@ class UpdateSpaceBody(BaseModel):
     icon: str | None = Field(default=None, max_length=8)
     clear_icon: bool = False
     description: str | None = Field(default=None, max_length=2000)
+
+
+class LinkRepoBody(BaseModel):
+    repo_url: str = Field(min_length=1, max_length=2048)
+    branch: str = Field(min_length=1, max_length=200)
+    share_cronos: bool = False
 
 
 def _summarize_space(
@@ -108,6 +119,11 @@ async def get_space(space_id: str, request: Request) -> Space:
 
 @router.post("", response_model=Space, status_code=status.HTTP_201_CREATED)
 async def create_space(body: CreateSpaceBody, request: Request) -> Space:
+    if body.repo_url and not body.branch:
+        raise HTTPException(
+            status_code=400,
+            detail="branch is required when repo_url is provided",
+        )
     try:
         return await get_space_store(request).create(
             name=body.name,
@@ -115,9 +131,39 @@ async def create_space(body: CreateSpaceBody, request: Request) -> Space:
             icon=body.icon,
             description=body.description,
             space_id=body.space_id,
+            repo_url=body.repo_url,
+            branch=body.branch,
+            share_cronos=body.share_cronos,
         )
     except SpaceExists as e:
         raise HTTPException(status_code=409, detail=f"Space {e} already exists") from None
+    except SpaceError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from None
+
+
+@router.post("/{space_id}/link", response_model=Space)
+async def link_space_repo(
+    space_id: str, body: LinkRepoBody, request: Request
+) -> Space:
+    try:
+        return await get_space_store(request).link_repo(
+            space_id,
+            repo_url=body.repo_url,
+            branch=body.branch,
+            share_cronos=body.share_cronos,
+        )
+    except SpaceNotFound:
+        raise HTTPException(status_code=404, detail=f"Space {space_id} not found") from None
+    except SpaceError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from None
+
+
+@router.post("/{space_id}/unlink", response_model=Space)
+async def unlink_space_repo(space_id: str, request: Request) -> Space:
+    try:
+        return await get_space_store(request).unlink_repo(space_id)
+    except SpaceNotFound:
+        raise HTTPException(status_code=404, detail=f"Space {space_id} not found") from None
     except SpaceError as e:
         raise HTTPException(status_code=400, detail=str(e)) from None
 
@@ -181,20 +227,27 @@ async def export_space(space_id: str, request: Request) -> StreamingResponse:
         raise HTTPException(status_code=404, detail=f"Space {space_id} not found")
 
     space_dir = space_store.space_dir(space_id)
+    cronos_dir = space_store.cronos_dir(space_id)
 
     def gen() -> bytes:
-        # Build in-memory then stream. Spaces are expected to be small (<50 MB).
+        # Only the `.cronos/` subtree is portable. Repo files & `.git/` are
+        # reconstituted on the destination by re-linking the repo, and
+        # per-task worktrees are recreated lazily — so skip both. We also
+        # skip `.cronos/workspaces/` (worktrees) and `.cronos/.trash/`.
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
-            for root, _dirs, files in os.walk(space_dir):
+            for root, dirs, files in os.walk(cronos_dir):
                 root_path = Path(root)
-                # Skip the .trash subdirectory of the space.
-                rel_root = root_path.relative_to(space_dir.parent)
-                if any(part.startswith(".trash") for part in rel_root.parts):
+                # Skip workspaces (per-task worktrees) and per-space trash.
+                rel_root = root_path.relative_to(cronos_dir)
+                if rel_root.parts and rel_root.parts[0] in ("workspaces", ".trash"):
+                    dirs.clear()
                     continue
                 for name in files:
                     file_path = root_path / name
-                    arcname = file_path.relative_to(space_dir.parent)
+                    arcname = (
+                        Path(space_dir.name) / ".cronos" / file_path.relative_to(cronos_dir)
+                    )
                     zf.write(file_path, arcname.as_posix())
         return buf.getvalue()
 
@@ -242,17 +295,25 @@ def _safe_extract(zf: zipfile.ZipFile, dest_root: Path) -> str:
         )
     incoming_id = next(iter(top_level))
 
-    has_space_yml = any(p == f"{incoming_id}/space.yml" for _, p in entries)
+    has_space_yml = any(p == f"{incoming_id}/.cronos/space.yml" for _, p in entries)
     if not has_space_yml:
-        raise SpaceError(f"ZIP is missing {incoming_id}/space.yml")
+        raise SpaceError(f"ZIP is missing {incoming_id}/.cronos/space.yml")
 
-    # Validate allowed subtrees: space.yml, tasks/, workspaces/ only.
+    # Validate allowed subtrees: only `.cronos/{space.yml,tasks/}`. Repo
+    # files and worktrees are not portable across hosts.
     for _info, normalized in entries:
         rel = normalized[len(incoming_id) + 1 :] if normalized != incoming_id else ""
         if rel == "":
             continue
         first = rel.split("/", 1)[0]
-        if first not in ("space.yml", "tasks", "workspaces"):
+        if first != ".cronos":
+            raise SpaceError(f"Disallowed path inside ZIP: {normalized!r}")
+        # `.cronos/{space.yml,tasks/...}` only.
+        sub = rel[len(".cronos/") :] if rel.startswith(".cronos/") else ""
+        if not sub:
+            continue
+        sub_first = sub.split("/", 1)[0]
+        if sub_first not in ("space.yml", "tasks"):
             raise SpaceError(f"Disallowed path inside ZIP: {normalized!r}")
 
     # Extract.
@@ -306,7 +367,7 @@ async def import_space(
                 raise HTTPException(status_code=400, detail=str(e)) from None
 
             # Validate space.yml parses with the final id.
-            yml = staged_dir / "space.yml"
+            yml = staged_dir / ".cronos" / "space.yml"
             try:
                 # parse_space_yaml derives id from parent dir name, so use a temp
                 # rename to validate; we'll rewrite the file post-rename below.

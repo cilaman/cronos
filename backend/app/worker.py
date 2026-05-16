@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 
 from .agent import AgentResult, Status, run_agent
 from .models import TaskState
+from .space_storage import SpaceStore
 from .storage import TaskStore
 
 log = logging.getLogger("cronos.worker")
@@ -25,8 +26,9 @@ class Worker:
     `subscribe(task_id)`.
     """
 
-    def __init__(self, store: TaskStore) -> None:
+    def __init__(self, store: TaskStore, space_store: SpaceStore | None = None) -> None:
         self.store = store
+        self.space_store = space_store
         self._queue: asyncio.Queue[tuple[str, str | None]] = asyncio.Queue()
         self._subscribers: dict[str, list[asyncio.Queue[dict]]] = defaultdict(list)
         self._current_id: str | None = None
@@ -115,12 +117,14 @@ class Worker:
         async def on_event(event: dict) -> None:
             await self._publish(task_id, event)
 
+        space = self.space_store.get(task.space_id) if self.space_store else None
         try:
             result = await run_agent(
                 task,
                 user_message=user_message,
                 on_event=on_event,
                 cancel_event=cancel_event,
+                space=space,
             )
         except FileNotFoundError as e:
             await self._publish(

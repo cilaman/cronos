@@ -78,6 +78,9 @@ export const api = {
     icon?: string | null;
     description?: string;
     space_id?: string;
+    repo_url?: string | null;
+    branch?: string | null;
+    share_cronos?: boolean;
   }) => request<Space>("/api/spaces", { method: "POST", body: JSON.stringify(body) }),
   updateSpace: (
     id: string,
@@ -90,6 +93,16 @@ export const api = {
     },
   ) =>
     request<Space>(`/api/spaces/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  linkSpaceRepo: (
+    id: string,
+    body: { repo_url: string; branch: string; share_cronos: boolean },
+  ) =>
+    request<Space>(`/api/spaces/${id}/link`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  unlinkSpaceRepo: (id: string) =>
+    request<Space>(`/api/spaces/${id}/unlink`, { method: "POST", body: "{}" }),
   deleteSpace: (id: string, cascade = false) =>
     request<void>(`/api/spaces/${id}${cascade ? "?cascade=true" : ""}`, {
       method: "DELETE",

@@ -10,11 +10,13 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 
-from .models import Task
+from . import git_ops
+from .models import Space, Task
 
 log = logging.getLogger("cronos.agent")
 
 DATA_DIR = Path(os.environ.get("CRONOS_DATA_DIR", "/data"))
+CRONOS_SUBDIR = ".cronos"
 
 STATUS_CONTRACT = """\
 You are an autonomous task executor. The user is not watching the chat in
@@ -65,8 +67,29 @@ def parse_status(text: str) -> tuple[Status | None, str | None]:
     return status, context
 
 
-def workspace_for(task: Task) -> Path:
-    path = DATA_DIR / "spaces" / task.space_id / "workspaces" / task.id
+def space_dir_for(space_id: str) -> Path:
+    return DATA_DIR / "spaces" / space_id
+
+
+async def workspace_for(task: Task, space: Space | None = None) -> Path:
+    """Return the working directory for `task`'s next run.
+
+    For repo-linked spaces this is a per-task git worktree on branch
+    `cronos/{task_id}` (created lazily if missing). For unlinked spaces it's
+    a plain dir, unchanged from previous behavior.
+    """
+    sdir = space_dir_for(task.space_id)
+    if space is not None and space.git_repo_url and space.git_branch:
+        try:
+            return await git_ops.ensure_task_worktree(
+                sdir, task.id, base_branch=space.git_branch
+            )
+        except git_ops.GitError:
+            log.exception(
+                "Failed to create worktree for %s; falling back to plain dir",
+                task.id,
+            )
+    path = sdir / CRONOS_SUBDIR / "workspaces" / task.id
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -117,6 +140,7 @@ async def run_agent(
     user_message: str | None,
     on_event: EventCallback,
     cancel_event: asyncio.Event | None = None,
+    space: Space | None = None,
 ) -> AgentResult:
     """Spawn claude CLI for one turn of work on `task` and stream its events.
 
@@ -125,7 +149,7 @@ async def run_agent(
     terminated and the returned `AgentResult.stopped` is True.
     Returns once the process exits.
     """
-    workspace = workspace_for(task)
+    workspace = await workspace_for(task, space)
     prompt = build_prompt(task, user_message)
     permission_mode = PERMISSION_MODE.get(task.agent_mode, "acceptEdits")
     allowed_tools = PLAN_MODE_TOOLS if task.agent_mode == "plan" else DEFAULT_TOOLS

@@ -34,6 +34,9 @@ export function SpaceCreatePage() {
             color: values.color,
             icon: values.icon,
             description: values.description,
+            repo_url: values.repoUrl,
+            branch: values.branch,
+            share_cronos: values.shareCronos,
           });
           navigate(`/spaces/${space.id}`);
         }}

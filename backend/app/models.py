@@ -66,7 +66,13 @@ class Board(BaseModel):
 
 
 class Space(BaseModel):
-    """A project-like namespace that owns tasks, workspaces, and config."""
+    """A project-like namespace that owns tasks, workspaces, and config.
+
+    On disk the Space directory is the repo working tree (when linked); all
+    Cronos state lives under `{space_dir}/.cronos/`. When `git_repo_url` is
+    set the space is linked: Cronos clones the repo into the space dir on
+    link, and creates a per-task git worktree for each task it spawns.
+    """
 
     id: str
     name: str
@@ -75,9 +81,11 @@ class Space(BaseModel):
     description: str = ""
     created_at: datetime
     updated_at: datetime
-    # Reserved for future binding (declared but unused in v1).
     git_repo_url: str | None = None
     git_branch: str | None = None
+    # When True, `.cronos/` is NOT added to .gitignore — the repo and Cronos
+    # state are versioned together so teammates can share tasks via git.
+    git_share_cronos: bool = False
     agent_defaults: dict[str, str] = Field(default_factory=dict)
 
 
