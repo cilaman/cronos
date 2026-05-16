@@ -114,6 +114,23 @@ export function Detail({ taskId, onClose }: Props) {
                     >
                       {task.state}
                     </span>
+                    {task.space_name && (
+                      <a
+                        href={`/spaces/${task.space_id}`}
+                        className="flex items-center gap-1.5 rounded border border-hairline px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] text-ink-muted transition hover:border-hairline-strong hover:text-ink"
+                      >
+                        <span
+                          aria-hidden
+                          className="h-2 w-2 rounded-sm"
+                          style={{
+                            backgroundColor:
+                              task.space_color ?? "rgb(var(--color-hairline-strong))",
+                          }}
+                        />
+                        {task.space_icon && <span aria-hidden>{task.space_icon}</span>}
+                        {task.space_name}
+                      </a>
+                    )}
                     <span className="font-mono text-xs text-ink-faint">{task.id}</span>
                   </div>
                   <h2 className="mt-2 text-xl font-semibold leading-tight tracking-tight text-ink">

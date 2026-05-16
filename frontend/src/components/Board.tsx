@@ -6,12 +6,11 @@ import {
   useSensors,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import { useState } from "react";
-import { useBoard, useCreateTask, useTransitionTask } from "../hooks/useTasks";
+import { useSearchParams } from "react-router-dom";
+import { useBoard, useTransitionTask } from "../hooks/useTasks";
 import { LANES, type TaskState, canUserTransition } from "../types";
 import { Detail } from "./Detail";
 import { Lane } from "./Lane";
-import { TaskForm } from "./TaskForm";
 
 function findTaskState(board: ReturnType<typeof useBoard>["data"], id: string): TaskState | null {
   if (!board) return null;
@@ -21,12 +20,28 @@ function findTaskState(board: ReturnType<typeof useBoard>["data"], id: string): 
   return null;
 }
 
-export function Board() {
-  const { data, isLoading, error } = useBoard();
+interface Props {
+  spaceId: string | null;
+  onAddTask: () => void;
+}
+
+export function Board({ spaceId, onAddTask }: Props) {
+  const { data, isLoading, error } = useBoard(spaceId);
   const transition = useTransitionTask();
-  const createTask = useCreateTask();
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const openId = searchParams.get("task");
+
+  const setOpenId = (id: string | null) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (id) next.set("task", id);
+        else next.delete("task");
+        return next;
+      },
+      { replace: true },
+    );
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -50,7 +65,7 @@ export function Board() {
   return (
     <>
       <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-        <div className="grid h-[calc(100vh-4rem)] grid-cols-1 gap-2 p-2 md:grid-cols-2 lg:grid-cols-4 lg:gap-3 lg:p-4">
+        <div className="grid h-[calc(100vh-3rem)] grid-cols-1 gap-2 p-2 md:grid-cols-2 lg:grid-cols-4 lg:gap-3 lg:p-4">
           {LANES.map(({ state, label }) => (
             <Lane
               key={state}
@@ -58,26 +73,13 @@ export function Board() {
               label={label}
               tasks={data[state]}
               onOpen={setOpenId}
-              onAdd={() => setCreating(true)}
+              onAdd={onAddTask}
             />
           ))}
         </div>
       </DndContext>
 
       {openId && <Detail taskId={openId} onClose={() => setOpenId(null)} />}
-
-      {creating && (
-        <TaskForm
-          heading="New task"
-          submitting={createTask.isPending}
-          error={createTask.error?.message ?? null}
-          onCancel={() => setCreating(false)}
-          onSubmit={async (body) => {
-            await createTask.mutateAsync(body);
-            setCreating(false);
-          }}
-        />
-      )}
     </>
   );
 }

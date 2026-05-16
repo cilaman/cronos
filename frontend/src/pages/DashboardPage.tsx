@@ -1,0 +1,317 @@
+import { useRef, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useActivity, useImportSpace, useSpaces } from "../hooks/useSpaces";
+import { useCreateTask } from "../hooks/useTasks";
+import { TaskForm } from "../components/TaskForm";
+import type { Activity, SpaceSummary, TaskState } from "../types";
+
+function formatRelative(iso: string | null): string {
+  if (!iso) return "—";
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return "—";
+  const seconds = Math.round((Date.now() - then) / 1000);
+  const abs = Math.abs(seconds);
+  if (abs < 60) return "just now";
+  if (abs < 3600) return `${Math.round(seconds / 60)}m ago`;
+  if (abs < 86_400) return `${Math.round(seconds / 3600)}h ago`;
+  return `${Math.round(seconds / 86_400)}d ago`;
+}
+
+function StatTile({
+  label,
+  value,
+  tone = "ink",
+  pulse = false,
+}: {
+  label: string;
+  value: number | string;
+  tone?: "ink" | "accent" | "warning";
+  pulse?: boolean;
+}) {
+  const valueClass =
+    tone === "accent"
+      ? "text-accent-bright"
+      : tone === "warning"
+        ? "text-warning"
+        : "text-ink";
+  return (
+    <div className="flex h-24 flex-col justify-between rounded-md border border-hairline bg-surface-1 p-4 shadow-inset-hairline">
+      <div className="flex items-center justify-between font-display text-[10px] uppercase tracking-[0.2em] text-ink-faint">
+        <span>{label}</span>
+        {pulse && (
+          <span
+            aria-hidden
+            className="anim-pulse-dot h-2 w-2 rounded-full bg-accent-bright"
+          />
+        )}
+      </div>
+      <p className={`font-display text-[28px] font-semibold tabular-nums ${valueClass}`}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function SpaceCard({ space }: { space: SpaceSummary }) {
+  const counts = space.task_counts;
+  return (
+    <Link
+      to={`/spaces/${space.id}`}
+      className="group block overflow-hidden rounded-md border border-hairline bg-surface-1 shadow-inset-hairline transition hover:-translate-y-px hover:border-hairline-strong hover:shadow-lift"
+    >
+      <div className="h-1" style={{ backgroundColor: space.color }} />
+      <div className="space-y-3 p-4">
+        <div className="flex items-center gap-2">
+          <span
+            aria-hidden
+            className="h-5 w-5 shrink-0 rounded-sm"
+            style={{ backgroundColor: space.color }}
+          />
+          {space.icon && (
+            <span aria-hidden className="text-lg leading-none">
+              {space.icon}
+            </span>
+          )}
+          <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
+            {space.name}
+          </h3>
+        </div>
+        <dl className="grid grid-cols-4 gap-1.5">
+          {(["backlog", "active", "waiting", "done"] as TaskState[]).map((s) => (
+            <div
+              key={s}
+              className="rounded border border-hairline bg-surface-2 px-1.5 py-1 text-center"
+            >
+              <dt className="font-display text-[9px] uppercase tracking-[0.16em] text-ink-faint">
+                {s.slice(0, 3)}
+              </dt>
+              <dd className="font-mono text-[12px] tabular-nums text-ink">
+                {String(counts[s] ?? 0).padStart(2, "0")}
+              </dd>
+            </div>
+          ))}
+        </dl>
+        <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-faint">
+          Updated {formatRelative(space.last_activity_at)}
+        </p>
+      </div>
+    </Link>
+  );
+}
+
+function ActivityRow({
+  event,
+  spaceLookup,
+}: {
+  event: Activity;
+  spaceLookup: Map<string, SpaceSummary>;
+}) {
+  const space = spaceLookup.get(event.space_id);
+  return (
+    <Link
+      to={`/spaces/${event.space_id}?task=${encodeURIComponent(event.task_id)}`}
+      className="grid grid-cols-[3.5rem_0.5rem_1fr_5rem] items-center gap-2 border-b border-hairline px-3 py-2 transition hover:bg-surface-2/60"
+    >
+      <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-faint">
+        {formatRelative(event.updated_at)}
+      </span>
+      <span
+        aria-hidden
+        className="h-2 w-2 rounded-sm"
+        style={{ backgroundColor: space?.color ?? "rgb(var(--color-hairline-strong))" }}
+      />
+      <span className="truncate text-[12px] text-ink">{event.title}</span>
+      <span className="text-right font-mono text-[10px] uppercase tracking-[0.14em] text-ink-muted">
+        {event.state}
+      </span>
+    </Link>
+  );
+}
+
+export function DashboardPage() {
+  const navigate = useNavigate();
+  const { data: spacesData, isLoading: spacesLoading } = useSpaces();
+  const { data: activity } = useActivity(50);
+  const importMutation = useImportSpace();
+  const createTask = useCreateTask();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [creating, setCreating] = useState(false);
+
+  const spaces = spacesData?.spaces ?? [];
+  const totals = spacesData?.totals ?? { backlog: 0, active: 0, waiting: 0, done: 0 };
+  const lookup = new Map(spaces.map((s) => [s.id, s] as const));
+
+  const totalTasks =
+    (totals.backlog ?? 0) +
+    (totals.active ?? 0) +
+    (totals.waiting ?? 0) +
+    (totals.done ?? 0);
+
+  async function handleImport(file: File) {
+    try {
+      const space = await importMutation.mutateAsync({ file });
+      navigate(`/spaces/${space.id}`);
+    } catch (err) {
+      // Mutation error is surfaced via the button state; keep noise low here.
+      console.error(err);
+    }
+  }
+
+  if (spacesLoading) {
+    return <p className="p-8 text-ink-muted">Loading dashboard…</p>;
+  }
+
+  return (
+    <div className="mx-auto max-w-[1280px] space-y-8 p-6 lg:p-8">
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink-faint">
+            Cronos · Overview
+          </p>
+          <h1 className="font-display text-[22px] font-semibold uppercase tracking-[0.14em] text-ink">
+            Dashboard
+          </h1>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setCreating(true)}
+            className="flex h-9 items-center gap-1.5 rounded border border-accent bg-accent px-3 text-[12px] font-medium text-canvas transition hover:bg-accent-bright"
+          >
+            <span aria-hidden className="text-base leading-none">＋</span>
+            New task
+          </button>
+          <Link
+            to="/spaces/new"
+            className="flex h-9 items-center rounded border border-hairline-strong bg-surface-1 px-3 text-[12px] text-ink transition hover:border-accent hover:bg-surface-2"
+          >
+            New space
+          </Link>
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={importMutation.isPending}
+            className="flex h-9 items-center rounded px-3 text-[12px] text-ink-muted transition hover:bg-surface-2 hover:text-ink disabled:opacity-60"
+          >
+            {importMutation.isPending ? "Importing…" : "Import space"}
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".zip"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleImport(file);
+              e.target.value = "";
+            }}
+          />
+        </div>
+      </header>
+
+      <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <StatTile
+          label="Active agents"
+          value={totals.active ?? 0}
+          tone="accent"
+          pulse={(totals.active ?? 0) > 0}
+        />
+        <StatTile
+          label="Waiting"
+          value={totals.waiting ?? 0}
+          tone={totals.waiting ? "warning" : "ink"}
+        />
+        <StatTile label="Done" value={totals.done ?? 0} />
+        <StatTile label="Total tasks" value={totalTasks} />
+      </section>
+
+      {spaces.length === 0 ? (
+        <section className="rounded-lg border border-dashed border-hairline-strong bg-surface-1 p-10 text-center shadow-inset-hairline">
+          <h2 className="font-display text-base font-semibold uppercase tracking-[0.18em] text-ink">
+            Create your first space
+          </h2>
+          <p className="mx-auto mt-2 max-w-md text-sm text-ink-muted">
+            Spaces group tasks like projects. Each one owns its own tasks, workspaces, and
+            (soon) a bound git repository.
+          </p>
+          <Link
+            to="/spaces/new"
+            className="mt-4 inline-flex h-9 items-center rounded border border-accent bg-accent px-4 text-[12px] font-medium text-canvas transition hover:bg-accent-bright"
+          >
+            New space
+          </Link>
+        </section>
+      ) : (
+        <section className="grid gap-6 xl:grid-cols-[2fr_1fr]">
+          <div>
+            <div className="mb-3 flex items-baseline gap-2">
+              <h2 className="font-display text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
+                Spaces
+              </h2>
+              <span className="font-mono text-[10px] tabular-nums text-ink-faint">
+                {String(spaces.length).padStart(2, "0")}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3">
+              {spaces.map((space) => (
+                <SpaceCard key={space.id} space={space} />
+              ))}
+              <Link
+                to="/spaces/new"
+                className="flex min-h-[150px] items-center justify-center rounded-md border border-dashed border-hairline-strong bg-surface-1/40 text-[12px] uppercase tracking-[0.2em] text-ink-muted transition hover:border-accent hover:text-accent-bright"
+              >
+                + New space
+              </Link>
+            </div>
+          </div>
+
+          <div>
+            <div className="mb-3 flex items-baseline gap-2">
+              <h2 className="font-display text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
+                Activity
+              </h2>
+              <span className="font-mono text-[10px] tabular-nums text-ink-faint">
+                {String(activity?.length ?? 0).padStart(2, "0")}
+              </span>
+            </div>
+            <div className="overflow-hidden rounded-md border border-hairline bg-surface-1 shadow-inset-hairline">
+              {!activity || activity.length === 0 ? (
+                <p className="p-4 text-sm italic text-ink-faint">No activity yet.</p>
+              ) : (
+                <div>
+                  {activity.map((ev) => (
+                    <ActivityRow
+                      key={ev.task_id + ev.updated_at}
+                      event={ev}
+                      spaceLookup={lookup}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {creating && (
+        <TaskForm
+          heading="New task"
+          showSpacePicker
+          submitting={createTask.isPending}
+          error={createTask.error?.message ?? null}
+          onCancel={() => setCreating(false)}
+          onSubmit={async (body) => {
+            if (!body.space_id) return;
+            await createTask.mutateAsync({
+              space_id: body.space_id,
+              title: body.title,
+              brief: body.brief,
+              agent_model: body.agent_model,
+            });
+            setCreating(false);
+          }}
+        />
+      )}
+    </div>
+  );
+}

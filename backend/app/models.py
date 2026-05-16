@@ -22,6 +22,7 @@ class Task(BaseModel):
     """Full task as parsed from a markdown file."""
 
     id: str
+    space_id: str
     title: str
     state: TaskState
     created_at: datetime
@@ -39,6 +40,7 @@ class TaskSummary(BaseModel):
     """Lightweight task representation for board listings."""
 
     id: str
+    space_id: str
     title: str
     state: TaskState
     created_at: datetime
@@ -48,6 +50,10 @@ class TaskSummary(BaseModel):
         default="",
         description="First ~200 chars of the brief, for card display.",
     )
+    # Denormalized space fields so cards can render without a separate join.
+    space_name: str | None = None
+    space_color: str | None = None
+    space_icon: str | None = None
 
 
 class Board(BaseModel):
@@ -57,3 +63,41 @@ class Board(BaseModel):
     active: list[TaskSummary] = []
     waiting: list[TaskSummary] = []
     done: list[TaskSummary] = []
+
+
+class Space(BaseModel):
+    """A project-like namespace that owns tasks, workspaces, and config."""
+
+    id: str
+    name: str
+    color: str  # validated hex, e.g. "#15803D"
+    icon: str | None = None
+    description: str = ""
+    created_at: datetime
+    updated_at: datetime
+    # Reserved for future binding (declared but unused in v1).
+    git_repo_url: str | None = None
+    git_branch: str | None = None
+    agent_defaults: dict[str, str] = Field(default_factory=dict)
+
+
+class SpaceSummary(BaseModel):
+    id: str
+    name: str
+    color: str
+    icon: str | None = None
+    task_counts: dict[TaskState, int] = Field(default_factory=dict)
+    last_activity_at: datetime | None = None
+
+
+class SpacesResponse(BaseModel):
+    spaces: list[SpaceSummary] = []
+    totals: dict[TaskState, int] = Field(default_factory=dict)
+
+
+class Activity(BaseModel):
+    task_id: str
+    space_id: str
+    title: str
+    state: TaskState
+    updated_at: datetime

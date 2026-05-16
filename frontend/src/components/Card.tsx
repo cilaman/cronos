@@ -28,6 +28,8 @@ export function Card({ task, onClick }: Props) {
       }
     : undefined;
 
+  const borderColor = task.space_color ?? "rgb(var(--color-hairline-strong))";
+
   return (
     <div
       ref={setNodeRef}
@@ -39,8 +41,29 @@ export function Card({ task, onClick }: Props) {
       <button
         type="button"
         onClick={onClick}
-        className="block w-full rounded-md border border-hairline bg-surface-2 p-3 text-left shadow-inset-hairline transition hover:-translate-y-px hover:border-hairline-strong hover:bg-surface-3 hover:shadow-lift focus:outline-none focus-visible:ring-1 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface-1"
+        style={{
+          borderLeftColor: borderColor,
+          borderLeftWidth: 3,
+        }}
+        className="block w-full rounded-md border border-hairline bg-surface-2 py-3 pl-2.5 pr-3 text-left shadow-inset-hairline transition hover:-translate-y-px hover:border-hairline-strong hover:bg-surface-3 hover:shadow-lift focus:outline-none focus-visible:ring-1 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface-1"
       >
+        {task.space_name && (
+          <div className="mb-1.5 flex items-center gap-1.5">
+            <span
+              aria-hidden
+              className="h-1.5 w-1.5 rounded-sm"
+              style={{ backgroundColor: borderColor }}
+            />
+            {task.space_icon && (
+              <span aria-hidden className="text-[11px] leading-none">
+                {task.space_icon}
+              </span>
+            )}
+            <span className="truncate font-mono text-[10px] uppercase tracking-[0.14em] text-ink-muted">
+              {task.space_name}
+            </span>
+          </div>
+        )}
         <h3 className="text-sm font-semibold leading-snug text-ink">{task.title}</h3>
         {task.brief_preview && (
           <p className="mt-1.5 text-xs leading-relaxed text-ink-muted line-clamp-3">

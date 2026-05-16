@@ -10,7 +10,10 @@ from pathlib import Path
 from fastapi import FastAPI, Request, Response
 from watchfiles import awatch
 
+from .api.activity import router as activity_router
+from .api.spaces import router as spaces_router
 from .api.tasks import router as tasks_router
+from .space_storage import RESERVED_SPACE_DIRS, SpaceStore
 from .storage import TaskStore
 from .worker import Worker
 
@@ -21,39 +24,77 @@ logging.basicConfig(
 log = logging.getLogger("cronos")
 
 DATA_DIR = Path(os.environ.get("CRONOS_DATA_DIR", "/data"))
-TASKS_DIR = DATA_DIR / "tasks"
-WORKSPACES_DIR = DATA_DIR / "workspaces"
+SPACES_DIR = DATA_DIR / "spaces"
+LEGACY_TASKS_DIR = DATA_DIR / "tasks"
+LEGACY_WORKSPACES_DIR = DATA_DIR / "workspaces"
 
 
-async def watch_tasks_dir(store: TaskStore, stop_event: asyncio.Event) -> None:
-    log.info("Watching %s for task changes", store.tasks_dir)
-    async for changes in awatch(store.tasks_dir, stop_event=stop_event):
+def _path_is_reserved(path: Path, root: Path) -> bool:
+    try:
+        rel = path.relative_to(root)
+    except ValueError:
+        return True
+    return any(part in RESERVED_SPACE_DIRS for part in rel.parts)
+
+
+async def watch_spaces_dir(
+    task_store: TaskStore,
+    space_store: SpaceStore,
+    stop_event: asyncio.Event,
+) -> None:
+    log.info("Watching %s for task & space changes", SPACES_DIR)
+    async for changes in awatch(SPACES_DIR, stop_event=stop_event):
         for _change, raw_path in changes:
             path = Path(raw_path)
-            if path.suffix != ".md":
+            if _path_is_reserved(path, SPACES_DIR):
                 continue
-            await store.reindex_path(path)
+            if path.suffix == ".md":
+                await task_store.reindex_path(path)
+            elif path.name == "space.yml":
+                await space_store.reindex_path(path)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    TASKS_DIR.mkdir(parents=True, exist_ok=True)
-    WORKSPACES_DIR.mkdir(parents=True, exist_ok=True)
+    SPACES_DIR.mkdir(parents=True, exist_ok=True)
 
-    store = TaskStore(TASKS_DIR)
-    await store.reload_all()
-    app.state.store = store
+    if LEGACY_TASKS_DIR.exists() or LEGACY_WORKSPACES_DIR.exists():
+        log.warning(
+            "Legacy /data/tasks or /data/workspaces directories exist. They are "
+            "ignored by Cronos now that tasks live under /data/spaces/{id}/. "
+            "Remove them once you've confirmed no data is needed."
+        )
 
-    worker = Worker(store)
+    space_store = SpaceStore(SPACES_DIR)
+    await space_store.reload_all()
+    if space_store.count() == 0:
+        await space_store.create(
+            name="Personal",
+            color="#15803D",
+            icon=None,
+            description="Default space — created automatically on first launch.",
+            space_id="personal",
+        )
+        log.info("Bootstrapped default 'personal' space")
+    app.state.space_store = space_store
+
+    task_store = TaskStore(SPACES_DIR)
+    await task_store.reload_all()
+    app.state.store = task_store
+
+    worker = Worker(task_store)
     worker.start()
     app.state.worker = worker
 
     stop_event = asyncio.Event()
-    watcher = asyncio.create_task(watch_tasks_dir(store, stop_event), name="watcher")
+    watcher = asyncio.create_task(
+        watch_spaces_dir(task_store, space_store, stop_event),
+        name="watcher",
+    )
 
     # Recover in-flight runs: any task left in ACTIVE on startup gets
     # re-enqueued. The agent resumes via its stored claude_session_id if any.
-    board = store.board()
+    board = task_store.board()
     for summary in board.active:
         log.info("Resuming task left in active state: %s", summary.id)
         await worker.enqueue(summary.id)
@@ -71,38 +112,40 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Cronos", version="0.0.1", lifespan=lifespan)
 app.include_router(tasks_router)
+app.include_router(spaces_router)
+app.include_router(activity_router)
 
 
 @app.get("/api/health")
 async def health(request: Request, response: Response) -> dict[str, object]:
     """Liveness + light readiness check.
 
-    Returns 200 only when the dirs exist, the in-memory task index loaded,
-    and the worker loop is alive. The Docker healthcheck and any external
-    monitoring should treat a non-200 here as "restart me".
+    Returns 200 only when the spaces dir exists, the in-memory indexes loaded,
+    and the worker loop is alive.
     """
     worker: Worker | None = getattr(request.app.state, "worker", None)
     store: TaskStore | None = getattr(request.app.state, "store", None)
+    space_store: SpaceStore | None = getattr(request.app.state, "space_store", None)
 
-    tasks_dir_ok = TASKS_DIR.is_dir()
-    workspaces_dir_ok = WORKSPACES_DIR.is_dir()
+    spaces_dir_ok = SPACES_DIR.is_dir()
     claude_on_path = shutil.which("claude") is not None
     worker_alive = worker is not None and worker.is_alive()
-    index_loaded = store is not None
+    index_loaded = store is not None and space_store is not None
     tasks_indexed = store.count() if store is not None else None
+    spaces_indexed = space_store.count() if space_store is not None else None
 
-    ok = tasks_dir_ok and workspaces_dir_ok and worker_alive and index_loaded
+    ok = spaces_dir_ok and worker_alive and index_loaded
     if not ok:
         response.status_code = 503
 
     return {
         "ok": ok,
         "data_dir": str(DATA_DIR),
-        "tasks_dir_exists": tasks_dir_ok,
-        "workspaces_dir_exists": workspaces_dir_ok,
+        "spaces_dir_exists": spaces_dir_ok,
         "claude_on_path": claude_on_path,
         "index_loaded": index_loaded,
         "tasks_indexed": tasks_indexed,
+        "spaces_indexed": spaces_indexed,
         "worker_running": worker_alive,
         "current_task": worker.current() if worker else None,
     }

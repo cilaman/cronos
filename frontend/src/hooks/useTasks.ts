@@ -1,11 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
-import type { AgentMode, AgentModel, Board, TaskState } from "../types";
+import type { AgentMode, AgentModel, TaskState } from "../types";
 
-export function useBoard() {
+export function useBoard(spaceId: string | null = null) {
   return useQuery({
-    queryKey: ["board"],
-    queryFn: api.board,
+    queryKey: ["board", spaceId ?? "all"],
+    queryFn: () => api.board(spaceId),
     refetchInterval: 5_000,
   });
 }
@@ -18,11 +18,22 @@ export function useTask(id: string | null) {
   });
 }
 
+function invalidateBoards(qc: ReturnType<typeof useQueryClient>) {
+  // Predicate-match so every cached board variant (per space + "all") refreshes.
+  qc.invalidateQueries({
+    predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === "board",
+  });
+}
+
 export function useCreateTask() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: api.create,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["board"] }),
+    onSuccess: () => {
+      invalidateBoards(qc);
+      qc.invalidateQueries({ queryKey: ["spaces"] });
+      qc.invalidateQueries({ queryKey: ["activity"] });
+    },
   });
 }
 
@@ -36,7 +47,7 @@ export function useUpdateTask(id: string) {
       agent_model?: AgentModel;
     }) => api.update(id, body),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["board"] });
+      invalidateBoards(qc);
       qc.invalidateQueries({ queryKey: ["task", id] });
     },
   });
@@ -47,7 +58,7 @@ export function useReplyToTask(id: string) {
   return useMutation({
     mutationFn: (message: string) => api.reply(id, message),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["board"] });
+      invalidateBoards(qc);
       qc.invalidateQueries({ queryKey: ["task", id] });
     },
   });
@@ -58,7 +69,7 @@ export function useStopTask(id: string) {
   return useMutation({
     mutationFn: () => api.stop(id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["board"] });
+      invalidateBoards(qc);
       qc.invalidateQueries({ queryKey: ["task", id] });
     },
   });
@@ -69,8 +80,9 @@ export function useStartTask(id: string) {
   return useMutation({
     mutationFn: () => api.start(id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["board"] });
+      invalidateBoards(qc);
       qc.invalidateQueries({ queryKey: ["task", id] });
+      qc.invalidateQueries({ queryKey: ["activity"] });
     },
   });
 }
@@ -79,7 +91,10 @@ export function useDeleteTask() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["board"] }),
+    onSuccess: () => {
+      invalidateBoards(qc);
+      qc.invalidateQueries({ queryKey: ["spaces"] });
+    },
   });
 }
 
@@ -88,31 +103,6 @@ export function useTransitionTask() {
   return useMutation({
     mutationFn: ({ id, state }: { id: string; state: TaskState }) =>
       api.transition(id, state),
-    onMutate: async ({ id, state }) => {
-      await qc.cancelQueries({ queryKey: ["board"] });
-      const previous = qc.getQueryData<Board>(["board"]);
-      if (previous) {
-        const next: Board = {
-          backlog: [...previous.backlog],
-          active: [...previous.active],
-          waiting: [...previous.waiting],
-          done: [...previous.done],
-        };
-        for (const lane of ["backlog", "active", "waiting", "done"] as const) {
-          const idx = next[lane].findIndex((t) => t.id === id);
-          if (idx >= 0) {
-            const [task] = next[lane].splice(idx, 1);
-            next[state] = [{ ...task, state }, ...next[state]];
-            break;
-          }
-        }
-        qc.setQueryData<Board>(["board"], next);
-      }
-      return { previous };
-    },
-    onError: (_err, _vars, ctx) => {
-      if (ctx?.previous) qc.setQueryData(["board"], ctx.previous);
-    },
-    onSettled: () => qc.invalidateQueries({ queryKey: ["board"] }),
+    onSettled: () => invalidateBoards(qc),
   });
 }
