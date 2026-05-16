@@ -5,6 +5,16 @@ export default {
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
+      fontFamily: {
+        mono: [
+          '"JetBrains Mono"',
+          "ui-monospace",
+          "SFMono-Regular",
+          "Menlo",
+          "Consolas",
+          "monospace",
+        ],
+      },
       colors: {
         // Surfaces — deep, forest-shadow neutrals with a green undertone.
         // `pitch` is the canvas; the numbered shades are elevated layers.

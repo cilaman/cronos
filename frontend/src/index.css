@@ -1,3 +1,49 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  .font-mono {
+    font-feature-settings: "calt", "ss01", "zero";
+  }
+}
+
+@layer utilities {
+  @media (prefers-reduced-motion: no-preference) {
+    .anim-enter {
+      animation: streamEnter 180ms ease-out both;
+    }
+    .anim-pulse-dot {
+      animation: pulseDot 1.8s ease-in-out infinite;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .anim-enter,
+    .anim-pulse-dot {
+      animation: none;
+    }
+  }
+}
+
+@keyframes streamEnter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulseDot {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgb(90 181 120 / 0.45);
+  }
+  50% {
+    opacity: 0.55;
+    box-shadow: 0 0 0 4px rgb(90 181 120 / 0);
+  }
+}

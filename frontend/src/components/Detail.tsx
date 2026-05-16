@@ -17,8 +17,8 @@ import {
   type AgentModel,
 } from "../types";
 import { ChatInput } from "./ChatInput";
+import { ConversationStream } from "./ConversationStream";
 import { FilesPanel } from "./FilesPanel";
-import { LiveLog } from "./LiveLog";
 import { TaskActionBar } from "./TaskActionBar";
 import { TaskForm } from "./TaskForm";
 
@@ -191,22 +191,7 @@ export function Detail({ taskId, onClose }: Props) {
                       </div>
                     </section>
 
-                    <section>
-                      <h3 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-bone-faint">
-                        History
-                      </h3>
-                      {task.history ? (
-                        <div className="prose prose-sm prose-invert mt-2 max-w-none prose-headings:text-bone prose-p:text-bone prose-strong:text-bone prose-a:text-moss-bright prose-code:text-moss-bright prose-pre:bg-pitch prose-pre:border prose-pre:border-hairline">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{task.history}</ReactMarkdown>
-                        </div>
-                      ) : (
-                        <p className="mt-2 text-sm italic text-bone-faint">No history yet.</p>
-                      )}
-                    </section>
-
-                    {(task.state === "active" || task.state === "waiting") && (
-                      <LiveLog taskId={task.id} />
-                    )}
+                    <ConversationStream task={task} />
                   </div>
 
                   <ChatInput
