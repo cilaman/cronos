@@ -4,7 +4,7 @@ import remarkGfm from "remark-gfm";
 import { formatClock, formatFullTimestamp } from "../parse-history";
 
 export const conversationProseClasses =
-  "prose prose-sm prose-invert max-w-none " +
+  "prose prose-sm dark:prose-invert max-w-none " +
   "prose-headings:text-ink prose-headings:font-semibold prose-headings:tracking-tight " +
   "prose-p:text-ink prose-p:leading-relaxed " +
   "prose-strong:text-ink " +

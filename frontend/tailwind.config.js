@@ -2,6 +2,7 @@ import typography from "@tailwindcss/typography";
 
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: "class",
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
@@ -32,54 +33,44 @@ export default {
         ],
       },
       colors: {
-        // Surfaces — operator-console ink with a green undertone.
-        // `canvas` is the page bg; numbered `surface` shades stack upward.
-        canvas: "#07100c",
+        // Theme-aware semantic tokens. Backed by CSS variables defined in
+        // `src/index.css` under `:root` (light) and `.dark`. The `<alpha-value>`
+        // placeholder lets Tailwind's opacity modifiers (`bg-canvas/40`) work.
+        canvas: "rgb(var(--color-canvas) / <alpha-value>)",
         surface: {
-          1: "#11181b", // raised — lanes, cards, modals, headers, inputs
-          2: "#1a2326", // hover / secondary surface
-          3: "#243030", // pressed / tertiary
+          1: "rgb(var(--color-surface-1) / <alpha-value>)",
+          2: "rgb(var(--color-surface-2) / <alpha-value>)",
+          3: "rgb(var(--color-surface-3) / <alpha-value>)",
         },
         hairline: {
-          DEFAULT: "#1f2a26", // standard 1px divider
-          strong: "#324038", // emphasised border (form inputs, highlights)
+          DEFAULT: "rgb(var(--color-hairline) / <alpha-value>)",
+          strong: "rgb(var(--color-hairline-strong) / <alpha-value>)",
         },
-        // Ink — phosphor-bone text scale, brighter than the previous bone.
-        // Named `ink-*` to avoid the `text-text` class collision.
         ink: {
-          DEFAULT: "#e8f0e3", // primary (15.2:1 on canvas, AAA)
-          muted: "#a8b8ad",   // secondary (7.6:1 on canvas, AAA)
-          faint: "#7e8e83",   // tertiary / disabled (4.7:1 on canvas, AA)
+          DEFAULT: "rgb(var(--color-ink) / <alpha-value>)",
+          muted: "rgb(var(--color-ink-muted) / <alpha-value>)",
+          faint: "rgb(var(--color-ink-faint) / <alpha-value>)",
         },
-        // Accent — phosphor green. `accent-deep` preserves the PWA #215732 seal.
         accent: {
-          DEFAULT: "#4ade80",
-          bright: "#86efac", // hover
-          dim: "#2a6e3e",    // pressed / inset
-          deep: "#215732",   // PWA anchor — seals, heavy panels
+          DEFAULT: "rgb(var(--color-accent) / <alpha-value>)",
+          bright: "rgb(var(--color-accent-bright) / <alpha-value>)",
+          dim: "rgb(var(--color-accent-dim) / <alpha-value>)",
+          deep: "rgb(var(--color-accent-deep) / <alpha-value>)",
         },
-        // Semantic supporting colors (non-state chrome — do NOT use for badges).
-        warning: "#d4a647", // queued status, shell-tool labels
-        danger: "#a84a4a",  // errors, stop button
+        warning: "rgb(var(--color-warning) / <alpha-value>)",
+        danger: "rgb(var(--color-danger) / <alpha-value>)",
       },
       boxShadow: {
-        // Hairline highlight on top of dark cards (1px white at 4%).
-        "inset-hairline": "inset 0 1px 0 0 rgb(255 255 255 / 0.04)",
-        // Heavy lift for modals / popovers on the canvas.
-        lift: "0 8px 24px -8px rgb(0 0 0 / 0.6), 0 2px 4px -2px rgb(0 0 0 / 0.4)",
-        // Phosphor glow for focused accent elements.
-        "accent-glow": "0 0 0 1px rgb(74 222 128 / 0.4), 0 0 16px -2px rgb(74 222 128 / 0.25)",
+        "inset-hairline": "inset 0 1px 0 0 var(--shadow-inset-hairline)",
+        lift: "0 8px 24px -8px var(--shadow-lift-outer), 0 2px 4px -2px var(--shadow-lift-inner)",
+        "accent-glow":
+          "0 0 0 1px rgb(var(--color-accent) / 0.4), 0 0 16px -2px rgb(var(--color-accent) / 0.25)",
       },
       backgroundImage: {
-        // SVG grain — use as `bg-grain` overlay (low opacity) on flat surfaces.
-        grain:
-          "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.5 0'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.18'/></svg>\")",
-        // Hairline grid — pair with `bg-[length:24px_24px]` (or `bg-grid-sm`).
-        "hairline-grid":
-          "linear-gradient(to right, rgb(255 255 255 / 0.03) 1px, transparent 1px), linear-gradient(to bottom, rgb(255 255 255 / 0.03) 1px, transparent 1px)",
-        // Vignette for board edges.
+        grain: "var(--bg-grain)",
+        "hairline-grid": "var(--bg-hairline-grid)",
         "canvas-vignette":
-          "radial-gradient(ellipse at center, transparent 50%, rgb(0 0 0 / 0.4) 100%)",
+          "radial-gradient(ellipse at center, transparent 50%, var(--shadow-lift-outer) 100%)",
       },
       backgroundSize: {
         "grid-sm": "24px 24px",
