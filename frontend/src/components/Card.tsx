@@ -39,18 +39,21 @@ export function Card({ task, onClick }: Props) {
       <button
         type="button"
         onClick={onClick}
-        className="block w-full rounded-md border border-slate-200 bg-white p-3 text-left shadow-sm hover:border-slate-300 hover:shadow focus:outline-none focus:ring-2 focus:ring-emerald-500"
+        className="block w-full rounded-md border border-hairline bg-pitch-100 p-3 text-left shadow-inset-hairline transition hover:-translate-y-px hover:border-hairline-strong hover:bg-pitch-200 hover:shadow-lift focus:outline-none focus-visible:ring-1 focus-visible:ring-moss focus-visible:ring-offset-1 focus-visible:ring-offset-pitch-50"
       >
-        <h3 className="text-sm font-semibold text-slate-900">{task.title}</h3>
+        <h3 className="text-sm font-semibold leading-snug text-bone">{task.title}</h3>
         {task.brief_preview && (
-          <p className="mt-1 text-xs text-slate-600 line-clamp-3">{task.brief_preview}</p>
-        )}
-        {task.waiting_question && (
-          <p className="mt-2 rounded bg-amber-50 px-2 py-1 text-xs text-amber-900">
-            <span className="font-medium">Q:</span> {task.waiting_question}
+          <p className="mt-1.5 text-xs leading-relaxed text-bone-muted line-clamp-3">
+            {task.brief_preview}
           </p>
         )}
-        <p className="mt-2 text-[10px] uppercase tracking-wide text-slate-400">
+        {task.waiting_question && (
+          <p className="mt-2 rounded border border-amber-800/40 bg-amber-950/60 px-2 py-1 text-xs text-amber-300">
+            <span className="font-semibold uppercase tracking-wide text-[10px]">Q&nbsp;</span>
+            {task.waiting_question}
+          </p>
+        )}
+        <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.15em] text-bone-faint">
           {formatRelative(task.updated_at)}
         </p>
       </button>
