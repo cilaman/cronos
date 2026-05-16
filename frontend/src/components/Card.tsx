@@ -39,21 +39,21 @@ export function Card({ task, onClick }: Props) {
       <button
         type="button"
         onClick={onClick}
-        className="block w-full rounded-md border border-hairline bg-pitch-100 p-3 text-left shadow-inset-hairline transition hover:-translate-y-px hover:border-hairline-strong hover:bg-pitch-200 hover:shadow-lift focus:outline-none focus-visible:ring-1 focus-visible:ring-moss focus-visible:ring-offset-1 focus-visible:ring-offset-pitch-50"
+        className="block w-full rounded-md border border-hairline bg-surface-2 p-3 text-left shadow-inset-hairline transition hover:-translate-y-px hover:border-hairline-strong hover:bg-surface-3 hover:shadow-lift focus:outline-none focus-visible:ring-1 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface-1"
       >
-        <h3 className="text-sm font-semibold leading-snug text-bone">{task.title}</h3>
+        <h3 className="text-sm font-semibold leading-snug text-ink">{task.title}</h3>
         {task.brief_preview && (
-          <p className="mt-1.5 text-xs leading-relaxed text-bone-muted line-clamp-3">
+          <p className="mt-1.5 text-xs leading-relaxed text-ink-muted line-clamp-3">
             {task.brief_preview}
           </p>
         )}
         {task.waiting_question && (
-          <p className="mt-2 rounded border border-amber-800/40 bg-amber-950/60 px-2 py-1 text-xs text-amber-300">
+          <p className="mt-2 rounded border border-amber-400/30 bg-amber-400/10 px-2 py-1 text-xs text-amber-300">
             <span className="font-semibold uppercase tracking-wide text-[10px]">Q&nbsp;</span>
             {task.waiting_question}
           </p>
         )}
-        <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.15em] text-bone-faint">
+        <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.15em] text-ink-faint">
           {formatRelative(task.updated_at)}
         </p>
       </button>

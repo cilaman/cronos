@@ -97,11 +97,11 @@ export function Detail({ taskId, onClose }: Props) {
         onClick={onClose}
       >
         <div
-          className="flex h-full w-full max-w-5xl flex-col overflow-hidden border border-hairline bg-pitch-50 shadow-lift sm:h-auto sm:max-h-[90vh] sm:rounded-lg"
+          className="flex h-full w-full max-w-5xl flex-col overflow-hidden border border-hairline bg-surface-1 shadow-lift sm:h-auto sm:max-h-[90vh] sm:rounded-lg"
           onClick={(e) => e.stopPropagation()}
         >
-          {isLoading && <div className="p-6 text-bone-muted">Loading…</div>}
-          {error && <div className="p-6 text-oxblood">Error: {error.message}</div>}
+          {isLoading && <div className="p-6 text-ink-muted">Loading…</div>}
+          {error && <div className="p-6 text-danger">Error: {error.message}</div>}
           {task && (
             <>
               <header className="flex items-start justify-between gap-4 border-b border-hairline p-4">
@@ -114,14 +114,14 @@ export function Detail({ taskId, onClose }: Props) {
                     >
                       {task.state}
                     </span>
-                    <span className="font-mono text-xs text-bone-faint">{task.id}</span>
+                    <span className="font-mono text-xs text-ink-faint">{task.id}</span>
                   </div>
-                  <h2 className="mt-2 text-xl font-semibold leading-tight tracking-tight text-bone">
+                  <h2 className="mt-2 text-xl font-semibold leading-tight tracking-tight text-ink">
                     {task.title}
                   </h2>
                   <div className="mt-3 flex flex-wrap items-center gap-4 text-xs">
-                    <label className="flex items-center gap-2 text-bone-muted">
-                      <span className="text-[10px] uppercase tracking-[0.15em] text-bone-faint">
+                    <label className="flex items-center gap-2 text-ink-muted">
+                      <span className="font-display text-[10px] uppercase tracking-[0.18em] text-ink-faint">
                         Mode
                       </span>
                       <select
@@ -129,7 +129,7 @@ export function Detail({ taskId, onClose }: Props) {
                         onChange={(e) =>
                           void onModeChange(e.target.value as AgentMode)
                         }
-                        className="rounded border border-hairline-strong bg-pitch px-2 py-1 text-xs font-medium text-bone focus:border-moss focus:outline-none focus:ring-1 focus:ring-moss"
+                        className="rounded border border-hairline-strong bg-canvas px-2 py-1 text-xs font-medium text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                       >
                         {AGENT_MODES.map((m) => (
                           <option key={m.value} value={m.value}>
@@ -138,8 +138,8 @@ export function Detail({ taskId, onClose }: Props) {
                         ))}
                       </select>
                     </label>
-                    <label className="flex items-center gap-2 text-bone-muted">
-                      <span className="text-[10px] uppercase tracking-[0.15em] text-bone-faint">
+                    <label className="flex items-center gap-2 text-ink-muted">
+                      <span className="font-display text-[10px] uppercase tracking-[0.18em] text-ink-faint">
                         Model
                       </span>
                       <select
@@ -147,7 +147,7 @@ export function Detail({ taskId, onClose }: Props) {
                         onChange={(e) =>
                           void onModelChange(e.target.value as AgentModel)
                         }
-                        className="rounded border border-hairline-strong bg-pitch px-2 py-1 text-xs font-medium text-bone focus:border-moss focus:outline-none focus:ring-1 focus:ring-moss"
+                        className="rounded border border-hairline-strong bg-canvas px-2 py-1 text-xs font-medium text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                       >
                         {AGENT_MODELS.map((m) => (
                           <option key={m.value} value={m.value}>
@@ -162,7 +162,7 @@ export function Detail({ taskId, onClose }: Props) {
                   type="button"
                   onClick={onClose}
                   aria-label="Close"
-                  className="rounded p-1 text-bone-muted transition hover:bg-pitch-100 hover:text-bone"
+                  className="rounded p-1 text-ink-muted transition hover:bg-surface-2 hover:text-ink"
                 >
                   ✕
                 </button>
@@ -183,10 +183,10 @@ export function Detail({ taskId, onClose }: Props) {
                 <div className="flex min-w-0 flex-1 flex-col">
                   <div className="flex-1 space-y-6 overflow-y-auto p-4">
                     <section>
-                      <h3 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-bone-faint">
+                      <h3 className="font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
                         Brief
                       </h3>
-                      <div className="prose prose-sm prose-invert mt-2 max-w-none prose-headings:text-bone prose-p:text-bone prose-strong:text-bone prose-a:text-moss-bright prose-code:text-moss-bright prose-pre:bg-pitch prose-pre:border prose-pre:border-hairline">
+                      <div className="prose prose-sm prose-invert mt-2 max-w-none prose-headings:text-ink prose-p:text-ink prose-strong:text-ink prose-a:text-accent-bright prose-code:text-accent-bright prose-pre:bg-canvas prose-pre:border prose-pre:border-hairline">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>{task.brief}</ReactMarkdown>
                       </div>
                     </section>

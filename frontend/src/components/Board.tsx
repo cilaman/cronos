@@ -43,8 +43,8 @@ export function Board() {
     }
   }
 
-  if (isLoading) return <p className="p-6 text-bone-muted">Loading board…</p>;
-  if (error) return <p className="p-6 text-oxblood">Error: {error.message}</p>;
+  if (isLoading) return <p className="p-6 text-ink-muted">Loading board…</p>;
+  if (error) return <p className="p-6 text-danger">Error: {error.message}</p>;
   if (!data) return null;
 
   return (

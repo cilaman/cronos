@@ -5,14 +5,14 @@ import { formatClock, formatFullTimestamp } from "../parse-history";
 
 export const conversationProseClasses =
   "prose prose-sm prose-invert max-w-none " +
-  "prose-headings:text-bone prose-headings:font-semibold prose-headings:tracking-tight " +
-  "prose-p:text-bone prose-p:leading-relaxed " +
-  "prose-strong:text-bone " +
-  "prose-a:text-moss-bright prose-a:no-underline hover:prose-a:underline " +
-  "prose-li:text-bone " +
-  "prose-blockquote:border-l-moss prose-blockquote:bg-pitch/40 prose-blockquote:not-italic prose-blockquote:text-bone-muted " +
-  "prose-code:rounded prose-code:bg-pitch prose-code:px-1 prose-code:py-px prose-code:text-[0.85em] prose-code:font-mono prose-code:text-moss-bright prose-code:before:hidden prose-code:after:hidden " +
-  "prose-pre:bg-pitch prose-pre:border prose-pre:border-hairline prose-pre:rounded prose-pre:text-[12px] prose-pre:leading-relaxed " +
+  "prose-headings:text-ink prose-headings:font-semibold prose-headings:tracking-tight " +
+  "prose-p:text-ink prose-p:leading-relaxed " +
+  "prose-strong:text-ink " +
+  "prose-a:text-accent-bright prose-a:no-underline hover:prose-a:underline " +
+  "prose-li:text-ink " +
+  "prose-blockquote:border-l-accent prose-blockquote:bg-canvas/40 prose-blockquote:not-italic prose-blockquote:text-ink-muted " +
+  "prose-code:rounded prose-code:bg-canvas prose-code:px-1 prose-code:py-px prose-code:text-[0.85em] prose-code:font-mono prose-code:text-accent-bright prose-code:before:hidden prose-code:after:hidden " +
+  "prose-pre:bg-canvas prose-pre:border prose-pre:border-hairline prose-pre:rounded prose-pre:text-[12px] prose-pre:leading-relaxed " +
   "prose-hr:border-hairline";
 
 interface EntryShellProps {
@@ -34,10 +34,10 @@ function RoleTag({
     role === "user" ? "USER" : role === "agent" ? "AGENT" : "SYSTEM";
   const color =
     role === "agent"
-      ? "text-moss-bright"
+      ? "text-accent-bright"
       : role === "user"
-      ? "text-bone"
-      : "text-bone-faint";
+      ? "text-ink"
+      : "text-ink-faint";
   return (
     <span
       className={`inline-flex items-center gap-1.5 font-mono text-[10px] font-medium uppercase tracking-[0.22em] ${color}`}
@@ -46,7 +46,7 @@ function RoleTag({
       {streaming && (
         <span
           aria-hidden
-          className="anim-pulse-dot inline-block h-1.5 w-1.5 rounded-full bg-moss-bright"
+          className="anim-pulse-dot inline-block h-1.5 w-1.5 rounded-full bg-accent-bright"
         />
       )}
     </span>
@@ -71,18 +71,18 @@ export function EntryShell({
           <time
             dateTime={timestamp}
             title={formatFullTimestamp(timestamp)}
-            className="font-mono text-[11px] tabular-nums text-bone-faint"
+            className="font-mono text-[11px] tabular-nums text-ink-faint"
           >
             {formatClock(timestamp)}
           </time>
         ) : (
-          <span className="font-mono text-[11px] text-bone-faint">—</span>
+          <span className="font-mono text-[11px] text-ink-faint">—</span>
         )}
         <RoleTag role={role} streaming={isStreaming} />
         {role === "agent" && (
           <span
             aria-hidden
-            className="hidden h-px w-6 bg-moss-bright/40 sm:block"
+            className="hidden h-px w-6 bg-accent-bright/40 sm:block"
           />
         )}
       </header>
@@ -101,11 +101,11 @@ export function MarkdownBody({ source }: { source: string }) {
 
 export function ThinkingBlock({ text }: { text: string }) {
   return (
-    <details className="group rounded border border-hairline/60 bg-pitch/40 open:bg-pitch/60">
-      <summary className="cursor-pointer select-none px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.22em] text-bone-faint transition hover:text-bone-muted">
+    <details className="group rounded border border-hairline/60 bg-canvas/40 open:bg-canvas/60">
+      <summary className="cursor-pointer select-none px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.22em] text-ink-faint transition hover:text-ink-muted">
         <span className="mr-2">▸</span>thinking
       </summary>
-      <div className="border-t border-hairline/60 px-3 py-2 font-mono text-[11px] leading-relaxed text-bone-muted">
+      <div className="border-t border-hairline/60 px-3 py-2 font-mono text-[11px] leading-relaxed text-ink-muted">
         <pre className="whitespace-pre-wrap">{text}</pre>
       </div>
     </details>
@@ -114,7 +114,7 @@ export function ThinkingBlock({ text }: { text: string }) {
 
 export function SystemRow({ text }: { text: string }) {
   return (
-    <div className="flex items-center gap-3 border-t border-hairline/40 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-bone-faint">
+    <div className="flex items-center gap-3 border-t border-hairline/40 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-faint">
       <span aria-hidden>::</span>
       <span>{text}</span>
     </div>

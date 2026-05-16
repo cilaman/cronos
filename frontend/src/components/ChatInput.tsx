@@ -57,17 +57,17 @@ export function ChatInput({
   }
 
   return (
-    <div className="border-t border-hairline bg-pitch">
+    <div className="border-t border-hairline bg-canvas">
       {waitingQuestion && taskState === "waiting" && (
-        <div className="border-b border-amber-800/40 bg-amber-950/60 px-4 py-2 text-sm text-amber-300">
-          <span className="mr-2 font-semibold uppercase tracking-[0.18em] text-[10px]">
+        <div className="border-b border-amber-400/30 bg-amber-400/10 px-4 py-2 text-sm text-amber-300">
+          <span className="mr-2 font-display font-semibold uppercase tracking-[0.18em] text-[10px]">
             Agent asks
           </span>
           {waitingQuestion}
         </div>
       )}
       <div className="flex flex-col gap-2 p-3">
-        <div className="flex items-end gap-2 rounded-lg border border-hairline-strong bg-pitch-50 px-3 py-2 shadow-inset-hairline transition focus-within:border-moss focus-within:ring-1 focus-within:ring-moss">
+        <div className="flex items-end gap-2 rounded-lg border border-hairline-strong bg-surface-1 px-3 py-2 shadow-inset-hairline transition focus-within:border-accent focus-within:ring-1 focus-within:ring-accent">
           <textarea
             ref={textareaRef}
             value={draft}
@@ -75,33 +75,33 @@ export function ChatInput({
             onKeyDown={handleKeyDown}
             rows={1}
             placeholder={placeholderFor(taskState)}
-            className="block w-full resize-none bg-transparent text-sm text-bone placeholder:text-bone-faint focus:outline-none"
+            className="block w-full resize-none bg-transparent text-sm text-ink placeholder:text-ink-faint focus:outline-none"
           />
           <button
             type="button"
             onClick={() => void handleSend()}
             disabled={!draft.trim() || isSending}
-            className="rounded border border-moss bg-moss px-3 py-1.5 text-xs font-medium text-bone transition hover:bg-moss-bright hover:shadow-moss-glow disabled:cursor-not-allowed disabled:border-hairline disabled:bg-pitch-100 disabled:text-bone-faint disabled:shadow-none"
+            className="rounded border border-accent bg-accent px-3 py-1.5 text-xs font-medium text-canvas transition hover:bg-accent-bright hover:shadow-accent-glow disabled:cursor-not-allowed disabled:border-hairline disabled:bg-surface-2 disabled:text-ink-faint disabled:shadow-none"
           >
             {isSending ? "Sending…" : "Send"}
           </button>
         </div>
 
-        <div className="flex items-center gap-3 text-[11px] text-bone-faint">
+        <div className="flex items-center gap-3 text-[11px] text-ink-faint">
           <span>
-            <kbd className="rounded bg-pitch-100 px-1 font-mono text-bone-muted ring-1 ring-hairline">
+            <kbd className="rounded bg-surface-2 px-1 font-mono text-ink-muted ring-1 ring-hairline">
               ⌘⏎
             </kbd>{" "}
             to send
           </span>
           {pendingCount > 0 && (
-            <span className="rounded bg-pitch-100 px-2 py-0.5 text-bone-muted ring-1 ring-hairline">
+            <span className="rounded bg-surface-2 px-2 py-0.5 text-ink-muted ring-1 ring-hairline">
               queued {pendingCount}
             </span>
           )}
         </div>
 
-        {error && <p className="text-xs text-oxblood">{error}</p>}
+        {error && <p className="text-xs text-danger">{error}</p>}
       </div>
     </div>
   );
