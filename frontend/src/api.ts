@@ -35,6 +35,8 @@ export const api = {
     }),
   delete: (id: string) =>
     request<void>(`/api/tasks/${id}`, { method: "DELETE" }),
+  start: (id: string) =>
+    request<Task>(`/api/tasks/${id}/start`, { method: "POST", body: "{}" }),
   reply: (id: string, message: string) =>
     request<Task>(`/api/tasks/${id}/reply`, {
       method: "POST",

@@ -1,6 +1,6 @@
 ---
 name: frontend-design
-description: Create distinctive, production-grade UI for Cronos — the Kanban task manager that orchestrates Claude Code agents. Use this skill when the user asks to build, restyle, or beautify any React component, page, modal, or interface in the frontend/ workspace (e.g. board lanes, cards, detail views, chat input, live logs, login, settings). Generates polished React + TypeScript + Tailwind code with a coherent aesthetic point-of-view, avoiding generic AI slop.
+description: Create distinctive, production-grade UI for Cronos — the Kanban task manager that orchestrates Claude Code agents. Use this skill when the user asks to build, restyle, or beautify any React component, page, modal, or interface in the frontend/ workspace (e.g. board lanes, cards, detail views, chat input, live logs, login, settings). Generates polished React + TypeScript + Tailwind code with a coherent aesthetic point-of-view, mobile-first responsive layout, avoiding generic AI slop.
 license: Internal use — Cronos project.
 ---
 
@@ -82,6 +82,24 @@ Respect `prefers-reduced-motion` — wrap non-essential animations in `@media (p
 
 **Iconography.** When a glyph beats text, prefer inline SVG (single-path, `currentColor`) inside a tiny component. If a feature truly needs a kit, ask before adding `lucide-react` — it is small and fits the aesthetic if introduced cleanly.
 
+## Responsive & mobile-first (non-negotiable)
+
+Cronos is used on a phone as often as a laptop — the operator triages tasks on the go and runs heavy work at the desk. Every component you ship MUST be responsive and authored mobile-first. This is a hard requirement, not a nice-to-have.
+
+**Rules:**
+- **Author mobile-first.** Write the base classes for the smallest viewport (≥320px), then layer up with `sm:` (640), `md:` (768), `lg:` (1024), `xl:` (1280). Never the reverse. No `lg:flex md:flex sm:block` cascading down — start at `flex-col` and add `sm:flex-row`.
+- **Touch targets ≥ 44×44px on mobile.** Buttons, drag handles, the lane `＋` add button, close `✕`, mode/model selects — give them enough padding (`p-2` minimum on small viewports). Icon-only controls need `aria-label`.
+- **The board is the hardest surface.** It is a 4-column grid on desktop and stacks to 1 column on mobile (`grid-cols-1 md:grid-cols-2 lg:grid-cols-4` — already established in [Board.tsx](frontend/src/components/Board.tsx)). Don't break that contract. If you introduce a new lane-level affordance, verify it doesn't push the column under 280px wide.
+- **Modals are full-screen on mobile, centered on desktop.** The pattern is already in [Detail.tsx](frontend/src/components/Detail.tsx) and [TaskForm.tsx](frontend/src/components/TaskForm.tsx): `flex items-stretch p-0 sm:items-center sm:p-4` on the backdrop, `h-full w-full ... sm:h-auto sm:max-h-[90vh] sm:rounded-lg` on the panel. Reuse it; do not invent a half-screen drawer or a centered-tiny dialog on mobile.
+- **Drag-and-drop must work on touch.** `@dnd-kit` `TouchSensor` is configured with a 200ms activation delay in [Board.tsx](frontend/src/components/Board.tsx) — preserve it. Any drag handle you add must use `touch-none` (the `Card` already does). Test with the browser's mobile emulator before shipping.
+- **Stack horizontally only when there's room.** Toolbars, chip rows, the `ChatInput` mode/model controls — wrap with `flex-wrap` on mobile, not `overflow-x-auto` scroll-jail. Vertical stacking with `gap-2` is preferable to horizontal scroll.
+- **Type & spacing scale.** Don't shrink text below `text-xs` on mobile; if a label doesn't fit, shorten the label, don't shrink the type. Reduce paddings (`p-2 sm:p-4`) rather than reducing line-height.
+- **Safe-area insets.** `index.html` already sets `viewport-fit=cover`. Sticky headers and floating actions near the top/bottom of the viewport must respect `env(safe-area-inset-top/bottom)` (use Tailwind's arbitrary values: `pt-[env(safe-area-inset-top)]`).
+- **Test at three viewports before declaring done:** 375×667 (small phone), 768×1024 (tablet), 1440×900 (laptop). Use the dev server's network URL or a tunneling tool to test on a real device when the change is non-trivial.
+- **Reduced motion.** Wrap non-essential animation behind `@media (prefers-reduced-motion: no-preference)`. Drag transforms and layout transitions stay; decorative `animate-pulse` / hover lifts opt out.
+
+If a desktop-only design idea cannot be made to work on mobile, the design is wrong — rethink, don't ship a "tablet+ only" feature. The single exception is the LiveLog code panel, which may scroll horizontally on overflow (it's intentional terminal behavior).
+
 ## What to avoid (the AI-slop list, calibrated to this repo)
 
 - Purple→pink gradients on white. The Cronos theme color is deep green and the direction is dark; don't fight it.
@@ -102,5 +120,6 @@ Code you write should be:
 - **Cohesive**: a single aesthetic direction per request — don't blend three.
 - **Refined down to the details**: focus rings, hover states, empty states, loading skeletons, mobile layout. The 90% case isn't done; the edges are where Cronos lives.
 - **Accessible enough to be real**: keyboard reachable, `aria-*` on interactive non-buttons, contrast ratios that survive AA, `prefers-reduced-motion` honored.
+- **Mobile-first responsive by default** — see the dedicated section above. If you ship something that breaks below `md`, it's not done.
 
 When the user asks for one component, deliver one component built well, in the right file, using the existing hooks/api/types, with any new tokens added to `tailwind.config.js` and any new fonts wired into `index.css`. Show the work — don't hold back on the distinctive choice that makes the surface memorable.

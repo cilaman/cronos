@@ -4,14 +4,22 @@ import remarkGfm from "remark-gfm";
 import {
   useDeleteTask,
   useReplyToTask,
+  useStartTask,
   useStopTask,
   useTask,
   useUpdateTask,
 } from "../hooks/useTasks";
 import { STATE_BADGE } from "../state-badges";
-import type { AgentMode, AgentModel } from "../types";
+import {
+  AGENT_MODELS,
+  AGENT_MODES,
+  type AgentMode,
+  type AgentModel,
+} from "../types";
 import { ChatInput } from "./ChatInput";
+import { FilesPanel } from "./FilesPanel";
 import { LiveLog } from "./LiveLog";
+import { TaskActionBar } from "./TaskActionBar";
 import { TaskForm } from "./TaskForm";
 
 interface Props {
@@ -24,6 +32,7 @@ export function Detail({ taskId, onClose }: Props) {
   const updateTask = useUpdateTask(taskId);
   const deleteTask = useDeleteTask();
   const replyTask = useReplyToTask(taskId);
+  const startTask = useStartTask(taskId);
   const stopTask = useStopTask(taskId);
   const [editing, setEditing] = useState(false);
 
@@ -57,6 +66,10 @@ export function Detail({ taskId, onClose }: Props) {
     await replyTask.mutateAsync(message);
   }
 
+  async function onStart() {
+    await startTask.mutateAsync();
+  }
+
   async function onStop() {
     await stopTask.mutateAsync();
   }
@@ -72,7 +85,10 @@ export function Detail({ taskId, onClose }: Props) {
   }
 
   const chatError =
-    replyTask.error?.message ?? stopTask.error?.message ?? null;
+    replyTask.error?.message ??
+    startTask.error?.message ??
+    stopTask.error?.message ??
+    null;
 
   return (
     <>
@@ -81,7 +97,7 @@ export function Detail({ taskId, onClose }: Props) {
         onClick={onClose}
       >
         <div
-          className="flex h-full w-full max-w-3xl flex-col overflow-hidden border border-hairline bg-pitch-50 shadow-lift sm:h-auto sm:max-h-[90vh] sm:rounded-lg"
+          className="flex h-full w-full max-w-5xl flex-col overflow-hidden border border-hairline bg-pitch-50 shadow-lift sm:h-auto sm:max-h-[90vh] sm:rounded-lg"
           onClick={(e) => e.stopPropagation()}
         >
           {isLoading && <div className="p-6 text-bone-muted">Loading…</div>}
@@ -89,7 +105,7 @@ export function Detail({ taskId, onClose }: Props) {
           {task && (
             <>
               <header className="flex items-start justify-between gap-4 border-b border-hairline p-4">
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span
                       className={`rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] ${
@@ -103,6 +119,44 @@ export function Detail({ taskId, onClose }: Props) {
                   <h2 className="mt-2 text-xl font-semibold leading-tight tracking-tight text-bone">
                     {task.title}
                   </h2>
+                  <div className="mt-3 flex flex-wrap items-center gap-4 text-xs">
+                    <label className="flex items-center gap-2 text-bone-muted">
+                      <span className="text-[10px] uppercase tracking-[0.15em] text-bone-faint">
+                        Mode
+                      </span>
+                      <select
+                        value={task.agent_mode}
+                        onChange={(e) =>
+                          void onModeChange(e.target.value as AgentMode)
+                        }
+                        className="rounded border border-hairline-strong bg-pitch px-2 py-1 text-xs font-medium text-bone focus:border-moss focus:outline-none focus:ring-1 focus:ring-moss"
+                      >
+                        {AGENT_MODES.map((m) => (
+                          <option key={m.value} value={m.value}>
+                            {m.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="flex items-center gap-2 text-bone-muted">
+                      <span className="text-[10px] uppercase tracking-[0.15em] text-bone-faint">
+                        Model
+                      </span>
+                      <select
+                        value={task.agent_model}
+                        onChange={(e) =>
+                          void onModelChange(e.target.value as AgentModel)
+                        }
+                        className="rounded border border-hairline-strong bg-pitch px-2 py-1 text-xs font-medium text-bone focus:border-moss focus:outline-none focus:ring-1 focus:ring-moss"
+                      >
+                        {AGENT_MODELS.map((m) => (
+                          <option key={m.value} value={m.value}>
+                            {m.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
                 </div>
                 <button
                   type="button"
@@ -114,68 +168,59 @@ export function Detail({ taskId, onClose }: Props) {
                 </button>
               </header>
 
-              <div className="flex-1 space-y-6 overflow-y-auto p-4">
-                <section>
-                  <h3 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-bone-faint">
-                    Brief
-                  </h3>
-                  <div className="prose prose-sm prose-invert mt-2 max-w-none prose-headings:text-bone prose-p:text-bone prose-strong:text-bone prose-a:text-moss-bright prose-code:text-moss-bright prose-pre:bg-pitch prose-pre:border prose-pre:border-hairline">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{task.brief}</ReactMarkdown>
-                  </div>
-                </section>
-
-                <section>
-                  <h3 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-bone-faint">
-                    History
-                  </h3>
-                  {task.history ? (
-                    <div className="prose prose-sm prose-invert mt-2 max-w-none prose-headings:text-bone prose-p:text-bone prose-strong:text-bone prose-a:text-moss-bright prose-code:text-moss-bright prose-pre:bg-pitch prose-pre:border prose-pre:border-hairline">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{task.history}</ReactMarkdown>
-                    </div>
-                  ) : (
-                    <p className="mt-2 text-sm italic text-bone-faint">No history yet.</p>
-                  )}
-                </section>
-
-                {(task.state === "active" || task.state === "waiting") && (
-                  <LiveLog taskId={task.id} />
-                )}
-              </div>
-
-              <ChatInput
+              <TaskActionBar
                 taskState={task.state}
-                agentMode={task.agent_mode}
-                agentModel={task.agent_model}
-                waitingQuestion={task.waiting_question}
-                pendingCount={task.pending_messages.length}
-                isSending={replyTask.isPending}
+                isStarting={startTask.isPending}
                 isStopping={stopTask.isPending}
-                error={chatError}
-                onSend={onSend}
-                onStop={onStop}
-                onModeChange={onModeChange}
-                onModelChange={onModelChange}
+                isDeleting={deleteTask.isPending}
+                onStart={() => void onStart()}
+                onStop={() => void onStop()}
+                onEdit={() => setEditing(true)}
+                onDelete={() => void onDelete()}
               />
 
-              <footer className="flex items-center justify-between gap-2 border-t border-hairline p-3">
-                <button
-                  type="button"
-                  onClick={onDelete}
-                  disabled={deleteTask.isPending}
-                  className="rounded px-3 py-2 text-sm text-oxblood transition hover:bg-oxblood/15 disabled:opacity-50"
-                >
-                  Delete
-                </button>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setEditing(true)}
-                    className="rounded border border-moss-deep bg-moss-deep px-4 py-2 text-sm font-medium text-bone transition hover:bg-moss hover:shadow-moss-glow"
-                  >
-                    Edit
-                  </button>
+              <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <div className="flex-1 space-y-6 overflow-y-auto p-4">
+                    <section>
+                      <h3 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-bone-faint">
+                        Brief
+                      </h3>
+                      <div className="prose prose-sm prose-invert mt-2 max-w-none prose-headings:text-bone prose-p:text-bone prose-strong:text-bone prose-a:text-moss-bright prose-code:text-moss-bright prose-pre:bg-pitch prose-pre:border prose-pre:border-hairline">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{task.brief}</ReactMarkdown>
+                      </div>
+                    </section>
+
+                    <section>
+                      <h3 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-bone-faint">
+                        History
+                      </h3>
+                      {task.history ? (
+                        <div className="prose prose-sm prose-invert mt-2 max-w-none prose-headings:text-bone prose-p:text-bone prose-strong:text-bone prose-a:text-moss-bright prose-code:text-moss-bright prose-pre:bg-pitch prose-pre:border prose-pre:border-hairline">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{task.history}</ReactMarkdown>
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-sm italic text-bone-faint">No history yet.</p>
+                      )}
+                    </section>
+
+                    {(task.state === "active" || task.state === "waiting") && (
+                      <LiveLog taskId={task.id} />
+                    )}
+                  </div>
+
+                  <ChatInput
+                    taskState={task.state}
+                    waitingQuestion={task.waiting_question}
+                    pendingCount={task.pending_messages.length}
+                    isSending={replyTask.isPending}
+                    error={chatError}
+                    onSend={onSend}
+                  />
                 </div>
-              </footer>
+
+                <FilesPanel />
+              </div>
             </>
           )}
         </div>
