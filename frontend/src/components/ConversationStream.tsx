@@ -23,23 +23,23 @@ interface Props {
 function StatusPill({ status }: { status: LiveStatus }) {
   const map: Record<LiveStatus, { dot: string; text: string; label: string }> = {
     connecting: {
-      dot: "bg-brass",
-      text: "text-brass",
+      dot: "bg-warning",
+      text: "text-warning",
       label: "connecting",
     },
     live: {
-      dot: "bg-moss-bright anim-pulse-dot",
-      text: "text-moss-bright",
+      dot: "bg-accent-bright anim-pulse-dot",
+      text: "text-accent-bright",
       label: "live",
     },
     ended: {
-      dot: "bg-bone-faint",
-      text: "text-bone-faint",
+      dot: "bg-ink-faint",
+      text: "text-ink-faint",
       label: "ended",
     },
     error: {
-      dot: "bg-oxblood",
-      text: "text-oxblood",
+      dot: "bg-danger",
+      text: "text-danger",
       label: "stream error",
     },
   };
@@ -175,17 +175,17 @@ export function ConversationStream({ task }: Props) {
 
   return (
     <section ref={sectionRef} className="relative">
-      <div className="sticky top-0 z-10 -mt-1 mb-2 flex items-center justify-between border-b border-hairline/60 bg-pitch-50/95 px-1 py-2 backdrop-blur supports-[backdrop-filter]:bg-pitch-50/80">
-        <h3 className="font-mono text-[10px] font-semibold uppercase tracking-[0.24em] text-bone-faint">
+      <div className="sticky top-0 z-10 -mt-1 mb-2 flex items-center justify-between border-b border-hairline/60 bg-surface-1/95 px-1 py-2 backdrop-blur supports-[backdrop-filter]:bg-surface-1/80">
+        <h3 className="font-display text-[10px] font-semibold uppercase tracking-[0.24em] text-ink-faint">
           Conversation
         </h3>
         {streamEnabled && <StatusPill status={liveStatus} />}
       </div>
 
-      <div className="rounded border border-hairline bg-pitch/40 px-3 py-1 shadow-inset-hairline">
+      <div className="rounded border border-hairline bg-canvas/40 px-3 py-1 shadow-inset-hairline">
         {isEmpty && (
           <div className="flex items-center justify-center py-10">
-            <p className="font-mono text-[11px] text-bone-faint">
+            <p className="font-mono text-[11px] text-ink-faint">
               // no exchanges yet — send the first message below
             </p>
           </div>
@@ -195,7 +195,7 @@ export function ConversationStream({ task }: Props) {
           if (item.kind === "unparsed") {
             return (
               <EntryShell key={`h:${idx}`} role="system">
-                <pre className="whitespace-pre-wrap font-mono text-[11px] text-bone-muted">
+                <pre className="whitespace-pre-wrap font-mono text-[11px] text-ink-muted">
                   {item.body}
                 </pre>
               </EntryShell>
@@ -214,7 +214,7 @@ export function ConversationStream({ task }: Props) {
 
         {task.pending_messages.map((msg, idx) => (
           <EntryShell key={`p:${idx}`} role="user" enter>
-            <div className="mb-1 font-mono text-[9px] uppercase tracking-[0.22em] text-brass">
+            <div className="mb-1 font-mono text-[9px] uppercase tracking-[0.22em] text-warning">
               queued
             </div>
             <MarkdownBody source={msg} />
@@ -280,7 +280,7 @@ export function ConversationStream({ task }: Props) {
           <button
             type="button"
             onClick={scrollToBottom}
-            className="inline-flex items-center gap-1.5 rounded-full border border-moss/40 bg-pitch px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.22em] text-moss-bright shadow-moss-glow transition hover:bg-pitch-100"
+            className="inline-flex items-center gap-1.5 rounded-full border border-accent/40 bg-canvas px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.22em] text-accent-bright shadow-accent-glow transition hover:bg-surface-2"
           >
             ↓ new activity
           </button>

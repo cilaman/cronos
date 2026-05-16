@@ -60,15 +60,17 @@ export function TaskForm({
           if (showModel) body.agent_model = model;
           onSubmit(body);
         }}
-        className="flex h-full w-full max-w-2xl flex-col overflow-hidden border border-hairline bg-pitch-50 shadow-lift sm:h-auto sm:max-h-[90vh] sm:rounded-lg"
+        className="flex h-full w-full max-w-2xl flex-col overflow-hidden border border-hairline bg-surface-1 shadow-lift sm:h-auto sm:max-h-[90vh] sm:rounded-lg"
       >
         <header className="flex items-center justify-between border-b border-hairline p-4">
-          <h2 className="text-lg font-semibold tracking-tight text-bone">{heading}</h2>
+          <h2 className="font-display text-base font-semibold uppercase tracking-[0.18em] text-ink">
+            {heading}
+          </h2>
           <button
             type="button"
             onClick={onCancel}
             aria-label="Close"
-            className="rounded p-1 text-bone-muted transition hover:bg-pitch-100 hover:text-bone"
+            className="rounded p-1 text-ink-muted transition hover:bg-surface-2 hover:text-ink"
           >
             ✕
           </button>
@@ -76,7 +78,7 @@ export function TaskForm({
         <div className="flex-1 space-y-4 overflow-y-auto p-4">
           <div className="flex flex-col gap-3 sm:flex-row">
             <label className="block flex-1">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-bone-faint">
+              <span className="font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
                 Title
               </span>
               <input
@@ -86,18 +88,18 @@ export function TaskForm({
                 onChange={(e) => setTitle(e.target.value)}
                 maxLength={200}
                 required
-                className="mt-1 block w-full rounded border border-hairline-strong bg-pitch px-3 py-2 text-sm text-bone placeholder:text-bone-faint focus:border-moss focus:outline-none focus:ring-1 focus:ring-moss"
+                className="mt-1 block w-full rounded border border-hairline-strong bg-canvas px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
               />
             </label>
             {showModel && (
               <label className="block sm:w-40">
-                <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-bone-faint">
+                <span className="font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
                   Model
                 </span>
                 <select
                   value={model}
                   onChange={(e) => setModel(e.target.value as AgentModel)}
-                  className="mt-1 block w-full rounded border border-hairline-strong bg-pitch px-3 py-2 text-sm text-bone focus:border-moss focus:outline-none focus:ring-1 focus:ring-moss"
+                  className="mt-1 block w-full rounded border border-hairline-strong bg-canvas px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                 >
                   {AGENT_MODELS.map((m) => (
                     <option key={m.value} value={m.value}>
@@ -109,7 +111,7 @@ export function TaskForm({
             )}
           </div>
           <label className="block">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-bone-faint">
+            <span className="font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
               Brief
             </span>
             <textarea
@@ -117,11 +119,11 @@ export function TaskForm({
               onChange={(e) => setBrief(e.target.value)}
               rows={10}
               placeholder="Describe what the agent should do. Markdown supported."
-              className="mt-1 block w-full rounded border border-hairline-strong bg-pitch px-3 py-2 font-mono text-sm text-bone placeholder:text-bone-faint focus:border-moss focus:outline-none focus:ring-1 focus:ring-moss"
+              className="mt-1 block w-full rounded border border-hairline-strong bg-canvas px-3 py-2 font-mono text-sm text-ink placeholder:text-ink-faint focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
             />
           </label>
           {error && (
-            <p className="rounded border border-oxblood/40 bg-oxblood/15 px-3 py-2 text-sm text-oxblood">
+            <p className="rounded border border-danger/40 bg-danger/15 px-3 py-2 text-sm text-danger">
               {error}
             </p>
           )}
@@ -130,14 +132,14 @@ export function TaskForm({
           <button
             type="button"
             onClick={onCancel}
-            className="rounded px-3 py-2 text-sm text-bone-muted transition hover:bg-pitch-100 hover:text-bone"
+            className="rounded px-3 py-2 text-sm text-ink-muted transition hover:bg-surface-2 hover:text-ink"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={!canSubmit}
-            className="rounded border border-moss bg-moss px-4 py-2 text-sm font-medium text-bone transition hover:bg-moss-bright hover:shadow-moss-glow disabled:cursor-not-allowed disabled:border-hairline disabled:bg-pitch-100 disabled:text-bone-faint disabled:shadow-none"
+            className="rounded border border-accent bg-accent px-4 py-2 text-sm font-medium text-canvas transition hover:bg-accent-bright hover:shadow-accent-glow disabled:cursor-not-allowed disabled:border-hairline disabled:bg-surface-2 disabled:text-ink-faint disabled:shadow-none"
           >
             {submitting ? "Saving…" : "Save"}
           </button>

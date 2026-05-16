@@ -28,7 +28,7 @@ export function TaskActionBar({
   const showStop = taskState === "active";
 
   return (
-    <div className="flex items-center gap-1 border-b border-hairline bg-pitch-50/40 px-3 py-2">
+    <div className="flex items-center gap-1 border-b border-hairline bg-surface-1/40 px-3 py-2">
       {showStart && (
         <button
           type="button"
@@ -36,7 +36,7 @@ export function TaskActionBar({
           disabled={isStarting}
           title="Start agent"
           aria-label="Start agent"
-          className={`${ICON_BUTTON} border-moss bg-moss text-bone hover:bg-moss-bright hover:shadow-moss-glow`}
+          className={`${ICON_BUTTON} border-accent bg-accent text-canvas hover:bg-accent-bright hover:shadow-accent-glow`}
         >
           {isStarting ? "…" : "▶"}
         </button>
@@ -48,7 +48,7 @@ export function TaskActionBar({
           disabled={isStopping}
           title="Stop agent"
           aria-label="Stop agent"
-          className={`${ICON_BUTTON} border-oxblood bg-oxblood text-bone hover:bg-oxblood/80`}
+          className={`${ICON_BUTTON} border-danger bg-danger text-ink hover:bg-danger/80`}
         >
           {isStopping ? "…" : "■"}
         </button>
@@ -58,7 +58,7 @@ export function TaskActionBar({
         onClick={onEdit}
         title="Edit task"
         aria-label="Edit task"
-        className={`${ICON_BUTTON} border-hairline-strong bg-pitch text-bone-muted hover:bg-pitch-100 hover:text-bone`}
+        className={`${ICON_BUTTON} border-hairline-strong bg-canvas text-ink-muted hover:bg-surface-2 hover:text-ink`}
       >
         ✎
       </button>
@@ -68,7 +68,7 @@ export function TaskActionBar({
         disabled={isDeleting}
         title="Delete task"
         aria-label="Delete task"
-        className={`${ICON_BUTTON} border-hairline-strong bg-pitch text-bone-muted hover:border-oxblood hover:bg-oxblood/15 hover:text-oxblood`}
+        className={`${ICON_BUTTON} border-hairline-strong bg-canvas text-ink-muted hover:border-danger hover:bg-danger/15 hover:text-danger`}
       >
         ⊘
       </button>

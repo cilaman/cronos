@@ -22,19 +22,19 @@ const FAMILY_TONE: Record<
   { name: string; bracket: string; rule: string }
 > = {
   read: {
-    name: "text-bone",
-    bracket: "text-bone-faint",
-    rule: "border-bone-faint/40",
+    name: "text-ink",
+    bracket: "text-ink-faint",
+    rule: "border-ink-faint/40",
   },
   write: {
-    name: "text-moss-bright",
-    bracket: "text-moss",
-    rule: "border-moss/50",
+    name: "text-accent-bright",
+    bracket: "text-accent",
+    rule: "border-accent/50",
   },
   shell: {
-    name: "text-brass",
-    bracket: "text-brass/70",
-    rule: "border-brass/50",
+    name: "text-warning",
+    bracket: "text-warning/70",
+    rule: "border-warning/50",
   },
   web: {
     name: "text-sky-300",
@@ -42,13 +42,13 @@ const FAMILY_TONE: Record<
     rule: "border-sky-400/50",
   },
   task: {
-    name: "text-bone",
-    bracket: "text-bone-faint",
+    name: "text-ink",
+    bracket: "text-ink-faint",
     rule: "border-hairline-strong",
   },
   other: {
-    name: "text-bone-muted",
-    bracket: "text-bone-faint",
+    name: "text-ink-muted",
+    bracket: "text-ink-faint",
     rule: "border-hairline-strong",
   },
 };
@@ -126,23 +126,23 @@ export function ToolCallBlock({
 
   return (
     <div
-      className={`border-l-2 ${hasError ? "border-oxblood/80" : tone.rule}`}
+      className={`border-l-2 ${hasError ? "border-danger/80" : tone.rule}`}
     >
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 px-2 py-1 text-left font-mono text-[11px] transition hover:bg-pitch-100/40 focus:outline-none focus-visible:bg-pitch-100/60"
+        className="flex w-full items-center gap-2 px-2 py-1 text-left font-mono text-[11px] transition hover:bg-surface-2/40 focus:outline-none focus-visible:bg-surface-2/60"
         aria-expanded={open}
       >
         <span className={tone.bracket}>{open ? "▾" : "▸"}</span>
         <span className={`font-medium ${tone.name}`}>{name}</span>
         {argSummary && (
-          <span className="truncate text-bone-faint">
+          <span className="truncate text-ink-faint">
             {summarize(argSummary, 96)}
           </span>
         )}
         {hasError && (
-          <span className="ml-auto rounded-sm bg-oxblood/20 px-1 py-px text-[9px] uppercase tracking-[0.18em] text-oxblood">
+          <span className="ml-auto rounded-sm bg-danger/20 px-1 py-px text-[9px] uppercase tracking-[0.18em] text-danger">
             error
           </span>
         )}
@@ -151,22 +151,22 @@ export function ToolCallBlock({
       {open && (
         <div className="flex flex-col gap-2 px-2 pb-2">
           <div>
-            <div className="mb-1 font-mono text-[9px] uppercase tracking-[0.22em] text-bone-faint">
+            <div className="mb-1 font-mono text-[9px] uppercase tracking-[0.22em] text-ink-faint">
               input
             </div>
-            <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded border border-hairline bg-pitch/80 p-3 font-mono text-[11px] leading-relaxed text-bone">
+            <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded border border-hairline bg-canvas/80 p-3 font-mono text-[11px] leading-relaxed text-ink">
               {formatInput(input)}
             </pre>
           </div>
           {matched && (
             <div>
-              <div className="mb-1 flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.22em] text-bone-faint">
+              <div className="mb-1 flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.22em] text-ink-faint">
                 <span>{hasError ? "error" : "output"}</span>
                 {shouldTruncate && (
                   <button
                     type="button"
                     onClick={() => setExpandedOutput((v) => !v)}
-                    className="cursor-pointer rounded px-1 text-bone-muted transition hover:text-bone"
+                    className="cursor-pointer rounded px-1 text-ink-muted transition hover:text-ink"
                   >
                     {expandedOutput
                       ? "collapse"
@@ -174,7 +174,7 @@ export function ToolCallBlock({
                   </button>
                 )}
               </div>
-              <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded border border-hairline bg-pitch/80 p-3 font-mono text-[11px] leading-relaxed text-bone">
+              <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded border border-hairline bg-canvas/80 p-3 font-mono text-[11px] leading-relaxed text-ink">
                 {displayedOutput || "(empty)"}
               </pre>
             </div>
@@ -197,23 +197,23 @@ export function ToolResultBlock({ output, isError }: ToolResultBlockProps) {
   return (
     <div
       className={`border-l-2 ${
-        isError ? "border-oxblood/70" : "border-hairline-strong"
+        isError ? "border-danger/70" : "border-hairline-strong"
       }`}
     >
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 px-2 py-1 text-left font-mono text-[11px] transition hover:bg-pitch-100/40 focus:outline-none focus-visible:bg-pitch-100/60"
+        className="flex w-full items-center gap-2 px-2 py-1 text-left font-mono text-[11px] transition hover:bg-surface-2/40 focus:outline-none focus-visible:bg-surface-2/60"
         aria-expanded={open}
       >
-        <span className="text-bone-faint">{open ? "▾" : "▸"}</span>
-        <span className="uppercase tracking-[0.18em] text-bone-faint">
+        <span className="text-ink-faint">{open ? "▾" : "▸"}</span>
+        <span className="uppercase tracking-[0.18em] text-ink-faint">
           {isError ? "tool error" : "tool result"}
         </span>
-        {preview && <span className="truncate text-bone-faint">{preview}</span>}
+        {preview && <span className="truncate text-ink-faint">{preview}</span>}
       </button>
       {open && (
-        <pre className="mx-2 mb-2 max-h-80 overflow-auto whitespace-pre-wrap rounded border border-hairline bg-pitch/80 p-3 font-mono text-[11px] leading-relaxed text-bone">
+        <pre className="mx-2 mb-2 max-h-80 overflow-auto whitespace-pre-wrap rounded border border-hairline bg-canvas/80 p-3 font-mono text-[11px] leading-relaxed text-ink">
           {output || "(empty)"}
         </pre>
       )}

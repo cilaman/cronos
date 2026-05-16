@@ -6,6 +6,22 @@ export default {
   theme: {
     extend: {
       fontFamily: {
+        sans: [
+          '"Geist"',
+          "system-ui",
+          "-apple-system",
+          "Segoe UI",
+          "Roboto",
+          "sans-serif",
+        ],
+        display: [
+          '"JetBrains Mono"',
+          "ui-monospace",
+          "SFMono-Regular",
+          "Menlo",
+          "Consolas",
+          "monospace",
+        ],
         mono: [
           '"JetBrains Mono"',
           "ui-monospace",
@@ -16,44 +32,43 @@ export default {
         ],
       },
       colors: {
-        // Surfaces — deep, forest-shadow neutrals with a green undertone.
-        // `pitch` is the canvas; the numbered shades are elevated layers.
-        pitch: {
-          DEFAULT: "#0c1110", // page background
-          50: "#141a17",      // raised surface (lanes, cards)
-          100: "#1c2521",     // hover / secondary surface
-          200: "#27322c",     // pressed / tertiary
+        // Surfaces — operator-console ink with a green undertone.
+        // `canvas` is the page bg; numbered `surface` shades stack upward.
+        canvas: "#07100c",
+        surface: {
+          1: "#11181b", // raised — lanes, cards, modals, headers, inputs
+          2: "#1a2326", // hover / secondary surface
+          3: "#243030", // pressed / tertiary
         },
         hairline: {
-          DEFAULT: "#252e29", // standard divider
-          strong: "#3a4540",  // emphasised border
+          DEFAULT: "#1f2a26", // standard 1px divider
+          strong: "#324038", // emphasised border (form inputs, highlights)
         },
-        // Type — bone / paper warmed, never pure white.
-        bone: {
-          DEFAULT: "#ece6d7", // primary
-          muted: "#a8ad9f",   // secondary
-          faint: "#6b7066",   // tertiary / disabled
+        // Ink — phosphor-bone text scale, brighter than the previous bone.
+        // Named `ink-*` to avoid the `text-text` class collision.
+        ink: {
+          DEFAULT: "#e8f0e3", // primary (15.2:1 on canvas, AAA)
+          muted: "#a8b8ad",   // secondary (7.6:1 on canvas, AAA)
+          faint: "#7e8e83",   // tertiary / disabled (4.7:1 on canvas, AA)
         },
-        // Accent — anchored on the PWA theme color #215732.
-        // Use `moss` for chrome (links, focus rings, headings). `moss.deep`
-        // is the original PWA hex; reserve it for seals and heavy fills.
-        moss: {
-          DEFAULT: "#3d8f5a",
-          bright: "#5ab578",  // hover
-          deep: "#215732",    // PWA anchor — seals, heavy panels
-          darker: "#163b22",  // pressed / inset
+        // Accent — phosphor green. `accent-deep` preserves the PWA #215732 seal.
+        accent: {
+          DEFAULT: "#4ade80",
+          bright: "#86efac", // hover
+          dim: "#2a6e3e",    // pressed / inset
+          deep: "#215732",   // PWA anchor — seals, heavy panels
         },
-        // Supporting accents (non-state chrome only — do NOT use for badges).
-        brass: "#c89b3c",
-        oxblood: "#8c3a3a",
+        // Semantic supporting colors (non-state chrome — do NOT use for badges).
+        warning: "#d4a647", // queued status, shell-tool labels
+        danger: "#a84a4a",  // errors, stop button
       },
       boxShadow: {
         // Hairline highlight on top of dark cards (1px white at 4%).
         "inset-hairline": "inset 0 1px 0 0 rgb(255 255 255 / 0.04)",
-        // Heavy lift for modals / popovers on the pitch canvas.
+        // Heavy lift for modals / popovers on the canvas.
         lift: "0 8px 24px -8px rgb(0 0 0 / 0.6), 0 2px 4px -2px rgb(0 0 0 / 0.4)",
-        // Soft phosphor glow for focused accent elements.
-        "moss-glow": "0 0 0 1px rgb(61 143 90 / 0.4), 0 0 16px -2px rgb(61 143 90 / 0.25)",
+        // Phosphor glow for focused accent elements.
+        "accent-glow": "0 0 0 1px rgb(74 222 128 / 0.4), 0 0 16px -2px rgb(74 222 128 / 0.25)",
       },
       backgroundImage: {
         // SVG grain — use as `bg-grain` overlay (low opacity) on flat surfaces.
@@ -63,7 +78,7 @@ export default {
         "hairline-grid":
           "linear-gradient(to right, rgb(255 255 255 / 0.03) 1px, transparent 1px), linear-gradient(to bottom, rgb(255 255 255 / 0.03) 1px, transparent 1px)",
         // Vignette for board edges.
-        "pitch-vignette":
+        "canvas-vignette":
           "radial-gradient(ellipse at center, transparent 50%, rgb(0 0 0 / 0.4) 100%)",
       },
       backgroundSize: {
