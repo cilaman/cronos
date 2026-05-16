@@ -78,10 +78,10 @@ export function ChatInput({
   const isActive = taskState === "active";
 
   return (
-    <div className="border-t border-slate-200 bg-slate-50">
+    <div className="border-t border-hairline bg-pitch">
       {waitingQuestion && taskState === "waiting" && (
-        <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">
-          <span className="mr-2 font-semibold uppercase tracking-wide text-[10px]">
+        <div className="border-b border-amber-800/40 bg-amber-950/60 px-4 py-2 text-sm text-amber-300">
+          <span className="mr-2 font-semibold uppercase tracking-[0.18em] text-[10px]">
             Agent asks
           </span>
           {waitingQuestion}
@@ -90,18 +90,18 @@ export function ChatInput({
       <div className="flex flex-col gap-2 p-3">
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span
-            className={`rounded px-2 py-0.5 font-medium uppercase tracking-wide ${STATE_BADGE[taskState]}`}
+            className={`rounded px-2 py-0.5 font-semibold uppercase tracking-[0.18em] text-[10px] ${STATE_BADGE[taskState]}`}
           >
             {taskState}
           </span>
-          <label className="flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-0.5 text-slate-700">
-            <span className="text-[10px] uppercase tracking-wide text-slate-500">
+          <label className="flex items-center gap-1 rounded border border-hairline-strong bg-pitch-50 px-2 py-0.5 text-bone-muted">
+            <span className="text-[10px] uppercase tracking-[0.15em] text-bone-faint">
               Mode
             </span>
             <select
               value={agentMode}
               onChange={(e) => void onModeChange(e.target.value as AgentMode)}
-              className="bg-transparent text-xs font-medium focus:outline-none"
+              className="bg-transparent text-xs font-medium text-bone focus:outline-none"
             >
               {AGENT_MODES.map((m) => (
                 <option key={m.value} value={m.value}>
@@ -110,14 +110,14 @@ export function ChatInput({
               ))}
             </select>
           </label>
-          <label className="flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-0.5 text-slate-700">
-            <span className="text-[10px] uppercase tracking-wide text-slate-500">
+          <label className="flex items-center gap-1 rounded border border-hairline-strong bg-pitch-50 px-2 py-0.5 text-bone-muted">
+            <span className="text-[10px] uppercase tracking-[0.15em] text-bone-faint">
               Model
             </span>
             <select
               value={agentModel}
               onChange={(e) => void onModelChange(e.target.value as AgentModel)}
-              className="bg-transparent text-xs font-medium focus:outline-none"
+              className="bg-transparent text-xs font-medium text-bone focus:outline-none"
             >
               {AGENT_MODELS.map((m) => (
                 <option key={m.value} value={m.value}>
@@ -127,16 +127,19 @@ export function ChatInput({
             </select>
           </label>
           {pendingCount > 0 && (
-            <span className="rounded bg-slate-200 px-2 py-0.5 text-slate-700">
+            <span className="rounded bg-pitch-100 px-2 py-0.5 text-bone-muted ring-1 ring-hairline">
               queued {pendingCount}
             </span>
           )}
-          <span className="ml-auto text-[11px] text-slate-500">
-            <kbd className="rounded bg-slate-200 px-1 font-mono">⌘⏎</kbd> to send
+          <span className="ml-auto text-[11px] text-bone-faint">
+            <kbd className="rounded bg-pitch-100 px-1 font-mono text-bone-muted ring-1 ring-hairline">
+              ⌘⏎
+            </kbd>{" "}
+            to send
           </span>
         </div>
 
-        <div className="flex items-end gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 shadow-sm focus-within:border-slate-500 focus-within:ring-1 focus-within:ring-slate-500">
+        <div className="flex items-end gap-2 rounded-lg border border-hairline-strong bg-pitch-50 px-3 py-2 shadow-inset-hairline transition focus-within:border-moss focus-within:ring-1 focus-within:ring-moss">
           <textarea
             ref={textareaRef}
             value={draft}
@@ -144,7 +147,7 @@ export function ChatInput({
             onKeyDown={handleKeyDown}
             rows={1}
             placeholder={placeholderFor(taskState)}
-            className="block w-full resize-none bg-transparent text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none"
+            className="block w-full resize-none bg-transparent text-sm text-bone placeholder:text-bone-faint focus:outline-none"
           />
           <div className="flex items-center gap-1">
             {isActive && (
@@ -154,7 +157,7 @@ export function ChatInput({
                 disabled={isStopping}
                 aria-label="Stop running agent"
                 title="Stop running agent"
-                className="rounded bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                className="rounded border border-oxblood bg-oxblood px-3 py-1.5 text-xs font-medium text-bone transition hover:bg-oxblood/80 disabled:cursor-not-allowed disabled:border-hairline disabled:bg-pitch-100 disabled:text-bone-faint"
               >
                 {isStopping ? "Stopping…" : "Stop"}
               </button>
@@ -163,14 +166,14 @@ export function ChatInput({
               type="button"
               onClick={() => void handleSend()}
               disabled={!draft.trim() || isSending}
-              className="rounded bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              className="rounded border border-moss bg-moss px-3 py-1.5 text-xs font-medium text-bone transition hover:bg-moss-bright hover:shadow-moss-glow disabled:cursor-not-allowed disabled:border-hairline disabled:bg-pitch-100 disabled:text-bone-faint disabled:shadow-none"
             >
               {isSending ? "Sending…" : "Send"}
             </button>
           </div>
         </div>
 
-        {error && <p className="text-xs text-red-700">{error}</p>}
+        {error && <p className="text-xs text-oxblood">{error}</p>}
       </div>
     </div>
   );

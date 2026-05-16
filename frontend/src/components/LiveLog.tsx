@@ -89,29 +89,41 @@ export function LiveLog({ taskId }: Props) {
   return (
     <section>
       <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <h3 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-bone-faint">
           Live
         </h3>
         <span
-          className={`text-xs ${
+          className={`flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] ${
             status === "live"
-              ? "text-emerald-700"
+              ? "text-moss-bright"
               : status === "ended"
-              ? "text-slate-500"
+              ? "text-bone-faint"
               : status === "error"
-              ? "text-red-600"
-              : "text-amber-700"
+              ? "text-oxblood"
+              : "text-amber-300"
           }`}
         >
+          <span
+            aria-hidden
+            className={`inline-block h-1.5 w-1.5 rounded-full ${
+              status === "live"
+                ? "animate-pulse bg-moss-bright shadow-moss-glow"
+                : status === "ended"
+                ? "bg-bone-faint"
+                : status === "error"
+                ? "bg-oxblood"
+                : "bg-amber-300"
+            }`}
+          />
           {status}
         </span>
       </div>
       <div
         ref={scrollerRef}
-        className="mt-2 max-h-[40vh] overflow-y-auto rounded border border-slate-200 bg-slate-900 p-3 font-mono text-xs leading-relaxed text-slate-100"
+        className="mt-2 max-h-[40vh] overflow-y-auto rounded border border-hairline bg-pitch p-3 font-mono text-xs leading-relaxed text-bone shadow-inset-hairline"
       >
         {entries.length === 0 ? (
-          <p className="text-slate-500">
+          <p className="italic text-bone-faint">
             {status === "ended"
               ? "No live activity. The agent has finished."
               : "Waiting for agent output…"}
@@ -122,10 +134,10 @@ export function LiveLog({ taskId }: Props) {
               key={i}
               className={
                 e.kind === "tool"
-                  ? "text-slate-400 italic"
+                  ? "italic text-bone-muted"
                   : e.kind === "system"
-                  ? "text-slate-500"
-                  : "whitespace-pre-wrap"
+                  ? "text-bone-faint"
+                  : "whitespace-pre-wrap text-bone"
               }
             >
               {e.text}
