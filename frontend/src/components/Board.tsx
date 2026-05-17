@@ -65,7 +65,7 @@ export function Board({ spaceId, onAddTask }: Props) {
   return (
     <>
       <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-        <div className="grid h-[calc(100vh-3rem)] grid-cols-1 gap-2 p-2 md:grid-cols-2 lg:grid-cols-4 lg:gap-3 lg:p-4">
+        <div className="grid h-full grid-cols-1 gap-2 p-2 md:grid-cols-2 lg:grid-cols-4 lg:gap-3 lg:p-4">
           {LANES.map(({ state, label }) => (
             <Lane
               key={state}

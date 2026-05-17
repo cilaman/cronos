@@ -21,11 +21,12 @@ function ActiveStrip({ color }: { color?: string }) {
   );
 }
 
-function SpaceRow({ space }: { space: SpaceSummary }) {
+function SpaceRow({ space, onClose }: { space: SpaceSummary; onClose?: () => void }) {
   const open = (space.task_counts.active ?? 0) + (space.task_counts.waiting ?? 0);
   return (
     <NavLink
       to={`/spaces/${space.id}`}
+      onClick={onClose}
       className={({ isActive }) =>
         [
           "group relative flex h-8 items-center gap-2 rounded px-3 text-[12px] transition",
@@ -58,24 +59,40 @@ function SpaceRow({ space }: { space: SpaceSummary }) {
   );
 }
 
-export function Sidebar() {
+interface Props {
+  onClose?: () => void;
+}
+
+export function Sidebar({ onClose }: Props) {
   const { data } = useSpaces();
   const spaces = data?.spaces ?? [];
 
   return (
-    <aside className="hidden h-screen w-56 shrink-0 flex-col border-r border-hairline bg-surface-1 lg:flex">
-      <div className="flex h-14 items-center gap-2 border-b border-hairline px-4">
-        <span
-          aria-hidden
-          className="h-2 w-2 rounded-full bg-accent-bright shadow-accent-glow"
-        />
-        <span className="font-display text-sm font-semibold uppercase tracking-[0.22em] text-ink">
-          Cronos
-        </span>
+    <aside className="flex h-full w-56 shrink-0 flex-col border-r border-hairline bg-surface-1">
+      <div className="flex h-14 items-center justify-between gap-2 border-b border-hairline px-4">
+        <div className="flex items-center gap-2">
+          <span
+            aria-hidden
+            className="h-2 w-2 rounded-full bg-accent-bright shadow-accent-glow"
+          />
+          <span className="font-display text-sm font-semibold uppercase tracking-[0.22em] text-ink">
+            Cronos
+          </span>
+        </div>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close menu"
+            className="rounded p-1 text-ink-muted transition hover:bg-surface-2 hover:text-ink lg:hidden"
+          >
+            ✕
+          </button>
+        )}
       </div>
 
       <nav className="flex flex-col gap-1 px-2 py-3">
-        <NavLink to="/" end className={primaryNavLinkClasses}>
+        <NavLink to="/" end className={primaryNavLinkClasses} onClick={onClose}>
           {({ isActive }) => (
             <>
               {isActive && <ActiveStrip />}
@@ -83,7 +100,7 @@ export function Sidebar() {
             </>
           )}
         </NavLink>
-        <NavLink to="/board" className={primaryNavLinkClasses}>
+        <NavLink to="/board" className={primaryNavLinkClasses} onClick={onClose}>
           {({ isActive }) => (
             <>
               {isActive && <ActiveStrip />}
@@ -91,7 +108,7 @@ export function Sidebar() {
             </>
           )}
         </NavLink>
-        <NavLink to="/archived" className={primaryNavLinkClasses}>
+        <NavLink to="/archived" className={primaryNavLinkClasses} onClick={onClose}>
           {({ isActive }) => (
             <>
               {isActive && <ActiveStrip />}
@@ -115,7 +132,7 @@ export function Sidebar() {
         ) : (
           <div className="flex flex-col gap-0.5">
             {spaces.map((space) => (
-              <SpaceRow key={space.id} space={space} />
+              <SpaceRow key={space.id} space={space} onClose={onClose} />
             ))}
           </div>
         )}
@@ -124,6 +141,7 @@ export function Sidebar() {
       <div className="border-t border-hairline px-2 py-2">
         <NavLink
           to="/spaces/new"
+          onClick={onClose}
           className="flex h-9 items-center justify-center rounded border border-dashed border-hairline text-[11px] font-medium uppercase tracking-[0.18em] text-ink-muted transition hover:border-accent hover:text-accent-bright"
         >
           + New space
