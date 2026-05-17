@@ -22,11 +22,13 @@ function StatTile({
   value,
   tone = "ink",
   pulse = false,
+  to,
 }: {
   label: string;
   value: number | string;
   tone?: "ink" | "accent" | "warning";
   pulse?: boolean;
+  to?: string;
 }) {
   const valueClass =
     tone === "accent"
@@ -34,8 +36,13 @@ function StatTile({
       : tone === "warning"
         ? "text-warning"
         : "text-ink";
-  return (
-    <div className="flex h-24 flex-col justify-between rounded-md border border-hairline bg-surface-1 p-4 shadow-inset-hairline">
+  const baseClass =
+    "flex h-24 flex-col justify-between rounded-md border border-hairline bg-surface-1 p-4 shadow-inset-hairline";
+  const interactiveClass = to
+    ? " cursor-pointer transition hover:-translate-y-px hover:border-hairline-strong hover:shadow-lift"
+    : "";
+  const inner = (
+    <>
       <div className="flex items-center justify-between font-display text-[10px] uppercase tracking-[0.2em] text-ink-faint">
         <span>{label}</span>
         {pulse && (
@@ -48,7 +55,14 @@ function StatTile({
       <p className={`font-display text-[28px] font-semibold tabular-nums ${valueClass}`}>
         {value}
       </p>
-    </div>
+    </>
+  );
+  return to ? (
+    <Link to={to} className={baseClass + interactiveClass}>
+      {inner}
+    </Link>
+  ) : (
+    <div className={baseClass}>{inner}</div>
   );
 }
 
@@ -215,14 +229,16 @@ export function DashboardPage() {
           value={totals.active ?? 0}
           tone="accent"
           pulse={(totals.active ?? 0) > 0}
+          to="/board"
         />
         <StatTile
           label="Waiting"
           value={totals.waiting ?? 0}
           tone={totals.waiting ? "warning" : "ink"}
+          to="/board"
         />
-        <StatTile label="Done" value={totals.done ?? 0} />
-        <StatTile label="Total tasks" value={totalTasks} />
+        <StatTile label="Done" value={totals.done ?? 0} to="/board" />
+        <StatTile label="Total tasks" value={totalTasks} to="/board" />
       </section>
 
       {spaces.length === 0 ? (
