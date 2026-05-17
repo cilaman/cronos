@@ -81,6 +81,13 @@
   .font-mono {
     font-feature-settings: "calt", "ss01", "zero";
   }
+
+  /* Prevent iOS Safari auto-zoom on input focus (triggers when font-size < 16px) */
+  @media (max-width: 640px) {
+    input, textarea, select {
+      font-size: 1rem;
+    }
+  }
 }
 
 @layer utilities {
