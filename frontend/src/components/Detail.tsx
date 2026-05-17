@@ -8,6 +8,7 @@ import {
   useStartTask,
   useStopTask,
   useTask,
+  useTransitionTask,
   useUpdateTask,
 } from "../hooks/useTasks";
 import { STATE_BADGE } from "../state-badges";
@@ -36,6 +37,7 @@ export function Detail({ taskId, onClose }: Props) {
   const replyTask = useReplyToTask(taskId);
   const startTask = useStartTask(taskId);
   const stopTask = useStopTask(taskId);
+  const transitionTask = useTransitionTask();
   const [editing, setEditing] = useState(false);
 
   useEffect(() => {
@@ -78,6 +80,11 @@ export function Detail({ taskId, onClose }: Props) {
 
   async function onArchive() {
     await archiveTask.mutateAsync();
+  }
+
+  async function onMarkDone() {
+    if (!task) return;
+    await transitionTask.mutateAsync({ id: task.id, state: "done" });
   }
 
   async function onModeChange(mode: AgentMode) {
@@ -197,11 +204,13 @@ export function Detail({ taskId, onClose }: Props) {
                 isStopping={stopTask.isPending}
                 isDeleting={deleteTask.isPending}
                 isArchiving={archiveTask.isPending}
+                isMarkingDone={transitionTask.isPending}
                 onStart={() => void onStart()}
                 onStop={() => void onStop()}
                 onEdit={() => setEditing(true)}
                 onDelete={() => void onDelete()}
                 onArchive={() => void onArchive()}
+                onMarkDone={() => void onMarkDone()}
               />
 
               <div className="flex min-h-0 flex-1 flex-col lg:flex-row">

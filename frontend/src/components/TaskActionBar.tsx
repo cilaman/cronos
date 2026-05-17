@@ -6,11 +6,13 @@ interface Props {
   isStopping: boolean;
   isDeleting: boolean;
   isArchiving: boolean;
+  isMarkingDone: boolean;
   onStart: () => void;
   onStop: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onArchive: () => void;
+  onMarkDone: () => void;
 }
 
 const ICON_BUTTON =
@@ -22,15 +24,19 @@ export function TaskActionBar({
   isStopping,
   isDeleting,
   isArchiving,
+  isMarkingDone,
   onStart,
   onStop,
   onEdit,
   onDelete,
   onArchive,
+  onMarkDone,
 }: Props) {
   const showStart = taskState === "backlog";
   const showStop = taskState === "active";
   const showArchive = taskState === "done" || taskState === "waiting";
+  const showMarkDone = taskState === "waiting";
+  const archiveLabel = taskState === "waiting" ? "Cancel task (archive)" : "Archive task";
 
   return (
     <div className="flex items-center gap-1 border-b border-hairline bg-surface-1/40 px-3 py-2">
@@ -58,13 +64,25 @@ export function TaskActionBar({
           {isStopping ? "…" : "■"}
         </button>
       )}
+      {showMarkDone && (
+        <button
+          type="button"
+          onClick={onMarkDone}
+          disabled={isMarkingDone}
+          title="Mark as done"
+          aria-label="Mark task as done"
+          className={`${ICON_BUTTON} border-accent bg-accent/15 text-accent-bright hover:bg-accent/25`}
+        >
+          {isMarkingDone ? "…" : "✓"}
+        </button>
+      )}
       {showArchive && (
         <button
           type="button"
           onClick={onArchive}
           disabled={isArchiving}
-          title="Archive task"
-          aria-label="Archive task"
+          title={archiveLabel}
+          aria-label={archiveLabel}
           className={`${ICON_BUTTON} border-hairline-strong bg-canvas text-ink-muted hover:bg-surface-2 hover:text-ink`}
         >
           {isArchiving ? "…" : "↓"}
