@@ -31,6 +31,12 @@ services:
         max-file: "5"
 
   backend:
+    environment:
+      # URL the agent calls to trigger a host-side upgrade.
+      # Set in .env: UPGRADE_WEBHOOK_URL=http://172.18.0.1:9137/upgrade
+      # Leave blank to disable (agent will report it can't upgrade).
+      UPGRADE_WEBHOOK_URL: ${UPGRADE_WEBHOOK_URL:-}
+      UPGRADE_WEBHOOK_SECRET: ${UPGRADE_WEBHOOK_SECRET:-}
     env_file:
       # chmod-600 file containing CLAUDE_CODE_OAUTH_TOKEN=...
       # Created on the VPS by the operator; see deploy/VPS_SETUP.md §4.

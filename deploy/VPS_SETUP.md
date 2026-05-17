@@ -284,6 +284,8 @@ driver in the prod overlay; the rest of the stack doesn't care.
 
 ## 10. Upgrades
 
+### 10.1 — Manual upgrade (always works)
+
 ```bash
 cd /opt/cronos
 git pull
@@ -291,12 +293,75 @@ docker compose \
   --env-file .env \
   -f docker-compose.yml -f docker-compose.prod.yml \
   up -d --build
-  sudo systemctl restart cronos.service
+sudo systemctl restart cronos.service
 ```
 
 `git pull` authenticates unattended via the deploy key set up in §5.1 — no
-prompts. The systemd unit picks up the same compose files, so a subsequent
-`systemctl restart cronos.service` will start the freshly-built images.
+prompts.
+
+### 10.2 — Agent-triggered upgrades ("tell Claude to upgrade")
+
+The backend container cannot call `docker` or `systemctl` directly. To let an
+agent task trigger an upgrade, install the **upgrade webhook** — a tiny Python
+HTTP server that runs on the *host* and listens only on the Docker bridge
+interface (172.18.0.1), so it is unreachable from the public internet.
+
+**Install the webhook service:**
+
+```bash
+# Install the service unit
+sudo install -m 644 /opt/cronos/deploy/cronos-upgrade-webhook.service \
+  /etc/systemd/system/
+
+# Make the upgrade script executable
+chmod +x /opt/cronos/upgrade.sh
+
+# Allow the cronos user to run systemctl restart without a password prompt
+# (needed because upgrade.sh calls `sudo systemctl restart cronos.service`)
+echo 'cronos ALL=(ALL) NOPASSWD: /bin/systemctl restart cronos.service' \
+  | sudo tee /etc/sudoers.d/cronos-upgrade
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now cronos-upgrade-webhook.service
+systemctl status cronos-upgrade-webhook.service
+```
+
+**Wire the URL into the backend container** — add to `/opt/cronos/.env`:
+
+```
+UPGRADE_WEBHOOK_URL=http://172.18.0.1:9137/upgrade
+```
+
+Then restart the stack so the variable is picked up:
+
+```bash
+sudo systemctl restart cronos.service
+```
+
+**Verify it works:**
+
+```bash
+# From the host — should print "upgrade started"
+curl -s -X POST http://172.18.0.1:9137/upgrade
+
+# From inside the backend container
+docker compose exec backend \
+  python3 -c "import urllib.request; print(urllib.request.urlopen('http://172.18.0.1:9137/upgrade', data=b'').read())"
+```
+
+Once the webhook is running and `UPGRADE_WEBHOOK_URL` is set, you can open a
+Cronos task and say **"upgrade the app"** — the agent will call the webhook,
+which runs `upgrade.sh` on the host.
+
+**Optional shared secret** — prevent other containers from triggering upgrades:
+
+```bash
+# In /opt/cronos/.env
+UPGRADE_WEBHOOK_SECRET=choose-a-random-string
+```
+
+The webhook checks the `X-Upgrade-Secret` header when the env var is set. The
+backend agent passes the same secret automatically.
 
 ---
 

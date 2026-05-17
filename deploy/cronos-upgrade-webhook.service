@@ -1,0 +1,19 @@
+[Unit]
+Description=Cronos upgrade webhook (Docker-bridge HTTP trigger)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cronos
+Group=cronos
+Environment=HOME=/home/cronos
+WorkingDirectory=/opt/cronos
+# Optional shared secret — set the same value in .env as UPGRADE_WEBHOOK_SECRET
+# EnvironmentFile=/opt/cronos/.env
+ExecStart=/usr/bin/python3 /opt/cronos/deploy/upgrade-webhook.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

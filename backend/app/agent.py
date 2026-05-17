@@ -18,6 +18,9 @@ log = logging.getLogger("cronos.agent")
 DATA_DIR = Path(os.environ.get("CRONOS_DATA_DIR", "/data"))
 CRONOS_SUBDIR = ".cronos"
 
+UPGRADE_WEBHOOK_URL = os.environ.get("UPGRADE_WEBHOOK_URL", "")
+UPGRADE_WEBHOOK_SECRET = os.environ.get("UPGRADE_WEBHOOK_SECRET", "")
+
 STATUS_CONTRACT = """\
 You are an autonomous task executor. The user is not watching the chat in
 real time. End EVERY response with exactly one of these markers on its own
@@ -104,6 +107,31 @@ PLAN_MODE_TOOLS = "Read,Grep,Glob"
 DEFAULT_TOOLS = "Read,Edit,Write,Bash"
 
 
+def _upgrade_instructions() -> str:
+    if not UPGRADE_WEBHOOK_URL:
+        return (
+            "# Upgrading the app\n"
+            "UPGRADE_WEBHOOK_URL is not set. You cannot trigger an upgrade from "
+            "inside the container. Ask the user to run `upgrade.sh` manually on "
+            "the host, or follow VPS_SETUP.md §10.2 to install the upgrade webhook."
+        )
+    secret_header = (
+        f'-H "X-Upgrade-Secret: {UPGRADE_WEBHOOK_SECRET}"'
+        if UPGRADE_WEBHOOK_SECRET
+        else ""
+    )
+    return (
+        "# Upgrading the app\n"
+        "When asked to upgrade the application, run:\n\n"
+        f"  curl -s -X POST {secret_header} {UPGRADE_WEBHOOK_URL}\n\n"
+        "This calls a host-side webhook that runs `upgrade.sh` (git pull + "
+        "docker compose up --build + systemctl restart). The containers will "
+        "restart; the current agent session will be terminated as part of the "
+        "restart. Confirm to the user that the upgrade has been triggered before "
+        "the session ends."
+    )
+
+
 def build_prompt(task: Task, user_message: str | None) -> str:
     fresh = task.claude_session_id is None
     if user_message and not fresh:
@@ -169,6 +197,8 @@ async def run_agent(
         str(workspace),
         "--append-system-prompt",
         STATUS_CONTRACT,
+        "--append-system-prompt",
+        _upgrade_instructions(),
     ]
     if task.agent_model != "default":
         cmd += ["--model", task.agent_model]
