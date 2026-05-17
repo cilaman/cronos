@@ -99,6 +99,25 @@ function parseAssistantEvent(event: RawEvent, idBase: string): StreamEntry[] {
   return out;
 }
 
+function extractSystemDetail(event: RawEvent): string | null {
+  const subtype = (event as { subtype?: unknown }).subtype;
+  if (typeof subtype === "string") {
+    const inner = (event as Record<string, unknown>)[subtype];
+    if (typeof inner === "string" && inner) return inner;
+    if (isRecord(inner)) {
+      const firstKey = Object.keys(inner)[0];
+      if (firstKey) return firstKey;
+    }
+  }
+  const kind = (event as { kind?: unknown }).kind;
+  if (typeof kind === "string" && kind) return kind;
+  const data = (event as { data?: unknown }).data;
+  if (isRecord(data) && typeof data.kind === "string" && data.kind) {
+    return data.kind;
+  }
+  return null;
+}
+
 function parseUserEvent(event: RawEvent, idBase: string): StreamEntry[] {
   const out: StreamEntry[] = [];
   let i = 0;
@@ -162,13 +181,9 @@ export function useLiveStream(taskId: string, enabled: boolean): LiveStream {
         next = parseUserEvent(event, idBase);
       } else if (event.type === "system" || event.type === "result") {
         const subtype = (event as { subtype?: string }).subtype;
-        next = [
-          {
-            id: idBase,
-            kind: "system",
-            text: `${event.type}${subtype ? `/${subtype}` : ""}`,
-          },
-        ];
+        const detail = extractSystemDetail(event);
+        const text = [event.type, subtype, detail].filter(Boolean).join("/");
+        next = [{ id: idBase, kind: "system", text }];
       }
 
       if (next.length) setEntries((prev) => [...prev, ...next]);
