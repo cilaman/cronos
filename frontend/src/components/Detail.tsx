@@ -197,8 +197,8 @@ export function Detail({ taskId, onClose }: Props) {
               />
 
               <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-                <div className="flex min-w-0 flex-1 flex-col">
-                  <div className="flex-1 space-y-6 overflow-y-auto p-4">
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                  <div className="flex-1 space-y-6 overflow-y-auto overscroll-contain p-4">
                     <section>
                       <h3 className="font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
                         Brief
