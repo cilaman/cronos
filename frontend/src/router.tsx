@@ -6,6 +6,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { SpaceCreatePage } from "./pages/SpaceCreatePage";
 import { SpaceSettingsPage } from "./pages/SpaceSettingsPage";
+import { SpaceToolsPage } from "./pages/SpaceToolsPage";
 
 export function AppRoutes() {
   return (
@@ -14,9 +15,11 @@ export function AppRoutes() {
         <Route index element={<DashboardPage />} />
         <Route path="board" element={<BoardPage />} />
         <Route path="archived" element={<ArchivedPage />} />
+        <Route path="tools" element={<SpaceToolsPage />} />
         <Route path="spaces/new" element={<SpaceCreatePage />} />
         <Route path="spaces/:spaceId" element={<BoardPage />} />
         <Route path="spaces/:spaceId/settings" element={<SpaceSettingsPage />} />
+        <Route path="spaces/:spaceId/tools" element={<SpaceToolsPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

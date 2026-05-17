@@ -113,8 +113,8 @@ PERMISSION_MODE: dict[str, str] = {
     "ask": "default",
 }
 
-PLAN_MODE_TOOLS = "Read,Grep,Glob"
-DEFAULT_TOOLS = "Read,Edit,Write,Bash"
+PLAN_MODE_TOOLS = "Read,Grep,Glob,Skill,Agent"
+DEFAULT_TOOLS = "Read,Edit,Write,Bash,Skill,Agent"
 
 
 def _upgrade_instructions() -> str:

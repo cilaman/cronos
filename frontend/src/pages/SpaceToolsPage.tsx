@@ -1,0 +1,356 @@
+import { useNavigate, useParams } from "react-router-dom";
+import { useSpaces, useSpaceTools } from "../hooks/useSpaces";
+import { cn } from "../utils/cn";
+import { formatRelative } from "../utils/format";
+import type { AiToolEntry, HookEntry, PermissionEntry } from "../types";
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const CATEGORY_ICON: Record<string, string> = {
+  agent: "🤖",
+  command: "⌘",
+  skill: "⚡",
+  context: "📖",
+};
+
+// ---------------------------------------------------------------------------
+// Sub-components
+// ---------------------------------------------------------------------------
+
+function ScopeBadge({ scope }: { scope: "space" | "global" }) {
+  return (
+    <span
+      className={cn(
+        "shrink-0 rounded border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.14em]",
+        scope === "space"
+          ? "border-accent/20 bg-accent/10 text-accent-bright"
+          : "border-hairline bg-surface-2 text-ink-muted",
+      )}
+    >
+      {scope}
+    </span>
+  );
+}
+
+function SectionHeader({ label, count }: { label: string; count: number }) {
+  return (
+    <div className="mb-3 flex items-baseline gap-2">
+      <h2 className="font-display text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
+        {label}
+      </h2>
+      <span className="font-mono text-[10px] tabular-nums text-ink-faint">
+        {String(count).padStart(2, "0")}
+      </span>
+    </div>
+  );
+}
+
+function SectionEmptyState({ label, subfolder }: { label: string; subfolder: string }) {
+  return (
+    <div className="rounded-md border border-dashed border-hairline bg-surface-1/40 px-4 py-8 text-center">
+      <p className="font-display text-[11px] uppercase tracking-[0.18em] text-ink-faint">
+        No {label.toLowerCase()} configured
+      </p>
+      <p className="mt-1 text-[11px] text-ink-faint">
+        Add files to{" "}
+        <code className="font-mono text-[10px]">.claude/{subfolder}/</code>
+      </p>
+    </div>
+  );
+}
+
+function ToolCard({ entry, category }: { entry: AiToolEntry; category: string }) {
+  return (
+    <div className="group relative rounded-md border border-hairline bg-surface-1 p-4 shadow-inset-hairline transition hover:-translate-y-px hover:border-hairline-strong hover:shadow-lift">
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="shrink-0 text-[18px] leading-none" aria-hidden>
+            {CATEGORY_ICON[category] ?? "📄"}
+          </span>
+          <span className="truncate font-display text-[13px] font-semibold tracking-[0.04em] text-ink">
+            {entry.name}
+          </span>
+        </div>
+        <ScopeBadge scope={entry.scope} />
+      </div>
+      <p className="line-clamp-2 text-[12px] leading-relaxed text-ink-muted">
+        {entry.description ?? (
+          <span className="italic text-ink-faint">No description</span>
+        )}
+      </p>
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <span className="max-w-[60%] truncate font-mono text-[10px] text-ink-faint">
+          {entry.path}
+        </span>
+        <span className="shrink-0 font-mono text-[10px] text-ink-faint">
+          {formatRelative(entry.modified_at)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function ToolGrid({
+  entries,
+  category,
+  label,
+  subfolder,
+}: {
+  entries: AiToolEntry[];
+  category: string;
+  label: string;
+  subfolder: string;
+}) {
+  return (
+    <section>
+      <SectionHeader label={label} count={entries.length} />
+      {entries.length === 0 ? (
+        <SectionEmptyState label={label} subfolder={subfolder} />
+      ) : (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {entries.map((e) => (
+            <ToolCard key={`${e.scope}:${e.path}`} entry={e} category={category} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function HooksPanel({ hooks }: { hooks: HookEntry[] }) {
+  return (
+    <div>
+      <SectionHeader label="Hooks" count={hooks.length} />
+      {hooks.length === 0 ? (
+        <SectionEmptyState label="hooks" subfolder=".claude/settings.json → hooks" />
+      ) : (
+        <div className="overflow-hidden rounded-md border border-hairline bg-surface-1 shadow-inset-hairline">
+          {hooks.map((hook, i) => (
+            <div
+              key={i}
+              className="grid grid-cols-[5.5rem_1fr_4rem] items-start gap-3 border-b border-hairline px-4 py-2.5 last:border-b-0 hover:bg-surface-2/40"
+            >
+              <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-warning">
+                {hook.event}
+              </span>
+              <div className="min-w-0">
+                {hook.matcher && (
+                  <span className="mb-0.5 mr-1.5 inline-block rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] text-ink-muted">
+                    {hook.matcher}
+                  </span>
+                )}
+                <code className="block truncate font-mono text-[11px] text-ink">
+                  {hook.command}
+                </code>
+              </div>
+              <ScopeBadge scope={hook.scope} />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PermissionsPanel({ permissions }: { permissions: PermissionEntry[] }) {
+  return (
+    <div>
+      <SectionHeader label="Permissions" count={permissions.length} />
+      {permissions.length === 0 ? (
+        <SectionEmptyState label="permissions" subfolder=".claude/settings.json → permissions" />
+      ) : (
+        <div className="flex min-h-[4rem] flex-wrap gap-1.5 rounded-md border border-hairline bg-surface-1 p-4 shadow-inset-hairline">
+          {permissions.map((p, i) => (
+            <span
+              key={i}
+              className={cn(
+                "rounded border px-2 py-0.5 font-mono text-[10px]",
+                p.allowed
+                  ? "border-accent/20 bg-accent/10 text-accent-bright"
+                  : "border-danger/20 bg-danger/10 text-danger",
+              )}
+              title={p.scope}
+            >
+              {p.pattern}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
+
+export function SpaceToolsPage() {
+  const { spaceId: routeSpaceId } = useParams<{ spaceId?: string }>();
+  const navigate = useNavigate();
+  const { data: spacesData, isLoading: spacesLoading } = useSpaces();
+  const spaces = spacesData?.spaces ?? [];
+
+  // Determine active space: from URL param, or from a selector on the /tools route
+  const activeSpaceId = routeSpaceId ?? null;
+
+  const { data: tools, isLoading: toolsLoading, isError: toolsError } = useSpaceTools(activeSpaceId);
+
+  function handleSpaceChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const val = e.target.value;
+    if (val) {
+      navigate(`/spaces/${val}/tools`);
+    } else {
+      navigate("/tools");
+    }
+  }
+
+  const activeSpace = spaces.find((s) => s.id === activeSpaceId) ?? null;
+
+  const totalCount =
+    (tools?.agents.length ?? 0) +
+    (tools?.commands.length ?? 0) +
+    (tools?.skills.length ?? 0) +
+    (tools?.context_files.length ?? 0);
+
+  return (
+    <div className="mx-auto max-w-[1280px] space-y-8 p-6 lg:p-8">
+      {/* Page header */}
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink-faint">
+            Cronos · AI Tools
+          </p>
+          <h1 className="font-display text-[22px] font-semibold uppercase tracking-[0.14em] text-ink">
+            {activeSpace ? activeSpace.name : "Inventory"}
+          </h1>
+        </div>
+
+        {/* Space selector */}
+        <div className="flex items-center gap-2">
+          {spacesLoading ? (
+            <span className="text-[12px] text-ink-muted">Loading…</span>
+          ) : (
+            <select
+              value={activeSpaceId ?? ""}
+              onChange={handleSpaceChange}
+              className="h-9 rounded border border-hairline-strong bg-surface-1 px-3 text-[12px] text-ink transition hover:border-accent focus:border-accent focus:outline-none"
+            >
+              <option value="">Select a space…</option>
+              {spaces.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.icon ? `${s.icon} ` : ""}{s.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      </header>
+
+      {/* No space selected */}
+      {!activeSpaceId && (
+        <div className="rounded-lg border border-dashed border-hairline-strong bg-surface-1 p-10 shadow-inset-hairline">
+          <div className="mx-auto max-w-sm text-center">
+            <p className="font-display text-[13px] font-semibold uppercase tracking-[0.14em] text-ink">
+              Select a space
+            </p>
+            <p className="mt-2 text-[12px] text-ink-muted">
+              Choose a space above to view its available AI tools — agents, commands, skills, context files, hooks, and permissions.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Loading */}
+      {activeSpaceId && toolsLoading && (
+        <p className="text-[12px] text-ink-muted">Loading tools…</p>
+      )}
+
+      {/* Error */}
+      {activeSpaceId && toolsError && (
+        <div className="rounded-md border border-danger/20 bg-danger/5 px-4 py-3 text-[12px] text-danger">
+          Failed to load tools for this space.
+        </div>
+      )}
+
+      {/* Content */}
+      {activeSpaceId && tools && (
+        <>
+          {/* Summary stats bar */}
+          <div className="flex flex-wrap items-center gap-2">
+            {[
+              { label: "Agents", count: tools.agents.length },
+              { label: "Commands", count: tools.commands.length },
+              { label: "Skills", count: tools.skills.length },
+              { label: "Context", count: tools.context_files.length },
+            ].map(({ label, count }) => (
+              <div
+                key={label}
+                className="flex items-center gap-1.5 rounded border border-hairline bg-surface-1 px-3 py-1.5 shadow-inset-hairline"
+              >
+                <span className="font-mono text-[16px] font-semibold tabular-nums text-ink">
+                  {String(count).padStart(2, "0")}
+                </span>
+                <span className="font-display text-[10px] uppercase tracking-[0.18em] text-ink-faint">
+                  {label}
+                </span>
+              </div>
+            ))}
+            {totalCount === 0 && (
+              <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-faint">
+                No tools found
+              </span>
+            )}
+            {tools.has_claude_md && (
+              <div className="flex items-center gap-1.5 rounded border border-hairline bg-surface-2 px-3 py-1.5">
+                <span className="font-display text-[10px] uppercase tracking-[0.18em] text-ink-muted">
+                  CLAUDE.md ✓
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Artifact sections */}
+          <ToolGrid
+            entries={tools.agents}
+            category="agent"
+            label="Agents"
+            subfolder="agents"
+          />
+          <ToolGrid
+            entries={tools.commands}
+            category="command"
+            label="Commands"
+            subfolder="commands"
+          />
+          <ToolGrid
+            entries={tools.skills}
+            category="skill"
+            label="Skills"
+            subfolder="skills"
+          />
+          <ToolGrid
+            entries={tools.context_files}
+            category="context"
+            label="Context"
+            subfolder="context"
+          />
+
+          {/* Settings */}
+          <section>
+            <div className="mb-3 flex items-baseline gap-2">
+              <h2 className="font-display text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
+                Settings
+              </h2>
+            </div>
+            <div className="grid gap-6 md:grid-cols-2">
+              <HooksPanel hooks={tools.hooks} />
+              <PermissionsPanel permissions={tools.permissions} />
+            </div>
+          </section>
+        </>
+      )}
+    </div>
+  );
+}

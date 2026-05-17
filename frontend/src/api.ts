@@ -5,6 +5,7 @@ import type {
   Board,
   Space,
   SpacesResponse,
+  SpaceToolsResponse,
   Task,
   TaskFile,
   TaskState,
@@ -145,6 +146,10 @@ export const api = {
       : `/api/tasks/${taskId}/files`;
     return request<TaskFile>(url, { method: "POST", body: fd });
   },
+
+  // --- ai tools ---
+  spaceTools: (spaceId: string) =>
+    request<SpaceToolsResponse>(`/api/spaces/${spaceId}/tools`),
 
   // --- activity ---
   activity: (limit = 50, spaceId: string | null = null) => {

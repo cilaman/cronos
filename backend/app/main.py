@@ -13,6 +13,7 @@ from watchfiles import awatch
 from .api.activity import router as activity_router
 from .api.spaces import router as spaces_router
 from .api.tasks import router as tasks_router
+from .api.tools import router as tools_router
 from .space_storage import CRONOS_SUBDIR, RESERVED_SPACE_DIRS, SpaceStore
 from .storage import TaskStore
 from .worker_pool import WorkerPool
@@ -189,6 +190,7 @@ app = FastAPI(title="Cronos", version="0.0.1", lifespan=lifespan)
 app.include_router(tasks_router)
 app.include_router(spaces_router)
 app.include_router(activity_router)
+app.include_router(tools_router)
 
 
 @app.get("/api/health")
