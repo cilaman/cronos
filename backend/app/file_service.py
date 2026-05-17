@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 from datetime import datetime, timezone
 from pathlib import Path
@@ -132,6 +133,60 @@ def list_files(
                 _walk(child, f"{rel}/")
 
     _walk(root, "")
+    return entries
+
+
+async def list_git_changed_files(root: Path) -> list[FileEntry] | None:
+    """Return only new/modified files in a git worktree.
+
+    Returns None if *root* is not a git repo so the caller can fall back to
+    list_files(). Deleted files are omitted (nothing to show).
+    """
+    if not (root / ".git").exists():
+        return None
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "git", "-C", str(root), "status", "--porcelain", "--untracked-files=all",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await proc.communicate()
+    except Exception:
+        return None
+
+    entries: list[FileEntry] = []
+    for line in stdout.decode().splitlines():
+        if len(line) < 4:
+            continue
+        xy = line[:2]
+        path = line[3:]
+        # Skip ignored files and deleted files
+        if xy == "!!" or "D" in xy:
+            continue
+        # Renames: "old -> new"
+        if " -> " in path:
+            path = path.split(" -> ", 1)[1]
+        path = path.strip('"').replace("\\", "/")
+
+        full = root / path
+        if not full.exists() or full.is_dir():
+            continue
+        try:
+            stat = full.stat()
+            mtime = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat()
+        except OSError:
+            continue
+
+        entries.append(FileEntry(
+            name=full.name,
+            path=path,
+            size=stat.st_size,
+            modified_at=mtime,
+            is_dir=False,
+            category=classify_file(path, full.name),
+        ))
+
+    entries.sort(key=lambda e: e.path)
     return entries
 
 
