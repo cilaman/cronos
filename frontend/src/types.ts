@@ -112,6 +112,20 @@ export interface Space {
   agent_defaults: Record<string, string>;
 }
 
+export type FileCategory =
+  | "agent" | "skill" | "command" | "context"
+  | "image" | "text" | "code"
+  | "document" | "archive" | "binary" | "directory";
+
+export interface TaskFile {
+  name: string;
+  path: string;
+  size: number;
+  modified_at: string;
+  is_dir: boolean;
+  category: FileCategory;
+}
+
 export interface Activity {
   task_id: string;
   space_id: string;

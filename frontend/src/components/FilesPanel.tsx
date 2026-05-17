@@ -1,13 +1,39 @@
-export function FilesPanel() {
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { api, taskFileUrl } from "../api";
+import { FileBrowser } from "./FileBrowser";
+
+interface Props {
+  taskId: string;
+}
+
+export function FilesPanel({ taskId }: Props) {
+  const queryClient = useQueryClient();
+  const { data: files = [], isLoading } = useQuery({
+    queryKey: ["task-files", taskId],
+    queryFn: () => api.taskFiles(taskId),
+    refetchInterval: 10_000,
+  });
+
+  const uploadMutation = useMutation({
+    mutationFn: ({ file, subdir }: { file: File; subdir: string }) =>
+      api.uploadTaskFile(taskId, file, subdir),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["task-files", taskId] });
+    },
+  });
+
   return (
-    <aside className="hidden flex-col border-t border-hairline bg-surface-1/30 p-4 lg:flex lg:w-72 lg:shrink-0 lg:border-l lg:border-t-0">
-      <h3 className="font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
+    <aside className="hidden flex-col border-t border-hairline bg-surface-1/30 lg:flex lg:w-72 lg:shrink-0 lg:border-l lg:border-t-0">
+      <h3 className="shrink-0 px-4 pt-4 pb-2 font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
         Files
       </h3>
-      <div className="mt-3 flex flex-1 flex-col items-start gap-1 text-sm">
-        <p className="text-ink-muted">No files attached yet</p>
-        <p className="text-xs italic text-ink-faint">Coming soon</p>
-      </div>
+      <FileBrowser
+        files={files}
+        isLoading={isLoading}
+        fileUrlBuilder={(path, dl) => taskFileUrl(taskId, path, dl)}
+        onUpload={(file, subdir) => uploadMutation.mutateAsync({ file, subdir }).then(() => undefined)}
+        uploadPending={uploadMutation.isPending}
+      />
     </aside>
   );
 }
