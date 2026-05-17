@@ -34,9 +34,8 @@ export function Card({ task, onClick }: Props) {
     <div
       ref={setNodeRef}
       style={style}
-      {...listeners}
       {...attributes}
-      className={`touch-none ${isDragging ? "opacity-50" : ""}`}
+      className={`group ${isDragging ? "opacity-50" : ""}`}
     >
       <button
         type="button"
@@ -45,8 +44,20 @@ export function Card({ task, onClick }: Props) {
           borderLeftColor: borderColor,
           borderLeftWidth: 3,
         }}
-        className="block w-full rounded-md border border-hairline bg-surface-2 py-3 pl-2.5 pr-3 text-left shadow-inset-hairline transition hover:-translate-y-px hover:border-hairline-strong hover:bg-surface-3 hover:shadow-lift focus:outline-none focus-visible:ring-1 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface-1"
+        className="relative block w-full rounded-md border border-hairline bg-surface-2 py-3 pl-2.5 pr-3 text-left shadow-inset-hairline transition hover:-translate-y-px hover:border-hairline-strong hover:bg-surface-3 hover:shadow-lift focus:outline-none focus-visible:ring-1 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface-1"
       >
+        <span
+          {...listeners}
+          className="absolute right-1.5 top-1.5 touch-none cursor-grab rounded p-0.5 text-ink-faint opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
+          aria-label="Drag"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor" aria-hidden="true">
+            <circle cx="2" cy="2" r="1.5"/><circle cx="8" cy="2" r="1.5"/>
+            <circle cx="2" cy="7" r="1.5"/><circle cx="8" cy="7" r="1.5"/>
+            <circle cx="2" cy="12" r="1.5"/><circle cx="8" cy="12" r="1.5"/>
+          </svg>
+        </span>
         {task.space_name && (
           <div className="mb-1.5 flex items-center gap-1.5">
             <span
@@ -66,12 +77,12 @@ export function Card({ task, onClick }: Props) {
         )}
         <h3 className="text-sm font-semibold leading-snug text-ink">{task.title}</h3>
         {task.brief_preview && (
-          <p className="mt-1.5 text-xs leading-relaxed text-ink-muted line-clamp-3">
+          <p className="mt-1.5 hidden text-xs leading-relaxed text-ink-muted line-clamp-3 sm:block">
             {task.brief_preview}
           </p>
         )}
         {task.waiting_question && (
-          <p className="mt-2 rounded border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-800 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-300">
+          <p className="mt-2 hidden rounded border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-800 sm:block dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-300">
             <span className="font-semibold uppercase tracking-wide text-[10px]">Q&nbsp;</span>
             {task.waiting_question}
           </p>
