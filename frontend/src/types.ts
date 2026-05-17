@@ -1,7 +1,7 @@
 export type TaskState = "backlog" | "active" | "waiting" | "done" | "archived";
 
 export const LANES: { state: TaskState; label: string }[] = [
-  { state: "backlog", label: "Backlog" },
+  { state: "backlog", label: "To Do" },
   { state: "active", label: "Active" },
   { state: "waiting", label: "Waiting" },
   { state: "done", label: "Done" },
