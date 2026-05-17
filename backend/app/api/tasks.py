@@ -3,14 +3,15 @@ from __future__ import annotations
 import logging
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Query, Request, Response, status
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, HTTPException, Query, Request, Response, UploadFile, status
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 log = logging.getLogger(__name__)
 
 from .. import git_ops
-from ..agent import space_dir_for
+from ..agent import CRONOS_SUBDIR, space_dir_for
+from ..file_service import FileEntry, list_files, resolve_safe, save_upload
 from ..models import Board, Space, Task, TaskState, TaskSummary
 from ..space_storage import SpaceStore
 from ..storage import (
@@ -271,6 +272,68 @@ async def stream_task(task_id: str, request: Request) -> StreamingResponse:
             "Connection": "keep-alive",
         },
     )
+
+
+def _task_workspace(task: Task):
+    return space_dir_for(task.space_id) / CRONOS_SUBDIR / "workspaces" / task.id
+
+
+@router.get("/{task_id}/files", response_model=list[FileEntry])
+async def list_task_files(task_id: str, request: Request) -> list[FileEntry]:
+    task = get_store(request).get(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+    workspace = _task_workspace(task)
+    if not workspace.exists():
+        return []
+    return list_files(workspace)
+
+
+@router.get("/{task_id}/files/{file_path:path}")
+async def get_task_file(
+    task_id: str,
+    file_path: str,
+    request: Request,
+    download: bool = Query(default=False),
+) -> FileResponse:
+    task = get_store(request).get(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+    workspace = _task_workspace(task)
+    try:
+        full = resolve_safe(workspace, file_path)
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Access denied")
+    if not full.exists() or full.is_dir():
+        raise HTTPException(status_code=404, detail=f"File not found: {file_path}")
+    headers = {}
+    if download:
+        headers["Content-Disposition"] = f'attachment; filename="{full.name}"'
+    return FileResponse(str(full), headers=headers)
+
+
+@router.post("/{task_id}/files", response_model=FileEntry, status_code=status.HTTP_201_CREATED)
+async def upload_task_file(
+    task_id: str,
+    request: Request,
+    file: UploadFile,
+    subdir: str = Query(default=""),
+) -> FileEntry:
+    task = get_store(request).get(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+    workspace = _task_workspace(task)
+    workspace.mkdir(parents=True, exist_ok=True)
+    # Validate subdir is safe before passing to save_upload
+    if subdir:
+        try:
+            resolve_safe(workspace, subdir)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid subdir path")
+    try:
+        return await save_upload(workspace, subdir, file)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)

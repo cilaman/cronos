@@ -6,6 +6,7 @@ import type {
   Space,
   SpacesResponse,
   Task,
+  TaskFile,
   TaskState,
   TaskSummary,
 } from "./types";
@@ -33,6 +34,14 @@ function withSpaceQuery(path: string, spaceId: string | null): string {
   const sep = path.includes("?") ? "&" : "?";
   return `${path}${sep}space_id=${encodeURIComponent(spaceId)}`;
 }
+
+export function taskFileUrl(taskId: string, filePath: string, download = false): string {
+  const encoded = filePath.split("/").map(encodeURIComponent).join("/");
+  return `/api/tasks/${taskId}/files/${encoded}${download ? "?download=true" : ""}`;
+}
+
+// Future mirror for space-level file manager:
+// export function spaceFileUrl(spaceId: string, filePath: string, download = false): string { ... }
 
 export const api = {
   board: (spaceId: string | null = null) =>
@@ -121,6 +130,19 @@ export const api = {
       ? `/api/spaces/import?rename_to=${encodeURIComponent(renameTo)}`
       : "/api/spaces/import";
     return request<Space>(url, { method: "POST", body: fd });
+  },
+
+  // --- task files ---
+  taskFiles: (taskId: string) =>
+    request<TaskFile[]>(`/api/tasks/${taskId}/files`),
+
+  uploadTaskFile: (taskId: string, file: File, subdir = "") => {
+    const fd = new FormData();
+    fd.append("file", file);
+    const url = subdir
+      ? `/api/tasks/${taskId}/files?subdir=${encodeURIComponent(subdir)}`
+      : `/api/tasks/${taskId}/files`;
+    return request<TaskFile>(url, { method: "POST", body: fd });
   },
 
   // --- activity ---
