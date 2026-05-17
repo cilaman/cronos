@@ -229,7 +229,7 @@ export function Detail({ taskId, onClose }: Props) {
                   />
                 </div>
 
-                <FilesPanel />
+                <FilesPanel taskId={task.id} />
               </div>
             </>
           )}
