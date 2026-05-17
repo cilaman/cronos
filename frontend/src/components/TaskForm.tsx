@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useSpaces } from "../hooks/useSpaces";
 import { AGENT_MODES, AGENT_MODELS, type AgentMode, type AgentModel } from "../types";
+import { Button } from "./ui/Button";
+import { FormField } from "./ui/FormField";
+import { FormInput, FormSelect, FormTextarea } from "./ui/FormInput";
+import { Modal } from "./ui/Modal";
 
 interface Props {
   heading: string;
@@ -90,10 +94,7 @@ export function TaskForm({
     : startImmediately ? "Create & Start" : "Create";
 
   return (
-    <div
-      className="fixed inset-0 z-40 flex items-stretch justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4"
-      onClick={onCancel}
-    >
+    <Modal onClose={onCancel}>
       <form
         onClick={(e) => e.stopPropagation()}
         onSubmit={(e) => {
@@ -126,92 +127,69 @@ export function TaskForm({
         </header>
 
         <div className="flex-1 space-y-4 overflow-y-auto p-4">
-          {/* Title + Mode + Model row */}
           <div className="flex flex-col gap-3 sm:flex-row">
-            <label className="block flex-1">
-              <span className="font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
-                Title
-              </span>
-              <input
+            <FormField label="Title" className="flex-1">
+              <FormInput
                 autoFocus
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 maxLength={200}
                 required
-                className="mt-1 block w-full rounded border border-hairline-strong bg-canvas px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
               />
-            </label>
-            <label className="block sm:w-32">
-              <span className="font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
-                Mode
-              </span>
-              <select
+            </FormField>
+            <FormField label="Mode" className="sm:w-32">
+              <FormSelect
                 value={mode}
                 onChange={(e) => setMode(e.target.value as AgentMode)}
-                className="mt-1 block w-full rounded border border-hairline-strong bg-canvas px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
               >
                 {AGENT_MODES.map((m) => (
-                  <option key={m.value} value={m.value}>
-                    {m.label}
-                  </option>
+                  <option key={m.value} value={m.value}>{m.label}</option>
                 ))}
-              </select>
-            </label>
-            <label className="block sm:w-32">
-              <span className="font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
-                Model
-              </span>
-              <select
+              </FormSelect>
+            </FormField>
+            <FormField label="Model" className="sm:w-32">
+              <FormSelect
                 value={model}
                 onChange={(e) => setModel(e.target.value as AgentModel)}
-                className="mt-1 block w-full rounded border border-hairline-strong bg-canvas px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
               >
                 {AGENT_MODELS.map((m) => (
-                  <option key={m.value} value={m.value}>
-                    {m.label}
-                  </option>
+                  <option key={m.value} value={m.value}>{m.label}</option>
                 ))}
-              </select>
-            </label>
+              </FormSelect>
+            </FormField>
           </div>
 
           {showSpacePicker && (
-            <label className="block">
-              <span className="font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
-                Space
-              </span>
-              <select
+            <FormField label="Space">
+              <FormSelect
                 value={effectiveSpaceId ?? ""}
                 onChange={(e) => setSpaceId(e.target.value)}
                 disabled={!!lockedSpaceId}
-                className="mt-1 block w-full rounded border border-hairline-strong bg-canvas px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-60"
               >
-                {spaces.length === 0 && <option value="">No spaces — create one first</option>}
+                {spaces.length === 0 && (
+                  <option value="">No spaces — create one first</option>
+                )}
                 {spaces.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.icon ? `${s.icon}  ` : ""}
                     {s.name}
                   </option>
                 ))}
-              </select>
-            </label>
+              </FormSelect>
+            </FormField>
           )}
 
-          <label className="block">
-            <span className="font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
-              Brief
-            </span>
-            <textarea
+          <FormField label="Brief">
+            <FormTextarea
               value={brief}
               onChange={(e) => setBrief(e.target.value)}
               rows={8}
               placeholder="Describe what the agent should do. Markdown supported."
-              className="mt-1 block w-full rounded border border-hairline-strong bg-canvas px-3 py-2 font-mono text-sm text-ink placeholder:text-ink-faint focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+              className="font-mono"
             />
-          </label>
+          </FormField>
 
-          {/* Files section */}
           <div>
             <span className="font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
               Files
@@ -270,30 +248,22 @@ export function TaskForm({
               type="checkbox"
               checked={startImmediately}
               onChange={(e) => setStartImmediately(e.target.checked)}
-              className="h-3.5 w-3.5 rounded border-hairline-strong accent-accent"
+              className="h-4 w-4 rounded border-hairline-strong accent-accent"
             />
             <span className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-muted">
               Start immediately
             </span>
           </label>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onCancel}
-              className="rounded px-3 py-2 text-sm text-ink-muted transition hover:bg-surface-2 hover:text-ink"
-            >
+            <Button type="button" variant="ghost" onClick={onCancel}>
               Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={!canSubmit}
-              className="rounded border border-accent bg-accent px-4 py-2 text-sm font-medium text-canvas transition hover:bg-accent-bright hover:shadow-accent-glow disabled:cursor-not-allowed disabled:border-hairline disabled:bg-surface-2 disabled:text-ink-faint disabled:shadow-none"
-            >
+            </Button>
+            <Button type="submit" disabled={!canSubmit} loading={submitting}>
               {submitLabel}
-            </button>
+            </Button>
           </div>
         </footer>
       </form>
-    </div>
+    </Modal>
   );
 }

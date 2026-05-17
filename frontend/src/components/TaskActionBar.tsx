@@ -1,3 +1,4 @@
+import { IconButton } from "./ui/IconButton";
 import type { TaskState } from "../types";
 
 interface Props {
@@ -14,9 +15,6 @@ interface Props {
   onArchive: () => void;
   onMarkDone: () => void;
 }
-
-const ICON_BUTTON =
-  "flex h-8 w-8 items-center justify-center rounded border text-sm transition disabled:cursor-not-allowed disabled:opacity-50";
 
 export function TaskActionBar({
   taskState,
@@ -41,72 +39,71 @@ export function TaskActionBar({
   return (
     <div className="flex items-center gap-1 border-b border-hairline bg-surface-1/40 px-3 py-2">
       {showStart && (
-        <button
-          type="button"
+        <IconButton
+          variant="accent"
           onClick={onStart}
           disabled={isStarting}
+          loading={isStarting}
           title="Start agent"
           aria-label="Start agent"
-          className={`${ICON_BUTTON} border-accent bg-accent text-canvas hover:bg-accent-bright hover:shadow-accent-glow`}
         >
-          {isStarting ? "…" : "▶"}
-        </button>
+          ▶
+        </IconButton>
       )}
       {showStop && (
-        <button
-          type="button"
+        <IconButton
+          variant="danger"
           onClick={onStop}
           disabled={isStopping}
+          loading={isStopping}
           title="Stop agent"
           aria-label="Stop agent"
-          className={`${ICON_BUTTON} border-danger bg-danger text-ink hover:bg-danger/80`}
         >
-          {isStopping ? "…" : "■"}
-        </button>
+          ■
+        </IconButton>
       )}
       {showMarkDone && (
-        <button
-          type="button"
+        <IconButton
+          variant="accent-soft"
           onClick={onMarkDone}
           disabled={isMarkingDone}
+          loading={isMarkingDone}
           title="Mark as done"
           aria-label="Mark task as done"
-          className={`${ICON_BUTTON} border-accent bg-accent/15 text-accent-bright hover:bg-accent/25`}
         >
-          {isMarkingDone ? "…" : "✓"}
-        </button>
+          ✓
+        </IconButton>
       )}
       {showArchive && (
-        <button
-          type="button"
+        <IconButton
+          variant="default"
           onClick={onArchive}
           disabled={isArchiving}
+          loading={isArchiving}
           title={archiveLabel}
           aria-label={archiveLabel}
-          className={`${ICON_BUTTON} border-hairline-strong bg-canvas text-ink-muted hover:bg-surface-2 hover:text-ink`}
         >
-          {isArchiving ? "…" : "↓"}
-        </button>
+          ↓
+        </IconButton>
       )}
-      <button
-        type="button"
+      <IconButton
+        variant="default"
         onClick={onEdit}
         title="Edit task"
         aria-label="Edit task"
-        className={`${ICON_BUTTON} border-hairline-strong bg-canvas text-ink-muted hover:bg-surface-2 hover:text-ink`}
       >
         ✎
-      </button>
-      <button
-        type="button"
+      </IconButton>
+      <IconButton
+        variant="danger-hover"
         onClick={onDelete}
         disabled={isDeleting}
+        loading={isDeleting}
         title="Delete task"
         aria-label="Delete task"
-        className={`${ICON_BUTTON} border-hairline-strong bg-canvas text-ink-muted hover:border-danger hover:bg-danger/15 hover:text-danger`}
       >
         ⊘
-      </button>
+      </IconButton>
     </div>
   );
 }

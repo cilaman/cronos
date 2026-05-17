@@ -23,14 +23,33 @@ import { ConversationStream } from "./ConversationStream";
 import { FilesPanel } from "./FilesPanel";
 import { TaskActionBar } from "./TaskActionBar";
 import { TaskForm } from "./TaskForm";
+import { Modal } from "./ui/Modal";
+import { SpaceTag } from "./ui/SpaceTag";
 
 interface Props {
   taskId: string;
   onClose: () => void;
 }
 
+function DetailSkeleton() {
+  return (
+    <div className="animate-pulse p-6 space-y-4">
+      <div className="flex gap-2">
+        <div className="h-5 w-16 rounded bg-surface-3" />
+        <div className="h-5 w-24 rounded bg-surface-3" />
+      </div>
+      <div className="h-7 w-2/3 rounded bg-surface-3" />
+      <div className="space-y-2 pt-2">
+        <div className="h-4 w-full rounded bg-surface-3" />
+        <div className="h-4 w-5/6 rounded bg-surface-3" />
+        <div className="h-4 w-4/6 rounded bg-surface-3" />
+      </div>
+    </div>
+  );
+}
+
 export function Detail({ taskId, onClose }: Props) {
-  const { data: task, isLoading, error } = useTask(taskId);
+  const { data: task, isLoading, error, refetch } = useTask(taskId);
   const updateTask = useUpdateTask(taskId);
   const deleteTask = useDeleteTask();
   const archiveTask = useArchiveTask(taskId);
@@ -105,16 +124,26 @@ export function Detail({ taskId, onClose }: Props) {
 
   return (
     <>
-      <div
-        className="fixed inset-0 z-30 flex items-stretch justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4"
-        onClick={onClose}
-      >
+      <Modal onClose={onClose} className="z-30">
         <div
           className="flex h-full w-full max-w-5xl flex-col overflow-hidden border border-hairline bg-surface-1 shadow-lift sm:h-auto sm:max-h-[90vh] sm:rounded-lg"
           onClick={(e) => e.stopPropagation()}
         >
-          {isLoading && <div className="p-6 text-ink-muted">Loading…</div>}
-          {error && <div className="p-6 text-danger">Error: {error.message}</div>}
+          {isLoading && <DetailSkeleton />}
+          {error && (
+            <div className="flex flex-col items-center gap-3 p-10 text-center">
+              <p className="rounded border border-danger/40 bg-danger/15 px-4 py-3 text-sm text-danger">
+                {error.message}
+              </p>
+              <button
+                type="button"
+                onClick={() => void refetch()}
+                className="rounded border border-hairline-strong bg-canvas px-3 py-1.5 text-xs text-ink-muted transition hover:bg-surface-2 hover:text-ink"
+              >
+                Retry
+              </button>
+            </div>
+          )}
           {task && (
             <>
               <header className="flex items-start justify-between gap-4 border-b border-hairline p-4">
@@ -130,18 +159,14 @@ export function Detail({ taskId, onClose }: Props) {
                     {task.space_name && (
                       <a
                         href={`/spaces/${task.space_id}`}
-                        className="flex items-center gap-1.5 rounded border border-hairline px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] text-ink-muted transition hover:border-hairline-strong hover:text-ink"
+                        className="flex items-center rounded border border-hairline px-2 py-0.5 transition hover:border-hairline-strong hover:text-ink"
                       >
-                        <span
-                          aria-hidden
-                          className="h-2 w-2 rounded-sm"
-                          style={{
-                            backgroundColor:
-                              task.space_color ?? "rgb(var(--color-hairline-strong))",
-                          }}
+                        <SpaceTag
+                          color={task.space_color}
+                          icon={task.space_icon}
+                          name={task.space_name}
+                          size="xs"
                         />
-                        {task.space_icon && <span aria-hidden>{task.space_icon}</span>}
-                        {task.space_name}
                       </a>
                     )}
                     <span className="font-mono text-xs text-ink-faint">{task.id}</span>
@@ -162,9 +187,7 @@ export function Detail({ taskId, onClose }: Props) {
                         className="rounded border border-hairline-strong bg-canvas px-2 py-1 text-xs font-medium text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                       >
                         {AGENT_MODES.map((m) => (
-                          <option key={m.value} value={m.value}>
-                            {m.label}
-                          </option>
+                          <option key={m.value} value={m.value}>{m.label}</option>
                         ))}
                       </select>
                     </label>
@@ -180,9 +203,7 @@ export function Detail({ taskId, onClose }: Props) {
                         className="rounded border border-hairline-strong bg-canvas px-2 py-1 text-xs font-medium text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                       >
                         {AGENT_MODELS.map((m) => (
-                          <option key={m.value} value={m.value}>
-                            {m.label}
-                          </option>
+                          <option key={m.value} value={m.value}>{m.label}</option>
                         ))}
                       </select>
                     </label>
@@ -243,7 +264,7 @@ export function Detail({ taskId, onClose }: Props) {
             </>
           )}
         </div>
-      </div>
+      </Modal>
 
       {editing && task && (
         <TaskForm

@@ -1,15 +1,16 @@
 import { NavLink } from "react-router-dom";
+import { cn } from "../utils/cn";
 import { useSpaces } from "../hooks/useSpaces";
 import type { SpaceSummary } from "../types";
 import { ThemeToggle } from "./ThemeToggle";
 
 const primaryNavLinkClasses = ({ isActive }: { isActive: boolean }) =>
-  [
+  cn(
     "group relative flex h-9 items-center gap-2 rounded px-3 font-display text-[11px] font-semibold uppercase tracking-[0.18em] transition",
     isActive
       ? "bg-surface-2 text-ink shadow-inset-hairline"
       : "text-ink-muted hover:bg-surface-2/60 hover:text-ink",
-  ].join(" ");
+  );
 
 function ActiveStrip({ color }: { color?: string }) {
   return (
@@ -28,12 +29,12 @@ function SpaceRow({ space, onClose }: { space: SpaceSummary; onClose?: () => voi
       to={`/spaces/${space.id}`}
       onClick={onClose}
       className={({ isActive }) =>
-        [
+        cn(
           "group relative flex h-8 items-center gap-2 rounded px-3 text-[12px] transition",
           isActive
             ? "bg-surface-2 text-ink shadow-inset-hairline"
             : "text-ink-muted hover:bg-surface-2/60 hover:text-ink",
-        ].join(" ")
+        )
       }
     >
       {({ isActive }) => (
@@ -126,9 +127,7 @@ export function Sidebar({ onClose }: Props) {
 
       <div className="flex-1 overflow-y-auto px-2 pb-2">
         {spaces.length === 0 ? (
-          <p className="px-3 py-2 text-[12px] italic text-ink-faint">
-            No spaces yet
-          </p>
+          <p className="px-3 py-2 text-[12px] italic text-ink-faint">No spaces yet</p>
         ) : (
           <div className="flex flex-col gap-0.5">
             {spaces.map((space) => (

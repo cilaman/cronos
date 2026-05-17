@@ -1,16 +1,8 @@
 import { useDraggable } from "@dnd-kit/core";
+import { cn } from "../utils/cn";
+import { formatRelative } from "../utils/format";
+import { SpaceTag } from "./ui/SpaceTag";
 import type { TaskSummary } from "../types";
-
-function formatRelative(iso: string): string {
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return "";
-  const seconds = Math.round((Date.now() - then) / 1000);
-  const abs = Math.abs(seconds);
-  if (abs < 60) return "just now";
-  if (abs < 3600) return `${Math.round(seconds / 60)}m ago`;
-  if (abs < 86_400) return `${Math.round(seconds / 3600)}h ago`;
-  return `${Math.round(seconds / 86_400)}d ago`;
-}
 
 interface Props {
   task: TaskSummary;
@@ -35,15 +27,12 @@ export function Card({ task, onClick }: Props) {
       ref={setNodeRef}
       style={style}
       {...attributes}
-      className={`group ${isDragging ? "opacity-50" : ""}`}
+      className={cn("group", isDragging && "opacity-50")}
     >
       <button
         type="button"
         onClick={onClick}
-        style={{
-          borderLeftColor: borderColor,
-          borderLeftWidth: 3,
-        }}
+        style={{ borderLeftColor: borderColor, borderLeftWidth: 3 }}
         className="relative block w-full rounded-md border border-hairline bg-surface-2 py-3 pl-2.5 pr-3 text-left shadow-inset-hairline transition hover:-translate-y-px hover:border-hairline-strong hover:bg-surface-3 hover:shadow-lift focus:outline-none focus-visible:ring-1 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface-1"
       >
         <span
@@ -59,20 +48,13 @@ export function Card({ task, onClick }: Props) {
           </svg>
         </span>
         {task.space_name && (
-          <div className="mb-1.5 flex items-center gap-1.5">
-            <span
-              aria-hidden
-              className="h-1.5 w-1.5 rounded-sm"
-              style={{ backgroundColor: borderColor }}
+          <div className="mb-1.5">
+            <SpaceTag
+              color={task.space_color}
+              icon={task.space_icon}
+              name={task.space_name}
+              size="xs"
             />
-            {task.space_icon && (
-              <span aria-hidden className="text-[11px] leading-none">
-                {task.space_icon}
-              </span>
-            )}
-            <span className="truncate font-mono text-[10px] uppercase tracking-[0.14em] text-ink-muted">
-              {task.space_name}
-            </span>
           </div>
         )}
         <h3 className="text-sm font-semibold leading-snug text-ink">{task.title}</h3>

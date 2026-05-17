@@ -1,6 +1,9 @@
 import { useDroppable } from "@dnd-kit/core";
-import type { TaskState, TaskSummary } from "../types";
+import { cn } from "../utils/cn";
+import { EmptyState } from "./ui/EmptyState";
+import { StickyToolbar } from "./ui/StickyToolbar";
 import { Card } from "./Card";
+import type { TaskState, TaskSummary } from "../types";
 
 interface Props {
   state: TaskState;
@@ -15,13 +18,12 @@ export function Lane({ state, label, tasks, onOpen, onAdd }: Props) {
   return (
     <section
       ref={setNodeRef}
-      className={`flex min-h-0 flex-col rounded-lg shadow-inset-hairline transition-colors ${
-        isOver
-          ? "bg-accent/10 ring-1 ring-accent-bright"
-          : "bg-surface-1"
-      }`}
+      className={cn(
+        "flex min-h-0 flex-col rounded-lg shadow-inset-hairline transition-colors",
+        isOver ? "bg-accent/10 ring-1 ring-accent-bright" : "bg-surface-1",
+      )}
     >
-      <header className="sticky top-0 z-10 flex h-10 items-center justify-between rounded-t-lg border-b border-hairline bg-surface-1/95 px-3 backdrop-blur">
+      <StickyToolbar className="z-10 h-10 rounded-t-lg px-3">
         <div className="flex items-baseline gap-2">
           <h2 className="font-display text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-muted">
             {label}
@@ -40,10 +42,10 @@ export function Lane({ state, label, tasks, onOpen, onAdd }: Props) {
             <span aria-hidden className="text-lg leading-none">＋</span>
           </button>
         )}
-      </header>
+      </StickyToolbar>
       <div className="flex-1 space-y-2 overflow-y-auto p-2">
         {tasks.length === 0 ? (
-          <p className="px-2 py-3 text-xs italic text-ink-faint">No tasks</p>
+          <EmptyState title="No tasks" />
         ) : (
           tasks.map((task) => (
             <Card key={task.id} task={task} onClick={() => onOpen(task.id)} />

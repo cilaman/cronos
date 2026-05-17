@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { PRESET_SPACE_COLORS, PRESET_SPACE_ICONS } from "../../types";
 import type { Space } from "../../types";
+import { Button } from "../ui/Button";
+import { FormField } from "../ui/FormField";
+import { FormInput, FormTextarea } from "../ui/FormInput";
 
 export interface SpaceFormValues {
   name: string;
@@ -42,7 +45,6 @@ export function SpaceForm({
   const [branch, setBranch] = useState("main");
   const [shareCronos, setShareCronos] = useState(false);
 
-  // Track initial values for the dirty check below (only matters in edit mode).
   const [snap] = useState({
     name: initial?.name ?? "",
     color: initial?.color ?? DEFAULT_COLOR,
@@ -90,34 +92,26 @@ export function SpaceForm({
       className="grid gap-8 lg:grid-cols-[1fr_320px]"
     >
       <div className="space-y-6">
-        <label className="block">
-          <span className="font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
-            Name
-          </span>
-          <input
+        <FormField label="Name">
+          <FormInput
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
             maxLength={80}
             required
             placeholder="e.g. Marketing site"
-            className="mt-1 block w-full rounded border border-hairline-strong bg-canvas px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
           />
-        </label>
+        </FormField>
 
-        <label className="block">
-          <span className="font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
-            Description
-          </span>
-          <textarea
+        <FormField label="Description">
+          <FormTextarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={3}
             maxLength={2000}
             placeholder="What lives in this space?"
-            className="mt-1 block w-full rounded border border-hairline-strong bg-canvas px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
           />
-        </label>
+        </FormField>
 
         <div className="block">
           <span className="font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
@@ -201,7 +195,8 @@ export function SpaceForm({
                 </span>
                 <p className="mt-0.5 text-[12px] text-ink-muted">
                   Cronos clones the repo into the space; each task runs in its own
-                  worktree with access to the repo's <code className="font-mono text-ink">.claude/</code>{" "}
+                  worktree with access to the repo's{" "}
+                  <code className="font-mono text-ink">.claude/</code>{" "}
                   agents and skills.
                 </p>
               </div>
@@ -209,34 +204,28 @@ export function SpaceForm({
 
             {linkRepo && (
               <div className="mt-4 space-y-3 border-t border-hairline pt-4">
-                <label className="block">
-                  <span className="font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
-                    Repo URL
-                  </span>
-                  <input
+                <FormField label="Repo URL">
+                  <FormInput
                     type="text"
                     value={repoUrl}
                     onChange={(e) => setRepoUrl(e.target.value)}
                     required={linkRepo}
                     spellCheck={false}
                     placeholder="git@github.com:org/repo.git"
-                    className="mt-1 block w-full rounded border border-hairline-strong bg-canvas px-3 py-2 font-mono text-[12px] text-ink placeholder:text-ink-faint focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                    className="font-mono text-[12px]"
                   />
-                </label>
-                <label className="block">
-                  <span className="font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
-                    Base branch
-                  </span>
-                  <input
+                </FormField>
+                <FormField label="Base branch">
+                  <FormInput
                     type="text"
                     value={branch}
                     onChange={(e) => setBranch(e.target.value)}
                     required={linkRepo}
                     spellCheck={false}
                     placeholder="main"
-                    className="mt-1 block w-full rounded border border-hairline-strong bg-canvas px-3 py-2 font-mono text-[12px] text-ink placeholder:text-ink-faint focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                    className="font-mono text-[12px]"
                   />
-                </label>
+                </FormField>
                 <label className="flex items-start gap-3">
                   <input
                     type="checkbox"
@@ -268,21 +257,17 @@ export function SpaceForm({
 
         <div className="sticky bottom-0 -mx-1 flex items-center justify-end gap-2 border-t border-hairline bg-canvas/95 px-1 py-3 backdrop-blur">
           {onCancel && (
-            <button
-              type="button"
-              onClick={onCancel}
-              className="rounded px-3 py-2 text-sm text-ink-muted transition hover:bg-surface-2 hover:text-ink"
-            >
+            <Button type="button" variant="ghost" onClick={onCancel}>
               Cancel
-            </button>
+            </Button>
           )}
-          <button
-            type="submit"
-            disabled={!canSubmit}
-            className="rounded border border-accent bg-accent px-4 py-2 text-sm font-medium text-canvas transition hover:bg-accent-bright hover:shadow-accent-glow disabled:cursor-not-allowed disabled:border-hairline disabled:bg-surface-2 disabled:text-ink-faint disabled:shadow-none"
-          >
-            {submitting ? "Saving…" : mode === "create" ? "Create space" : "Save changes"}
-          </button>
+          <Button type="submit" disabled={!canSubmit} loading={submitting}>
+            {submitting
+              ? "Saving…"
+              : mode === "create"
+                ? "Create space"
+                : "Save changes"}
+          </Button>
         </div>
       </div>
 
