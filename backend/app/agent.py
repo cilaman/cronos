@@ -32,8 +32,12 @@ final line:
   STATUS: BLOCKED     - you cannot proceed; the line ABOVE the marker must
                         explain why
 
-Do not emit a status marker until the final line of your final message.
-Until you are completely sure the task is done, do not output STATUS: DONE.
+Rules:
+- The status marker MUST be the very last line you write. Do not add any
+  text, explanation, or closing remark after the marker — not even a blank
+  line.
+- Do not emit a status marker until your final message.
+- Until you are completely sure the task is done, do not output STATUS: DONE.
 """
 
 
@@ -51,23 +55,29 @@ def parse_status(text: str) -> tuple[Status | None, str | None]:
 
     The context_line is the immediately preceding non-blank line, used as the
     waiting question for STATUS: WAIT or the blocker reason for STATUS: BLOCKED.
+
+    Scans backwards through the last several lines so that a stray trailing
+    sentence from the model does not hide an otherwise valid STATUS marker.
     """
     if not text:
         return None, None
     lines = text.rstrip().splitlines()
     if not lines:
         return None, None
-    m = _STATUS_LINE.match(lines[-1])
-    if not m:
-        return None, None
-    status = Status(m.group(1))
-    context: str | None = None
-    for line in reversed(lines[:-1]):
-        s = line.strip()
-        if s:
-            context = s
-            break
-    return status, context
+    # Scan the tail of the response (up to 5 lines) for the last STATUS marker.
+    scan_from = max(0, len(lines) - 5)
+    for i in range(len(lines) - 1, scan_from - 1, -1):
+        m = _STATUS_LINE.match(lines[i])
+        if m:
+            status = Status(m.group(1))
+            context: str | None = None
+            for line in reversed(lines[:i]):
+                s = line.strip()
+                if s:
+                    context = s
+                    break
+            return status, context
+    return None, None
 
 
 def space_dir_for(space_id: str) -> Path:
