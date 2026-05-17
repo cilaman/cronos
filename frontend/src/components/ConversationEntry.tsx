@@ -12,7 +12,7 @@ export const conversationProseClasses =
   "prose-li:text-ink " +
   "prose-blockquote:border-l-accent prose-blockquote:bg-canvas/40 prose-blockquote:not-italic prose-blockquote:text-ink-muted " +
   "prose-code:rounded prose-code:bg-canvas prose-code:px-1 prose-code:py-px prose-code:text-[0.85em] prose-code:font-mono prose-code:text-accent-bright prose-code:before:hidden prose-code:after:hidden " +
-  "prose-pre:bg-canvas prose-pre:border prose-pre:border-hairline prose-pre:rounded prose-pre:text-[12px] prose-pre:leading-relaxed " +
+  "prose-pre:bg-canvas prose-pre:border prose-pre:border-hairline prose-pre:rounded prose-pre:text-[12px] prose-pre:leading-relaxed prose-pre:overflow-x-auto " +
   "prose-hr:border-hairline";
 
 interface EntryShellProps {
