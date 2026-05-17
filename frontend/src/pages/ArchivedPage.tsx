@@ -63,7 +63,7 @@ function ArchivedRow({ task, onOpen, unarchivePending, deletePending, onUnarchiv
           onClick={onUnarchive}
           disabled={unarchivePending}
           loading={unarchivePending}
-          title="Unarchive — move to Backlog"
+          title="Unarchive — move to To Do"
           aria-label="Unarchive task"
         >
           ↑

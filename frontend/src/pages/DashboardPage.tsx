@@ -58,6 +58,8 @@ function StatTile({
   );
 }
 
+const LANE_ABBREV: Partial<Record<TaskState, string>> = { backlog: "todo" };
+
 function SpaceCard({ space }: { space: SpaceSummary }) {
   const counts = space.task_counts;
   return (
@@ -80,7 +82,7 @@ function SpaceCard({ space }: { space: SpaceSummary }) {
               className="rounded border border-hairline bg-surface-2 px-1.5 py-1 text-center"
             >
               <dt className="font-display text-[9px] uppercase tracking-[0.16em] text-ink-faint">
-                {s.slice(0, 3)}
+                {LANE_ABBREV[s] ?? s.slice(0, 3)}
               </dt>
               <dd className="font-mono text-[12px] tabular-nums text-ink">
                 {String(counts[s] ?? 0).padStart(2, "0")}
@@ -203,7 +205,8 @@ export function DashboardPage() {
         </div>
       </header>
 
-      <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
+        <StatTile label="To Do" value={totals.backlog ?? 0} to="/board" />
         <StatTile
           label="Active agents"
           value={totals.active ?? 0}
