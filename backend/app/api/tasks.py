@@ -24,6 +24,7 @@ from ..storage import (
     summarize,
 )
 from ..worker import Worker, sse_events
+from ..worker_pool import WorkerPool
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
@@ -36,8 +37,28 @@ def get_space_store(request: Request) -> SpaceStore:
     return request.app.state.space_store
 
 
-def get_worker(request: Request) -> Worker:
-    return request.app.state.worker
+def get_pool(request: Request) -> WorkerPool:
+    return request.app.state.worker_pool
+
+
+def get_worker_for_task(request: Request, task_id: str) -> Worker:
+    """Resolve the per-space worker that owns `task_id`.
+
+    Raises 404 if the task is unknown, or 503 if no worker exists for its
+    space (should only happen during a brief window while the space is
+    being created or deleted).
+    """
+    pool = get_pool(request)
+    task = get_store(request).get(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+    worker = pool.get(task.space_id)
+    if worker is None:
+        raise HTTPException(
+            status_code=503,
+            detail=f"No worker for space {task.space_id}",
+        )
+    return worker
 
 
 class TaskRead(Task):
@@ -207,7 +228,7 @@ async def transition_task(
     except StorageError as e:
         raise HTTPException(status_code=400, detail=str(e)) from None
     if updated.state == TaskState.ACTIVE:
-        await get_worker(request).enqueue(task_id)
+        await get_worker_for_task(request, task_id).enqueue(task_id)
     return _build_task_read(updated, get_space_store(request).get(updated.space_id))
 
 
@@ -225,7 +246,7 @@ async def start_task(task_id: str, request: Request) -> TaskRead:
     updated = await store.transition(
         task_id, TaskState.ACTIVE, allowed=USER_TRANSITIONS
     )
-    await get_worker(request).enqueue(task_id)
+    await get_worker_for_task(request, task_id).enqueue(task_id)
     return _build_task_read(updated, get_space_store(request).get(updated.space_id))
 
 
@@ -241,7 +262,9 @@ async def reply_to_task(task_id: str, body: ReplyBody, request: Request) -> Task
     except StorageError as e:
         raise HTTPException(status_code=400, detail=str(e)) from None
     if outcome.should_enqueue:
-        await get_worker(request).enqueue(task_id, user_message=body.message)
+        await get_worker_for_task(request, task_id).enqueue(
+            task_id, user_message=body.message
+        )
     return _build_task_read(outcome.task, get_space_store(request).get(outcome.task.space_id))
 
 
@@ -251,7 +274,7 @@ async def stop_task(task_id: str, request: Request) -> TaskRead:
     task = store.get(task_id)
     if task is None:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
-    worker = get_worker(request)
+    worker = get_worker_for_task(request, task_id)
     if not worker.stop_current(task_id):
         raise HTTPException(
             status_code=409,
@@ -262,7 +285,7 @@ async def stop_task(task_id: str, request: Request) -> TaskRead:
 
 @router.get("/{task_id}/stream")
 async def stream_task(task_id: str, request: Request) -> StreamingResponse:
-    worker = get_worker(request)
+    worker = get_worker_for_task(request, task_id)
     return StreamingResponse(
         sse_events(task_id, worker),
         media_type="text/event-stream",

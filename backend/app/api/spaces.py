@@ -23,6 +23,7 @@ from ..space_storage import (
     SpaceError,
     SpaceExists,
     SpaceNotFound,
+    SpaceRepoConflict,
     SpaceStore,
     dump_space,
     parse_space_yaml,
@@ -30,6 +31,7 @@ from ..space_storage import (
     validate_space_id,
 )
 from ..storage import TaskStore, slugify
+from ..worker_pool import WorkerPool
 
 log = logging.getLogger(__name__)
 
@@ -45,6 +47,10 @@ def get_space_store(request: Request) -> SpaceStore:
 
 def get_task_store(request: Request) -> TaskStore:
     return request.app.state.store
+
+
+def get_pool(request: Request) -> WorkerPool:
+    return request.app.state.worker_pool
 
 
 class CreateSpaceBody(BaseModel):
@@ -125,7 +131,7 @@ async def create_space(body: CreateSpaceBody, request: Request) -> Space:
             detail="branch is required when repo_url is provided",
         )
     try:
-        return await get_space_store(request).create(
+        space = await get_space_store(request).create(
             name=body.name,
             color=body.color,
             icon=body.icon,
@@ -137,8 +143,12 @@ async def create_space(body: CreateSpaceBody, request: Request) -> Space:
         )
     except SpaceExists as e:
         raise HTTPException(status_code=409, detail=f"Space {e} already exists") from None
+    except SpaceRepoConflict as e:
+        raise HTTPException(status_code=409, detail=str(e)) from None
     except SpaceError as e:
         raise HTTPException(status_code=400, detail=str(e)) from None
+    await get_pool(request).start_for_space(space.id)
+    return space
 
 
 @router.post("/{space_id}/link", response_model=Space)
@@ -154,6 +164,8 @@ async def link_space_repo(
         )
     except SpaceNotFound:
         raise HTTPException(status_code=404, detail=f"Space {space_id} not found") from None
+    except SpaceRepoConflict as e:
+        raise HTTPException(status_code=409, detail=str(e)) from None
     except SpaceError as e:
         raise HTTPException(status_code=400, detail=str(e)) from None
 
@@ -201,6 +213,7 @@ async def delete_space(
 ) -> Response:
     space_store = get_space_store(request)
     task_store = get_task_store(request)
+    pool = get_pool(request)
     if space_store.get(space_id) is None:
         raise HTTPException(status_code=404, detail=f"Space {space_id} not found")
     if task_store.count(space_id) > 0 and not cascade:
@@ -208,6 +221,9 @@ async def delete_space(
             status_code=409,
             detail="Space has tasks; pass ?cascade=true to delete anyway",
         )
+    # Stop the worker BEFORE removing on-disk state so an in-flight task
+    # can't write into a directory we're about to move to .trash/.
+    await pool.stop_for_space(space_id)
     try:
         await space_store.delete(space_id)
     except SpaceNotFound:
@@ -418,4 +434,5 @@ async def import_space(
     imported = space_store.get(final_id)
     if imported is None:
         raise HTTPException(status_code=500, detail="Import succeeded on disk but space did not load")
+    await get_pool(request).start_for_space(imported.id)
     return imported

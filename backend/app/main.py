@@ -15,7 +15,7 @@ from .api.spaces import router as spaces_router
 from .api.tasks import router as tasks_router
 from .space_storage import CRONOS_SUBDIR, RESERVED_SPACE_DIRS, SpaceStore
 from .storage import TaskStore
-from .worker import Worker
+from .worker_pool import WorkerPool
 
 logging.basicConfig(
     level=logging.INFO,
@@ -143,9 +143,10 @@ async def lifespan(app: FastAPI):
     await task_store.reload_all()
     app.state.store = task_store
 
-    worker = Worker(task_store, space_store=space_store)
-    worker.start()
-    app.state.worker = worker
+    worker_pool = WorkerPool(task_store, space_store)
+    for space in space_store.list_all():
+        await worker_pool.start_for_space(space.id)
+    app.state.worker_pool = worker_pool
 
     stop_event = asyncio.Event()
     watcher = asyncio.create_task(
@@ -158,9 +159,17 @@ async def lifespan(app: FastAPI):
     )
 
     # Recover in-flight runs: any task left in ACTIVE on startup gets
-    # re-enqueued. The agent resumes via its stored claude_session_id if any.
+    # re-enqueued on its space's worker. The agent resumes via its stored
+    # claude_session_id if any.
     board = task_store.board()
     for summary in board.active:
+        worker = worker_pool.get(summary.space_id)
+        if worker is None:
+            log.warning(
+                "Skipping resume of task %s: no worker for space %s",
+                summary.id, summary.space_id,
+            )
+            continue
         log.info("Resuming task left in active state: %s", summary.id)
         await worker.enqueue(summary.id)
 
@@ -168,7 +177,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         stop_event.set()
-        await worker.stop()
+        await worker_pool.stop_all()
         for bg_task in (watcher, archiver):
             try:
                 await asyncio.wait_for(bg_task, timeout=5.0)
@@ -187,20 +196,31 @@ async def health(request: Request, response: Response) -> dict[str, object]:
     """Liveness + light readiness check.
 
     Returns 200 only when the spaces dir exists, the in-memory indexes loaded,
-    and the worker loop is alive.
+    and every per-space worker loop is alive.
     """
-    worker: Worker | None = getattr(request.app.state, "worker", None)
+    pool: WorkerPool | None = getattr(request.app.state, "worker_pool", None)
     store: TaskStore | None = getattr(request.app.state, "store", None)
     space_store: SpaceStore | None = getattr(request.app.state, "space_store", None)
 
     spaces_dir_ok = SPACES_DIR.is_dir()
     claude_on_path = shutil.which("claude") is not None
-    worker_alive = worker is not None and worker.is_alive()
+    workers_info: list[dict[str, object]] = []
+    all_alive = True
+    if pool is not None:
+        for space_id, worker in pool.items():
+            alive = worker.is_alive()
+            all_alive = all_alive and alive
+            workers_info.append({
+                "space_id": space_id,
+                "alive": alive,
+                "current_task": worker.current(),
+            })
+    workers_running = pool is not None and all_alive
     index_loaded = store is not None and space_store is not None
     tasks_indexed = store.count() if store is not None else None
     spaces_indexed = space_store.count() if space_store is not None else None
 
-    ok = spaces_dir_ok and worker_alive and index_loaded
+    ok = spaces_dir_ok and workers_running and index_loaded
     if not ok:
         response.status_code = 503
 
@@ -212,6 +232,6 @@ async def health(request: Request, response: Response) -> dict[str, object]:
         "index_loaded": index_loaded,
         "tasks_indexed": tasks_indexed,
         "spaces_indexed": spaces_indexed,
-        "worker_running": worker_alive,
-        "current_task": worker.current() if worker else None,
+        "workers_running": workers_running,
+        "workers": workers_info,
     }

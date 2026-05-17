@@ -40,6 +40,42 @@ class SpaceExists(SpaceError):
     pass
 
 
+class SpaceRepoConflict(SpaceError):
+    """Raised when a repo URL is already linked to another space.
+
+    Two spaces are not allowed to target the same logical repo: that would
+    let two workers race on the same clone. With one-worker-per-space, this
+    invariant gives us serial git access for free.
+    """
+
+    def __init__(self, repo_url: str, existing_space_id: str) -> None:
+        super().__init__(
+            f"Repo {repo_url!r} is already linked to space {existing_space_id!r}"
+        )
+        self.repo_url = repo_url
+        self.existing_space_id = existing_space_id
+
+
+def _normalize_repo_url(url: str) -> str:
+    """Canonicalize a repo URL for uniqueness comparisons.
+
+    Lowercases scheme + host (case-insensitive in DNS), strips a trailing
+    `/` and a trailing `.git` suffix so e.g. `https://github.com/x/y`,
+    `https://github.com/x/y/`, and `https://GitHub.com/x/y.git` all collide.
+    Path case is preserved (Git hosts like Bitbucket are path-case-sensitive).
+    """
+    u = url.strip()
+    # Lowercase scheme://host while preserving the path.
+    m = re.match(r"^([a-zA-Z][a-zA-Z0-9+.\-]*://)([^/]+)(.*)$", u)
+    if m:
+        u = m.group(1).lower() + m.group(2).lower() + m.group(3)
+    if u.endswith("/"):
+        u = u[:-1]
+    if u.endswith(".git"):
+        u = u[:-4]
+    return u
+
+
 def validate_space_id(space_id: str) -> None:
     if not _SPACE_ID_RE.match(space_id):
         raise SpaceError(
@@ -100,13 +136,35 @@ class SpaceStore:
         self.trash_dir = spaces_dir / ".trash"
         self.imports_dir = spaces_dir / ".imports"
         self._by_id: dict[str, Space] = {}
+        # Secondary index: normalized git_repo_url -> space_id. Enforces the
+        # "no two spaces share a repo" invariant. Spaces with no linked repo
+        # do not appear here.
+        self._by_repo: dict[str, str] = {}
         self._lock = asyncio.Lock()
+
+    def _index_repo_locked(self, space: Space) -> None:
+        """Add a space's repo URL to `_by_repo`. No-op for unlinked spaces."""
+        if space.git_repo_url is None:
+            return
+        key = _normalize_repo_url(space.git_repo_url)
+        self._by_repo[key] = space.id
+
+    def _unindex_repo_locked(self, space: Space) -> None:
+        """Remove a space's repo URL from `_by_repo`. No-op for unlinked spaces."""
+        if space.git_repo_url is None:
+            return
+        key = _normalize_repo_url(space.git_repo_url)
+        # Only drop if it still points at this space (defensive against
+        # stale state from concurrent reindex).
+        if self._by_repo.get(key) == space.id:
+            self._by_repo.pop(key, None)
 
     # ---- index ----
 
     async def reload_all(self) -> None:
         async with self._lock:
             self._by_id.clear()
+            self._by_repo.clear()
             if not self.spaces_dir.exists():
                 log.info("Spaces dir %s does not exist yet", self.spaces_dir)
                 return
@@ -123,6 +181,17 @@ class SpaceStore:
                     log.warning("Skipping invalid space: %s", e)
                     continue
                 self._by_id[space.id] = space
+                if space.git_repo_url is not None:
+                    key = _normalize_repo_url(space.git_repo_url)
+                    prior = self._by_repo.get(key)
+                    if prior is not None and prior != space.id:
+                        log.warning(
+                            "Duplicate repo URL on disk: %s is linked from both "
+                            "%s and %s; keeping %s. Unlink one to resolve.",
+                            space.git_repo_url, prior, space.id, prior,
+                        )
+                    else:
+                        self._by_repo[key] = space.id
             log.info("Loaded %d spaces from %s", len(self._by_id), self.spaces_dir)
 
     async def reindex_path(self, path: Path) -> None:
@@ -146,7 +215,8 @@ class SpaceStore:
         space_id = rel.parts[0]
         if not path.exists():
             if space_id in self._by_id:
-                self._by_id.pop(space_id, None)
+                old = self._by_id.pop(space_id)
+                self._unindex_repo_locked(old)
                 log.info("Removed space %s (file deleted)", space_id)
             return
         try:
@@ -154,7 +224,11 @@ class SpaceStore:
         except SpaceError as e:
             log.warning("Skipping invalid space: %s", e)
             return
+        old = self._by_id.get(space.id)
+        if old is not None:
+            self._unindex_repo_locked(old)
         self._by_id[space.id] = space
+        self._index_repo_locked(space)
 
     # ---- reads ----
 
@@ -197,6 +271,11 @@ class SpaceStore:
             validate_space_id(sid)
             if sid in self._by_id:
                 raise SpaceExists(sid)
+            if repo_url is not None:
+                key = _normalize_repo_url(repo_url)
+                conflict = self._by_repo.get(key)
+                if conflict is not None:
+                    raise SpaceRepoConflict(repo_url, conflict)
             now = datetime.now(tz=UTC)
             space_dir = self.spaces_dir / sid
             space_dir.mkdir(parents=True, exist_ok=True)
@@ -234,6 +313,7 @@ class SpaceStore:
             )
             atomic_write(cronos_dir / "space.yml", dump_space(space))
             self._by_id[sid] = space
+            self._index_repo_locked(space)
             log.info("Created space %s%s", sid, f" linked to {repo_url}#{branch}" if repo_url else "")
             return space
 
@@ -291,6 +371,10 @@ class SpaceStore:
                     f"Space {space_id} is already linked to {space.git_repo_url}; "
                     "unlink first"
                 )
+            key = _normalize_repo_url(repo_url)
+            conflict = self._by_repo.get(key)
+            if conflict is not None:
+                raise SpaceRepoConflict(repo_url, conflict)
             space_dir = self.spaces_dir / space_id
             try:
                 await git_ops.clone_into_space(space_dir, repo_url, branch)
@@ -310,6 +394,7 @@ class SpaceStore:
                 space_dir / CRONOS_SUBDIR / "space.yml", dump_space(updated)
             )
             self._by_id[space_id] = updated
+            self._index_repo_locked(updated)
             log.info("Linked space %s to %s#%s", space_id, repo_url, branch)
             return updated
 
@@ -324,6 +409,7 @@ class SpaceStore:
             space_dir = self.spaces_dir / space_id
             await git_ops.unlink_repo(space_dir)
 
+            self._unindex_repo_locked(space)
             updated = space.model_copy(
                 update={
                     "git_repo_url": None,
@@ -342,13 +428,15 @@ class SpaceStore:
     async def delete(self, space_id: str) -> None:
         """Soft-delete by moving the entire space directory into `.trash/`."""
         async with self._lock:
-            if space_id not in self._by_id:
+            space = self._by_id.get(space_id)
+            if space is None:
                 raise SpaceNotFound(space_id)
             src = self.spaces_dir / space_id
             self.trash_dir.mkdir(parents=True, exist_ok=True)
             stamp = datetime.now(tz=UTC).strftime("%Y%m%dT%H%M%SZ")
             dest = self.trash_dir / f"{space_id}.{stamp}"
             os.replace(src, dest)
+            self._unindex_repo_locked(space)
             self._by_id.pop(space_id, None)
             log.info("Trashed space %s -> %s", space_id, dest.name)
 
