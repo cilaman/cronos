@@ -11,7 +11,7 @@ log = logging.getLogger(__name__)
 
 from .. import git_ops
 from ..agent import CRONOS_SUBDIR, space_dir_for
-from ..file_service import FileEntry, list_files, resolve_safe, save_upload
+from ..file_service import FileEntry, list_files, list_git_changed_files, resolve_safe, save_upload
 from ..models import Board, Space, Task, TaskState, TaskSummary
 from ..space_storage import SpaceStore
 from ..storage import (
@@ -286,6 +286,11 @@ async def list_task_files(task_id: str, request: Request) -> list[FileEntry]:
     workspace = _task_workspace(task)
     if not workspace.exists():
         return []
+    # For git worktrees (repo-linked spaces) show only files the agent
+    # changed or created, not the entire repo checkout.
+    changed = await list_git_changed_files(workspace)
+    if changed is not None:
+        return changed
     return list_files(workspace)
 
 
