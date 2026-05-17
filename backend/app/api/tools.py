@@ -107,6 +107,48 @@ def _scan_category(
     return entries
 
 
+def _scan_skills(claude_dir: Path, scope: str) -> list[AiToolEntry]:
+    """Scan .claude/skills/ for both flat *.md files and directory-based skills (dir/SKILL.md)."""
+    target = claude_dir / "skills"
+    if not target.is_dir():
+        return []
+
+    entries: list[AiToolEntry] = []
+    seen: set[str] = set()
+
+    # Flat *.md files (e.g. skills/my-skill.md)
+    for md_file in sorted(target.glob("*.md")):
+        if not md_file.is_file():
+            continue
+        rel = md_file.relative_to(claude_dir)
+        entries.append(AiToolEntry(
+            name=md_file.stem,
+            path=str(rel).replace("\\", "/"),
+            description=_extract_description(md_file),
+            scope=scope,
+            modified_at=_mtime_iso(md_file),
+        ))
+        seen.add(md_file.stem)
+
+    # Directory-based skills (e.g. skills/frontend-design/SKILL.md)
+    for skill_dir in sorted(target.iterdir()):
+        if not skill_dir.is_dir() or skill_dir.name in seen:
+            continue
+        skill_file = skill_dir / "SKILL.md"
+        if not skill_file.is_file():
+            continue
+        rel = skill_file.relative_to(claude_dir)
+        entries.append(AiToolEntry(
+            name=skill_dir.name,
+            path=str(rel).replace("\\", "/"),
+            description=_extract_description(skill_file),
+            scope=scope,
+            modified_at=_mtime_iso(skill_file),
+        ))
+
+    return entries
+
+
 def _scan_context(claude_dir: Path, scope: str) -> list[AiToolEntry]:
     """Collect .claude/context/ files and .claude/CONTEXT.md."""
     entries: list[AiToolEntry] = []
@@ -195,7 +237,7 @@ async def get_space_tools(space_id: str, request: Request) -> SpaceToolsResponse
     space_claude = space_dir / ".claude"
     agents = _scan_category(space_claude, "agents", "space")
     commands = _scan_category(space_claude, "commands", "space", recursive=True)
-    skills = _scan_category(space_claude, "skills", "space")
+    skills = _scan_skills(space_claude, "space")
     context_files = _scan_context(space_claude, "space")
 
     s_hooks, s_perms = _parse_settings(space_claude / "settings.json", "space")
@@ -206,7 +248,7 @@ async def get_space_tools(space_id: str, request: Request) -> SpaceToolsResponse
     # Scan global ~/.claude/
     g_agents = _scan_category(GLOBAL_CLAUDE_DIR, "agents", "global")
     g_commands = _scan_category(GLOBAL_CLAUDE_DIR, "commands", "global", recursive=True)
-    g_skills = _scan_category(GLOBAL_CLAUDE_DIR, "skills", "global")
+    g_skills = _scan_skills(GLOBAL_CLAUDE_DIR, "global")
     g_context = _scan_context(GLOBAL_CLAUDE_DIR, "global")
 
     g_hooks, g_perms = _parse_settings(GLOBAL_CLAUDE_DIR / "settings.json", "global")
