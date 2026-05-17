@@ -16,6 +16,10 @@ log = logging.getLogger("cronos.worker")
 # Sentinel event signalling end-of-stream on a subscriber queue.
 _DONE_SENTINEL: dict = {"type": "stream_end"}
 
+# Per-task replay buffer cap. Covers a typical Claude turn; older events
+# are dropped FIFO when exceeded.
+_RUN_BUFFER_CAP = 2000
+
 
 class Worker:
     """Single-agent serial worker.
@@ -31,6 +35,10 @@ class Worker:
         self.space_store = space_store
         self._queue: asyncio.Queue[tuple[str, str | None]] = asyncio.Queue()
         self._subscribers: dict[str, list[asyncio.Queue[dict]]] = defaultdict(list)
+        # Snapshot of the current run's published events per task. Lets a
+        # newly-connected SSE client replay what already happened so a
+        # mid-run page refresh doesn't show an empty conversation.
+        self._run_buffer: dict[str, list[dict]] = defaultdict(list)
         self._current_id: str | None = None
         self._current_cancel: asyncio.Event | None = None
         self._loop_task: asyncio.Task[None] | None = None
@@ -60,10 +68,18 @@ class Worker:
             return True
         return False
 
-    def subscribe(self, task_id: str) -> asyncio.Queue[dict]:
+    def subscribe(self, task_id: str) -> tuple[list[dict], asyncio.Queue[dict]]:
+        """Subscribe to live events plus a snapshot of the current run.
+
+        Returns `(replay, queue)`. `replay` is the list of events already
+        published during the current run (drained immediately by the caller),
+        `queue` receives all events from now on. Snapshot is taken before the
+        queue is registered to avoid double-delivery races with `_publish`.
+        """
         q: asyncio.Queue[dict] = asyncio.Queue(maxsize=256)
+        replay = list(self._run_buffer.get(task_id, []))
         self._subscribers[task_id].append(q)
-        return q
+        return replay, q
 
     def unsubscribe(self, task_id: str, q: asyncio.Queue[dict]) -> None:
         if q in self._subscribers.get(task_id, []):
@@ -112,6 +128,7 @@ class Worker:
         self._current_id = task_id
         cancel_event = asyncio.Event()
         self._current_cancel = cancel_event
+        self._run_buffer[task_id] = []
         await self._publish(task_id, {"type": "run_start", "task_id": task_id})
 
         async def on_event(event: dict) -> None:
@@ -229,6 +246,10 @@ class Worker:
             await self.enqueue(task_id, user_message=combined)
 
     async def _publish(self, task_id: str, event: dict) -> None:
+        buf = self._run_buffer.setdefault(task_id, [])
+        buf.append(event)
+        if len(buf) > _RUN_BUFFER_CAP:
+            del buf[: len(buf) - _RUN_BUFFER_CAP]
         for q in list(self._subscribers.get(task_id, [])):
             try:
                 q.put_nowait(event)
@@ -248,8 +269,13 @@ async def sse_events(task_id: str, worker: Worker) -> AsyncIterator[str]:
     """Yields formatted SSE lines for a subscriber on `task_id`."""
     import json
 
-    q = worker.subscribe(task_id)
+    replay, q = worker.subscribe(task_id)
     try:
+        # Flush headers + force EventSource.onopen to fire even when no
+        # events are flowing yet (defeats proxy/gzip body buffering).
+        yield ": ok\n\n"
+        for event in replay:
+            yield f"data: {json.dumps(event)}\n\n"
         # Keep the stream open until the run ends; if no run is active, the
         # subscriber will simply idle (no events). The client can disconnect.
         while True:
