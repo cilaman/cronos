@@ -80,7 +80,7 @@ export function SpaceFilterDropdown({
             <span aria-hidden className="h-2 w-2 rounded-sm bg-hairline-strong" />
             All spaces
           </button>
-          <div className="max-h-72 overflow-y-auto border-t border-hairline">
+          <div className="max-h-72 overflow-x-hidden overflow-y-auto border-t border-hairline">
             {spaces.map((s) => (
               <button
                 key={s.id}
