@@ -49,7 +49,7 @@ export function BoardToolbar({
           </h1>
         )}
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2">
         <SpaceFilterDropdown
           value={spaceId}
           onChange={onSpaceChange}
@@ -59,10 +59,11 @@ export function BoardToolbar({
         <button
           type="button"
           onClick={onNewTask}
+          aria-label="New task"
           className="flex h-8 items-center gap-1.5 rounded border border-accent bg-accent px-3 text-[12px] font-medium text-canvas transition hover:bg-accent-bright"
         >
           <span aria-hidden className="text-base leading-none">＋</span>
-          New task
+          <span className="hidden sm:inline">New task</span>
         </button>
       </div>
     </div>
