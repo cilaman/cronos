@@ -79,6 +79,7 @@ export interface Board {
   active: TaskSummary[];
   waiting: TaskSummary[];
   done: TaskSummary[];
+  archived: TaskSummary[];
 }
 
 // --- Spaces ---

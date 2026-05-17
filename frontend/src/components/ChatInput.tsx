@@ -20,6 +20,8 @@ function placeholderFor(state: TaskState): string {
       return "Queue a follow-up message…";
     case "done":
       return "Message the agent to resume this task…";
+    case "archived":
+      return "This task is archived.";
   }
 }
 
