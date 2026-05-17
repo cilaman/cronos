@@ -104,7 +104,10 @@ export function useTransitionTask() {
   return useMutation({
     mutationFn: ({ id, state }: { id: string; state: TaskState }) =>
       api.transition(id, state),
-    onSettled: () => invalidateBoards(qc),
+    onSettled: (_data, _error, { id }) => {
+      invalidateBoards(qc);
+      qc.invalidateQueries({ queryKey: ["task", id] });
+    },
   });
 }
 
