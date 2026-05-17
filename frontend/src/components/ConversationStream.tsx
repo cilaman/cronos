@@ -61,37 +61,73 @@ interface LiveGroup {
   thinking: string[];
 }
 
+interface SystemsBlock {
+  kind: "systems";
+  id: string;
+  rows: { text: string; count: number }[];
+}
+
+type LiveBlock =
+  | { kind: "group"; group: LiveGroup }
+  | SystemsBlock
+  | { kind: "orphan_result"; result: ToolResultEntry };
+
 interface LiveBucket {
-  groups: LiveGroup[];
-  systems: { id: string; text: string }[];
-  results: ToolResultEntry[];
+  blocks: LiveBlock[];
+  resultByToolUseId: Map<string, ToolResultEntry>;
 }
 
 function bucketLive(entries: StreamEntry[]): LiveBucket {
-  const groups: LiveGroup[] = [];
-  const systems: { id: string; text: string }[] = [];
-  const results: ToolResultEntry[] = [];
-  let current: LiveGroup | null = null;
+  const blocks: LiveBlock[] = [];
+  const resultByToolUseId = new Map<string, ToolResultEntry>();
+  const toolCallSeen = new Set<string>();
+  let currentGroup: LiveGroup | null = null;
+
+  const lastSystemsBlock = (): SystemsBlock | null => {
+    const last = blocks[blocks.length - 1];
+    return last && last.kind === "systems" ? last : null;
+  };
+
   entries.forEach((entry, idx) => {
     if (entry.kind === "system") {
-      systems.push({ id: entry.id, text: entry.text });
-      current = null;
+      currentGroup = null;
+      const existing = lastSystemsBlock();
+      if (existing) {
+        const lastRow = existing.rows[existing.rows.length - 1];
+        if (lastRow && lastRow.text === entry.text) {
+          lastRow.count += 1;
+        } else {
+          existing.rows.push({ text: entry.text, count: 1 });
+        }
+      } else {
+        blocks.push({
+          kind: "systems",
+          id: entry.id,
+          rows: [{ text: entry.text, count: 1 }],
+        });
+      }
       return;
     }
     if (entry.kind === "tool_result") {
-      results.push(entry);
-      current = null;
+      currentGroup = null;
+      if (entry.toolUseId) resultByToolUseId.set(entry.toolUseId, entry);
+      if (!entry.toolUseId || !toolCallSeen.has(entry.toolUseId)) {
+        blocks.push({ kind: "orphan_result", result: entry });
+      }
       return;
     }
-    if (!current) {
-      current = { startIndex: idx, text: [], toolCalls: [], thinking: [] };
-      groups.push(current);
+    if (!currentGroup) {
+      currentGroup = { startIndex: idx, text: [], toolCalls: [], thinking: [] };
+      blocks.push({ kind: "group", group: currentGroup });
     }
-    if (entry.kind === "assistant") current.text.push(entry.text);
-    else if (entry.kind === "tool_call") current.toolCalls.push(entry);
-    else if (entry.kind === "thinking") current.thinking.push(entry.text);
+    if (entry.kind === "assistant") currentGroup.text.push(entry.text);
+    else if (entry.kind === "tool_call") {
+      currentGroup.toolCalls.push(entry);
+      toolCallSeen.add(entry.toolUseId);
+    } else if (entry.kind === "thinking") currentGroup.thinking.push(entry.text);
   });
-  return { groups, systems, results };
+
+  return { blocks, resultByToolUseId };
 }
 
 export function ConversationStream({ task }: Props) {
@@ -103,14 +139,14 @@ export function ConversationStream({ task }: Props) {
 
   const historyItems = useMemo(() => parseHistory(task.history), [task.history]);
   const bucket = useMemo(() => bucketLive(liveEntries), [liveEntries]);
+  const { blocks, resultByToolUseId } = bucket;
 
-  const resultByToolUseId = useMemo(() => {
-    const map = new Map<string, ToolResultEntry>();
-    for (const r of bucket.results) {
-      if (r.toolUseId) map.set(r.toolUseId, r);
+  const lastGroupIdx = useMemo(() => {
+    for (let i = blocks.length - 1; i >= 0; i--) {
+      if (blocks[i].kind === "group") return i;
     }
-    return map;
-  }, [bucket.results]);
+    return -1;
+  }, [blocks]);
 
   // Bottom sentinel — used to auto-stick to bottom and to surface the
   // "new activity" pill when the user has scrolled away.
@@ -158,20 +194,6 @@ export function ConversationStream({ task }: Props) {
   }
 
   const isEmpty = historyItems.length === 0 && liveEntries.length === 0;
-  const lastGroupIdx = bucket.groups.length - 1;
-
-  // Orphaned tool results (whose tool_use_id never matched a tool_call).
-  const orphanResults = useMemo(
-    () =>
-      bucket.results.filter(
-        (r) =>
-          !r.toolUseId ||
-          !bucket.groups.some((g) =>
-            g.toolCalls.some((c) => c.toolUseId === r.toolUseId),
-          ),
-      ),
-    [bucket],
-  );
 
   return (
     <section ref={sectionRef} className="relative">
@@ -221,56 +243,64 @@ export function ConversationStream({ task }: Props) {
           </EntryShell>
         ))}
 
-        {bucket.groups.map((group, gi) => {
-          const text = group.text.join("");
-          const isLatest = gi === lastGroupIdx && liveStatus === "live";
+        {blocks.map((block, bi) => {
+          if (block.kind === "group") {
+            const group = block.group;
+            const text = group.text.join("");
+            const isLatest = bi === lastGroupIdx && liveStatus === "live";
+            return (
+              <EntryShell
+                key={`lg:${group.startIndex}`}
+                role="agent"
+                isStreaming={isLatest}
+                enter
+              >
+                <div className="space-y-2">
+                  {group.thinking.map((t, ti) => (
+                    <ThinkingBlock key={`th:${ti}`} text={t} />
+                  ))}
+                  {text && <MarkdownBody source={text} />}
+                  {group.toolCalls.length > 0 && (
+                    <div className="space-y-1.5">
+                      {group.toolCalls.map((call) => {
+                        const r = resultByToolUseId.get(call.toolUseId);
+                        return (
+                          <ToolCallBlock
+                            key={call.id}
+                            name={call.name}
+                            input={call.input}
+                            matchedResult={
+                              r ? { output: r.output, isError: r.isError } : null
+                            }
+                          />
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </EntryShell>
+            );
+          }
+          if (block.kind === "orphan_result") {
+            const r = block.result;
+            return (
+              <EntryShell key={`tr:${r.id}`} role="system" enter>
+                <ToolResultBlock output={r.output} isError={r.isError} />
+              </EntryShell>
+            );
+          }
           return (
-            <EntryShell
-              key={`lg:${group.startIndex}`}
-              role="agent"
-              isStreaming={isLatest}
-              enter
-            >
-              <div className="space-y-2">
-                {group.thinking.map((t, ti) => (
-                  <ThinkingBlock key={`th:${ti}`} text={t} />
-                ))}
-                {text && <MarkdownBody source={text} />}
-                {group.toolCalls.length > 0 && (
-                  <div className="space-y-1.5">
-                    {group.toolCalls.map((call) => {
-                      const r = resultByToolUseId.get(call.toolUseId);
-                      return (
-                        <ToolCallBlock
-                          key={call.id}
-                          name={call.name}
-                          input={call.input}
-                          matchedResult={
-                            r ? { output: r.output, isError: r.isError } : null
-                          }
-                        />
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </EntryShell>
+            <div key={`sys:${block.id}`} className="my-2 space-y-px">
+              {block.rows.map((row, ri) => (
+                <SystemRow
+                  key={`${block.id}:${ri}`}
+                  text={row.text}
+                  count={row.count}
+                />
+              ))}
+            </div>
           );
         })}
-
-        {orphanResults.map((r) => (
-          <EntryShell key={`tr:${r.id}`} role="system" enter>
-            <ToolResultBlock output={r.output} isError={r.isError} />
-          </EntryShell>
-        ))}
-
-        {bucket.systems.length > 0 && (
-          <div className="mt-2 space-y-px">
-            {bucket.systems.map((s) => (
-              <SystemRow key={s.id} text={s.text} />
-            ))}
-          </div>
-        )}
 
         <div ref={endRef} aria-hidden className="h-px w-full" />
       </div>
