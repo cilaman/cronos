@@ -236,12 +236,12 @@ export function Detail({ taskId, onClose }: Props) {
 
               <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-                  <div className="flex-1 space-y-6 overflow-y-auto overscroll-contain p-4">
+                  <div className="flex-1 space-y-6 overflow-x-hidden overflow-y-auto overscroll-contain p-4">
                     <section>
                       <h3 className="font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
                         Brief
                       </h3>
-                      <div className="prose prose-sm dark:prose-invert mt-2 max-w-none prose-headings:text-ink prose-p:text-ink prose-strong:text-ink prose-a:text-accent-bright prose-code:text-accent-bright prose-pre:bg-canvas prose-pre:border prose-pre:border-hairline">
+                      <div className="prose prose-sm dark:prose-invert mt-2 max-w-none prose-headings:text-ink prose-p:text-ink prose-strong:text-ink prose-a:text-accent-bright prose-code:text-accent-bright prose-pre:bg-canvas prose-pre:border prose-pre:border-hairline prose-pre:overflow-x-auto">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>{task.brief}</ReactMarkdown>
                       </div>
                     </section>

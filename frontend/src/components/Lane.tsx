@@ -43,7 +43,7 @@ export function Lane({ state, label, tasks, onOpen, onAdd }: Props) {
           </button>
         )}
       </StickyToolbar>
-      <div className="flex-1 space-y-2 overflow-y-auto p-2">
+      <div className="flex-1 space-y-2 overflow-x-hidden overflow-y-auto p-2">
         {tasks.length === 0 ? (
           <EmptyState title="No tasks" />
         ) : (

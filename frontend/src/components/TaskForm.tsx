@@ -126,7 +126,7 @@ export function TaskForm({
           </button>
         </header>
 
-        <div className="flex-1 space-y-4 overflow-y-auto p-4">
+        <div className="flex-1 space-y-4 overflow-x-hidden overflow-y-auto p-4">
           <div className="flex flex-col gap-3 sm:flex-row">
             <FormField label="Title" className="flex-1">
               <FormInput

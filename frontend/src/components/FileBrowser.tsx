@@ -198,7 +198,7 @@ export function FileBrowser({
     <>
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* File list */}
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
           {isLoading ? (
             <p className="px-4 py-3 text-sm text-ink-muted">Loading…</p>
           ) : files.length === 0 ? (
