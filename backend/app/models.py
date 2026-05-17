@@ -12,6 +12,7 @@ class TaskState(str, Enum):
     ACTIVE = "active"
     WAITING = "waiting"
     DONE = "done"
+    ARCHIVED = "archived"
 
 
 AgentMode = Literal["plan", "auto", "ask"]

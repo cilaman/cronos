@@ -106,3 +106,37 @@ export function useTransitionTask() {
     onSettled: () => invalidateBoards(qc),
   });
 }
+
+export function useArchiveTask(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.transition(id, "archived"),
+    onSuccess: () => {
+      invalidateBoards(qc);
+      qc.invalidateQueries({ queryKey: ["task", id] });
+      qc.invalidateQueries({ queryKey: ["spaces"] });
+      qc.invalidateQueries({ queryKey: ["archived"] });
+    },
+  });
+}
+
+export function useArchivedTasks(spaceId: string | null = null) {
+  return useQuery({
+    queryKey: ["archived", spaceId ?? "all"],
+    queryFn: () => api.archived(spaceId),
+    refetchInterval: 10_000,
+  });
+}
+
+export function useUnarchiveTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.transition(id, "backlog"),
+    onSuccess: (_data, id) => {
+      invalidateBoards(qc);
+      qc.invalidateQueries({ queryKey: ["task", id] });
+      qc.invalidateQueries({ queryKey: ["spaces"] });
+      qc.invalidateQueries({ queryKey: ["archived"] });
+    },
+  });
+}

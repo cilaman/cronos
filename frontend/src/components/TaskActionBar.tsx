@@ -5,10 +5,12 @@ interface Props {
   isStarting: boolean;
   isStopping: boolean;
   isDeleting: boolean;
+  isArchiving: boolean;
   onStart: () => void;
   onStop: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onArchive: () => void;
 }
 
 const ICON_BUTTON =
@@ -19,13 +21,16 @@ export function TaskActionBar({
   isStarting,
   isStopping,
   isDeleting,
+  isArchiving,
   onStart,
   onStop,
   onEdit,
   onDelete,
+  onArchive,
 }: Props) {
   const showStart = taskState === "backlog";
   const showStop = taskState === "active";
+  const showArchive = taskState === "done" || taskState === "waiting";
 
   return (
     <div className="flex items-center gap-1 border-b border-hairline bg-surface-1/40 px-3 py-2">
@@ -51,6 +56,18 @@ export function TaskActionBar({
           className={`${ICON_BUTTON} border-danger bg-danger text-ink hover:bg-danger/80`}
         >
           {isStopping ? "…" : "■"}
+        </button>
+      )}
+      {showArchive && (
+        <button
+          type="button"
+          onClick={onArchive}
+          disabled={isArchiving}
+          title="Archive task"
+          aria-label="Archive task"
+          className={`${ICON_BUTTON} border-hairline-strong bg-canvas text-ink-muted hover:bg-surface-2 hover:text-ink`}
+        >
+          {isArchiving ? "…" : "↓"}
         </button>
       )}
       <button

@@ -14,4 +14,6 @@ export const STATE_BADGE: Record<TaskState, string> = {
     "bg-amber-100 text-amber-800 ring-1 ring-amber-300 dark:bg-amber-400/10 dark:text-amber-300 dark:ring-amber-400/40",
   done:
     "bg-sky-100 text-sky-800 ring-1 ring-sky-300 dark:bg-sky-400/10 dark:text-sky-300 dark:ring-sky-400/40",
+  archived:
+    "bg-surface-2 text-ink-faint ring-1 ring-hairline",
 };

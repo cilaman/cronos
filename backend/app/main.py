@@ -27,6 +27,7 @@ DATA_DIR = Path(os.environ.get("CRONOS_DATA_DIR", "/data"))
 SPACES_DIR = DATA_DIR / "spaces"
 LEGACY_TASKS_DIR = DATA_DIR / "tasks"
 LEGACY_WORKSPACES_DIR = DATA_DIR / "workspaces"
+ARCHIVE_AFTER_DAYS = int(os.environ.get("CRONOS_ARCHIVE_AFTER_DAYS", "7"))
 
 
 def _path_is_reserved(path: Path, root: Path) -> bool:
@@ -35,6 +36,24 @@ def _path_is_reserved(path: Path, root: Path) -> bool:
     except ValueError:
         return True
     return any(part in RESERVED_SPACE_DIRS for part in rel.parts)
+
+
+async def auto_archive_loop(
+    task_store: TaskStore,
+    days: int,
+    stop_event: asyncio.Event,
+) -> None:
+    while not stop_event.is_set():
+        try:
+            n = await task_store.archive_stale_done_tasks(days)
+            if n:
+                log.info("Auto-archived %d stale done task(s) (threshold: %d days)", n, days)
+        except Exception:
+            log.exception("Error during auto-archive sweep")
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=3600.0)
+        except asyncio.TimeoutError:
+            pass
 
 
 async def watch_spaces_dir(
@@ -133,6 +152,10 @@ async def lifespan(app: FastAPI):
         watch_spaces_dir(task_store, space_store, stop_event),
         name="watcher",
     )
+    archiver = asyncio.create_task(
+        auto_archive_loop(task_store, ARCHIVE_AFTER_DAYS, stop_event),
+        name="archiver",
+    )
 
     # Recover in-flight runs: any task left in ACTIVE on startup gets
     # re-enqueued. The agent resumes via its stored claude_session_id if any.
@@ -146,10 +169,11 @@ async def lifespan(app: FastAPI):
     finally:
         stop_event.set()
         await worker.stop()
-        try:
-            await asyncio.wait_for(watcher, timeout=5.0)
-        except asyncio.TimeoutError:
-            watcher.cancel()
+        for bg_task in (watcher, archiver):
+            try:
+                await asyncio.wait_for(bg_task, timeout=5.0)
+            except asyncio.TimeoutError:
+                bg_task.cancel()
 
 
 app = FastAPI(title="Cronos", version="0.0.1", lifespan=lifespan)

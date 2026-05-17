@@ -20,6 +20,7 @@ from ..storage import (
     TaskNotFound,
     TaskStore,
     UnknownSpace,
+    summarize,
 )
 from ..worker import Worker, sse_events
 
@@ -114,6 +115,25 @@ async def list_tasks(
     if scope is not None and not space_store.exists(scope):
         raise HTTPException(status_code=404, detail=f"Space {scope} not found")
     return _enrich_board(store.board(scope), space_store)
+
+
+@router.get("/archived", response_model=list[TaskSummary])
+async def list_archived_tasks(
+    request: Request,
+    space_id: str | None = Query(default=None, description="Space id, or 'all' for cross-space."),
+) -> list[TaskSummary]:
+    store = get_store(request)
+    space_store = get_space_store(request)
+    scope = None if space_id in (None, "all", "") else space_id
+    if scope is not None and not space_store.exists(scope):
+        raise HTTPException(status_code=404, detail=f"Space {scope} not found")
+    space_by_id = {s.id: s for s in space_store.list_all()}
+    tasks = [
+        t for t in store.all()
+        if t.state == TaskState.ARCHIVED and (scope is None or t.space_id == scope)
+    ]
+    tasks.sort(key=lambda t: t.updated_at, reverse=True)
+    return [_enrich_summary(summarize(t), space_by_id.get(t.space_id)) for t in tasks]
 
 
 @router.get("/{task_id}", response_model=TaskRead)

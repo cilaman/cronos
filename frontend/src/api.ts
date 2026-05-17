@@ -7,6 +7,7 @@ import type {
   SpacesResponse,
   Task,
   TaskState,
+  TaskSummary,
 } from "./types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -36,6 +37,8 @@ function withSpaceQuery(path: string, spaceId: string | null): string {
 export const api = {
   board: (spaceId: string | null = null) =>
     request<Board>(withSpaceQuery("/api/tasks", spaceId)),
+  archived: (spaceId: string | null = null) =>
+    request<TaskSummary[]>(withSpaceQuery("/api/tasks/archived", spaceId)),
   task: (id: string) => request<Task>(`/api/tasks/${id}`),
   create: (body: {
     space_id: string;
