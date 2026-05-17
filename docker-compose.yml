@@ -13,6 +13,10 @@ services:
       context: ./backend
     environment:
       CRONOS_DATA_DIR: /data
+      # Optional: PAT used to authenticate `git clone` for repo-linked spaces
+      # over HTTPS. Single-user only — will be replaced by per-user storage
+      # once Cronos supports multiple operators. Set in .env, never commit.
+      CRONOS_GIT_TOKEN: ${CRONOS_GIT_TOKEN:-}
     # Pass-through: if CLAUDE_CODE_OAUTH_TOKEN is set in the shell or in a
     # project-root .env file, it lands in the container. Listing the bare
     # name (no value) means we *don't* clobber whatever the prod overlay

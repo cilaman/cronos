@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
+import os
 import re
 import shutil
 from pathlib import Path
@@ -38,6 +40,7 @@ async def _run(
     *args: str,
     cwd: Path | None = None,
     timeout: float = 300.0,
+    env: dict[str, str] | None = None,
 ) -> tuple[int, str, str]:
     """Run a git command and capture stdout/stderr.
 
@@ -51,6 +54,7 @@ async def _run(
         cwd=str(cwd) if cwd else None,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        env=env,
     )
     try:
         stdout_b, stderr_b = await asyncio.wait_for(proc.communicate(), timeout=timeout)
@@ -61,11 +65,52 @@ async def _run(
     return proc.returncode or 0, stdout_b.decode(errors="replace"), stderr_b.decode(errors="replace")
 
 
-async def _run_or_raise(*args: str, cwd: Path | None = None, timeout: float = 300.0) -> str:
-    code, out, err = await _run(*args, cwd=cwd, timeout=timeout)
+async def _run_or_raise(
+    *args: str,
+    cwd: Path | None = None,
+    timeout: float = 300.0,
+    env: dict[str, str] | None = None,
+) -> str:
+    code, out, err = await _run(*args, cwd=cwd, timeout=timeout, env=env)
     if code != 0:
         raise GitError(f"git {' '.join(args)} failed (exit {code}): {err.strip() or out.strip()}")
     return out
+
+
+# ---------- credentials ----------
+
+# Single-user pragmatic auth: a Personal Access Token in the environment is
+# injected into git's `http.extraHeader` via `GIT_CONFIG_*` env vars (not
+# subprocess args — keeps the token out of `ps`). The token applies only to
+# the specific git invocation; it is NOT persisted into the cloned repo's
+# config and is never visible to the agent subprocess that later runs in
+# the worktree.
+#
+# When Cronos grows multi-user this should be replaced by a per-space (or
+# per-user) credential lookup — `_clone_env(token=...)` is the only seam.
+_GIT_TOKEN_ENV = "CRONOS_GIT_TOKEN"
+
+
+def _clone_env(repo_url: str) -> dict[str, str] | None:
+    """Build the subprocess env for a clone, injecting a PAT if available.
+
+    Returns None when no token is configured or the URL isn't HTTPS (SSH
+    URLs are authenticated via ssh-agent / mounted keys, not PATs).
+    """
+    token = os.environ.get(_GIT_TOKEN_ENV)
+    if not token or not repo_url.startswith(("https://", "http://")):
+        return None
+    # `Authorization: Basic <base64(x-access-token:TOKEN)>` is the form
+    # GitHub Actions and GitHub Apps use; it also works for fine-grained
+    # PATs on github.com and most GitLab/Bitbucket setups.
+    auth = base64.b64encode(f"x-access-token:{token}".encode()).decode()
+    env = os.environ.copy()
+    env["GIT_CONFIG_COUNT"] = "1"
+    env["GIT_CONFIG_KEY_0"] = "http.extraHeader"
+    env["GIT_CONFIG_VALUE_0"] = f"Authorization: Basic {auth}"
+    # Stop git from prompting if the token is wrong — fail fast instead.
+    env.setdefault("GIT_TERMINAL_PROMPT", "0")
+    return env
 
 
 # ---------- repo linking ----------
@@ -115,7 +160,8 @@ async def clone_into_space(space_dir: Path, repo_url: str, branch: str) -> None:
             shutil.rmtree(scratch)
         try:
             await _run_or_raise(
-                "clone", "--branch", branch, "--single-branch", repo_url, str(scratch)
+                "clone", "--branch", branch, "--single-branch", repo_url, str(scratch),
+                env=_clone_env(repo_url),
             )
             # Move every entry (including dotfiles) out of scratch into space_dir.
             for entry in scratch.iterdir():
