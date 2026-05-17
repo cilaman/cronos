@@ -57,7 +57,8 @@ export function useReplyToTask(id: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (message: string) => api.reply(id, message),
-    onSuccess: () => {
+    onSuccess: (updatedTask) => {
+      qc.setQueryData(["task", id], updatedTask);
       invalidateBoards(qc);
       qc.invalidateQueries({ queryKey: ["task", id] });
     },
