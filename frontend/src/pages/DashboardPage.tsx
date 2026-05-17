@@ -3,20 +3,11 @@ import { Link, useNavigate } from "react-router-dom";
 import { useActivity, useImportSpace, useSpaces } from "../hooks/useSpaces";
 import { useCreateTask } from "../hooks/useTasks";
 import { TaskForm } from "../components/TaskForm";
+import { EmptyState } from "../components/ui/EmptyState";
+import { SpaceTag } from "../components/ui/SpaceTag";
 import { api } from "../api";
+import { formatRelative } from "../utils/format";
 import type { Activity, SpaceSummary, TaskState } from "../types";
-
-function formatRelative(iso: string | null): string {
-  if (!iso) return "—";
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return "—";
-  const seconds = Math.round((Date.now() - then) / 1000);
-  const abs = Math.abs(seconds);
-  if (abs < 60) return "just now";
-  if (abs < 3600) return `${Math.round(seconds / 60)}m ago`;
-  if (abs < 86_400) return `${Math.round(seconds / 3600)}h ago`;
-  return `${Math.round(seconds / 86_400)}d ago`;
-}
 
 function StatTile({
   label,
@@ -77,16 +68,7 @@ function SpaceCard({ space }: { space: SpaceSummary }) {
       <div className="h-1" style={{ backgroundColor: space.color }} />
       <div className="space-y-3 p-4">
         <div className="flex items-center gap-2">
-          <span
-            aria-hidden
-            className="h-5 w-5 shrink-0 rounded-sm"
-            style={{ backgroundColor: space.color }}
-          />
-          {space.icon && (
-            <span aria-hidden className="text-lg leading-none">
-              {space.icon}
-            </span>
-          )}
+          <SpaceTag color={space.color} icon={space.icon} size="md" />
           <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
             {space.name}
           </h3>
@@ -125,16 +107,12 @@ function ActivityRow({
   return (
     <Link
       to={`/spaces/${event.space_id}?task=${encodeURIComponent(event.task_id)}`}
-      className="grid grid-cols-[3.5rem_0.5rem_1fr_5rem] items-center gap-2 border-b border-hairline px-3 py-2 transition hover:bg-surface-2/60"
+      className="grid grid-cols-[3.5rem_auto_1fr_5rem] items-center gap-2 border-b border-hairline px-3 py-2 transition hover:bg-surface-2/60"
     >
       <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-faint">
         {formatRelative(event.updated_at)}
       </span>
-      <span
-        aria-hidden
-        className="h-2 w-2 rounded-sm"
-        style={{ backgroundColor: space?.color ?? "rgb(var(--color-hairline-strong))" }}
-      />
+      <SpaceTag color={space?.color} size="xs" />
       <span className="truncate text-[12px] text-ink">{event.title}</span>
       <span className="text-right font-mono text-[10px] uppercase tracking-[0.14em] text-ink-muted">
         {event.state}
@@ -169,7 +147,6 @@ export function DashboardPage() {
       const space = await importMutation.mutateAsync({ file });
       navigate(`/spaces/${space.id}`);
     } catch (err) {
-      // Mutation error is surfaced via the button state; keep noise low here.
       console.error(err);
     }
   }
@@ -245,20 +222,18 @@ export function DashboardPage() {
       </section>
 
       {spaces.length === 0 ? (
-        <section className="rounded-lg border border-dashed border-hairline-strong bg-surface-1 p-10 text-center shadow-inset-hairline">
-          <h2 className="font-display text-base font-semibold uppercase tracking-[0.18em] text-ink">
-            Create your first space
-          </h2>
-          <p className="mx-auto mt-2 max-w-md text-sm text-ink-muted">
-            Spaces group tasks like projects. Each one owns its own tasks, workspaces, and
-            (soon) a bound git repository.
-          </p>
-          <Link
-            to="/spaces/new"
-            className="mt-4 inline-flex h-9 items-center rounded border border-accent bg-accent px-4 text-[12px] font-medium text-canvas transition hover:bg-accent-bright"
+        <section className="rounded-lg border border-dashed border-hairline-strong bg-surface-1 p-10 shadow-inset-hairline">
+          <EmptyState
+            title="Create your first space"
+            description="Spaces group tasks like projects. Each one owns its own tasks, workspaces, and (soon) a bound git repository."
           >
-            New space
-          </Link>
+            <Link
+              to="/spaces/new"
+              className="inline-flex h-9 items-center rounded border border-accent bg-accent px-4 text-[12px] font-medium text-canvas transition hover:bg-accent-bright"
+            >
+              New space
+            </Link>
+          </EmptyState>
         </section>
       ) : (
         <section className="grid gap-6 xl:grid-cols-[2fr_1fr]">
@@ -295,7 +270,7 @@ export function DashboardPage() {
             </div>
             <div className="overflow-hidden rounded-md border border-hairline bg-surface-1 shadow-inset-hairline">
               {!activity || activity.length === 0 ? (
-                <p className="p-4 text-sm italic text-ink-faint">No activity yet.</p>
+                <EmptyState title="No activity yet" />
               ) : (
                 <div>
                   {activity.map((ev) => (

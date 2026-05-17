@@ -1,6 +1,8 @@
 import { Link } from "react-router-dom";
 import { useSpaces } from "../hooks/useSpaces";
 import { SpaceFilterDropdown } from "./SpaceFilterDropdown";
+import { SpaceTag } from "./ui/SpaceTag";
+import { StickyToolbar } from "./ui/StickyToolbar";
 
 interface Props {
   spaceId: string | null;
@@ -19,20 +21,11 @@ export function BoardToolbar({
   const active = spaceId ? data?.spaces.find((s) => s.id === spaceId) ?? null : null;
 
   return (
-    <div className="sticky top-0 z-20 flex h-12 items-center justify-between border-b border-hairline bg-surface-1/95 px-4 backdrop-blur">
+    <StickyToolbar>
       <div className="flex min-w-0 items-center gap-3">
         {active ? (
           <>
-            <span
-              aria-hidden
-              className="h-3 w-3 shrink-0 rounded-sm"
-              style={{ backgroundColor: active.color }}
-            />
-            {active.icon && (
-              <span aria-hidden className="text-base leading-none">
-                {active.icon}
-              </span>
-            )}
+            <SpaceTag color={active.color} icon={active.icon} size="md" />
             <h1 className="truncate font-display text-[13px] font-semibold uppercase tracking-[0.18em] text-ink">
               {active.name}
             </h1>
@@ -66,6 +59,6 @@ export function BoardToolbar({
           <span className="hidden sm:inline">New task</span>
         </button>
       </div>
-    </div>
+    </StickyToolbar>
   );
 }
