@@ -117,6 +117,14 @@ export function Sidebar({ onClose }: Props) {
             </>
           )}
         </NavLink>
+        <NavLink to="/tools" className={primaryNavLinkClasses} onClick={onClose}>
+          {({ isActive }) => (
+            <>
+              {isActive && <ActiveStrip />}
+              AI Tools
+            </>
+          )}
+        </NavLink>
       </nav>
 
       <div className="mt-2 border-t border-hairline px-4 pb-1 pt-3">

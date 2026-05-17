@@ -99,6 +99,15 @@ export function useDeleteSpace() {
   });
 }
 
+export function useSpaceTools(spaceId: string | null) {
+  return useQuery({
+    queryKey: ["space-tools", spaceId],
+    queryFn: () => api.spaceTools(spaceId!),
+    enabled: !!spaceId,
+    staleTime: 30_000,
+  });
+}
+
 export function useImportSpace() {
   const qc = useQueryClient();
   return useMutation({

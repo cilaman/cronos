@@ -110,3 +110,39 @@ class Activity(BaseModel):
     title: str
     state: TaskState
     updated_at: datetime
+
+
+# ---------------------------------------------------------------------------
+# AI Tools Inventory
+# ---------------------------------------------------------------------------
+
+class AiToolEntry(BaseModel):
+    name: str
+    path: str
+    description: str | None = None
+    scope: str  # "space" | "global"
+    modified_at: str  # ISO-8601
+
+
+class HookEntry(BaseModel):
+    event: str
+    matcher: str | None = None
+    command: str
+    scope: str  # "space" | "global"
+
+
+class PermissionEntry(BaseModel):
+    pattern: str
+    allowed: bool
+    scope: str  # "space" | "global"
+
+
+class SpaceToolsResponse(BaseModel):
+    space_id: str
+    agents: list[AiToolEntry] = []
+    commands: list[AiToolEntry] = []
+    skills: list[AiToolEntry] = []
+    context_files: list[AiToolEntry] = []
+    hooks: list[HookEntry] = []
+    permissions: list[PermissionEntry] = []
+    has_claude_md: bool = False

@@ -134,6 +134,40 @@ export interface Activity {
   updated_at: string;
 }
 
+// --- AI Tools Inventory ---
+
+export interface AiToolEntry {
+  name: string;
+  path: string;
+  description: string | null;
+  scope: "space" | "global";
+  modified_at: string;
+}
+
+export interface HookEntry {
+  event: string;
+  matcher: string | null;
+  command: string;
+  scope: "space" | "global";
+}
+
+export interface PermissionEntry {
+  pattern: string;
+  allowed: boolean;
+  scope: "space" | "global";
+}
+
+export interface SpaceToolsResponse {
+  space_id: string;
+  agents: AiToolEntry[];
+  commands: AiToolEntry[];
+  skills: AiToolEntry[];
+  context_files: AiToolEntry[];
+  hooks: HookEntry[];
+  permissions: PermissionEntry[];
+  has_claude_md: boolean;
+}
+
 export interface PresetColor {
   name: string;
   value: string;
