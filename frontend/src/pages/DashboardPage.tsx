@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useActivity, useImportSpace, useSpaces } from "../hooks/useSpaces";
 import { useCreateTask } from "../hooks/useTasks";
 import { TaskForm } from "../components/TaskForm";
+import { api } from "../api";
 import type { Activity, SpaceSummary, TaskState } from "../types";
 
 function formatRelative(iso: string | null): string {
@@ -150,6 +151,8 @@ export function DashboardPage() {
   const createTask = useCreateTask();
   const fileRef = useRef<HTMLInputElement>(null);
   const [creating, setCreating] = useState(false);
+  const [isWorking, setIsWorking] = useState(false);
+  const [workError, setWorkError] = useState<string | null>(null);
 
   const spaces = spacesData?.spaces ?? [];
   const totals = spacesData?.totals ?? { backlog: 0, active: 0, waiting: 0, done: 0 };
@@ -313,18 +316,33 @@ export function DashboardPage() {
         <TaskForm
           heading="New task"
           showSpacePicker
-          submitting={createTask.isPending}
-          error={createTask.error?.message ?? null}
-          onCancel={() => setCreating(false)}
+          submitting={isWorking}
+          error={workError}
+          onCancel={() => { setCreating(false); setWorkError(null); }}
           onSubmit={async (body) => {
             if (!body.space_id) return;
-            await createTask.mutateAsync({
-              space_id: body.space_id,
-              title: body.title,
-              brief: body.brief,
-              agent_model: body.agent_model,
-            });
-            setCreating(false);
+            setIsWorking(true);
+            setWorkError(null);
+            try {
+              const task = await createTask.mutateAsync({
+                space_id: body.space_id,
+                title: body.title,
+                brief: body.brief,
+                agent_model: body.agent_model,
+                agent_mode: body.agent_mode,
+              });
+              for (const file of body.files) {
+                await api.uploadTaskFile(task.id, file);
+              }
+              if (body.startImmediately) {
+                await api.start(task.id);
+              }
+              setCreating(false);
+            } catch (err) {
+              setWorkError(err instanceof Error ? err.message : String(err));
+            } finally {
+              setIsWorking(false);
+            }
           }}
         />
       )}

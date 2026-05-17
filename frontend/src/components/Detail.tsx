@@ -250,12 +250,18 @@ export function Detail({ taskId, onClose }: Props) {
           heading="Edit task"
           initialTitle={task.title}
           initialBrief={task.brief}
-          showModel={false}
+          initialModel={task.agent_model}
+          initialMode={task.agent_mode}
           submitting={updateTask.isPending}
           error={updateTask.error?.message ?? null}
           onCancel={() => setEditing(false)}
           onSubmit={async (body) => {
-            await updateTask.mutateAsync(body);
+            await updateTask.mutateAsync({
+              title: body.title,
+              brief: body.brief,
+              agent_model: body.agent_model,
+              agent_mode: body.agent_mode,
+            });
             setEditing(false);
           }}
         />

@@ -54,6 +54,7 @@ export const api = {
     title: string;
     brief: string;
     agent_model?: AgentModel;
+    agent_mode?: AgentMode;
   }) => request<Task>("/api/tasks", { method: "POST", body: JSON.stringify(body) }),
   update: (
     id: string,

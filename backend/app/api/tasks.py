@@ -74,6 +74,7 @@ class CreateTaskBody(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     brief: str = Field(default="", max_length=20_000)
     agent_model: Literal["default", "sonnet", "opus", "haiku"] = "default"
+    agent_mode: Literal["plan", "auto", "ask"] = "auto"
 
 
 class UpdateTaskBody(BaseModel):
@@ -178,6 +179,7 @@ async def create_task(body: CreateTaskBody, request: Request) -> TaskRead:
             title=body.title,
             brief=body.brief,
             agent_model=body.agent_model,
+            agent_mode=body.agent_mode,
         )
     except UnknownSpace:
         raise HTTPException(status_code=404, detail=f"Space {body.space_id} not found") from None
