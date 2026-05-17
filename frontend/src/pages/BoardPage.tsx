@@ -5,6 +5,7 @@ import { BoardToolbar } from "../components/BoardToolbar";
 import { TaskForm } from "../components/TaskForm";
 import { useSpaces } from "../hooks/useSpaces";
 import { useCreateTask } from "../hooks/useTasks";
+import { api } from "../api";
 import {
   readBoardSpaceFilter,
   writeBoardSpaceFilter,
@@ -18,6 +19,8 @@ export function BoardPage() {
     scoped ?? readBoardSpaceFilter(),
   );
   const [creating, setCreating] = useState(false);
+  const [isWorking, setIsWorking] = useState(false);
+  const [workError, setWorkError] = useState<string | null>(null);
   const { data: spacesData } = useSpaces();
   const createTask = useCreateTask();
 
@@ -59,18 +62,33 @@ export function BoardPage() {
           showSpacePicker
           initialSpaceId={initialSpaceForCreate}
           lockedSpaceId={scoped}
-          submitting={createTask.isPending}
-          error={createTask.error?.message ?? null}
-          onCancel={() => setCreating(false)}
+          submitting={isWorking}
+          error={workError}
+          onCancel={() => { setCreating(false); setWorkError(null); }}
           onSubmit={async (body) => {
             if (!body.space_id) return;
-            await createTask.mutateAsync({
-              space_id: body.space_id,
-              title: body.title,
-              brief: body.brief,
-              agent_model: body.agent_model,
-            });
-            setCreating(false);
+            setIsWorking(true);
+            setWorkError(null);
+            try {
+              const task = await createTask.mutateAsync({
+                space_id: body.space_id,
+                title: body.title,
+                brief: body.brief,
+                agent_model: body.agent_model,
+                agent_mode: body.agent_mode,
+              });
+              for (const file of body.files) {
+                await api.uploadTaskFile(task.id, file);
+              }
+              if (body.startImmediately) {
+                await api.start(task.id);
+              }
+              setCreating(false);
+            } catch (err) {
+              setWorkError(err instanceof Error ? err.message : String(err));
+            } finally {
+              setIsWorking(false);
+            }
           }}
         />
       )}

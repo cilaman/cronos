@@ -356,9 +356,12 @@ class TaskStore:
         title: str,
         brief: str,
         agent_model: AgentModel = "default",
+        agent_mode: AgentMode = "auto",
     ) -> Task:
         if agent_model not in VALID_AGENT_MODELS:
             raise StorageError(f"Invalid agent_model: {agent_model}")
+        if agent_mode not in VALID_AGENT_MODES:
+            raise StorageError(f"Invalid agent_mode: {agent_mode}")
         tasks_dir = self.tasks_dir_for(space_id)
         if not tasks_dir.is_dir():
             raise UnknownSpace(space_id)
@@ -375,6 +378,7 @@ class TaskStore:
                 brief=brief.strip(),
                 history="",
                 agent_model=agent_model,
+                agent_mode=agent_mode,
             )
             path = tasks_dir / f"{task_id}.md"
             atomic_write(path, dump_task(task))

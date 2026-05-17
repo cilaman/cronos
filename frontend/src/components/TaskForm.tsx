@@ -1,14 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSpaces } from "../hooks/useSpaces";
-import { AGENT_MODELS, type AgentModel } from "../types";
+import { AGENT_MODES, AGENT_MODELS, type AgentMode, type AgentModel } from "../types";
 
 interface Props {
   heading: string;
   initialTitle?: string;
   initialBrief?: string;
   initialModel?: AgentModel;
+  initialMode?: AgentMode;
   initialSpaceId?: string | null;
-  showModel?: boolean;
   showSpacePicker?: boolean;
   lockedSpaceId?: string | null;
   submitting?: boolean;
@@ -16,8 +16,11 @@ interface Props {
   onSubmit: (body: {
     title: string;
     brief: string;
-    agent_model?: AgentModel;
+    agent_model: AgentModel;
+    agent_mode: AgentMode;
     space_id?: string;
+    startImmediately: boolean;
+    files: File[];
   }) => void;
   onCancel: () => void;
 }
@@ -27,8 +30,8 @@ export function TaskForm({
   initialTitle = "",
   initialBrief = "",
   initialModel = "default",
+  initialMode = "auto",
   initialSpaceId = null,
-  showModel = true,
   showSpacePicker = false,
   lockedSpaceId = null,
   submitting = false,
@@ -39,14 +42,17 @@ export function TaskForm({
   const [title, setTitle] = useState(initialTitle);
   const [brief, setBrief] = useState(initialBrief);
   const [model, setModel] = useState<AgentModel>(initialModel);
+  const [mode, setMode] = useState<AgentMode>(initialMode);
+  const [startImmediately, setStartImmediately] = useState(false);
+  const [files, setFiles] = useState<File[]>([]);
   const [spaceId, setSpaceId] = useState<string | null>(
     lockedSpaceId ?? initialSpaceId,
   );
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { data: spacesData } = useSpaces();
   const spaces = spacesData?.spaces ?? [];
 
   useEffect(() => {
-    // If no space chosen yet and spaces just loaded, pick the first as default.
     if (!spaceId && spaces.length > 0) {
       setSpaceId(spaces[0].id);
     }
@@ -66,6 +72,23 @@ export function TaskForm({
     !submitting &&
     (!showSpacePicker || !!effectiveSpaceId);
 
+  function addFiles(incoming: FileList | null) {
+    if (!incoming) return;
+    const next = Array.from(incoming);
+    setFiles((prev) => {
+      const names = new Set(prev.map((f) => f.name));
+      return [...prev, ...next.filter((f) => !names.has(f.name))];
+    });
+  }
+
+  function removeFile(name: string) {
+    setFiles((prev) => prev.filter((f) => f.name !== name));
+  }
+
+  const submitLabel = submitting
+    ? startImmediately ? "Starting…" : "Creating…"
+    : startImmediately ? "Create & Start" : "Create";
+
   return (
     <div
       className="fixed inset-0 z-40 flex items-stretch justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4"
@@ -76,18 +99,15 @@ export function TaskForm({
         onSubmit={(e) => {
           e.preventDefault();
           if (!canSubmit) return;
-          const body: {
-            title: string;
-            brief: string;
-            agent_model?: AgentModel;
-            space_id?: string;
-          } = {
+          onSubmit({
             title: title.trim(),
             brief: brief.trim(),
-          };
-          if (showModel) body.agent_model = model;
-          if (showSpacePicker && effectiveSpaceId) body.space_id = effectiveSpaceId;
-          onSubmit(body);
+            agent_model: model,
+            agent_mode: mode,
+            space_id: effectiveSpaceId ?? undefined,
+            startImmediately,
+            files,
+          });
         }}
         className="flex h-full w-full max-w-2xl flex-col overflow-hidden border border-hairline bg-surface-1 shadow-lift sm:h-auto sm:max-h-[90vh] sm:rounded-lg"
       >
@@ -104,7 +124,9 @@ export function TaskForm({
             ✕
           </button>
         </header>
+
         <div className="flex-1 space-y-4 overflow-y-auto p-4">
+          {/* Title + Mode + Model row */}
           <div className="flex flex-col gap-3 sm:flex-row">
             <label className="block flex-1">
               <span className="font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
@@ -120,25 +142,40 @@ export function TaskForm({
                 className="mt-1 block w-full rounded border border-hairline-strong bg-canvas px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
               />
             </label>
-            {showModel && (
-              <label className="block sm:w-40">
-                <span className="font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
-                  Model
-                </span>
-                <select
-                  value={model}
-                  onChange={(e) => setModel(e.target.value as AgentModel)}
-                  className="mt-1 block w-full rounded border border-hairline-strong bg-canvas px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-                >
-                  {AGENT_MODELS.map((m) => (
-                    <option key={m.value} value={m.value}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
+            <label className="block sm:w-32">
+              <span className="font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
+                Mode
+              </span>
+              <select
+                value={mode}
+                onChange={(e) => setMode(e.target.value as AgentMode)}
+                className="mt-1 block w-full rounded border border-hairline-strong bg-canvas px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+              >
+                {AGENT_MODES.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block sm:w-32">
+              <span className="font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
+                Model
+              </span>
+              <select
+                value={model}
+                onChange={(e) => setModel(e.target.value as AgentModel)}
+                className="mt-1 block w-full rounded border border-hairline-strong bg-canvas px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+              >
+                {AGENT_MODELS.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
+
           {showSpacePicker && (
             <label className="block">
               <span className="font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
@@ -160,6 +197,7 @@ export function TaskForm({
               </select>
             </label>
           )}
+
           <label className="block">
             <span className="font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
               Brief
@@ -167,32 +205,93 @@ export function TaskForm({
             <textarea
               value={brief}
               onChange={(e) => setBrief(e.target.value)}
-              rows={10}
+              rows={8}
               placeholder="Describe what the agent should do. Markdown supported."
               className="mt-1 block w-full rounded border border-hairline-strong bg-canvas px-3 py-2 font-mono text-sm text-ink placeholder:text-ink-faint focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
             />
           </label>
+
+          {/* Files section */}
+          <div>
+            <span className="font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
+              Files
+            </span>
+            <div className="mt-1 rounded border border-hairline-strong bg-canvas p-3">
+              {files.length > 0 && (
+                <ul className="mb-2 space-y-1">
+                  {files.map((f) => (
+                    <li
+                      key={f.name}
+                      className="flex items-center justify-between rounded px-2 py-1 text-sm text-ink hover:bg-surface-2"
+                    >
+                      <span className="min-w-0 truncate font-mono text-xs text-ink-muted">
+                        {f.name}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeFile(f.name)}
+                        className="ml-2 flex-shrink-0 text-ink-faint transition hover:text-danger"
+                        aria-label={`Remove ${f.name}`}
+                      >
+                        ✕
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(e) => addFiles(e.target.files)}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-1.5 rounded border border-hairline-strong bg-surface-1 px-3 py-1.5 text-xs text-ink-muted transition hover:border-accent hover:bg-surface-2 hover:text-ink"
+              >
+                <span aria-hidden className="text-sm leading-none">↑</span>
+                {files.length > 0 ? "Add more files" : "Upload files"}
+              </button>
+            </div>
+          </div>
+
           {error && (
             <p className="rounded border border-danger/40 bg-danger/15 px-3 py-2 text-sm text-danger">
               {error}
             </p>
           )}
         </div>
-        <footer className="flex items-center justify-end gap-2 border-t border-hairline p-3">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded px-3 py-2 text-sm text-ink-muted transition hover:bg-surface-2 hover:text-ink"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={!canSubmit}
-            className="rounded border border-accent bg-accent px-4 py-2 text-sm font-medium text-canvas transition hover:bg-accent-bright hover:shadow-accent-glow disabled:cursor-not-allowed disabled:border-hairline disabled:bg-surface-2 disabled:text-ink-faint disabled:shadow-none"
-          >
-            {submitting ? "Saving…" : "Save"}
-          </button>
+
+        <footer className="flex items-center justify-between gap-2 border-t border-hairline p-3">
+          <label className="flex cursor-pointer items-center gap-2 select-none">
+            <input
+              type="checkbox"
+              checked={startImmediately}
+              onChange={(e) => setStartImmediately(e.target.checked)}
+              className="h-3.5 w-3.5 rounded border-hairline-strong accent-accent"
+            />
+            <span className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-muted">
+              Start immediately
+            </span>
+          </label>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="rounded px-3 py-2 text-sm text-ink-muted transition hover:bg-surface-2 hover:text-ink"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!canSubmit}
+              className="rounded border border-accent bg-accent px-4 py-2 text-sm font-medium text-canvas transition hover:bg-accent-bright hover:shadow-accent-glow disabled:cursor-not-allowed disabled:border-hairline disabled:bg-surface-2 disabled:text-ink-faint disabled:shadow-none"
+            >
+              {submitLabel}
+            </button>
+          </div>
         </footer>
       </form>
     </div>
