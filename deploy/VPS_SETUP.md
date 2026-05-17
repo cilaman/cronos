@@ -93,23 +93,13 @@ ls -l ~/.config/claude/env   # should show -rw------- cronos cronos
 ```
 
 The compose prod overlay points the backend container at this file via
-`env_file: ${HOME}/.config/claude/env`, so it's loaded directly into the
-container without ever appearing in `docker compose config` dumps or shell
-history.
-
-> ⚠️ **Why the `cronos` user matters here.** Docker Compose expands
-> `${HOME}` *at invoke time*, based on the user running `docker compose`.
-> The systemd unit (§7) runs as `cronos`, so `${HOME}=/home/cronos` and the
-> token is found. If you ever start the stack manually as `root` (e.g.
-> `sudo docker compose up`, or a root shell in `/opt/cronos`),
-> `${HOME}=/root`, Compose looks in `/root/.config/claude/env`, doesn't
-> find it, and **silently skips loading** — `env_file` is marked
-> `required: false` so dev machines without a token can still boot. The
-> backend then runs without `CLAUDE_CODE_OAUTH_TOKEN`, the `claude` CLI
-> can't authenticate, and the UI gets stuck on `LIVE: connecting` for
-> every iteration. **Always (re)start via `sudo systemctl restart
-> cronos.service`** — that's the only path that resolves `${HOME}`
-> correctly.
+`env_file: /home/cronos/.config/claude/env`, so it's loaded directly into
+the container without ever appearing in `docker compose config` dumps or
+shell history. The path is hardcoded (not `${HOME}`-relative) so the token
+loads whether you bring the stack up via systemd, as `cronos`, or as
+`root` — earlier versions silently dropped the token when invoked as root,
+producing mysterious "Not logged in" errors. If your operator account
+isn't `cronos`, edit the path in `docker-compose.prod.yml`.
 
 ---
 

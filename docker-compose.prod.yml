@@ -40,10 +40,13 @@ services:
     env_file:
       # chmod-600 file containing CLAUDE_CODE_OAUTH_TOKEN=...
       # Created on the VPS by the operator; see deploy/VPS_SETUP.md §4.
+      # Absolute path (not ${HOME}-relative) so the token loads regardless of
+      # who invokes compose — running as root with HOME=/root used to silently
+      # skip this file and produce mysterious "Not logged in" errors.
       # required:false lets the overlay parse on a fresh dev machine that
       # has never run `claude setup-token` — the backend will still boot,
       # but agent runs will fail at the CLI level until the file exists.
-      - path: ${HOME}/.config/claude/env
+      - path: /home/cronos/.config/claude/env
         required: false
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/health', timeout=3).status == 200 else 1)\""]
