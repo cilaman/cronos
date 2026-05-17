@@ -112,11 +112,14 @@ export function ThinkingBlock({ text }: { text: string }) {
   );
 }
 
-export function SystemRow({ text }: { text: string }) {
+export function SystemRow({ text, count }: { text: string; count?: number }) {
   return (
     <div className="flex items-center gap-3 border-t border-hairline/40 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-faint">
       <span aria-hidden>::</span>
       <span>{text}</span>
+      {count && count > 1 ? (
+        <span className="text-ink-muted">×{count}</span>
+      ) : null}
     </div>
   );
 }
