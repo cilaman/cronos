@@ -91,6 +91,14 @@ export function Sidebar() {
             </>
           )}
         </NavLink>
+        <NavLink to="/archived" className={primaryNavLinkClasses}>
+          {({ isActive }) => (
+            <>
+              {isActive && <ActiveStrip />}
+              Archived
+            </>
+          )}
+        </NavLink>
       </nav>
 
       <div className="mt-2 border-t border-hairline px-4 pb-1 pt-3">

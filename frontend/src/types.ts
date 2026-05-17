@@ -1,4 +1,4 @@
-export type TaskState = "backlog" | "active" | "waiting" | "done";
+export type TaskState = "backlog" | "active" | "waiting" | "done" | "archived";
 
 export const LANES: { state: TaskState; label: string }[] = [
   { state: "backlog", label: "Backlog" },
@@ -14,6 +14,9 @@ const USER_TRANSITIONS_SET = new Set<string>([
   "active->backlog",
   "waiting->backlog",
   "done->backlog",
+  "done->archived",
+  "waiting->archived",
+  "archived->backlog",
 ]);
 
 export function canUserTransition(from: TaskState, to: TaskState): boolean {

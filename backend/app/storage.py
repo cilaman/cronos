@@ -5,7 +5,7 @@ import logging
 import os
 import re
 import secrets
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import frontmatter
@@ -41,6 +41,9 @@ USER_TRANSITIONS: set[tuple[TaskState, TaskState]] = {
     (TaskState.ACTIVE, TaskState.BACKLOG),
     (TaskState.WAITING, TaskState.BACKLOG),
     (TaskState.DONE, TaskState.BACKLOG),
+    (TaskState.DONE, TaskState.ARCHIVED),
+    (TaskState.WAITING, TaskState.ARCHIVED),
+    (TaskState.ARCHIVED, TaskState.BACKLOG),
 }
 
 WORKER_TRANSITIONS: set[tuple[TaskState, TaskState]] = {
@@ -583,6 +586,24 @@ class TaskStore:
             self._by_id.pop(task_id, None)
             self._path_by_id.pop(task_id, None)
             log.info("Trashed task %s -> %s", task_id, dest.name)
+
+    async def archive_stale_done_tasks(self, threshold_days: int) -> int:
+        """Transition DONE tasks older than threshold_days to ARCHIVED. Returns count."""
+        cutoff = datetime.now(tz=UTC) - timedelta(days=threshold_days)
+        async with self._lock:
+            to_archive = [
+                task.id
+                for task in self._by_id.values()
+                if task.state == TaskState.DONE and task.updated_at < cutoff
+            ]
+        count = 0
+        for task_id in to_archive:
+            try:
+                await self.transition(task_id, TaskState.ARCHIVED, allowed=USER_TRANSITIONS)
+                count += 1
+            except (TaskNotFound, InvalidTransition) as e:
+                log.warning("Failed to auto-archive task %s: %s", task_id, e)
+        return count
 
     async def drop_space(self, space_id: str) -> None:
         """Drop all in-memory entries for a space (used after the space is trashed)."""

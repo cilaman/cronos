@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
+  useArchiveTask,
   useDeleteTask,
   useReplyToTask,
   useStartTask,
@@ -31,6 +32,7 @@ export function Detail({ taskId, onClose }: Props) {
   const { data: task, isLoading, error } = useTask(taskId);
   const updateTask = useUpdateTask(taskId);
   const deleteTask = useDeleteTask();
+  const archiveTask = useArchiveTask(taskId);
   const replyTask = useReplyToTask(taskId);
   const startTask = useStartTask(taskId);
   const stopTask = useStopTask(taskId);
@@ -72,6 +74,10 @@ export function Detail({ taskId, onClose }: Props) {
 
   async function onStop() {
     await stopTask.mutateAsync();
+  }
+
+  async function onArchive() {
+    await archiveTask.mutateAsync();
   }
 
   async function onModeChange(mode: AgentMode) {
@@ -190,10 +196,12 @@ export function Detail({ taskId, onClose }: Props) {
                 isStarting={startTask.isPending}
                 isStopping={stopTask.isPending}
                 isDeleting={deleteTask.isPending}
+                isArchiving={archiveTask.isPending}
                 onStart={() => void onStart()}
                 onStop={() => void onStop()}
                 onEdit={() => setEditing(true)}
                 onDelete={() => void onDelete()}
+                onArchive={() => void onArchive()}
               />
 
               <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
