@@ -148,6 +148,10 @@ export function useLiveStream(taskId: string, enabled: boolean): LiveStream {
   const [entries, setEntries] = useState<StreamEntry[]>([]);
   const [status, setStatus] = useState<LiveStatus>("connecting");
   const counter = useRef(0);
+  // Track whether we've seen a run_end since the last run_start.
+  // When a new run_start arrives after a run_end, it's a live new run —
+  // clear accumulated entries so old-run events don't duplicate history.
+  const seenRunEnd = useRef(false);
 
   useEffect(() => {
     if (!enabled) {
@@ -159,6 +163,7 @@ export function useLiveStream(taskId: string, enabled: boolean): LiveStream {
     setEntries([]);
     setStatus("connecting");
     counter.current = 0;
+    seenRunEnd.current = false;
     const es = new EventSource(`/api/tasks/${taskId}/stream`);
 
     es.onopen = () => setStatus("live");
@@ -171,6 +176,23 @@ export function useLiveStream(taskId: string, enabled: boolean): LiveStream {
       } catch {
         return;
       }
+
+      if (event.type === "run_start") {
+        if (seenRunEnd.current) {
+          // A new agent run started after the previous one ended — clear
+          // old entries since they are now committed to task history.
+          setEntries([]);
+          counter.current = 0;
+          seenRunEnd.current = false;
+        }
+        return;
+      }
+
+      if (event.type === "run_end") {
+        seenRunEnd.current = true;
+        return;
+      }
+
       const seq = counter.current++;
       const idBase = `${seq}`;
       let next: StreamEntry[] = [];
