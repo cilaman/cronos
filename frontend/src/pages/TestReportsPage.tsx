@@ -160,7 +160,7 @@ function TestCaseRow({ tc }: { tc: TestCase }) {
         {truncate(tc.name)}
       </span>
       <span className="font-mono text-[10px] tabular-nums text-ink-faint">
-        {fmtDuration(tc.duration_seconds)}
+        {fmtDuration(tc.duration_seconds ?? null)}
       </span>
       {tc.error_message && (
         <details className="w-full col-span-full mt-1 pl-8">
