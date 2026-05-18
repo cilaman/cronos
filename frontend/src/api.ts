@@ -4,6 +4,7 @@ import type {
   AgentModel,
   Board,
   GlobalStats,
+  RunTrace,
   Space,
   SpacesResponse,
   SpaceToolsResponse,
@@ -166,4 +167,12 @@ export const api = {
   spaceStats: (spaceId: string) =>
     request<TaskStats[]>(`/api/spaces/${spaceId}/stats`),
   globalStats: () => request<GlobalStats>("/api/stats"),
+
+  // --- traces ---
+  taskTraces: (taskId: string) =>
+    request<RunTrace[]>(`/api/tasks/${taskId}/traces`),
+  taskTraceLatest: (taskId: string) =>
+    request<RunTrace>(`/api/tasks/${taskId}/traces/latest`),
+  taskTrace: (taskId: string, runIndex: number) =>
+    request<RunTrace>(`/api/tasks/${taskId}/traces/${runIndex}`),
 };

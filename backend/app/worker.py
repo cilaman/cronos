@@ -12,6 +12,8 @@ from .space_storage import SpaceStore
 from .stats import RunStats, compute_cost, extract_tokens_and_tools
 from .stats_store import StatsStore
 from .storage import TaskStore
+from .trace_parser import extract_run_trace
+from .trace_store import TraceStore
 
 log = logging.getLogger("cronos.worker")
 
@@ -37,10 +39,12 @@ class Worker:
         store: TaskStore,
         space_store: SpaceStore | None = None,
         stats_store: StatsStore | None = None,
+        trace_store: TraceStore | None = None,
     ) -> None:
         self.store = store
         self.space_store = space_store
         self.stats_store = stats_store
+        self.trace_store = trace_store
         self._queue: asyncio.Queue[tuple[str, str | None]] = asyncio.Queue()
         self._subscribers: dict[str, list[asyncio.Queue[dict]]] = defaultdict(list)
         # Snapshot of the current run's published events per task. Lets a
@@ -270,6 +274,34 @@ class Worker:
                     )
                 except Exception:
                     log.exception("Failed to save stats for %s", task_id)
+
+        # Persist run trace (lives with the task, deleted on task deletion)
+        if self.trace_store is not None:
+            task = self.store.get(task_id)
+            if task is not None:
+                try:
+                    run_index = await self.trace_store.count_runs(task.space_id, task_id)
+                    exit_reason = (
+                        "STOPPED" if result.stopped
+                        else "CRASHED" if result.exit_code != 0
+                        else (result.status.value if result.status else "CRASHED")
+                    )
+                    trace = extract_run_trace(
+                        result.raw_events,
+                        task_id=task_id,
+                        space_id=task.space_id,
+                        run_index=run_index,
+                        model=task.agent_model,
+                        mode=task.agent_mode,
+                        started_at=started_at or ended_at,
+                        ended_at=ended_at,
+                        exit_reason=exit_reason,
+                        session_id=result.session_id,
+                        had_crash=result.exit_code != 0 and not result.stopped,
+                    )
+                    await self.trace_store.save_run(task.space_id, task_id, trace)
+                except Exception:
+                    log.exception("Failed to save trace for %s", task_id)
 
         await self._publish(
             task_id,
