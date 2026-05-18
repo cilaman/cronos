@@ -1,7 +1,7 @@
 import { ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { formatClock, formatFullTimestamp } from "../parse-history";
+import { AgentInfo, formatClock, formatFullTimestamp } from "../parse-history";
 
 export const conversationProseClasses =
   "prose prose-sm dark:prose-invert max-w-none " +
@@ -20,8 +20,23 @@ interface EntryShellProps {
   timestamp?: string;
   isStreaming?: boolean;
   enter?: boolean;
+  agentInfo?: AgentInfo;
   children: ReactNode;
 }
+
+function shortenModel(model: string): string {
+  const lower = model.toLowerCase();
+  if (lower.includes("opus")) return "opus";
+  if (lower.includes("haiku")) return "haiku";
+  if (lower.includes("sonnet")) return "sonnet";
+  return model;
+}
+
+const MODEL_COLOR: Record<string, string> = {
+  opus: "text-purple-400",
+  sonnet: "text-accent-bright",
+  haiku: "text-emerald-400",
+};
 
 function RoleTag({
   role,
@@ -53,11 +68,30 @@ function RoleTag({
   );
 }
 
+function AgentBadge({ info }: { info: AgentInfo }) {
+  const short = shortenModel(info.model);
+  const modelColor = MODEL_COLOR[short] ?? "text-ink-faint";
+  return (
+    <div className="mt-0.5 flex flex-col gap-0.5">
+      <span className="inline-flex items-center gap-1 font-mono text-[9px] tabular-nums text-ink-faint">
+        <span className="rounded bg-accent/15 px-1 py-px font-semibold text-accent-bright">
+          #{info.runIndex + 1}
+        </span>
+        <span className={modelColor}>{short}</span>
+      </span>
+      <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-ink-faint/70">
+        {info.mode}
+      </span>
+    </div>
+  );
+}
+
 export function EntryShell({
   role,
   timestamp,
   isStreaming,
   enter,
+  agentInfo,
   children,
 }: EntryShellProps) {
   return (
@@ -79,7 +113,8 @@ export function EntryShell({
           <span className="font-mono text-[11px] text-ink-faint">—</span>
         )}
         <RoleTag role={role} streaming={isStreaming} />
-        {role === "agent" && (
+        {role === "agent" && agentInfo && <AgentBadge info={agentInfo} />}
+        {role === "agent" && !agentInfo && (
           <span
             aria-hidden
             className="hidden h-px w-6 bg-accent-bright/40 sm:block"

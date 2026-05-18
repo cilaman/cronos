@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { parseHistory } from "../parse-history";
+import { AgentInfo, parseHistory } from "../parse-history";
 import {
   LiveStatus,
   StreamEntry,
@@ -139,6 +139,20 @@ export function ConversationStream({ task }: Props) {
 
   const historyItems = useMemo(() => parseHistory(task.history), [task.history]);
   const bucket = useMemo(() => bucketLive(liveEntries), [liveEntries]);
+
+  // Derive the run index for the live (in-progress) run from the number of
+  // completed agent history entries so the badge stays accurate even mid-run.
+  const liveRunIndex = useMemo(
+    () =>
+      historyItems.filter((h) => h.kind === "history" && h.role === "agent")
+        .length,
+    [historyItems],
+  );
+  const liveAgentInfo: AgentInfo = {
+    runIndex: liveRunIndex,
+    model: task.agent_model,
+    mode: task.agent_mode,
+  };
   const { blocks, resultByToolUseId } = bucket;
 
   const lastGroupIdx = useMemo(() => {
@@ -228,6 +242,7 @@ export function ConversationStream({ task }: Props) {
               key={`h:${idx}`}
               role={item.role}
               timestamp={item.timestamp}
+              agentInfo={item.agentInfo}
             >
               <MarkdownBody source={item.body} />
             </EntryShell>
@@ -254,6 +269,7 @@ export function ConversationStream({ task }: Props) {
                 role="agent"
                 isStreaming={isLatest}
                 enter
+                agentInfo={liveAgentInfo}
               >
                 <div className="space-y-2">
                   {group.thinking.map((t, ti) => (
