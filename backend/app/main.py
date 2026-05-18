@@ -14,11 +14,13 @@ from .api.activity import router as activity_router
 from .api.spaces import router as spaces_router
 from .api.stats import router as stats_router
 from .api.tasks import router as tasks_router
+from .api.test_reports import router as test_reports_router
 from .api.tools import router as tools_router
 from .api.traces import router as traces_router
 from .space_storage import CRONOS_SUBDIR, RESERVED_SPACE_DIRS, SpaceStore
 from .stats_store import StatsStore
 from .storage import TaskStore
+from .test_report_store import TestReportStore
 from .trace_store import TraceStore
 from .worker_pool import WorkerPool
 
@@ -154,6 +156,9 @@ async def lifespan(app: FastAPI):
     trace_store = TraceStore(SPACES_DIR)
     app.state.trace_store = trace_store
 
+    test_report_store = TestReportStore(SPACES_DIR)
+    app.state.test_report_store = test_report_store
+
     worker_pool = WorkerPool(task_store, space_store, stats_store=stats_store, trace_store=trace_store)
     for space in space_store.list_all():
         await worker_pool.start_for_space(space.id)
@@ -203,6 +208,7 @@ app.include_router(activity_router)
 app.include_router(tools_router)
 app.include_router(stats_router)
 app.include_router(traces_router)
+app.include_router(test_reports_router)
 
 
 @app.get("/api/health")
