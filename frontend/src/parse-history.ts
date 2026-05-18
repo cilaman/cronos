@@ -1,10 +1,17 @@
 export type HistoryRole = "user" | "agent";
 
+export interface AgentInfo {
+  runIndex: number;
+  model: string;
+  mode: string;
+}
+
 export interface HistoryEntry {
   kind: "history";
   role: HistoryRole;
   timestamp: string;
   body: string;
+  agentInfo?: AgentInfo;
 }
 
 export interface UnparsedEntry {
@@ -14,8 +21,9 @@ export interface UnparsedEntry {
 
 export type ParsedHistoryItem = HistoryEntry | UnparsedEntry;
 
-// Matches the leading line of each block: an ISO-8601 timestamp followed by [user] or [agent].
-const HEADER = /^(\S+)\s+\[(user|agent)\]\s*$/;
+// Matches the leading line of each block: an ISO-8601 timestamp, [user] or [agent],
+// and an optional metadata string (e.g. "run=2 model=claude-sonnet-4-6 mode=auto").
+const HEADER = /^(\S+)\s+\[(user|agent)\](?:\s+(.+))?\s*$/;
 
 // Backend writes each turn as `\`\`\`\nTIMESTAMP [role]\nbody\n\`\`\``, with
 // entries joined by `\n\n`. We split on the boundary between two entries
@@ -31,6 +39,21 @@ function stripWrappingFences(segment: string): string {
   if (s.endsWith("\n```")) s = s.slice(0, -4);
   else if (s.endsWith("```")) s = s.slice(0, -3);
   return s;
+}
+
+function parseAgentMeta(meta: string): AgentInfo | undefined {
+  const parts: Record<string, string> = {};
+  for (const pair of meta.trim().split(/\s+/)) {
+    const eqIdx = pair.indexOf("=");
+    if (eqIdx > 0) parts[pair.slice(0, eqIdx)] = pair.slice(eqIdx + 1);
+  }
+  const runStr = parts["run"];
+  const model = parts["model"];
+  const mode = parts["mode"];
+  if (runStr === undefined || !model || !mode) return undefined;
+  const runIndex = parseInt(runStr, 10);
+  if (isNaN(runIndex)) return undefined;
+  return { runIndex, model, mode };
 }
 
 export function parseHistory(raw: string): ParsedHistoryItem[] {
@@ -52,11 +75,15 @@ export function parseHistory(raw: string): ParsedHistoryItem[] {
       continue;
     }
 
+    const agentInfo =
+      match[2] === "agent" && match[3] ? parseAgentMeta(match[3]) : undefined;
+
     items.push({
       kind: "history",
       role: match[2] as HistoryRole,
       timestamp: match[1],
       body,
+      agentInfo,
     });
   }
 
