@@ -142,6 +142,7 @@ export interface RunStats {
   ended_at: string;
   duration_seconds: number;
   model: string;
+  real_model: string | null;
   mode: string;
   exit_reason: "DONE" | "WAIT" | "BLOCKED" | "STOPPED" | "CRASHED";
   input_tokens: number;
@@ -214,6 +215,7 @@ export interface RunTrace {
   run_index: number;
   session_id: string | null;
   model: string;
+  real_model: string | null;
   mode: string;
   started_at: string;
   ended_at: string;
