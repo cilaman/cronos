@@ -17,6 +17,20 @@ _PRICING: dict[str, dict[str, float]] = {
 }
 
 
+def _tier_from_real_model(real_model: str | None, configured_model: str) -> str:
+    """Map actual model ID to pricing tier, falling back to configured tier."""
+    if not real_model:
+        return configured_model
+    lowered = real_model.lower()
+    if "opus" in lowered:
+        return "opus"
+    if "haiku" in lowered:
+        return "haiku"
+    if "sonnet" in lowered:
+        return "sonnet"
+    return configured_model
+
+
 def compute_cost(
     model: str,
     input_tokens: int,
@@ -38,6 +52,7 @@ def extract_tokens_and_tools(events: list[dict[str, Any]]) -> dict[str, Any]:
     """Parse stream-json events from a Claude CLI run and extract usage stats."""
     tool_uses: dict[str, int] = {}
     error_count = 0
+    real_model: str | None = None
 
     # Accumulators from assistant events (fallback if no result event)
     asst_input = 0
@@ -66,6 +81,8 @@ def extract_tokens_and_tools(events: list[dict[str, Any]]) -> dict[str, Any]:
 
         elif etype == "assistant":
             msg = event.get("message") or {}
+            if real_model is None:
+                real_model = msg.get("model") or None
             usage = msg.get("usage") or {}
             if usage:
                 # input_tokens is cumulative per turn; take the max
@@ -97,6 +114,7 @@ def extract_tokens_and_tools(events: list[dict[str, Any]]) -> dict[str, Any]:
         "cache_creation_tokens": result_cache_creation if result_cache_creation is not None else asst_cache_creation,
         "tool_uses": tool_uses,
         "error_count": error_count,
+        "real_model": real_model,
     }
 
 
@@ -110,6 +128,7 @@ class RunStats(BaseModel):
     ended_at: datetime
     duration_seconds: float
     model: str   # "default" | "sonnet" | "opus" | "haiku"
+    real_model: str | None = None  # actual model ID from the API, e.g. "claude-sonnet-4-6-20250620"
     mode: str    # "plan" | "auto" | "ask"
     exit_reason: str  # "DONE" | "WAIT" | "BLOCKED" | "STOPPED" | "CRASHED"
     input_tokens: int = 0

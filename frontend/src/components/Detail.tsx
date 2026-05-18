@@ -206,7 +206,13 @@ function StatsPanel({ taskId }: { taskId: string }) {
                           {fmtCost(run.cost_usd)}
                         </td>
                         <td className="px-3 py-2 font-mono text-[10px] text-ink-muted">
-                          {run.model}
+                          {run.real_model ? (
+                            <span title={run.real_model} className="cursor-default">
+                              {run.real_model.replace(/^claude-/, "").replace(/-\d{8}$/, "")}
+                            </span>
+                          ) : (
+                            run.model
+                          )}
                         </td>
                         <td className="px-3 py-2 font-mono text-[10px] text-ink-muted">
                           {run.mode}

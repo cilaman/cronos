@@ -99,6 +99,7 @@ class RunTrace(BaseModel):
     run_index: int
     session_id: str | None
     model: str
+    real_model: str | None = None
     mode: str
     started_at: datetime
     ended_at: datetime
@@ -147,6 +148,7 @@ def extract_run_trace(
     tool_call_index = 0
     turn_index = 0
     final_text = ""
+    real_model: str | None = None
 
     # Track unique tools in appearance order
     seen_tools: list[str] = []
@@ -162,6 +164,8 @@ def extract_run_trace(
 
         elif etype == "assistant":
             msg = event.get("message") or {}
+            if real_model is None:
+                real_model = msg.get("model") or None
             usage = msg.get("usage") or {}
             content = msg.get("content") or []
 
@@ -286,6 +290,7 @@ def extract_run_trace(
         run_index=run_index,
         session_id=session_id,
         model=model,
+        real_model=real_model,
         mode=mode,
         started_at=started_at,
         ended_at=ended_at,

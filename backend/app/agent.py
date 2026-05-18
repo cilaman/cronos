@@ -22,22 +22,23 @@ UPGRADE_WEBHOOK_URL = os.environ.get("UPGRADE_WEBHOOK_URL", "")
 UPGRADE_WEBHOOK_SECRET = os.environ.get("UPGRADE_WEBHOOK_SECRET", "")
 
 STATUS_CONTRACT = """\
-You are an autonomous task executor. The user is not watching the chat in
-real time. End EVERY response with exactly one of these markers on its own
-final line:
+You are an autonomous task executor. The user is not watching in real time.
+
+When you have finished all your work, end your FINAL response with exactly one
+status marker on its own last line:
 
   STATUS: DONE        - the task is fully complete
   STATUS: WAIT        - you need information from the user; the line ABOVE
                         the marker must be a single clear question
-  STATUS: BLOCKED     - you cannot proceed; the line ABOVE the marker must
-                        explain why
+  STATUS: BLOCKED     - you cannot proceed; the line ABOVE must explain why
 
 Rules:
-- The status marker MUST be the very last line you write. Do not add any
-  text, explanation, or closing remark after the marker — not even a blank
-  line.
-- Do not emit a status marker until your final message.
-- Until you are completely sure the task is done, do not output STATUS: DONE.
+- The STATUS marker MUST be the very last line you output. No text after it.
+- Write STATUS only once, in the final wrap-up after all tool calls are done.
+- If you cannot finish the task in this session (e.g. turn limit approaching),
+  use STATUS: WAIT and describe exactly what was completed and what still
+  remains so the next run can pick up from there.
+- Use STATUS: DONE only when the task is truly and fully complete.
 """
 
 
@@ -64,8 +65,8 @@ def parse_status(text: str) -> tuple[Status | None, str | None]:
     lines = text.rstrip().splitlines()
     if not lines:
         return None, None
-    # Scan the tail of the response (up to 5 lines) for the last STATUS marker.
-    scan_from = max(0, len(lines) - 5)
+    # Scan the tail of the response (up to 10 lines) for the last STATUS marker.
+    scan_from = max(0, len(lines) - 10)
     for i in range(len(lines) - 1, scan_from - 1, -1):
         m = _STATUS_LINE.match(lines[i])
         if m:
@@ -108,7 +109,7 @@ async def workspace_for(task: Task, space: Space | None = None) -> Path:
 
 
 PERMISSION_MODE: dict[str, str] = {
-    "plan": "plan",
+    "plan": "acceptEdits",  # "plan" would inject ExitPlanMode instructions that can't be fulfilled
     "auto": "acceptEdits",
     "ask": "default",
 }
@@ -167,6 +168,7 @@ class AgentResult:
     context: str | None = None
     raw_events: list[dict] = field(default_factory=list)
     stopped: bool = False
+    result_subtype: str | None = None
 
 
 EventCallback = Callable[[dict], Awaitable[None]]
@@ -228,6 +230,7 @@ async def run_agent(
     )
 
     session_id: str | None = None
+    result_subtype: str | None = None
     final_text_parts: list[str] = []
     raw_events: list[dict] = []
     stderr_chunks: list[bytes] = []
@@ -288,6 +291,7 @@ async def run_agent(
                     session_id = event.get("session_id") or session_id
                 elif event.get("type") == "result":
                     session_id = event.get("session_id") or session_id
+                    result_subtype = event.get("subtype") or result_subtype
 
             # Extract assistant text blocks for our final_text accumulation.
             text = _extract_assistant_text(event)
@@ -308,10 +312,14 @@ async def run_agent(
 
     final_text = "\n\n".join(final_text_parts).strip()
     status, context = parse_status(final_text)
+    # Fallback: if the concatenated text buries an earlier STATUS marker, try
+    # parsing just the last turn's text in isolation.
+    if status is None and final_text_parts:
+        status, context = parse_status(final_text_parts[-1])
 
     log.info(
-        "claude exited code=%d status=%s session=%s text_len=%d stopped=%s",
-        exit_code, status, session_id, len(final_text), stopped,
+        "claude exited code=%d status=%s subtype=%s session=%s text_len=%d stopped=%s",
+        exit_code, status, result_subtype, session_id, len(final_text), stopped,
     )
 
     return AgentResult(
@@ -323,6 +331,7 @@ async def run_agent(
         context=context,
         raw_events=raw_events,
         stopped=stopped,
+        result_subtype=result_subtype,
     )
 
 

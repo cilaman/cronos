@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from .agent import AgentResult, Status, run_agent
 from .models import TaskState
 from .space_storage import SpaceStore
-from .stats import RunStats, compute_cost, extract_tokens_and_tools
+from .stats import RunStats, _tier_from_real_model, compute_cost, extract_tokens_and_tools
 from .stats_store import StatsStore
 from .storage import TaskStore
 from .trace_parser import extract_run_trace
@@ -55,6 +55,8 @@ class Worker:
         self._current_cancel: asyncio.Event | None = None
         self._loop_task: asyncio.Task[None] | None = None
         self._stop = asyncio.Event()
+        # Track consecutive auto-resumes per task to prevent infinite loops.
+        self._auto_resume_counts: dict[str, int] = {}
 
     # ---- public api ----
 
@@ -194,14 +196,16 @@ class Worker:
             new_state = TaskState.WAITING
             waiting_question = "Stopped by user."
         elif result.exit_code != 0 or result.status is None:
-            # Crash or missing STATUS marker — keep the task in waiting so a
-            # human notices it and can decide how to recover.
             new_state = TaskState.WAITING
-            waiting_question = (
-                "Agent did not finish cleanly (no STATUS marker)."
-                if result.exit_code == 0
-                else f"Agent crashed with exit code {result.exit_code}."
-            )
+            if result.exit_code != 0:
+                waiting_question = f"Agent crashed with exit code {result.exit_code}."
+            elif result.result_subtype == "error_max_turns":
+                waiting_question = (
+                    "Agent hit the turn limit before finishing. "
+                    "Reply 'continue' to resume from where it left off."
+                )
+            else:
+                waiting_question = "Agent did not finish cleanly (no STATUS marker)."
         elif result.status == Status.DONE:
             new_state = TaskState.DONE
             waiting_question = None
@@ -242,12 +246,15 @@ class Worker:
                     existing = await self.stats_store.load(task.space_id, task_id)
                     run_index = len(existing.runs) if existing else 0
                     _started = started_at or ended_at
+                    real_model = usage["real_model"]
+                    pricing_tier = _tier_from_real_model(real_model, task.agent_model)
                     run_stats = RunStats(
                         run_index=run_index,
                         started_at=_started,
                         ended_at=ended_at,
                         duration_seconds=round((ended_at - _started).total_seconds(), 2),
                         model=task.agent_model,
+                        real_model=real_model,
                         mode=task.agent_mode,
                         exit_reason=(
                             "STOPPED" if result.stopped
@@ -259,7 +266,7 @@ class Worker:
                         cache_read_tokens=usage["cache_read_tokens"],
                         cache_creation_tokens=usage["cache_creation_tokens"],
                         cost_usd=compute_cost(
-                            task.agent_model,
+                            pricing_tier,
                             usage["input_tokens"],
                             usage["output_tokens"],
                             usage["cache_read_tokens"],
@@ -302,6 +309,32 @@ class Worker:
                     await self.trace_store.save_run(task.space_id, task_id, trace)
                 except Exception:
                     log.exception("Failed to save trace for %s", task_id)
+
+        # Auto-resume when the agent hit the turn limit mid-task (up to 3 times
+        # per task to prevent infinite loops).
+        _MAX_AUTO_RESUMES = 3
+        if (
+            result.exit_code == 0
+            and result.status is None
+            and result.result_subtype == "error_max_turns"
+            and not result.stopped
+            and self._auto_resume_counts.get(task_id, 0) < _MAX_AUTO_RESUMES
+        ):
+            self._auto_resume_counts[task_id] = self._auto_resume_counts.get(task_id, 0) + 1
+            log.info(
+                "Auto-resuming %s after max-turns exit (attempt %d/%d)",
+                task_id, self._auto_resume_counts[task_id], _MAX_AUTO_RESUMES,
+            )
+            try:
+                await self.store.resume_with_message(task_id)
+                await self.enqueue(task_id, user_message="Continue where you left off.")
+            except Exception:
+                log.exception("Failed to auto-resume %s after max-turns", task_id)
+            # Fall through to publish run_end so the current SSE stream closes cleanly.
+        else:
+            # Clear the counter on any non-max-turns outcome so it resets
+            # between separate task invocations.
+            self._auto_resume_counts.pop(task_id, None)
 
         await self._publish(
             task_id,
