@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -12,6 +13,7 @@ import {
   useUpdateTask,
 } from "../hooks/useTasks";
 import { useTaskStats } from "../hooks/useStats";
+import { useTaskTestReportLatest } from "../hooks/useTestReports";
 import { STATE_BADGE } from "../state-badges";
 import {
   AGENT_MODELS,
@@ -264,6 +266,28 @@ function StatsPanel({ taskId }: { taskId: string }) {
   );
 }
 
+// ── Test result mini-badge ────────────────────────────────────────────────────
+
+function TaskTestBadge({ taskId }: { taskId: string }) {
+  const { data: report } = useTaskTestReportLatest(taskId);
+  if (!report) return null;
+  const hasFail = report.total_failed > 0 || report.total_errors > 0;
+  return (
+    <Link
+      to={`/tests`}
+      className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 font-mono text-[10px] transition hover:opacity-80 ${
+        hasFail
+          ? "border-danger/30 bg-danger/10 text-danger"
+          : "border-accent/30 bg-accent/10 text-accent-bright"
+      }`}
+      title="View test reports"
+    >
+      <span>{report.total_passed}✓</span>
+      {hasFail && <span>{report.total_failed + report.total_errors}✗</span>}
+    </Link>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 interface Props {
@@ -410,6 +434,7 @@ export function Detail({ taskId, onClose }: Props) {
                         />
                       </a>
                     )}
+                    <TaskTestBadge taskId={task.id} />
                     <span className="font-mono text-xs text-ink-faint">{task.id}</span>
                   </div>
                   <h2 className="mt-2 text-xl font-semibold leading-tight tracking-tight text-ink">

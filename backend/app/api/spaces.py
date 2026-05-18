@@ -369,9 +369,13 @@ async def import_space(
         staging = imports / f"staging-{secrets.token_hex(4)}"
         staging.mkdir(parents=True, exist_ok=True)
         try:
-            with zipfile.ZipFile(upload_path, "r") as zf:
+            try:
+                zf_handle = zipfile.ZipFile(upload_path, "r")
+            except zipfile.BadZipFile:
+                raise HTTPException(status_code=400, detail="Uploaded file is not a valid ZIP") from None
+            with zf_handle:
                 try:
-                    incoming_id = _safe_extract(zf, staging)
+                    incoming_id = _safe_extract(zf_handle, staging)
                 except SpaceError as e:
                     raise HTTPException(status_code=400, detail=str(e)) from None
 
