@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response, UploadFile, status
@@ -90,6 +91,10 @@ class TransitionBody(BaseModel):
 
 class ReplyBody(BaseModel):
     message: str = Field(min_length=1, max_length=20_000)
+
+
+class UpdateFileBody(BaseModel):
+    content: str = Field(max_length=10_000_000)
 
 
 def _enrich_summary(summary: TaskSummary, space: Space | None) -> TaskSummary:
@@ -364,6 +369,43 @@ async def upload_task_file(
         return await save_upload(workspace, subdir, file)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.put("/{task_id}/files/{file_path:path}", response_model=FileEntry)
+async def update_task_file(
+    task_id: str,
+    file_path: str,
+    body: UpdateFileBody,
+    request: Request,
+) -> FileEntry:
+    task = get_store(request).get(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+    workspace = _task_workspace(task)
+    try:
+        full = resolve_safe(workspace, file_path)
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Access denied")
+    if not full.exists() or full.is_dir():
+        raise HTTPException(status_code=404, detail=f"File not found: {file_path}")
+    tmp = full.with_suffix(full.suffix + ".tmp")
+    try:
+        tmp.write_bytes(body.content.encode("utf-8"))
+        tmp.rename(full)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
+    stat = full.stat()
+    rel = str(full.relative_to(workspace)).replace("\\", "/")
+    mtime = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat()
+    return FileEntry(
+        name=full.name,
+        path=rel,
+        size=stat.st_size,
+        modified_at=mtime,
+        is_dir=False,
+        category=classify_file(rel, full.name),
+    )
 
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)

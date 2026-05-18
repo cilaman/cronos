@@ -150,6 +150,14 @@ export const api = {
     return request<TaskFile>(url, { method: "POST", body: fd });
   },
 
+  saveTaskFile: (taskId: string, filePath: string, content: string) => {
+    const encoded = filePath.split("/").map(encodeURIComponent).join("/");
+    return request<TaskFile>(`/api/tasks/${taskId}/files/${encoded}`, {
+      method: "PUT",
+      body: JSON.stringify({ content }),
+    });
+  },
+
   // --- ai tools ---
   spaceTools: (spaceId: string) =>
     request<SpaceToolsResponse>(`/api/spaces/${spaceId}/tools`),
