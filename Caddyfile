@@ -4,7 +4,9 @@
 #   docker run --rm caddy caddy hash-password --plaintext '<password>'
 
 {$DOMAIN} {
-    basicauth * {
+    # Public crawler-facing paths bypass basic auth so web filters can classify the site.
+    @private not path /robots.txt /sitemap.xml /about.html /terms.html /privacy.html
+    basicauth @private {
         {$BASIC_AUTH_USER} {$BASIC_AUTH_HASH}
     }
 
