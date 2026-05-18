@@ -195,29 +195,32 @@ class Worker:
         if result.stopped:
             new_state = TaskState.WAITING
             waiting_question = "Stopped by user."
-        elif result.exit_code != 0 or result.status is None:
-            new_state = TaskState.WAITING
-            if result.exit_code != 0:
-                waiting_question = f"Agent crashed with exit code {result.exit_code}."
-            elif result.result_subtype == "error_max_turns":
-                waiting_question = (
-                    "Agent hit the turn limit before finishing. "
-                    "Reply 'continue' to resume from where it left off."
-                )
-            else:
-                waiting_question = "Agent did not finish cleanly (no STATUS marker)."
         elif result.status == Status.DONE:
+            # Trust STATUS:DONE even with non-zero exit (e.g., killed by upgrade webhook).
             new_state = TaskState.DONE
             waiting_question = None
+        elif result.exit_code != 0:
+            new_state = TaskState.WAITING
+            waiting_question = f"Agent crashed with exit code {result.exit_code}."
         elif result.status == Status.WAIT:
             new_state = TaskState.WAITING
             waiting_question = result.context or "(agent asked to wait but gave no question)"
         elif result.status == Status.BLOCKED:
             new_state = TaskState.WAITING
             waiting_question = f"Blocked: {result.context or '(no reason)'}"
+        elif result.result_subtype == "error_max_turns":
+            new_state = TaskState.WAITING
+            waiting_question = (
+                "Agent hit the turn limit before finishing. "
+                "Reply 'continue' to resume from where it left off."
+            )
         else:
             new_state = TaskState.WAITING
-            waiting_question = "Unknown STATUS marker."
+            waiting_question = (
+                "The previous run ended without a STATUS marker. "
+                "If the task is complete, reply with just 'done'. "
+                "Otherwise continue where you left off."
+            )
 
         # Only persist the session id from a successful run. A crashed run
         # often emits a fresh session id that claude never actually stored on
@@ -258,8 +261,8 @@ class Worker:
                         mode=task.agent_mode,
                         exit_reason=(
                             "STOPPED" if result.stopped
-                            else "CRASHED" if result.exit_code != 0
-                            else (result.status.value if result.status else "CRASHED")
+                            else (result.status.value if result.status else
+                                  ("CRASHED" if result.exit_code != 0 else "NO_STATUS"))
                         ),
                         input_tokens=usage["input_tokens"],
                         output_tokens=usage["output_tokens"],
@@ -290,8 +293,8 @@ class Worker:
                     run_index = await self.trace_store.count_runs(task.space_id, task_id)
                     exit_reason = (
                         "STOPPED" if result.stopped
-                        else "CRASHED" if result.exit_code != 0
-                        else (result.status.value if result.status else "CRASHED")
+                        else (result.status.value if result.status else
+                              ("CRASHED" if result.exit_code != 0 else "NO_STATUS"))
                     )
                     trace = extract_run_trace(
                         result.raw_events,

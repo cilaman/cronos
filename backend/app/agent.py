@@ -39,6 +39,9 @@ Rules:
   use STATUS: WAIT and describe exactly what was completed and what still
   remains so the next run can pick up from there.
 - Use STATUS: DONE only when the task is truly and fully complete.
+- In plan mode (when presenting a plan for approval): end your plan summary
+  with STATUS: WAIT and a one-line question such as "Shall I implement this plan?"
+  Do not wait for the user to ask — emit STATUS: WAIT immediately after the plan.
 """
 
 
@@ -133,13 +136,14 @@ def _upgrade_instructions() -> str:
     )
     return (
         "# Upgrading the app\n"
-        "When asked to upgrade the application, run:\n\n"
+        "When asked to upgrade the application:\n"
+        "1. Write your completion summary and **STATUS: DONE** as the very last line "
+        "of your text response (before any tool calls in that turn).\n"
+        "2. In the same turn, run the upgrade webhook:\n\n"
         f"  curl -s -X POST {secret_header} {UPGRADE_WEBHOOK_URL}\n\n"
-        "This calls a host-side webhook that runs `upgrade.sh` (git pull + "
-        "docker compose up --build + systemctl restart). The containers will "
-        "restart; the current agent session will be terminated as part of the "
-        "restart. Confirm to the user that the upgrade has been triggered before "
-        "the session ends."
+        "The container restart will kill this process immediately after the webhook "
+        "fires. STATUS: DONE must already be in your output before the curl runs, "
+        "or the run will be marked as crashed."
     )
 
 
@@ -316,6 +320,13 @@ async def run_agent(
     # parsing just the last turn's text in isolation.
     if status is None and final_text_parts:
         status, context = parse_status(final_text_parts[-1])
+    # Second fallback: scan all turns in reverse so a STATUS marker from turn N
+    # is not lost when later turns pushed it outside the 10-line scan window.
+    if status is None and len(final_text_parts) > 1:
+        for turn_text in reversed(final_text_parts[:-1]):
+            status, context = parse_status(turn_text)
+            if status is not None:
+                break
 
     log.info(
         "claude exited code=%d status=%s subtype=%s session=%s text_len=%d stopped=%s",
