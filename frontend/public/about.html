@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="About Cronos — the internal Kanban-style project management tool used by ULTC to orchestrate Claude Code AI agents for software development automation." />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Cronos" />
+  <meta property="og:title" content="About Cronos — ULTC Internal Project Management" />
+  <meta property="og:url" content="https://cronos.ultc.at/about.html" />
+  <title>About — Cronos</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #fafaf7;
+      color: #1a1a14;
+      margin: 0;
+      padding: 0;
+    }
+    header {
+      border-bottom: 1px solid #e5e5e0;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    header a { text-decoration: none; color: inherit; display: flex; align-items: center; gap: 10px; }
+    .logo { width: 10px; height: 10px; border-radius: 50%; background: #15862d; box-shadow: 0 0 8px #15862d88; }
+    .site-name { font-weight: 600; font-size: 1rem; letter-spacing: -0.01em; }
+    main {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 48px 24px 80px;
+    }
+    h1 { font-size: 2rem; font-weight: 700; margin: 0 0 8px; letter-spacing: -0.02em; }
+    .subtitle { color: #555; font-size: 1.05rem; margin: 0 0 40px; }
+    h2 { font-size: 1.15rem; font-weight: 600; margin: 36px 0 10px; color: #15862d; }
+    p { margin: 0 0 16px; line-height: 1.75; color: #333; }
+    ul { margin: 0 0 16px; padding-left: 20px; }
+    li { margin-bottom: 6px; line-height: 1.7; color: #333; }
+    footer {
+      border-top: 1px solid #e5e5e0;
+      padding: 20px 24px;
+      text-align: center;
+      font-size: 0.85rem;
+      color: #888;
+    }
+    footer a { color: #15862d; text-decoration: none; margin: 0 8px; }
+    footer a:hover { text-decoration: underline; }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: #15862d;
+      text-decoration: none;
+      font-size: 0.9rem;
+      margin-bottom: 32px;
+    }
+    .back-link:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="/">
+      <div class="logo"></div>
+      <span class="site-name">Cronos</span>
+    </a>
+  </header>
+
+  <main>
+    <a class="back-link" href="/">&#8592; Back to app</a>
+    <h1>About Cronos</h1>
+    <p class="subtitle">Internal project management for the ULTC engineering team.</p>
+
+    <h2>What is Cronos?</h2>
+    <p>
+      Cronos is a Kanban-style task management application built and operated by ULTC for its own
+      engineering team. It provides a structured board for planning, tracking, and automating software
+      development work — with built-in support for dispatching tasks to Claude Code AI agents.
+    </p>
+
+    <h2>How it works</h2>
+    <p>
+      Team members create task cards on a shared board and organize them across workflow lanes
+      (backlog, in progress, review, done). Any task can be handed off to an autonomous Claude Code
+      agent that will:
+    </p>
+    <ul>
+      <li>Read the relevant codebase and understand the context</li>
+      <li>Write, edit, or refactor code to meet the task requirements</li>
+      <li>Run tests and verify the changes</li>
+      <li>Report results back to the board in real time</li>
+    </ul>
+    <p>
+      This dramatically reduces the manual effort required for routine engineering tasks and lets
+      the team focus on higher-level design and decision-making.
+    </p>
+
+    <h2>Who operates it?</h2>
+    <p>
+      Cronos is operated entirely by ULTC on private infrastructure (a self-hosted VPS). It is not a
+      commercial product and is not offered to external users. All task data and code remain within
+      ULTC's own systems.
+    </p>
+
+    <h2>Technology</h2>
+    <p>
+      Cronos is a web application. The frontend is built with React and the backend with FastAPI
+      (Python). Agent execution is powered by the Anthropic Claude API. The entire stack runs in
+      Docker containers managed with Docker Compose.
+    </p>
+
+    <h2>Access</h2>
+    <p>
+      Access to Cronos is restricted to authorized ULTC team members via HTTP basic authentication.
+      If you reached this page unexpectedly, please contact your ULTC administrator.
+    </p>
+  </main>
+
+  <footer>
+    &copy; 2026 ULTC &mdash;
+    <a href="/about.html">About</a>
+    <a href="/terms.html">Terms of Service</a>
+    <a href="/privacy.html">Privacy Notice</a>
+  </footer>
+</body>
+</html>
