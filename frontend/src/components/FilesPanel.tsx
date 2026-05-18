@@ -4,9 +4,11 @@ import { FileBrowser } from "./FileBrowser";
 
 interface Props {
   taskId: string;
+  /** Override the aside element's className for alternate layouts (e.g. mobile tab view) */
+  className?: string;
 }
 
-export function FilesPanel({ taskId }: Props) {
+export function FilesPanel({ taskId, className }: Props) {
   const queryClient = useQueryClient();
   const { data: files = [], isLoading } = useQuery({
     queryKey: ["task-files", taskId],
@@ -23,7 +25,7 @@ export function FilesPanel({ taskId }: Props) {
   });
 
   return (
-    <aside className="hidden flex-col border-t border-hairline bg-surface-1/30 lg:flex lg:w-72 lg:shrink-0 lg:border-l lg:border-t-0">
+    <aside className={className ?? "hidden flex-col border-t border-hairline bg-surface-1/30 lg:flex lg:w-72 lg:shrink-0 lg:border-l lg:border-t-0"}>
       <h3 className="shrink-0 px-4 pt-4 pb-2 font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
         Files
       </h3>
