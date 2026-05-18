@@ -13,6 +13,8 @@ import type {
   TaskState,
   TaskStats,
   TaskSummary,
+  TestReport,
+  TestReportSummary,
 } from "./types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -183,4 +185,16 @@ export const api = {
     request<RunTrace>(`/api/tasks/${taskId}/traces/latest`),
   taskTrace: (taskId: string, runIndex: number) =>
     request<RunTrace>(`/api/tasks/${taskId}/traces/${runIndex}`),
+
+  // --- test reports ---
+  testReports: (spaceId: string) =>
+    request<TestReportSummary[]>(`/api/spaces/${spaceId}/test-reports`),
+  testReportLatest: (spaceId: string) =>
+    request<TestReport>(`/api/spaces/${spaceId}/test-reports/latest`),
+  testReport: (spaceId: string, reportId: string) =>
+    request<TestReport>(`/api/spaces/${spaceId}/test-reports/${reportId}`),
+  taskTestReports: (taskId: string) =>
+    request<TestReportSummary[]>(`/api/tasks/${taskId}/test-reports`),
+  taskTestReportLatest: (taskId: string) =>
+    request<TestReport>(`/api/tasks/${taskId}/test-reports/latest`),
 };
