@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { FileCategory, TaskFile } from "../types";
+import { MarkdownEditorModal } from "./MarkdownEditorModal";
 
 // ---------------------------------------------------------------------------
 // Category metadata
@@ -146,6 +147,8 @@ export interface FileBrowserProps {
   fileUrlBuilder: (path: string, download?: boolean) => string;
   onUpload?: (file: File, subdir: string) => Promise<void>;
   uploadPending?: boolean;
+  onSave?: (file: TaskFile, content: string) => Promise<void>;
+  savePending?: boolean;
 }
 
 export function FileBrowser({
@@ -154,8 +157,11 @@ export function FileBrowser({
   fileUrlBuilder,
   onUpload,
   uploadPending,
+  onSave,
+  savePending,
 }: FileBrowserProps) {
   const [viewing, setViewing] = useState<TaskFile | null>(null);
+  const [editingMd, setEditingMd] = useState<TaskFile | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [subdir, setSubdir] = useState("");
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -176,7 +182,11 @@ export function FileBrowser({
       return;
     }
     if (VIEWABLE_CATEGORIES.has(cat)) {
-      setViewing(file);
+      if (file.name.endsWith(".md")) {
+        setEditingMd(file);
+      } else {
+        setViewing(file);
+      }
     }
   }
 
@@ -314,6 +324,15 @@ export function FileBrowser({
           fileUrl={fileUrlBuilder(viewing.path)}
           downloadUrl={fileUrlBuilder(viewing.path, true)}
           onClose={() => setViewing(null)}
+        />
+      )}
+      {editingMd && (
+        <MarkdownEditorModal
+          file={editingMd}
+          fileUrl={fileUrlBuilder(editingMd.path)}
+          onSave={onSave}
+          savePending={savePending}
+          onClose={() => setEditingMd(null)}
         />
       )}
     </>

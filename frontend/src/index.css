@@ -129,3 +129,84 @@
     box-shadow: 0 0 0 4px rgb(var(--color-accent-bright) / 0);
   }
 }
+
+/* ── @uiw/react-md-editor theme bridge ───────────────────────────────────── */
+.cronos-md-editor .w-md-editor {
+  height: 100% !important;
+  background-color: rgb(var(--color-surface-1)) !important;
+  border: none !important;
+  color: rgb(var(--color-ink)) !important;
+  box-shadow: none !important;
+}
+
+.cronos-md-editor .w-md-editor-toolbar {
+  background-color: rgb(var(--color-surface-2)) !important;
+  border-bottom: 1px solid rgb(var(--color-hairline)) !important;
+}
+
+.cronos-md-editor .w-md-editor-toolbar li > button {
+  color: rgb(var(--color-ink-muted)) !important;
+}
+
+.cronos-md-editor .w-md-editor-toolbar li > button:hover,
+.cronos-md-editor .w-md-editor-toolbar li.active > button {
+  color: rgb(var(--color-accent-bright)) !important;
+  background-color: rgb(var(--color-surface-3, var(--color-surface-2))) !important;
+}
+
+.cronos-md-editor .w-md-editor-content {
+  background-color: rgb(var(--color-surface-1)) !important;
+}
+
+.cronos-md-editor .w-md-editor-text-pre,
+.cronos-md-editor .w-md-editor-text-input,
+.cronos-md-editor .w-md-editor-text {
+  font-family: "JetBrains Mono", ui-monospace, monospace !important;
+  font-size: 13px !important;
+  color: rgb(var(--color-ink)) !important;
+  background-color: rgb(var(--color-surface-1)) !important;
+  caret-color: rgb(var(--color-ink)) !important;
+}
+
+.cronos-md-editor .w-md-editor-preview {
+  background-color: rgb(var(--color-surface-1)) !important;
+  border-left: 1px solid rgb(var(--color-hairline)) !important;
+}
+
+.cronos-md-editor .wmde-markdown {
+  font-family: "Geist", system-ui, sans-serif !important;
+  background-color: rgb(var(--color-surface-1)) !important;
+  color: rgb(var(--color-ink)) !important;
+  padding: 1rem 1.25rem;
+}
+
+.cronos-md-editor .wmde-markdown h1,
+.cronos-md-editor .wmde-markdown h2,
+.cronos-md-editor .wmde-markdown h3,
+.cronos-md-editor .wmde-markdown h4,
+.cronos-md-editor .wmde-markdown h5,
+.cronos-md-editor .wmde-markdown h6 {
+  color: rgb(var(--color-ink)) !important;
+  border-bottom-color: rgb(var(--color-hairline)) !important;
+}
+
+.cronos-md-editor .wmde-markdown code,
+.cronos-md-editor .wmde-markdown pre {
+  background-color: rgb(var(--color-surface-2)) !important;
+  color: rgb(var(--color-ink)) !important;
+  font-family: "JetBrains Mono", ui-monospace, monospace !important;
+}
+
+.cronos-md-editor .wmde-markdown blockquote {
+  border-left-color: rgb(var(--color-accent-bright)) !important;
+  color: rgb(var(--color-ink-muted)) !important;
+}
+
+.cronos-md-editor .wmde-markdown a {
+  color: rgb(var(--color-accent-bright)) !important;
+}
+
+.cronos-md-editor .wmde-markdown table th,
+.cronos-md-editor .wmde-markdown table td {
+  border-color: rgb(var(--color-hairline)) !important;
+}

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, taskFileUrl } from "../api";
+import type { TaskFile } from "../types";
 import { FileBrowser } from "./FileBrowser";
 
 interface Props {
@@ -24,6 +25,14 @@ export function FilesPanel({ taskId, className }: Props) {
     },
   });
 
+  const saveFileMutation = useMutation({
+    mutationFn: ({ file, content }: { file: TaskFile; content: string }) =>
+      api.saveTaskFile(taskId, file.path, content),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["task-files", taskId] });
+    },
+  });
+
   return (
     <aside className={className ?? "hidden flex-col border-t border-hairline bg-surface-1/30 lg:flex lg:w-72 lg:shrink-0 lg:border-l lg:border-t-0"}>
       <h3 className="shrink-0 px-4 pt-4 pb-2 font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
@@ -35,6 +44,10 @@ export function FilesPanel({ taskId, className }: Props) {
         fileUrlBuilder={(path, dl) => taskFileUrl(taskId, path, dl)}
         onUpload={(file, subdir) => uploadMutation.mutateAsync({ file, subdir }).then(() => undefined)}
         uploadPending={uploadMutation.isPending}
+        onSave={(file, content) =>
+          saveFileMutation.mutateAsync({ file, content }).then(() => undefined)
+        }
+        savePending={saveFileMutation.isPending}
       />
     </aside>
   );
