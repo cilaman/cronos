@@ -60,10 +60,10 @@ def _extract_description(path: Path) -> str | None:
     # Fall back to first non-empty, non-heading, non-frontmatter line
     in_front = lines[0].strip() == "---"
     past_front = not in_front
-    for line in lines:
+    for i, line in enumerate(lines):
         stripped = line.strip()
         if in_front:
-            if stripped == "---" and line != lines[0]:
+            if stripped == "---" and i > 0:
                 past_front = True
                 in_front = False
             continue
