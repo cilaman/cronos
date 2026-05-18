@@ -292,7 +292,7 @@ export function Detail({ taskId, onClose }: Props) {
   const stopTask = useStopTask(taskId);
   const transitionTask = useTransitionTask();
   const [editing, setEditing] = useState(false);
-  const [activeTab, setActiveTab] = useState<"details" | "stats" | "trace">("details");
+  const [activeTab, setActiveTab] = useState<"details" | "stats" | "trace" | "files">("details");
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -486,6 +486,19 @@ export function Detail({ taskId, onClose }: Props) {
                     {tab}
                   </button>
                 ))}
+                {/* Files tab — only visible on mobile since desktop shows files as a sidebar */}
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("files")}
+                  className={[
+                    "lg:hidden relative mr-4 pb-2.5 pt-2 font-display text-[10px] uppercase tracking-[0.18em] transition",
+                    activeTab === "files"
+                      ? "text-ink after:absolute after:inset-x-0 after:bottom-0 after:h-[2px] after:rounded-t after:bg-accent"
+                      : "text-ink-faint hover:text-ink-muted",
+                  ].join(" ")}
+                >
+                  files
+                </button>
               </div>
 
               {/* Tab content */}
@@ -521,9 +534,16 @@ export function Detail({ taskId, onClose }: Props) {
                 <div className="flex min-h-0 flex-1 flex-col">
                   <StatsPanel taskId={task.id} />
                 </div>
-              ) : (
+              ) : activeTab === "trace" ? (
                 <div className="flex min-h-0 flex-1 flex-col">
                   <TracePanel taskId={task.id} />
+                </div>
+              ) : (
+                <div className="flex min-h-0 flex-1 flex-col">
+                  <FilesPanel
+                    taskId={task.id}
+                    className="flex flex-1 flex-col overflow-hidden"
+                  />
                 </div>
               )}
             </>
