@@ -4,6 +4,12 @@ import { useEffect, useState } from "react";
 import { useTheme } from "../hooks/useTheme";
 import type { TaskFile } from "../types";
 
+type PreviewMode = "edit" | "preview" | "live";
+
+function isMobile() {
+  return window.innerWidth < 768;
+}
+
 interface Props {
   file: TaskFile;
   fileUrl: string;
@@ -18,6 +24,9 @@ export function MarkdownEditorModal({ file, fileUrl, onSave, savePending, onClos
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [previewMode, setPreviewMode] = useState<PreviewMode>(() =>
+    isMobile() ? "preview" : "live"
+  );
 
   useEffect(() => {
     fetch(fileUrl)
@@ -78,13 +87,33 @@ export function MarkdownEditorModal({ file, fileUrl, onSave, savePending, onClos
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex shrink-0 items-center justify-between gap-4 border-b border-hairline px-4 py-3">
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-hairline px-4 py-3">
           <span className="min-w-0 truncate font-mono text-sm text-ink">
             {file.path}
           </span>
           <div className="flex shrink-0 items-center gap-2">
+            {/* Mode toggle */}
+            <div className="flex rounded border border-hairline text-[10px] uppercase tracking-wide overflow-hidden">
+              {(["edit", "preview", "live"] as PreviewMode[]).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setPreviewMode(mode)}
+                  className={`px-2 py-1 transition ${
+                    mode === "live" ? "hidden sm:block" : ""
+                  } ${
+                    previewMode === mode
+                      ? "bg-surface-2 text-ink"
+                      : "text-ink-muted hover:text-ink"
+                  }`}
+                >
+                  {mode === "live" ? "Split" : mode.charAt(0).toUpperCase() + mode.slice(1)}
+                </button>
+              ))}
+            </div>
+
             {dirty && (
-              <span className="text-[10px] text-ink-muted">Unsaved changes</span>
+              <span className="hidden text-[10px] text-ink-muted sm:inline">Unsaved</span>
             )}
             {saveError && (
               <span className="max-w-xs truncate text-[10px] text-danger">{saveError}</span>
@@ -122,7 +151,7 @@ export function MarkdownEditorModal({ file, fileUrl, onSave, savePending, onClos
               onChange={handleChange}
               height="100%"
               visibleDragbar={false}
-              preview="live"
+              preview={previewMode}
             />
           )}
         </div>
