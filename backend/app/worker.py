@@ -184,7 +184,26 @@ class Worker:
     ) -> None:
         ended_at = datetime.now(tz=UTC)
         timestamp = ended_at.strftime("%Y-%m-%dT%H:%M:%SZ")
-        prefix = f"```\n{timestamp} [agent]\n"
+
+        # Pre-fetch task and extract usage early to build history entry with agent metadata.
+        task_pre = self.store.get(task_id)
+        usage = extract_tokens_and_tools(result.raw_events)
+        real_model = usage["real_model"]
+
+        # Determine run index before persisting anything so the history entry
+        # accurately identifies which run this is.
+        run_index = 0
+        if self.stats_store is not None and task_pre is not None:
+            existing = await self.stats_store.load(task_pre.space_id, task_id)
+            run_index = len(existing.runs) if existing else 0
+        elif self.trace_store is not None and task_pre is not None:
+            run_index = await self.trace_store.count_runs(task_pre.space_id, task_id)
+
+        model_label = real_model or (task_pre.agent_model if task_pre else "default")
+        mode_label = task_pre.agent_mode if task_pre else "auto"
+        agent_meta = f"run={run_index} model={model_label} mode={mode_label}"
+        prefix = f"```\n{timestamp} [agent] {agent_meta}\n"
+
         body = result.final_text.strip() or "(no assistant text)"
         if result.stopped:
             body += "\n\n(stopped by user)"
@@ -240,16 +259,18 @@ class Worker:
         except Exception:
             log.exception("Failed to persist finalize for %s", task_id)
 
-        # Persist run statistics
+        exit_reason = (
+            "STOPPED" if result.stopped
+            else (result.status.value if result.status else
+                  ("CRASHED" if result.exit_code != 0 else "NO_STATUS"))
+        )
+
+        # Persist run statistics (usage and run_index already computed above)
         if self.stats_store is not None:
             task = self.store.get(task_id)
             if task is not None:
                 try:
-                    usage = extract_tokens_and_tools(result.raw_events)
-                    existing = await self.stats_store.load(task.space_id, task_id)
-                    run_index = len(existing.runs) if existing else 0
                     _started = started_at or ended_at
-                    real_model = usage["real_model"]
                     pricing_tier = _tier_from_real_model(real_model, task.agent_model)
                     run_stats = RunStats(
                         run_index=run_index,
@@ -259,11 +280,7 @@ class Worker:
                         model=task.agent_model,
                         real_model=real_model,
                         mode=task.agent_mode,
-                        exit_reason=(
-                            "STOPPED" if result.stopped
-                            else (result.status.value if result.status else
-                                  ("CRASHED" if result.exit_code != 0 else "NO_STATUS"))
-                        ),
+                        exit_reason=exit_reason,
                         input_tokens=usage["input_tokens"],
                         output_tokens=usage["output_tokens"],
                         cache_read_tokens=usage["cache_read_tokens"],
@@ -285,17 +302,11 @@ class Worker:
                 except Exception:
                     log.exception("Failed to save stats for %s", task_id)
 
-        # Persist run trace (lives with the task, deleted on task deletion)
+        # Persist run trace (run_index already computed above)
         if self.trace_store is not None:
             task = self.store.get(task_id)
             if task is not None:
                 try:
-                    run_index = await self.trace_store.count_runs(task.space_id, task_id)
-                    exit_reason = (
-                        "STOPPED" if result.stopped
-                        else (result.status.value if result.status else
-                              ("CRASHED" if result.exit_code != 0 else "NO_STATUS"))
-                    )
                     trace = extract_run_trace(
                         result.raw_events,
                         task_id=task_id,
