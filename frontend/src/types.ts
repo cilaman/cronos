@@ -184,6 +184,55 @@ export interface GlobalStats {
   avg_tokens_per_run: number;
 }
 
+// --- Traces ---
+
+export interface ToolCallTrace {
+  tool_call_index: number;
+  tool_use_id: string;
+  name: string;
+  input_summary: string;
+  output_summary: string | null;
+  is_error: boolean;
+  turn_index: number;
+  elapsed_seconds: number | null;
+}
+
+export interface AssistantTurnTrace {
+  turn_index: number;
+  text_snippet: string;
+  has_thinking: boolean;
+  tool_calls: string[];
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_creation_tokens: number;
+}
+
+export interface RunTrace {
+  task_id: string;
+  space_id: string;
+  run_index: number;
+  session_id: string | null;
+  model: string;
+  mode: string;
+  started_at: string;
+  ended_at: string;
+  duration_seconds: number;
+  exit_reason: string;
+  turns: AssistantTurnTrace[];
+  tool_calls: ToolCallTrace[];
+  total_tool_calls: number;
+  unique_tools: string[];
+  error_tool_calls: number;
+  read_tool_calls: number;
+  write_tool_calls: number;
+  exploration_ratio: number;
+  error_recovery_count: number;
+  backtrack_count: number;
+  final_text_snippet: string;
+  had_crash: boolean;
+}
+
 // --- AI Tools Inventory ---
 
 export interface AiToolEntry {

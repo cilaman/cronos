@@ -383,4 +383,12 @@ async def delete_task(task_id: str, request: Request) -> Response:
             await git_ops.remove_task_worktree(space_dir_for(task.space_id), task_id)
         except git_ops.GitError:
             log.exception("Worktree cleanup failed for %s", task_id)
+    # Delete traces — they live with the task (unlike stats which survive deletion).
+    if task is not None:
+        trace_store = getattr(request.app.state, "trace_store", None)
+        if trace_store is not None:
+            try:
+                await trace_store.delete_task_traces(task.space_id, task_id)
+            except Exception:
+                log.exception("Trace cleanup failed for %s", task_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -26,6 +26,7 @@ import { ConversationStream } from "./ConversationStream";
 import { FilesPanel } from "./FilesPanel";
 import { TaskActionBar } from "./TaskActionBar";
 import { TaskForm } from "./TaskForm";
+import { TracePanel } from "./TracePanel";
 import { Modal } from "./ui/Modal";
 import { SpaceTag } from "./ui/SpaceTag";
 
@@ -291,7 +292,7 @@ export function Detail({ taskId, onClose }: Props) {
   const stopTask = useStopTask(taskId);
   const transitionTask = useTransitionTask();
   const [editing, setEditing] = useState(false);
-  const [activeTab, setActiveTab] = useState<"details" | "stats">("details");
+  const [activeTab, setActiveTab] = useState<"details" | "stats" | "trace">("details");
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -470,7 +471,7 @@ export function Detail({ taskId, onClose }: Props) {
 
               {/* Tab bar */}
               <div className="flex border-b border-hairline bg-surface-1 px-4">
-                {(["details", "stats"] as const).map((tab) => (
+                {(["details", "stats", "trace"] as const).map((tab) => (
                   <button
                     key={tab}
                     type="button"
@@ -516,9 +517,13 @@ export function Detail({ taskId, onClose }: Props) {
 
                   <FilesPanel taskId={task.id} />
                 </div>
-              ) : (
+              ) : activeTab === "stats" ? (
                 <div className="flex min-h-0 flex-1 flex-col">
                   <StatsPanel taskId={task.id} />
+                </div>
+              ) : (
+                <div className="flex min-h-0 flex-1 flex-col">
+                  <TracePanel taskId={task.id} />
                 </div>
               )}
             </>

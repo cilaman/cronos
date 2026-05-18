@@ -6,6 +6,7 @@ import logging
 from .space_storage import SpaceStore
 from .stats_store import StatsStore
 from .storage import TaskStore
+from .trace_store import TraceStore
 from .worker import Worker
 
 log = logging.getLogger("cronos.worker_pool")
@@ -25,10 +26,12 @@ class WorkerPool:
         task_store: TaskStore,
         space_store: SpaceStore,
         stats_store: StatsStore | None = None,
+        trace_store: TraceStore | None = None,
     ) -> None:
         self._task_store = task_store
         self._space_store = space_store
         self._stats_store = stats_store
+        self._trace_store = trace_store
         self._workers: dict[str, Worker] = {}
         self._lock = asyncio.Lock()
 
@@ -45,6 +48,7 @@ class WorkerPool:
                 self._task_store,
                 space_store=self._space_store,
                 stats_store=self._stats_store,
+                trace_store=self._trace_store,
             )
             worker.start()
             self._workers[space_id] = worker
