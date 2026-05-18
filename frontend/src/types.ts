@@ -292,3 +292,53 @@ export const PRESET_SPACE_ICONS: string[] = [
   "📦", "🧪", "🛰️", "🪐", "⚙️", "🎯", "🧭", "🛠️",
   "🧱", "📚", "🔬", "🪄", "🌿", "🔌", "🪧", "🧰",
 ];
+
+// ---------------------------------------------------------------------------
+// Test reports
+// ---------------------------------------------------------------------------
+
+export type TestCaseStatus = "passed" | "failed" | "error" | "skipped";
+
+export interface TestCase {
+  id: string;
+  name: string;
+  status: TestCaseStatus;
+  duration_seconds?: number | null;
+  error_message?: string | null;
+  file_path?: string | null;
+  line?: number | null;
+}
+
+export interface TestSuite {
+  name: string;
+  tests: TestCase[];
+  passed: number;
+  failed: number;
+  errors: number;
+  skipped: number;
+  duration_seconds: number;
+}
+
+export interface TestReportSummary {
+  id: string;
+  space_id: string;
+  task_id?: string | null;
+  report_type: "task" | "space";
+  triggered_by: string;
+  started_at: string;
+  ended_at: string;
+  total_passed: number;
+  total_failed: number;
+  total_errors: number;
+  total_skipped: number;
+  total_tests: number;
+  coverage_pct?: number | null;
+  exit_code: number;
+  framework: string;
+}
+
+export interface TestReport extends TestReportSummary {
+  suites: TestSuite[];
+  coverage_data?: Record<string, number> | null;
+  raw_output: string;
+}
