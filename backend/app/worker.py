@@ -9,6 +9,8 @@ from datetime import UTC, datetime
 from .agent import AgentResult, Status, run_agent
 from .models import TaskState
 from .space_storage import SpaceStore
+from .stats import RunStats, compute_cost, extract_tokens_and_tools
+from .stats_store import StatsStore
 from .storage import TaskStore
 
 log = logging.getLogger("cronos.worker")
@@ -30,9 +32,15 @@ class Worker:
     `subscribe(task_id)`.
     """
 
-    def __init__(self, store: TaskStore, space_store: SpaceStore | None = None) -> None:
+    def __init__(
+        self,
+        store: TaskStore,
+        space_store: SpaceStore | None = None,
+        stats_store: StatsStore | None = None,
+    ) -> None:
         self.store = store
         self.space_store = space_store
+        self.stats_store = stats_store
         self._queue: asyncio.Queue[tuple[str, str | None]] = asyncio.Queue()
         self._subscribers: dict[str, list[asyncio.Queue[dict]]] = defaultdict(list)
         # Snapshot of the current run's published events per task. Lets a
@@ -129,6 +137,7 @@ class Worker:
         cancel_event = asyncio.Event()
         self._current_cancel = cancel_event
         self._run_buffer[task_id] = []
+        started_at = datetime.now(tz=UTC)
         await self._publish(task_id, {"type": "run_start", "task_id": task_id})
 
         async def on_event(event: dict) -> None:
@@ -158,10 +167,17 @@ class Worker:
             return
 
         self._current_cancel = None
-        await self._finalize(task_id, result)
+        await self._finalize(task_id, result, started_at=started_at)
 
-    async def _finalize(self, task_id: str, result: AgentResult) -> None:
-        timestamp = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    async def _finalize(
+        self,
+        task_id: str,
+        result: AgentResult,
+        *,
+        started_at: datetime | None = None,
+    ) -> None:
+        ended_at = datetime.now(tz=UTC)
+        timestamp = ended_at.strftime("%Y-%m-%dT%H:%M:%SZ")
         prefix = f"```\n{timestamp} [agent]\n"
         body = result.final_text.strip() or "(no assistant text)"
         if result.stopped:
@@ -212,6 +228,48 @@ class Worker:
             )
         except Exception:
             log.exception("Failed to persist finalize for %s", task_id)
+
+        # Persist run statistics
+        if self.stats_store is not None:
+            task = self.store.get(task_id)
+            if task is not None:
+                try:
+                    usage = extract_tokens_and_tools(result.raw_events)
+                    existing = await self.stats_store.load(task.space_id, task_id)
+                    run_index = len(existing.runs) if existing else 0
+                    _started = started_at or ended_at
+                    run_stats = RunStats(
+                        run_index=run_index,
+                        started_at=_started,
+                        ended_at=ended_at,
+                        duration_seconds=round((ended_at - _started).total_seconds(), 2),
+                        model=task.agent_model,
+                        mode=task.agent_mode,
+                        exit_reason=(
+                            "STOPPED" if result.stopped
+                            else "CRASHED" if result.exit_code != 0
+                            else (result.status.value if result.status else "CRASHED")
+                        ),
+                        input_tokens=usage["input_tokens"],
+                        output_tokens=usage["output_tokens"],
+                        cache_read_tokens=usage["cache_read_tokens"],
+                        cache_creation_tokens=usage["cache_creation_tokens"],
+                        cost_usd=compute_cost(
+                            task.agent_model,
+                            usage["input_tokens"],
+                            usage["output_tokens"],
+                            usage["cache_read_tokens"],
+                            usage["cache_creation_tokens"],
+                        ),
+                        tool_uses=usage["tool_uses"],
+                        error_count=usage["error_count"],
+                        had_crash=result.exit_code != 0 and not result.stopped,
+                    )
+                    await self.stats_store.append_run(
+                        task.space_id, task_id, task.title, run_stats
+                    )
+                except Exception:
+                    log.exception("Failed to save stats for %s", task_id)
 
         await self._publish(
             task_id,

@@ -12,9 +12,11 @@ from watchfiles import awatch
 
 from .api.activity import router as activity_router
 from .api.spaces import router as spaces_router
+from .api.stats import router as stats_router
 from .api.tasks import router as tasks_router
 from .api.tools import router as tools_router
 from .space_storage import CRONOS_SUBDIR, RESERVED_SPACE_DIRS, SpaceStore
+from .stats_store import StatsStore
 from .storage import TaskStore
 from .worker_pool import WorkerPool
 
@@ -144,7 +146,10 @@ async def lifespan(app: FastAPI):
     await task_store.reload_all()
     app.state.store = task_store
 
-    worker_pool = WorkerPool(task_store, space_store)
+    stats_store = StatsStore(SPACES_DIR)
+    app.state.stats_store = stats_store
+
+    worker_pool = WorkerPool(task_store, space_store, stats_store=stats_store)
     for space in space_store.list_all():
         await worker_pool.start_for_space(space.id)
     app.state.worker_pool = worker_pool
@@ -191,6 +196,7 @@ app.include_router(tasks_router)
 app.include_router(spaces_router)
 app.include_router(activity_router)
 app.include_router(tools_router)
+app.include_router(stats_router)
 
 
 @app.get("/api/health")

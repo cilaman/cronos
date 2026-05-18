@@ -4,6 +4,7 @@ import asyncio
 import logging
 
 from .space_storage import SpaceStore
+from .stats_store import StatsStore
 from .storage import TaskStore
 from .worker import Worker
 
@@ -19,9 +20,15 @@ class WorkerPool:
     no two concurrent processes ever touch the same git working tree.
     """
 
-    def __init__(self, task_store: TaskStore, space_store: SpaceStore) -> None:
+    def __init__(
+        self,
+        task_store: TaskStore,
+        space_store: SpaceStore,
+        stats_store: StatsStore | None = None,
+    ) -> None:
         self._task_store = task_store
         self._space_store = space_store
+        self._stats_store = stats_store
         self._workers: dict[str, Worker] = {}
         self._lock = asyncio.Lock()
 
@@ -34,7 +41,11 @@ class WorkerPool:
             existing = self._workers.get(space_id)
             if existing is not None:
                 return existing
-            worker = Worker(self._task_store, space_store=self._space_store)
+            worker = Worker(
+                self._task_store,
+                space_store=self._space_store,
+                stats_store=self._stats_store,
+            )
             worker.start()
             self._workers[space_id] = worker
             log.info("Started worker for space %s", space_id)

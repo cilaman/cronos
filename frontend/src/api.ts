@@ -3,12 +3,14 @@ import type {
   AgentMode,
   AgentModel,
   Board,
+  GlobalStats,
   Space,
   SpacesResponse,
   SpaceToolsResponse,
   Task,
   TaskFile,
   TaskState,
+  TaskStats,
   TaskSummary,
 } from "./types";
 
@@ -157,4 +159,11 @@ export const api = {
     if (spaceId) params.set("space_id", spaceId);
     return request<Activity[]>(`/api/activity?${params.toString()}`);
   },
+
+  // --- stats ---
+  taskStats: (taskId: string) =>
+    request<TaskStats>(`/api/tasks/${taskId}/stats`),
+  spaceStats: (spaceId: string) =>
+    request<TaskStats[]>(`/api/spaces/${spaceId}/stats`),
+  globalStats: () => request<GlobalStats>("/api/stats"),
 };
