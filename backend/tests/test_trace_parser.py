@@ -1,0 +1,459 @@
+from __future__ import annotations
+
+import json
+from datetime import UTC, datetime
+
+import pytest
+
+from app.trace_parser import (
+    RunTrace,
+    ToolCallTrace,
+    _is_read_tool,
+    _summarize_input,
+    _summarize_output,
+    extract_run_trace,
+)
+from app.trace_store import TraceStore
+
+from .conftest import SPACE_ID
+
+TASK_ID = "2025-01-01-0000-test-task"
+_NOW = datetime(2025, 1, 1, 12, 0, tzinfo=UTC)
+_LATER = datetime(2025, 1, 1, 12, 1, tzinfo=UTC)
+
+
+# ---------------------------------------------------------------------------
+# _is_read_tool
+# ---------------------------------------------------------------------------
+
+
+def test_is_read_tool_named_tools():
+    assert _is_read_tool("Read", "")
+    assert _is_read_tool("Grep", "")
+    assert _is_read_tool("Glob", "")
+    assert _is_read_tool("WebFetch", "")
+    assert _is_read_tool("WebSearch", "")
+
+
+def test_is_read_tool_write_tools():
+    assert not _is_read_tool("Write", "")
+    assert not _is_read_tool("Edit", "")
+    assert not _is_read_tool("Bash", json.dumps({"command": "rm -rf /"}))
+
+
+def test_is_read_tool_bash_read_commands():
+    assert _is_read_tool("Bash", json.dumps({"command": "cat file.txt"}))
+    assert _is_read_tool("Bash", json.dumps({"command": "git log --oneline"}))
+    assert _is_read_tool("Bash", json.dumps({"command": "git diff HEAD"}))
+    assert _is_read_tool("Bash", json.dumps({"command": "ls -la"}))
+    assert _is_read_tool("Bash", json.dumps({"command": "find . -name '*.py'"}))
+
+
+def test_is_read_tool_bash_write_command():
+    assert not _is_read_tool("Bash", json.dumps({"command": "echo 'hello' > file.txt"}))
+    assert not _is_read_tool("Bash", json.dumps({"command": "npm install"}))
+
+
+def test_is_read_tool_unknown():
+    assert not _is_read_tool("UnknownTool", "")
+
+
+# ---------------------------------------------------------------------------
+# _summarize_input / _summarize_output
+# ---------------------------------------------------------------------------
+
+
+def test_summarize_input_string():
+    result = _summarize_input("hello world")
+    assert result == "hello world"
+
+
+def test_summarize_input_dict():
+    result = _summarize_input({"file_path": "test.py"})
+    assert "file_path" in result
+    assert "test.py" in result
+
+
+def test_summarize_input_truncates():
+    long_str = "x" * 600
+    result = _summarize_input(long_str)
+    assert len(result) <= 501
+    assert result.endswith("…")
+
+
+def test_summarize_output_string():
+    result = _summarize_output("some output")
+    assert result == "some output"
+
+
+def test_summarize_output_none():
+    assert _summarize_output(None) == ""
+
+
+def test_summarize_output_list_of_text_blocks():
+    content = [{"type": "text", "text": "line one"}, {"type": "text", "text": "line two"}]
+    result = _summarize_output(content)
+    assert "line one" in result
+    assert "line two" in result
+
+
+def test_summarize_output_truncates():
+    long_str = "y" * 1200
+    result = _summarize_output(long_str)
+    assert len(result) <= 1001
+    assert result.endswith("…")
+
+
+# ---------------------------------------------------------------------------
+# extract_run_trace helpers
+# ---------------------------------------------------------------------------
+
+
+def _make_assistant_event(
+    tool_uses: list[dict] | None = None,
+    text: str = "",
+    input_tokens: int = 100,
+    output_tokens: int = 50,
+    model: str = "claude-sonnet-4-6",
+) -> dict:
+    content = []
+    if text:
+        content.append({"type": "text", "text": text})
+    for tu in (tool_uses or []):
+        content.append(tu)
+    return {
+        "type": "assistant",
+        "message": {
+            "model": model,
+            "usage": {
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "cache_read_input_tokens": 0,
+                "cache_creation_input_tokens": 0,
+            },
+            "content": content,
+        },
+    }
+
+
+def _tool_use_block(name: str, tool_id: str, inp: dict) -> dict:
+    return {"type": "tool_use", "id": tool_id, "name": name, "input": inp}
+
+
+def _tool_result_event(tool_id: str, content: str = "ok", is_error: bool = False) -> dict:
+    return {
+        "type": "user",
+        "message": {
+            "content": [
+                {
+                    "type": "tool_result",
+                    "tool_use_id": tool_id,
+                    "is_error": is_error,
+                    "content": content,
+                }
+            ]
+        },
+    }
+
+
+def _base_kwargs() -> dict:
+    return dict(
+        task_id=TASK_ID,
+        space_id=SPACE_ID,
+        run_index=0,
+        model="default",
+        mode="auto",
+        started_at=_NOW,
+        ended_at=_LATER,
+        exit_reason="DONE",
+        session_id=None,
+        had_crash=False,
+    )
+
+
+# ---------------------------------------------------------------------------
+# extract_run_trace — core behaviour
+# ---------------------------------------------------------------------------
+
+
+def test_extract_run_trace_empty():
+    trace = extract_run_trace([], **_base_kwargs())
+    assert trace.task_id == TASK_ID
+    assert trace.space_id == SPACE_ID
+    assert trace.total_tool_calls == 0
+    assert trace.exploration_ratio == 0.0
+    assert trace.turns == []
+
+
+def test_extract_run_trace_duration():
+    trace = extract_run_trace([], **_base_kwargs())
+    assert trace.duration_seconds == pytest.approx(60.0)
+
+
+def test_extract_run_trace_captures_text():
+    events = [_make_assistant_event(text="I will now read the file.")]
+    trace = extract_run_trace(events, **_base_kwargs())
+    assert len(trace.turns) == 1
+    assert "I will now read the file." in trace.turns[0].text_snippet
+
+
+def test_extract_run_trace_captures_model():
+    events = [_make_assistant_event(model="claude-opus-4-7")]
+    trace = extract_run_trace(events, **_base_kwargs())
+    assert trace.real_model == "claude-opus-4-7"
+
+
+def test_extract_run_trace_tool_calls_counted():
+    events = [
+        _make_assistant_event(tool_uses=[
+            _tool_use_block("Read", "tu-1", {"file_path": "a.py"}),
+            _tool_use_block("Write", "tu-2", {"file_path": "b.py", "content": "x"}),
+        ]),
+    ]
+    trace = extract_run_trace(events, **_base_kwargs())
+    assert trace.total_tool_calls == 2
+    assert trace.read_tool_calls == 1
+    assert trace.write_tool_calls == 1
+
+
+def test_extract_run_trace_unique_tools():
+    events = [
+        _make_assistant_event(tool_uses=[
+            _tool_use_block("Read", "tu-1", {}),
+            _tool_use_block("Read", "tu-2", {}),
+            _tool_use_block("Write", "tu-3", {}),
+        ]),
+    ]
+    trace = extract_run_trace(events, **_base_kwargs())
+    assert set(trace.unique_tools) == {"Read", "Write"}
+    assert trace.unique_tools.index("Read") < trace.unique_tools.index("Write")
+
+
+def test_extract_run_trace_error_tool_calls():
+    events = [
+        _make_assistant_event(tool_uses=[
+            _tool_use_block("Bash", "tu-1", {"command": "bad cmd"}),
+        ]),
+        _tool_result_event("tu-1", "Permission denied", is_error=True),
+    ]
+    trace = extract_run_trace(events, **_base_kwargs())
+    assert trace.error_tool_calls == 1
+    assert trace.tool_calls[0].is_error is True
+
+
+def test_extract_run_trace_output_summary_captured():
+    events = [
+        _make_assistant_event(tool_uses=[_tool_use_block("Read", "tu-1", {})]),
+        _tool_result_event("tu-1", "file contents here"),
+    ]
+    trace = extract_run_trace(events, **_base_kwargs())
+    assert "file contents here" in trace.tool_calls[0].output_summary
+
+
+# ---------------------------------------------------------------------------
+# exploration_ratio
+# ---------------------------------------------------------------------------
+
+
+def test_extract_run_trace_exploration_ratio_all_reads():
+    events = [
+        _make_assistant_event(tool_uses=[
+            _tool_use_block("Read", "tu-1", {}),
+            _tool_use_block("Read", "tu-2", {}),
+        ]),
+    ]
+    trace = extract_run_trace(events, **_base_kwargs())
+    assert trace.exploration_ratio == pytest.approx(1.0)
+
+
+def test_extract_run_trace_exploration_ratio_mixed():
+    events = [
+        _make_assistant_event(tool_uses=[
+            _tool_use_block("Read", "tu-1", {}),
+            _tool_use_block("Write", "tu-2", {}),
+        ]),
+    ]
+    trace = extract_run_trace(events, **_base_kwargs())
+    assert trace.exploration_ratio == pytest.approx(0.5)
+
+
+# ---------------------------------------------------------------------------
+# error_recovery_count
+# ---------------------------------------------------------------------------
+
+
+def test_extract_run_trace_error_recovery():
+    # Error on Bash → success on Bash within 3 steps
+    events = [
+        _make_assistant_event(tool_uses=[
+            _tool_use_block("Bash", "tu-1", {"command": "bad"}),
+        ]),
+        _tool_result_event("tu-1", "error!", is_error=True),
+        _make_assistant_event(tool_uses=[
+            _tool_use_block("Bash", "tu-2", {"command": "cat file.txt"}),
+        ]),
+        _tool_result_event("tu-2", "content"),
+    ]
+    trace = extract_run_trace(events, **_base_kwargs())
+    assert trace.error_recovery_count == 1
+
+
+def test_extract_run_trace_no_recovery_different_tool():
+    events = [
+        _make_assistant_event(tool_uses=[
+            _tool_use_block("Bash", "tu-1", {"command": "bad"}),
+        ]),
+        _tool_result_event("tu-1", "error!", is_error=True),
+        _make_assistant_event(tool_uses=[
+            _tool_use_block("Read", "tu-2", {"file_path": "x.py"}),
+        ]),
+        _tool_result_event("tu-2", "ok"),
+    ]
+    trace = extract_run_trace(events, **_base_kwargs())
+    assert trace.error_recovery_count == 0
+
+
+# ---------------------------------------------------------------------------
+# backtrack_count
+# ---------------------------------------------------------------------------
+
+
+def test_extract_run_trace_backtrack():
+    # Write file.py → Read file.py immediately after
+    events = [
+        _make_assistant_event(tool_uses=[
+            _tool_use_block("Write", "tu-1", {"file_path": "file.py", "content": "x"}),
+        ]),
+        _tool_result_event("tu-1", "written"),
+        _make_assistant_event(tool_uses=[
+            _tool_use_block("Read", "tu-2", {"file_path": "file.py"}),
+        ]),
+        _tool_result_event("tu-2", "x"),
+    ]
+    trace = extract_run_trace(events, **_base_kwargs())
+    assert trace.backtrack_count == 1
+
+
+def test_extract_run_trace_no_backtrack_different_file():
+    events = [
+        _make_assistant_event(tool_uses=[
+            _tool_use_block("Write", "tu-1", {"file_path": "a.py", "content": "x"}),
+        ]),
+        _tool_result_event("tu-1", "written"),
+        _make_assistant_event(tool_uses=[
+            _tool_use_block("Read", "tu-2", {"file_path": "b.py"}),
+        ]),
+        _tool_result_event("tu-2", "y"),
+    ]
+    trace = extract_run_trace(events, **_base_kwargs())
+    assert trace.backtrack_count == 0
+
+
+# ---------------------------------------------------------------------------
+# session_id propagation
+# ---------------------------------------------------------------------------
+
+
+def test_extract_run_trace_session_from_result():
+    events = [
+        {"type": "result", "session_id": "sess-abc", "usage": {}},
+    ]
+    kwargs = _base_kwargs()
+    trace = extract_run_trace(events, **kwargs)
+    assert trace.session_id == "sess-abc"
+
+
+def test_extract_run_trace_session_from_system_init():
+    events = [
+        {"type": "system", "subtype": "init", "session_id": "init-sess"},
+    ]
+    trace = extract_run_trace(events, **_base_kwargs())
+    assert trace.session_id == "init-sess"
+
+
+# ---------------------------------------------------------------------------
+# TraceStore
+# ---------------------------------------------------------------------------
+
+
+def _make_trace(run_index: int = 0) -> RunTrace:
+    return RunTrace(
+        task_id=TASK_ID,
+        space_id=SPACE_ID,
+        run_index=run_index,
+        session_id=None,
+        model="default",
+        mode="auto",
+        started_at=_NOW,
+        ended_at=_LATER,
+        duration_seconds=60.0,
+        exit_reason="DONE",
+    )
+
+
+async def test_trace_store_save_and_load(tmp_spaces_dir):
+    store = TraceStore(tmp_spaces_dir)
+    trace = _make_trace(run_index=0)
+    await store.save_run(SPACE_ID, TASK_ID, trace)
+    loaded = await store.load_run(SPACE_ID, TASK_ID, 0)
+    assert loaded is not None
+    assert loaded.run_index == 0
+    assert loaded.task_id == TASK_ID
+
+
+async def test_trace_store_load_nonexistent(tmp_spaces_dir):
+    store = TraceStore(tmp_spaces_dir)
+    result = await store.load_run(SPACE_ID, "no-task", 0)
+    assert result is None
+
+
+async def test_trace_store_load_latest(tmp_spaces_dir):
+    store = TraceStore(tmp_spaces_dir)
+    await store.save_run(SPACE_ID, TASK_ID, _make_trace(0))
+    await store.save_run(SPACE_ID, TASK_ID, _make_trace(1))
+    latest = await store.load_latest(SPACE_ID, TASK_ID)
+    assert latest is not None
+    assert latest.run_index == 1
+
+
+async def test_trace_store_load_latest_no_traces(tmp_spaces_dir):
+    store = TraceStore(tmp_spaces_dir)
+    result = await store.load_latest(SPACE_ID, "no-task")
+    assert result is None
+
+
+async def test_trace_store_list_runs(tmp_spaces_dir):
+    store = TraceStore(tmp_spaces_dir)
+    await store.save_run(SPACE_ID, TASK_ID, _make_trace(0))
+    await store.save_run(SPACE_ID, TASK_ID, _make_trace(1))
+    runs = await store.list_runs(SPACE_ID, TASK_ID)
+    assert len(runs) == 2
+    assert runs[0].run_index == 0
+    assert runs[1].run_index == 1
+
+
+async def test_trace_store_list_runs_empty(tmp_spaces_dir):
+    store = TraceStore(tmp_spaces_dir)
+    runs = await store.list_runs(SPACE_ID, "no-task")
+    assert runs == []
+
+
+async def test_trace_store_count_runs(tmp_spaces_dir):
+    store = TraceStore(tmp_spaces_dir)
+    assert await store.count_runs(SPACE_ID, TASK_ID) == 0
+    await store.save_run(SPACE_ID, TASK_ID, _make_trace(0))
+    assert await store.count_runs(SPACE_ID, TASK_ID) == 1
+    await store.save_run(SPACE_ID, TASK_ID, _make_trace(1))
+    assert await store.count_runs(SPACE_ID, TASK_ID) == 2
+
+
+async def test_trace_store_delete_task_traces(tmp_spaces_dir):
+    store = TraceStore(tmp_spaces_dir)
+    await store.save_run(SPACE_ID, TASK_ID, _make_trace(0))
+    await store.delete_task_traces(SPACE_ID, TASK_ID)
+    assert await store.count_runs(SPACE_ID, TASK_ID) == 0
+
+
+async def test_trace_store_delete_nonexistent_is_noop(tmp_spaces_dir):
+    store = TraceStore(tmp_spaces_dir)
+    await store.delete_task_traces(SPACE_ID, "never-existed")
