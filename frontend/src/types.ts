@@ -134,6 +134,56 @@ export interface Activity {
   updated_at: string;
 }
 
+// --- Stats ---
+
+export interface RunStats {
+  run_index: number;
+  started_at: string;
+  ended_at: string;
+  duration_seconds: number;
+  model: string;
+  mode: string;
+  exit_reason: "DONE" | "WAIT" | "BLOCKED" | "STOPPED" | "CRASHED";
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_creation_tokens: number;
+  cost_usd: number;
+  tool_uses: Record<string, number>;
+  error_count: number;
+  had_crash: boolean;
+}
+
+export interface TaskStats {
+  task_id: string;
+  space_id: string;
+  title: string;
+  runs: RunStats[];
+  total_runs: number;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  total_cache_tokens: number;
+  total_cost_usd: number;
+  total_duration_seconds: number;
+  tool_use_summary: Record<string, number>;
+  exit_reason_counts: Record<string, number>;
+  avg_tokens_per_run: number;
+  crash_rate: number;
+}
+
+export interface GlobalStats {
+  total_tasks_with_stats: number;
+  total_runs: number;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  total_cache_tokens: number;
+  total_cost_usd: number;
+  total_duration_seconds: number;
+  tool_use_summary: Record<string, number>;
+  exit_reason_counts: Record<string, number>;
+  avg_tokens_per_run: number;
+}
+
 // --- AI Tools Inventory ---
 
 export interface AiToolEntry {
