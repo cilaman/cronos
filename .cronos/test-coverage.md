@@ -1,10 +1,11 @@
 # Test Coverage — cronos-development
 
-**Last updated:** 2026-05-18
-**Overall backend coverage:** 64.76% (339 passed, 7 skipped)
-**Frontend tests:** 24 passed
+**Updated**: 2026-05-19T14:57:00Z
+**Overall**: 73.41% (+2.99% vs previous)
+**Passed**: 507 | **Failed**: 0 | **Total**: 507
+**Backend**: 419 passed (pytest) | **Frontend**: 88 passed (vitest)
 
-## Backend (pytest)
+## Per-module coverage (backend)
 
 | Module | Coverage |
 |--------|----------|
@@ -12,53 +13,108 @@
 | app/api/activity.py | 100% |
 | app/models.py | 100% |
 | app/test_report.py | 100% |
+| app/stats.py | 98% |
 | app/api/stats.py | 97% |
 | app/api/tools.py | 96% |
-| app/stats.py | 94% |
-| app/api/traces.py | 93% |
-| app/trace_parser.py | 92% |
-| app/api/spaces.py | 91% |
+| app/api/traces.py | 92% |
+| app/trace_parser.py | 91% |
+| app/api/spaces.py | 90% |
+| app/file_service.py | 90% |
 | app/stats_store.py | 85% |
 | app/trace_store.py | 84% |
 | app/test_report_store.py | 83% |
-| app/storage.py | 71% |
+| app/agent.py | 83% |
+| app/storage.py | 76% |
 | app/api/test_reports.py | 70% |
 | app/space_storage.py | 59% |
-| app/api/tasks.py | 54% |
-| app/agent.py | 53% |
+| app/worker.py | 58% |
+| app/api/tasks.py | 55% |
 | app/worker_pool.py | 30% |
 | app/main.py | 29% |
 | app/git_ops.py | 21% |
-| app/file_service.py | 19% |
-| app/worker.py | 14% |
 
-## Frontend (vitest)
+## Recent changes (2026-05-19 — file_service coverage pass)
 
-| File | Tests |
-|------|-------|
-| src/hooks/__tests__/useStats.test.ts | 5 passed |
-| src/utils/__tests__/format.test.ts | 12 passed |
-| src/components/__tests__/TestStatusBadge.test.tsx | 7 passed |
+Added 25 tests covering `app/file_service.py`, which was the lowest-covered
+backend module at 19%. Coverage of that module is now 90% (+71 pts) and
+overall backend+frontend coverage moved from 70.42% to 73.41% (+2.99 pts).
 
-## Coverage gaps (lowest priority targets)
+New test file: `backend/tests/test_file_service.py` (25 tests):
 
-1. `app/worker.py` (14%) — worker lifecycle and event handling; requires mocking Claude subprocess
-2. `app/file_service.py` (19%) — file read/write helpers; add integration tests with temp dirs
-3. `app/git_ops.py` (21%) — git operations; needs git repo fixtures
-4. `app/main.py` (29%) — FastAPI startup and lifespan; tested via integration
-5. `app/worker_pool.py` (30%) — pool management; mocking required
+- **`classify_file` (6 tests)** — image/text/code/document/archive/binary
+  extension mapping; AI prefix rules (`.claude/agents/`, `.claude/skills/`,
+  `.claude/commands/`, `.claude/context/`, exact `.claude/CONTEXT.md`)
+  taking priority over extension; backslash normalisation.
+- **`resolve_safe` (4 tests)** — simple in-root resolution; leading-slash
+  and backslash normalisation; traversal attempts via `../` raise
+  `ValueError`; empty path resolves to root.
+- **`list_files` (7 tests)** — basic tree walk with sizes, categories,
+  is_dir flags; hidden files skipped outside `.claude/`; `.claude/` dir
+  itself stays hidden by the walker; `skip_prefixes` excludes named dirs
+  (e.g. `.cronos`); `max_entries` bound respected; directory-before-file
+  sort order; entries are `FileEntry` instances.
+- **`list_git_changed_files` (2 tests)** — returns `None` when path is
+  not a git repo; in a real repo correctly reports modified + untracked
+  files while excluding deleted ones and sorts results by path.
+- **`save_upload` (6 tests)** — round-trip write returns a populated
+  `FileEntry` and cleans up the `.tmp` file; filename basename is taken
+  so path components in `upload.filename` cannot escape the target dir;
+  traversal in the `rel_subdir` argument raises `ValueError`; oversized
+  uploads raise `ValueError` and leave no partial/temp file behind;
+  intermediate target directories are created; missing filename falls
+  back to literal `"upload"`.
 
-## New tests added (2026-05-18)
+All 25 tests pass on first run; no regressions introduced in the rest of
+the suite (backend 419 passed, frontend 88 passed).
 
-**test_api_tools.py** — 41 tests covering `app/api/tools.py` (13% → 96%):
-- `_mtime_iso`: existing file and missing file
-- `_extract_description`: YAML frontmatter (quoted/unquoted/single), fallback to first paragraph, empty file, missing file, separator lines, length truncation
-- `_scan_category`: empty/missing dirs, markdown discovery, scope, recursive mode, non-markdown ignored
-- `_scan_skills`: flat files, directory-based, deduplication, missing SKILL.md
-- `_scan_context`: CONTEXT.md, context dir files, combined
-- `_parse_settings`: missing/invalid JSON, allow/deny permissions, hooks with and without matchers, empty command skipped, non-string patterns
-- API endpoint: 404 for unknown space, empty space, with agents, with settings, CLAUDE.md detection
+## Recent changes (2026-05-19 — agent identification in history)
 
-**Bug fixed:** `_extract_description` fallback phase used `line != lines[0]` to detect closing `---`,
-which always compared content rather than position — so any file with frontmatter but no `description:` field
-returned `None` instead of falling back to the first paragraph. Fixed to use `i > 0` index check.
+Added 28 tests covering the new subagent-types-in-history feature
+(commit context: `_extract_subagent_types` + `agents=` header field):
+
+- **test_worker.py** (+20 tests):
+  - 13 tests covering `_extract_subagent_types(events)` directly:
+    empty input; no Agent calls; single call lowercased; dedup
+    across mixed case; insertion-order preservation; missing/non-
+    string/empty `subagent_type`; non-assistant events ignored;
+    other tool names ignored; malformed event shapes tolerated.
+  - 3 tests covering `_finalize()` history-entry serialization
+    of the new `agents=` field: appended when subagents used;
+    omitted when not; dedup+lowercase in header CSV.
+- **parse-history.test.ts** (+8 tests):
+  - `agents=` parsing into `AgentInfo.agents` (single, multi, missing,
+    empty, key-order independence, full multi-entry round-trip,
+    empty-token filter).
+
+Worker module coverage moved from 14.3% → 57.7% (+43 pts) because
+`_finalize()` now executes via these tests with realistic event
+fixtures. All tests pass on first run; no regressions.
+
+## Recent changes (2026-05-19 — tasks mode visualization)
+
+Added 8 tests covering the `agent_mode` propagation from Task to TaskSummary
+(the data path that lets the frontend render mode badges on board cards):
+
+- **test_storage.py** (+6 tests) — `summarize()` direct unit tests for
+  `agent_mode` defaulting and propagation (`auto`, `plan`, `ask`), plus a
+  preserves-other-fields check, plus `task_store.board()` integration tests
+  for default-mode and non-default-mode tasks.
+- **test_api_tasks.py** (+2 tests) — `GET /api/tasks` board responses now
+  verified to include `agent_mode` on each summary (both default `"auto"`
+  and explicitly-set `"plan"`).
+
+Frontend `Card.test.tsx` (+5 tests, by feature author) covers the badge
+rendering matrix: Auto shown only in full mode; Plan and Ask shown in both
+full and compact modes.
+
+All tests pass on first run; no regressions introduced.
+
+## Recent changes (2026-05-18 second pass)
+
+Added 27 tests covering the worker/agent fixes in commit `cbf5fa4`:
+
+- **test_worker.py** (NEW, 19 tests) — `Worker._finalize()` state resolution
+  for false-CRASHED scenarios; verifies that successful runs are not
+  misclassified as crashes when STATUS markers are present.
+- **test_agent.py** (+8 tests) — STATUS marker parsing for both modern
+  and legacy formats; trims whitespace and handles missing markers.
