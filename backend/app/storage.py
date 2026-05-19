@@ -152,6 +152,7 @@ def summarize(task: Task) -> TaskSummary:
         brief_preview=preview,
         priority=task.priority,
         manual_order=task.manual_order,
+        agent_mode=task.agent_mode,
     )
 
 

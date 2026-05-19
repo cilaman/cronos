@@ -3,7 +3,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { cn } from "../utils/cn";
 import { formatRelative } from "../utils/format";
 import { SpaceTag } from "./ui/SpaceTag";
-import type { TaskSummary } from "../types";
+import type { AgentMode, TaskSummary } from "../types";
 
 const PRIORITY_STYLES: Record<number, { badge: string; dot: string }> = {
   1: {
@@ -28,6 +28,18 @@ const PRIORITY_STYLES: Record<number, { badge: string; dot: string }> = {
   },
 };
 
+const MODE_STYLES: Record<AgentMode, string> = {
+  plan: "border-indigo-200 bg-indigo-50 text-indigo-600 dark:border-indigo-400/30 dark:bg-indigo-400/10 dark:text-indigo-400",
+  auto: "border-hairline bg-surface-2 text-ink-faint",
+  ask: "border-violet-200 bg-violet-50 text-violet-600 dark:border-violet-400/30 dark:bg-violet-400/10 dark:text-violet-400",
+};
+
+const MODE_LABELS: Record<AgentMode, string> = {
+  plan: "Plan",
+  auto: "Auto",
+  ask: "Ask",
+};
+
 interface Props {
   task: TaskSummary;
   onClick: () => void;
@@ -50,6 +62,8 @@ export function Card({ task, onClick, compact = false, isDragOverlay = false }: 
   const borderColor = task.space_color ?? "rgb(var(--color-hairline-strong))";
   const priority = task.priority ?? 3;
   const pStyle = PRIORITY_STYLES[priority] ?? PRIORITY_STYLES[3];
+  const mode = task.agent_mode ?? "auto";
+  const showModeBadge = !compact || mode !== "auto";
 
   return (
     <div
@@ -93,6 +107,16 @@ export function Card({ task, onClick, compact = false, isDragOverlay = false }: 
               name={task.space_name}
               size="xs"
             />
+          )}
+          {showModeBadge && (
+            <span
+              className={cn(
+                "inline-flex items-center rounded border px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide",
+                MODE_STYLES[mode],
+              )}
+            >
+              {MODE_LABELS[mode]}
+            </span>
           )}
         </div>
 

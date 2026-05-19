@@ -35,6 +35,7 @@ export interface TaskSummary {
   brief_preview: string;
   priority: number;
   manual_order: number;
+  agent_mode: AgentMode;
   space_name: string | null;
   space_color: string | null;
   space_icon: string | null;

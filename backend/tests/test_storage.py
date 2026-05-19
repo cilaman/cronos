@@ -16,6 +16,7 @@ from app.storage import (
     generate_task_id,
     parse_file,
     slugify,
+    summarize,
 )
 
 from .conftest import SPACE_ID
@@ -335,3 +336,89 @@ async def test_archive_stale_done_tasks_skips_recent(task_store):
     count = await task_store.archive_stale_done_tasks(threshold_days=7)
     assert count == 0
     assert task_store.get(task.id).state == TaskState.DONE
+
+
+# ---------------------------------------------------------------------------
+# summarize() — agent_mode propagation onto TaskSummary
+# ---------------------------------------------------------------------------
+
+
+def _make_task(**overrides):
+    """Build a Task model with sensible defaults for summarize() tests."""
+    from app.models import Task
+
+    now = datetime(2025, 6, 1, 12, 0, tzinfo=UTC)
+    defaults = dict(
+        id="2025-06-01-1200-summarize-task",
+        space_id=SPACE_ID,
+        title="Summarize Me",
+        state=TaskState.BACKLOG,
+        created_at=now,
+        updated_at=now,
+        brief="A brief.",
+        history="",
+    )
+    defaults.update(overrides)
+    return Task(**defaults)
+
+
+def test_summarize_defaults_agent_mode_to_auto():
+    task = _make_task()
+    # Task model default is "auto"; summarize() should preserve that.
+    summary = summarize(task)
+    assert summary.agent_mode == "auto"
+
+
+def test_summarize_propagates_agent_mode_plan():
+    task = _make_task(agent_mode="plan")
+    summary = summarize(task)
+    assert summary.agent_mode == "plan"
+
+
+def test_summarize_propagates_agent_mode_ask():
+    task = _make_task(agent_mode="ask")
+    summary = summarize(task)
+    assert summary.agent_mode == "ask"
+
+
+def test_summarize_preserves_other_fields_with_custom_mode():
+    """agent_mode must not clobber the rest of the summary."""
+    task = _make_task(
+        agent_mode="plan",
+        title="My Title",
+        brief="Short brief.",
+        priority=2,
+        manual_order=7,
+    )
+    summary = summarize(task)
+    assert summary.agent_mode == "plan"
+    assert summary.title == "My Title"
+    assert summary.brief_preview == "Short brief."
+    assert summary.priority == 2
+    assert summary.manual_order == 7
+    assert summary.id == task.id
+    assert summary.space_id == task.space_id
+    assert summary.state == task.state
+
+
+async def test_task_store_board_summary_includes_agent_mode(task_store):
+    """End-to-end: a task created with non-default agent_mode shows up
+    in board() summaries with the correct mode."""
+    task = await task_store.create(
+        space_id=SPACE_ID, title="Plan Task", brief="", agent_mode="plan"
+    )
+    board = task_store.board(SPACE_ID)
+    matches = [s for s in board.backlog if s.id == task.id]
+    assert len(matches) == 1
+    assert matches[0].agent_mode == "plan"
+
+
+async def test_task_store_board_summary_default_agent_mode_auto(task_store):
+    """Tasks created without agent_mode default to "auto" in the summary."""
+    task = await task_store.create(
+        space_id=SPACE_ID, title="Default Mode Task", brief=""
+    )
+    board = task_store.board(SPACE_ID)
+    matches = [s for s in board.backlog if s.id == task.id]
+    assert len(matches) == 1
+    assert matches[0].agent_mode == "auto"
