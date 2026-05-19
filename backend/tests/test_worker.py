@@ -24,7 +24,7 @@ from app.models import TaskState
 from app.stats_store import StatsStore
 from app.storage import TaskStore, WORKER_TRANSITIONS
 from app.trace_store import TraceStore
-from app.worker import Worker
+from app.worker import Worker, _extract_subagent_types
 
 SPACE_ID = "test-space"
 
@@ -510,3 +510,310 @@ async def test_finalize_history_entry_falls_back_to_task_agent_model(
     assert "mode=auto" in first_line
     # Must NOT contain a stray "None" leaked through from missing real_model.
     assert "model=None" not in first_line
+
+
+# ---------------------------------------------------------------------------
+# _extract_subagent_types: pure unit tests on the event-stream helper
+# ---------------------------------------------------------------------------
+
+
+def _agent_tool_use_event(
+    subagent_type: object,
+    *,
+    name: str = "Agent",
+    extra_blocks: list[dict] | None = None,
+) -> dict:
+    """Build an `assistant` event containing one Agent tool_use block.
+
+    `subagent_type` may be any value (including None, non-string, missing-via
+    sentinel) to drive negative paths. Pass the sentinel `_OMIT` to omit the
+    `subagent_type` key from the input entirely.
+    """
+    inp: dict = {}
+    if subagent_type is not _OMIT:
+        inp["subagent_type"] = subagent_type
+    blocks: list[dict] = [
+        {
+            "type": "tool_use",
+            "name": name,
+            "id": "toolu_x",
+            "input": inp,
+        }
+    ]
+    if extra_blocks:
+        blocks.extend(extra_blocks)
+    return {"type": "assistant", "message": {"content": blocks}}
+
+
+# Sentinel for "do not put this key in the dict at all" in test inputs.
+_OMIT = object()
+
+
+def test_extract_subagent_types_empty_events_returns_empty_list():
+    assert _extract_subagent_types([]) == []
+
+
+def test_extract_subagent_types_no_agent_calls_returns_empty_list():
+    """Events without any Agent tool_use blocks return []."""
+    events = [
+        {"type": "system", "message": {"content": []}},
+        {
+            "type": "assistant",
+            "message": {
+                "content": [
+                    {"type": "text", "text": "hello"},
+                    {"type": "tool_use", "name": "Read", "input": {"file_path": "/x"}},
+                ]
+            },
+        },
+        {"type": "user", "message": {"content": []}},
+    ]
+    assert _extract_subagent_types(events) == []
+
+
+def test_extract_subagent_types_single_explore_call_lowercased():
+    """A single Agent call with `subagent_type='Explore'` returns ['explore']."""
+    events = [_agent_tool_use_event("Explore")]
+    assert _extract_subagent_types(events) == ["explore"]
+
+
+def test_extract_subagent_types_already_lowercase_passes_through():
+    events = [_agent_tool_use_event("test-architect")]
+    assert _extract_subagent_types(events) == ["test-architect"]
+
+
+def test_extract_subagent_types_dedupes_repeated_same_type():
+    """Repeated calls of the same subagent_type are collapsed to one entry."""
+    events = [
+        _agent_tool_use_event("Explore"),
+        _agent_tool_use_event("explore"),
+        _agent_tool_use_event("EXPLORE"),
+    ]
+    assert _extract_subagent_types(events) == ["explore"]
+
+
+def test_extract_subagent_types_preserves_insertion_order_across_distinct_types():
+    """Distinct types are returned in their first-seen order."""
+    events = [
+        _agent_tool_use_event("Plan"),
+        _agent_tool_use_event("Explore"),
+        _agent_tool_use_event("test-architect"),
+    ]
+    assert _extract_subagent_types(events) == ["plan", "explore", "test-architect"]
+
+
+def test_extract_subagent_types_preserves_first_seen_order_with_dupes_mixed_in():
+    """If a type repeats *after* a later type appears, the order does not change."""
+    events = [
+        _agent_tool_use_event("Plan"),
+        _agent_tool_use_event("Explore"),
+        _agent_tool_use_event("Plan"),  # dupe; must not move
+        _agent_tool_use_event("test-architect"),
+        _agent_tool_use_event("Explore"),  # dupe; must not move
+    ]
+    assert _extract_subagent_types(events) == ["plan", "explore", "test-architect"]
+
+
+def test_extract_subagent_types_skips_missing_subagent_type_key():
+    events = [_agent_tool_use_event(_OMIT)]
+    assert _extract_subagent_types(events) == []
+
+
+def test_extract_subagent_types_skips_non_string_subagent_type():
+    """A non-string subagent_type (int, dict, None) is skipped gracefully."""
+    events = [
+        _agent_tool_use_event(None),
+        _agent_tool_use_event(42),
+        _agent_tool_use_event({"nested": "thing"}),
+        _agent_tool_use_event(["list", "type"]),
+    ]
+    assert _extract_subagent_types(events) == []
+
+
+def test_extract_subagent_types_skips_empty_string_subagent_type():
+    """An empty-string subagent_type is treated as missing."""
+    events = [_agent_tool_use_event("")]
+    assert _extract_subagent_types(events) == []
+
+
+def test_extract_subagent_types_mixes_valid_and_invalid_inputs():
+    """Invalid entries are skipped but valid ones are still collected in order."""
+    events = [
+        _agent_tool_use_event(None),
+        _agent_tool_use_event("Explore"),
+        _agent_tool_use_event(""),
+        _agent_tool_use_event("test-architect"),
+        _agent_tool_use_event(123),
+    ]
+    assert _extract_subagent_types(events) == ["explore", "test-architect"]
+
+
+def test_extract_subagent_types_ignores_non_assistant_events():
+    """Agent-like tool_use blocks in non-assistant events are ignored."""
+    events = [
+        {
+            "type": "system",  # not assistant
+            "message": {
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "name": "Agent",
+                        "input": {"subagent_type": "Explore"},
+                    }
+                ]
+            },
+        },
+        {
+            "type": "user",  # not assistant
+            "message": {
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "name": "Agent",
+                        "input": {"subagent_type": "Plan"},
+                    }
+                ]
+            },
+        },
+    ]
+    assert _extract_subagent_types(events) == []
+
+
+def test_extract_subagent_types_ignores_other_tool_uses_in_same_event():
+    """Only tool_use blocks named exactly 'Agent' contribute."""
+    events = [
+        {
+            "type": "assistant",
+            "message": {
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "name": "Read",
+                        "input": {"subagent_type": "Explore"},  # wrong name
+                    },
+                    {
+                        "type": "tool_use",
+                        "name": "Bash",
+                        "input": {"subagent_type": "Plan"},  # wrong name
+                    },
+                    {
+                        "type": "tool_use",
+                        "name": "Agent",
+                        "input": {"subagent_type": "test-architect"},  # the only valid one
+                    },
+                ]
+            },
+        }
+    ]
+    assert _extract_subagent_types(events) == ["test-architect"]
+
+
+def test_extract_subagent_types_tolerates_malformed_event_shapes():
+    """Various shape oddities must not raise; they are just skipped."""
+    events = [
+        {"type": "assistant"},  # no message
+        {"type": "assistant", "message": None},  # message is None
+        {"type": "assistant", "message": "string-not-dict"},  # message wrong type
+        {"type": "assistant", "message": {}},  # missing content
+        {"type": "assistant", "message": {"content": None}},  # content None
+        {"type": "assistant", "message": {"content": "not-a-list"}},  # content wrong type
+        {
+            "type": "assistant",
+            "message": {"content": [None, "string", 5]},  # blocks not dicts
+        },
+        {
+            "type": "assistant",
+            "message": {
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "name": "Agent",
+                        "input": "not-a-dict",  # input wrong type
+                    }
+                ]
+            },
+        },
+        # And one valid event at the end to prove iteration continues.
+        _agent_tool_use_event("Explore"),
+    ]
+    assert _extract_subagent_types(events) == ["explore"]
+
+
+# ---------------------------------------------------------------------------
+# _finalize: agents=... metadata in the history entry
+# ---------------------------------------------------------------------------
+
+
+def _make_result_with_agents(
+    subagent_types: list[str],
+    *,
+    real_model: str = "claude-sonnet-4-6-20250620",
+) -> AgentResult:
+    """Build an AgentResult whose raw_events include one Agent tool_use per type.
+
+    Each subagent type is wrapped in its own assistant event so insertion-order
+    matches the input list.
+    """
+    raw_events: list[dict] = [_assistant_event(real_model)]
+    for t in subagent_types:
+        raw_events.append(_agent_tool_use_event(t))
+    return AgentResult(
+        exit_code=0,
+        session_id="sess-xyz",
+        final_text="all done.",
+        stderr_tail="",
+        status=Status.DONE,
+        context=None,
+        raw_events=raw_events,
+        stopped=False,
+        result_subtype=None,
+    )
+
+
+async def test_finalize_history_entry_appends_agents_field_when_subagents_used(
+    worker, task_store
+):
+    """History header gains `agents=<csv>` when Agent tool calls were made."""
+    task_id = await _active_task(task_store)
+    result = _make_result_with_agents(["Explore", "test-architect"])
+
+    await worker._finalize(task_id, result)
+
+    task = task_store.get(task_id)
+    first_line = task.history.splitlines()[1]
+    assert "[agent]" in first_line
+    assert "run=0" in first_line
+    # Order matches insertion; types are lowercased.
+    assert "agents=explore,test-architect" in first_line
+
+
+async def test_finalize_history_entry_omits_agents_field_when_no_subagents(
+    worker, task_store
+):
+    """History header has no `agents=` segment when no Agent calls were made."""
+    task_id = await _active_task(task_store)
+    result = _make_result_with_model("claude-sonnet-4-6-20250620")
+
+    await worker._finalize(task_id, result)
+
+    task = task_store.get(task_id)
+    first_line = task.history.splitlines()[1]
+    assert "[agent]" in first_line
+    # Bare key must not appear at all when the list is empty.
+    assert "agents=" not in first_line
+
+
+async def test_finalize_history_entry_agents_dedupes_and_lowercases(
+    worker, task_store
+):
+    """Repeated and mixed-case subagent_types are normalised in the header."""
+    task_id = await _active_task(task_store)
+    result = _make_result_with_agents(
+        ["Explore", "EXPLORE", "Plan", "explore", "test-architect"]
+    )
+
+    await worker._finalize(task_id, result)
+
+    task = task_store.get(task_id)
+    first_line = task.history.splitlines()[1]
+    assert "agents=explore,plan,test-architect" in first_line

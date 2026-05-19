@@ -202,6 +202,9 @@ class Worker:
         model_label = real_model or (task_pre.agent_model if task_pre else "default")
         mode_label = task_pre.agent_mode if task_pre else "auto"
         agent_meta = f"run={run_index} model={model_label} mode={mode_label}"
+        subagent_types = _extract_subagent_types(result.raw_events)
+        if subagent_types:
+            agent_meta += f" agents={','.join(subagent_types)}"
         prefix = f"```\n{timestamp} [agent] {agent_meta}\n"
 
         body = result.final_text.strip() or "(no assistant text)"
@@ -400,6 +403,36 @@ class Worker:
                     q.put_nowait(event)
                 except asyncio.QueueFull:
                     pass
+
+
+def _extract_subagent_types(events: list[dict]) -> list[str]:
+    """Return ordered-unique lowercase subagent types from Agent tool calls in the event stream."""
+    seen: list[str] = []
+    seen_set: set[str] = set()
+    for event in events:
+        if event.get("type") != "assistant":
+            continue
+        msg = event.get("message")
+        if not isinstance(msg, dict):
+            continue
+        content = msg.get("content")
+        if not isinstance(content, list):
+            continue
+        for block in content:
+            if not isinstance(block, dict):
+                continue
+            if block.get("type") != "tool_use" or block.get("name") != "Agent":
+                continue
+            inp = block.get("input")
+            if not isinstance(inp, dict):
+                continue
+            subtype = inp.get("subagent_type")
+            if isinstance(subtype, str) and subtype:
+                key = subtype.lower()
+                if key not in seen_set:
+                    seen_set.add(key)
+                    seen.append(key)
+    return seen
 
 
 async def sse_events(task_id: str, worker: Worker) -> AsyncIterator[str]:

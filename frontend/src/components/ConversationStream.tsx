@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AgentInfo, parseHistory } from "../parse-history";
+import { AGENT_TYPE_COLOR } from "./ConversationEntry";
 import {
   LiveStatus,
   StreamEntry,
@@ -18,6 +19,25 @@ import { ToolCallBlock, ToolResultBlock } from "./ToolBlock";
 
 interface Props {
   task: Task;
+}
+
+interface ActiveSubagentPillProps {
+  subtype: string;
+}
+
+function ActiveSubagentPill({ subtype }: ActiveSubagentPillProps) {
+  const color = AGENT_TYPE_COLOR[subtype] ?? "text-ink-faint";
+  return (
+    <span
+      className={`inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.18em] ${color}`}
+    >
+      <span
+        aria-hidden
+        className="anim-pulse-dot inline-block h-1 w-1 rounded-full bg-current"
+      />
+      {subtype}
+    </span>
+  );
 }
 
 function StatusPill({ status }: { status: LiveStatus }) {
@@ -155,6 +175,26 @@ export function ConversationStream({ task }: Props) {
   };
   const { blocks, resultByToolUseId } = bucket;
 
+  // Derive the currently-running subagent: last Agent tool_call whose toolUseId
+  // has no matching tool_result yet in this stream.
+  const activeSubagent = useMemo<string | null>(() => {
+    if (liveStatus !== "live") return null;
+    for (const block of [...blocks].reverse()) {
+      if (block.kind !== "group") continue;
+      for (const call of [...block.group.toolCalls].reverse()) {
+        if (call.name !== "Agent") continue;
+        if (resultByToolUseId.has(call.toolUseId)) continue;
+        const inp = call.input as Record<string, unknown> | null;
+        const subtype =
+          inp && typeof inp["subagent_type"] === "string"
+            ? (inp["subagent_type"] as string).toLowerCase()
+            : null;
+        return subtype;
+      }
+    }
+    return null;
+  }, [blocks, resultByToolUseId, liveStatus]);
+
   const lastGroupIdx = useMemo(() => {
     for (let i = blocks.length - 1; i >= 0; i--) {
       if (blocks[i].kind === "group") return i;
@@ -215,7 +255,10 @@ export function ConversationStream({ task }: Props) {
         <h3 className="font-display text-[10px] font-semibold uppercase tracking-[0.24em] text-ink-faint">
           Conversation
         </h3>
-        {streamEnabled && <StatusPill status={liveStatus} />}
+        <div className="flex items-center gap-2">
+          {activeSubagent && <ActiveSubagentPill subtype={activeSubagent} />}
+          {streamEnabled && <StatusPill status={liveStatus} />}
+        </div>
       </div>
 
       <div className="rounded border border-hairline bg-canvas/40 px-3 py-1 shadow-inset-hairline">
