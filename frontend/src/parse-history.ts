@@ -4,6 +4,7 @@ export interface AgentInfo {
   runIndex: number;
   model: string;
   mode: string;
+  agents?: string[]; // subagent types called during this run, e.g. ["explore", "test-architect"]
 }
 
 export interface HistoryEntry {
@@ -53,7 +54,9 @@ function parseAgentMeta(meta: string): AgentInfo | undefined {
   if (runStr === undefined || !model || !mode) return undefined;
   const runIndex = parseInt(runStr, 10);
   if (isNaN(runIndex)) return undefined;
-  return { runIndex, model, mode };
+  const agentsStr = parts["agents"];
+  const agents = agentsStr ? agentsStr.split(",").filter(Boolean) : undefined;
+  return { runIndex, model, mode, agents };
 }
 
 export function parseHistory(raw: string): ParsedHistoryItem[] {

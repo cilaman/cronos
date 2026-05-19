@@ -38,6 +38,16 @@ const MODEL_COLOR: Record<string, string> = {
   haiku: "text-emerald-400",
 };
 
+export const AGENT_TYPE_COLOR: Record<string, string> = {
+  explore: "text-sky-400",
+  plan: "text-purple-400",
+  "test-architect": "text-emerald-400",
+  tester: "text-emerald-300",
+  "security-officer": "text-rose-400",
+  "general-purpose": "text-amber-400",
+  claude: "text-accent-bright",
+};
+
 function RoleTag({
   role,
   streaming,
@@ -82,6 +92,21 @@ function AgentBadge({ info }: { info: AgentInfo }) {
       <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-ink-faint/70">
         {info.mode}
       </span>
+      {info.agents && info.agents.length > 0 && (
+        <div className="flex flex-col gap-px">
+          {info.agents.map((agent) => {
+            const color = AGENT_TYPE_COLOR[agent] ?? "text-ink-faint";
+            return (
+              <span
+                key={agent}
+                className={`font-mono text-[8px] tracking-[0.10em] ${color}`}
+              >
+                ↳ {agent}
+              </span>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

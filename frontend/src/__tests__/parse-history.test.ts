@@ -210,3 +210,127 @@ describe("parseHistory — multi-entry streams with mixed metadata", () => {
     expect(parseHistory("   \n  ")).toEqual([]);
   });
 });
+
+describe("parseHistory — agents= subagent-types metadata", () => {
+  it("parses agents=explore,test-architect into AgentInfo.agents", () => {
+    const raw = entry(
+      "2024-01-15T14:30:45Z [agent] run=0 model=sonnet mode=auto agents=explore,test-architect",
+      "body"
+    );
+    const h = asHistory(parseHistory(raw)[0]);
+    expect(h.agentInfo).toBeDefined();
+    expect(h.agentInfo?.agents).toEqual(["explore", "test-architect"]);
+    // Other fields still parsed correctly.
+    expect(h.agentInfo?.runIndex).toBe(0);
+    expect(h.agentInfo?.model).toBe("sonnet");
+    expect(h.agentInfo?.mode).toBe("auto");
+  });
+
+  it("leaves agents undefined when the agents= key is absent", () => {
+    const raw = entry(
+      "2024-01-15T14:30:45Z [agent] run=0 model=sonnet mode=auto",
+      "body"
+    );
+    const h = asHistory(parseHistory(raw)[0]);
+    expect(h.agentInfo).toBeDefined();
+    expect(h.agentInfo?.agents).toBeUndefined();
+  });
+
+  it("leaves agents undefined when agents= is an empty string", () => {
+    const raw = entry(
+      "2024-01-15T14:30:45Z [agent] run=0 model=sonnet mode=auto agents=",
+      "body"
+    );
+    const h = asHistory(parseHistory(raw)[0]);
+    expect(h.agentInfo).toBeDefined();
+    // Empty agents= is normalized away rather than carrying an empty array.
+    expect(h.agentInfo?.agents).toBeUndefined();
+  });
+
+  it("parses a single-agent value into a one-element array", () => {
+    const raw = entry(
+      "2024-01-15T14:30:45Z [agent] run=2 model=sonnet mode=plan agents=explore",
+      "body"
+    );
+    const h = asHistory(parseHistory(raw)[0]);
+    expect(h.agentInfo?.agents).toEqual(["explore"]);
+  });
+
+  it("preserves order and case as written in the header", () => {
+    // The backend lowercases before writing, but the frontend parser doesn't
+    // re-lowercase — it just splits. So we verify it preserves what it sees.
+    const raw = entry(
+      "2024-01-15T14:30:45Z [agent] run=0 model=sonnet mode=auto agents=plan,explore,test-architect",
+      "body"
+    );
+    const h = asHistory(parseHistory(raw)[0]);
+    expect(h.agentInfo?.agents).toEqual(["plan", "explore", "test-architect"]);
+  });
+
+  it("filters out empty tokens from comma-separated agents (e.g. 'a,,b')", () => {
+    const raw = entry(
+      "2024-01-15T14:30:45Z [agent] run=0 model=sonnet mode=auto agents=explore,,test-architect",
+      "body"
+    );
+    const h = asHistory(parseHistory(raw)[0]);
+    expect(h.agentInfo?.agents).toEqual(["explore", "test-architect"]);
+  });
+
+  it("survives a full round-trip across multiple entries with mixed agents metadata", () => {
+    const raw =
+      entry("2024-01-15T14:30:00Z [user]", "go") +
+      "\n\n" +
+      entry(
+        "2024-01-15T14:30:10Z [agent] run=0 model=sonnet mode=auto",
+        "no subagents this turn"
+      ) +
+      "\n\n" +
+      entry(
+        "2024-01-15T14:31:00Z [agent] run=1 model=sonnet mode=auto agents=explore",
+        "delegated to explore"
+      ) +
+      "\n\n" +
+      entry(
+        "2024-01-15T14:32:00Z [agent] run=2 model=opus mode=plan agents=explore,test-architect,plan",
+        "delegated to three"
+      );
+
+    const items = parseHistory(raw);
+    expect(items).toHaveLength(4);
+
+    // User entry: no agentInfo.
+    expect(asHistory(items[0]).agentInfo).toBeUndefined();
+
+    // First agent run: agentInfo present, agents absent.
+    const r0 = asHistory(items[1]).agentInfo;
+    expect(r0).toBeDefined();
+    expect(r0?.runIndex).toBe(0);
+    expect(r0?.agents).toBeUndefined();
+
+    // Second agent run: single agent.
+    const r1 = asHistory(items[2]).agentInfo;
+    expect(r1?.runIndex).toBe(1);
+    expect(r1?.agents).toEqual(["explore"]);
+
+    // Third agent run: three agents in input order.
+    const r2 = asHistory(items[3]).agentInfo;
+    expect(r2?.runIndex).toBe(2);
+    expect(r2?.model).toBe("opus");
+    expect(r2?.mode).toBe("plan");
+    expect(r2?.agents).toEqual(["explore", "test-architect", "plan"]);
+  });
+
+  it("still parses agents when keys appear in a different order", () => {
+    const raw = entry(
+      "2024-01-15T14:30:45Z [agent] agents=explore,plan mode=auto model=sonnet run=4",
+      "body"
+    );
+    const h = asHistory(parseHistory(raw)[0]);
+    expect(h.agentInfo).toEqual({
+      runIndex: 4,
+      model: "sonnet",
+      mode: "auto",
+      agents: ["explore", "plan"],
+    });
+  });
+});

@@ -1,6 +1,7 @@
 import { useState } from "react";
+import { AGENT_TYPE_COLOR } from "./ConversationEntry";
 
-type ToolFamily = "read" | "write" | "shell" | "web" | "task" | "other";
+type ToolFamily = "read" | "write" | "shell" | "web" | "task" | "agent" | "other";
 
 const READ_TOOLS = new Set(["Read", "Grep", "Glob", "LS", "NotebookRead"]);
 const WRITE_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
@@ -9,6 +10,7 @@ const WEB_TOOLS = new Set(["WebFetch", "WebSearch"]);
 const TASK_TOOLS = new Set(["Task", "TodoWrite", "ExitPlanMode"]);
 
 function familyOf(name: string): ToolFamily {
+  if (name === "Agent") return "agent";
   if (READ_TOOLS.has(name)) return "read";
   if (WRITE_TOOLS.has(name)) return "write";
   if (SHELL_TOOLS.has(name)) return "shell";
@@ -45,6 +47,11 @@ const FAMILY_TONE: Record<
     name: "text-ink",
     bracket: "text-ink-faint",
     rule: "border-hairline-strong",
+  },
+  agent: {
+    name: "text-ink-muted",
+    bracket: "text-ink-faint",
+    rule: "border-ink-faint/40",
   },
   other: {
     name: "text-ink-muted",
@@ -93,6 +100,120 @@ function formatInput(input: unknown): string {
   }
 }
 
+interface AgentInput {
+  subagent_type?: string;
+  description?: string;
+  prompt?: string;
+}
+
+function isAgentInput(v: unknown): v is AgentInput {
+  return typeof v === "object" && v !== null;
+}
+
+function AgentCallBlock({
+  input,
+  matchedResult,
+}: {
+  input: unknown;
+  matchedResult?: { output: string; isError: boolean } | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const [expandedOutput, setExpandedOutput] = useState(false);
+  const ai = isAgentInput(input) ? input : {};
+  const subtype = (ai.subagent_type ?? "").toLowerCase();
+  const description = ai.description ?? ai.prompt ?? "";
+  const accentColor = AGENT_TYPE_COLOR[subtype] ?? "text-ink-faint";
+  const borderColor =
+    subtype === "explore"
+      ? "border-sky-500/50"
+      : subtype === "plan"
+        ? "border-purple-500/50"
+        : subtype === "test-architect" || subtype === "tester"
+          ? "border-emerald-500/50"
+          : subtype === "security-officer"
+            ? "border-rose-500/50"
+            : subtype === "general-purpose"
+              ? "border-amber-500/50"
+              : "border-accent/40";
+
+  const matched = matchedResult ?? null;
+  const hasError = matched?.isError ?? false;
+  const outputLines = matched ? matched.output.split("\n") : [];
+  const shouldTruncate = outputLines.length > OUTPUT_LINE_LIMIT;
+  const displayedOutput = matched
+    ? shouldTruncate && !expandedOutput
+      ? outputLines.slice(0, OUTPUT_LINE_LIMIT).join("\n")
+      : matched.output
+    : "";
+
+  return (
+    <div className={`border-l-2 ${hasError ? "border-danger/80" : borderColor}`}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-2 px-2 py-1 text-left font-mono text-[11px] transition hover:bg-surface-2/40 focus:outline-none focus-visible:bg-surface-2/60"
+        aria-expanded={open}
+      >
+        <span className="text-ink-faint">{open ? "▾" : "▸"}</span>
+        <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.18em] text-ink-faint">
+          agent
+        </span>
+        {subtype && (
+          <span
+            className={`rounded bg-surface-2 px-1 py-px font-mono text-[9px] font-semibold tracking-[0.12em] ${accentColor}`}
+          >
+            {subtype}
+          </span>
+        )}
+        {description && (
+          <span className="truncate text-ink-faint">
+            {summarize(description, 88)}
+          </span>
+        )}
+        {hasError && (
+          <span className="ml-auto rounded-sm bg-danger/20 px-1 py-px text-[9px] uppercase tracking-[0.18em] text-danger">
+            error
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="flex flex-col gap-2 px-2 pb-2">
+          <div>
+            <div className="mb-1 font-mono text-[9px] uppercase tracking-[0.22em] text-ink-faint">
+              input
+            </div>
+            <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded border border-hairline bg-canvas/80 p-3 font-mono text-[11px] leading-relaxed text-ink">
+              {formatInput(input)}
+            </pre>
+          </div>
+          {matched && (
+            <div>
+              <div className="mb-1 flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.22em] text-ink-faint">
+                <span>{hasError ? "error" : "output"}</span>
+                {shouldTruncate && (
+                  <button
+                    type="button"
+                    onClick={() => setExpandedOutput((v) => !v)}
+                    className="cursor-pointer rounded px-1 text-ink-muted transition hover:text-ink"
+                  >
+                    {expandedOutput
+                      ? "collapse"
+                      : `show all (${outputLines.length} lines)`}
+                  </button>
+                )}
+              </div>
+              <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded border border-hairline bg-canvas/80 p-3 font-mono text-[11px] leading-relaxed text-ink">
+                {displayedOutput || "(empty)"}
+              </pre>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export interface ToolCallBlockProps {
   name: string;
   input: unknown;
@@ -109,6 +230,10 @@ export function ToolCallBlock({
 }: ToolCallBlockProps) {
   const [open, setOpen] = useState(false);
   const [expandedOutput, setExpandedOutput] = useState(false);
+
+  if (name === "Agent") {
+    return <AgentCallBlock input={input} matchedResult={matchedResult} />;
+  }
 
   const family = familyOf(name);
   const tone = FAMILY_TONE[family];
