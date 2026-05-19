@@ -9,6 +9,11 @@ import { api } from "../api";
 import {
   readBoardSpaceFilter,
   writeBoardSpaceFilter,
+  readCardViewMode,
+  writeCardViewMode,
+  readBoardSortMode,
+  writeBoardSortMode,
+  type BoardSortMode,
 } from "../lib/storage";
 
 export function BoardPage() {
@@ -18,6 +23,8 @@ export function BoardPage() {
   const [filter, setFilter] = useState<string | null>(() =>
     scoped ?? readBoardSpaceFilter(),
   );
+  const [compact, setCompact] = useState(() => readCardViewMode() === "minimal");
+  const [sortMode, setSortMode] = useState<BoardSortMode>(() => readBoardSortMode());
   const [creating, setCreating] = useState(false);
   const [isWorking, setIsWorking] = useState(false);
   const [workError, setWorkError] = useState<string | null>(null);
@@ -51,9 +58,21 @@ export function BoardPage() {
         onSpaceChange={(next) => setFilter(next)}
         filterLocked={!!scoped}
         onNewTask={() => setCreating(true)}
+        compact={compact}
+        onCompactToggle={() => {
+          const next = !compact;
+          setCompact(next);
+          writeCardViewMode(next ? "minimal" : "full");
+        }}
+        sortMode={sortMode}
+        onSortModeToggle={() => {
+          const next: BoardSortMode = sortMode === "manual" ? "priority" : "manual";
+          setSortMode(next);
+          writeBoardSortMode(next);
+        }}
       />
       <div className="min-h-0 flex-1">
-        <Board spaceId={filter} onAddTask={() => setCreating(true)} />
+        <Board spaceId={filter} onAddTask={() => setCreating(true)} compact={compact} sortMode={sortMode} />
       </div>
 
       {creating && (
@@ -76,6 +95,7 @@ export function BoardPage() {
                 brief: body.brief,
                 agent_model: body.agent_model,
                 agent_mode: body.agent_mode,
+                priority: body.priority,
               });
               for (const file of body.files) {
                 await api.uploadTaskFile(task.id, file);

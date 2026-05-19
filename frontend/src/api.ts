@@ -61,6 +61,7 @@ export const api = {
     brief: string;
     agent_model?: AgentModel;
     agent_mode?: AgentMode;
+    priority?: number;
   }) => request<Task>("/api/tasks", { method: "POST", body: JSON.stringify(body) }),
   update: (
     id: string,
@@ -69,9 +70,15 @@ export const api = {
       brief?: string;
       agent_mode?: AgentMode;
       agent_model?: AgentModel;
+      priority?: number;
     },
   ) =>
     request<Task>(`/api/tasks/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  reorder: (lane: TaskState, task_ids: string[]) =>
+    request<void>("/api/tasks/reorder", {
+      method: "PUT",
+      body: JSON.stringify({ lane, task_ids }),
+    }),
   transition: (id: string, state: TaskState) =>
     request<Task>(`/api/tasks/${id}/state`, {
       method: "PATCH",

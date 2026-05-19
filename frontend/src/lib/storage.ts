@@ -2,6 +2,8 @@
 
 export const STORAGE_KEYS = {
   boardSpaceFilter: "cronos.boardSpaceFilter",
+  cardViewMode: "cronos.cardViewMode",
+  boardSortMode: "cronos.boardSortMode",
 } as const;
 
 export function readBoardSpaceFilter(): string | null {
@@ -20,6 +22,44 @@ export function writeBoardSpaceFilter(spaceId: string | null): void {
       STORAGE_KEYS.boardSpaceFilter,
       spaceId ?? "all",
     );
+  } catch {
+    // localStorage unavailable (private mode) — silently fall back.
+  }
+}
+
+export type CardViewMode = "full" | "minimal";
+
+export function readCardViewMode(): CardViewMode {
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEYS.cardViewMode);
+    return raw === "minimal" ? "minimal" : "full";
+  } catch {
+    return "full";
+  }
+}
+
+export function writeCardViewMode(mode: CardViewMode): void {
+  try {
+    window.localStorage.setItem(STORAGE_KEYS.cardViewMode, mode);
+  } catch {
+    // localStorage unavailable (private mode) — silently fall back.
+  }
+}
+
+export type BoardSortMode = "manual" | "priority";
+
+export function readBoardSortMode(): BoardSortMode {
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEYS.boardSortMode);
+    return raw === "priority" ? "priority" : "manual";
+  } catch {
+    return "manual";
+  }
+}
+
+export function writeBoardSortMode(mode: BoardSortMode): void {
+  try {
+    window.localStorage.setItem(STORAGE_KEYS.boardSortMode, mode);
   } catch {
     // localStorage unavailable (private mode) — silently fall back.
   }

@@ -107,6 +107,14 @@ def parse_file(path: Path, space_id: str) -> Task:
     if agent_model not in VALID_AGENT_MODELS:
         agent_model = "default"
     try:
+        priority = max(1, min(5, int(meta.get("priority", 3) or 3)))
+    except (TypeError, ValueError):
+        priority = 3
+    try:
+        manual_order = int(meta.get("manual_order", 0) or 0)
+    except (TypeError, ValueError):
+        manual_order = 0
+    try:
         return Task(
             id=meta.get("id") or path.stem,
             space_id=space_id,
@@ -121,6 +129,8 @@ def parse_file(path: Path, space_id: str) -> Task:
             pending_messages=pending,
             agent_mode=agent_mode,
             agent_model=agent_model,
+            priority=priority,
+            manual_order=manual_order,
         )
     except (KeyError, ValidationError) as e:
         raise ValueError(f"Invalid task file {path.name}: {e}") from e
@@ -140,6 +150,8 @@ def summarize(task: Task) -> TaskSummary:
         updated_at=task.updated_at,
         waiting_question=task.waiting_question,
         brief_preview=preview,
+        priority=task.priority,
+        manual_order=task.manual_order,
     )
 
 
@@ -164,6 +176,8 @@ def dump_task(task: Task) -> str:
         "agent_mode": task.agent_mode,
         "agent_model": task.agent_model,
         "pending_messages": list(task.pending_messages),
+        "priority": task.priority,
+        "manual_order": task.manual_order,
     }
     body_parts = ["# Brief", "", task.brief.strip() or ""]
     if task.history.strip():
@@ -339,7 +353,7 @@ class TaskStore:
                 continue
             lanes[task.state].append(summarize(task))
         for items in lanes.values():
-            items.sort(key=lambda t: t.updated_at, reverse=True)
+            items.sort(key=lambda t: (t.manual_order, -t.updated_at.timestamp()))
         return Board(
             backlog=lanes[TaskState.BACKLOG],
             active=lanes[TaskState.ACTIVE],
@@ -357,6 +371,7 @@ class TaskStore:
         brief: str,
         agent_model: AgentModel = "default",
         agent_mode: AgentMode = "auto",
+        priority: int = 3,
     ) -> Task:
         if agent_model not in VALID_AGENT_MODELS:
             raise StorageError(f"Invalid agent_model: {agent_model}")
@@ -379,6 +394,8 @@ class TaskStore:
                 history="",
                 agent_model=agent_model,
                 agent_mode=agent_mode,
+                priority=max(1, min(5, priority)),
+                manual_order=0,
             )
             path = tasks_dir / f"{task_id}.md"
             atomic_write(path, dump_task(task))
@@ -394,6 +411,7 @@ class TaskStore:
         brief: str | None = None,
         agent_mode: AgentMode | None = None,
         agent_model: AgentModel | None = None,
+        priority: int | None = None,
     ) -> Task:
         if agent_mode is not None and agent_mode not in VALID_AGENT_MODES:
             raise StorageError(f"Invalid agent_mode: {agent_mode}")
@@ -403,15 +421,16 @@ class TaskStore:
             task = self._by_id.get(task_id)
             if task is None:
                 raise TaskNotFound(task_id)
-            updated = task.model_copy(
-                update={
-                    "title": title.strip() if title is not None else task.title,
-                    "brief": brief.strip() if brief is not None else task.brief,
-                    "agent_mode": agent_mode if agent_mode is not None else task.agent_mode,
-                    "agent_model": agent_model if agent_model is not None else task.agent_model,
-                    "updated_at": datetime.now(tz=UTC),
-                }
-            )
+            update_dict: dict = {
+                "title": title.strip() if title is not None else task.title,
+                "brief": brief.strip() if brief is not None else task.brief,
+                "agent_mode": agent_mode if agent_mode is not None else task.agent_mode,
+                "agent_model": agent_model if agent_model is not None else task.agent_model,
+                "updated_at": datetime.now(tz=UTC),
+            }
+            if priority is not None:
+                update_dict["priority"] = max(1, min(5, priority))
+            updated = task.model_copy(update=update_dict)
             path = self._path_by_id[task_id]
             atomic_write(path, dump_task(updated))
             self._reindex_locked(path)
@@ -591,6 +610,20 @@ class TaskStore:
             self._by_id.pop(task_id, None)
             self._path_by_id.pop(task_id, None)
             log.info("Trashed task %s -> %s", task_id, dest.name)
+
+    async def reorder(self, task_ids: list[str], lane: TaskState) -> None:
+        """Set manual_order for tasks in a lane based on their position in task_ids."""
+        async with self._lock:
+            for index, task_id in enumerate(task_ids):
+                task = self._by_id.get(task_id)
+                if task is None or task.state != lane:
+                    continue
+                if task.manual_order == index:
+                    continue
+                updated = task.model_copy(update={"manual_order": index})
+                path = self._path_by_id[task_id]
+                atomic_write(path, dump_task(updated))
+                self._reindex_locked(path)
 
     async def archive_stale_done_tasks(self, threshold_days: int) -> int:
         """Transition DONE tasks older than threshold_days to ARCHIVED. Returns count."""
