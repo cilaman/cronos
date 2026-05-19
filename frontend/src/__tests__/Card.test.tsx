@@ -18,6 +18,7 @@ function makeTask(overrides: Partial<TaskSummary> = {}): TaskSummary {
     brief_preview: "A short description of what needs doing.",
     priority: 3,
     manual_order: 0,
+    agent_mode: "auto",
     space_name: "Cronos",
     space_color: "#0F766E",
     space_icon: "🛰️",
@@ -99,6 +100,36 @@ describe("Card — compact prop", () => {
     const { container } = renderCard({ task, onClick: () => {} });
     // No paragraph with the line-clamp-3 class
     expect(container.querySelector(".line-clamp-3")).toBeNull();
+  });
+
+  it("shows Auto badge in full mode (compact=false)", () => {
+    const task = makeTask({ agent_mode: "auto" });
+    renderCard({ task, onClick: () => {}, compact: false });
+    expect(screen.getByText("Auto")).toBeInTheDocument();
+  });
+
+  it("hides Auto badge in compact mode", () => {
+    const task = makeTask({ agent_mode: "auto" });
+    renderCard({ task, onClick: () => {}, compact: true });
+    expect(screen.queryByText("Auto")).not.toBeInTheDocument();
+  });
+
+  it("shows Plan badge in full mode", () => {
+    const task = makeTask({ agent_mode: "plan" });
+    renderCard({ task, onClick: () => {}, compact: false });
+    expect(screen.getByText("Plan")).toBeInTheDocument();
+  });
+
+  it("shows Plan badge in compact mode (non-default mode is always shown)", () => {
+    const task = makeTask({ agent_mode: "plan" });
+    renderCard({ task, onClick: () => {}, compact: true });
+    expect(screen.getByText("Plan")).toBeInTheDocument();
+  });
+
+  it("shows Ask badge in compact mode (non-default mode is always shown)", () => {
+    const task = makeTask({ agent_mode: "ask" });
+    renderCard({ task, onClick: () => {}, compact: true });
+    expect(screen.getByText("Ask")).toBeInTheDocument();
   });
 
   it("invokes onClick when the card is clicked", async () => {

@@ -56,6 +56,37 @@ async def test_list_tasks_all_space(async_client):
     assert len(board["backlog"]) >= 1
 
 
+async def test_list_tasks_board_summary_includes_agent_mode(async_client):
+    """Board summaries must surface agent_mode so the frontend can render
+    the mode badge on cards without re-fetching the full task."""
+    await async_client.post(
+        "/api/tasks",
+        json={
+            "space_id": SPACE_ID,
+            "title": "Plan Mode Task",
+            "brief": "",
+            "agent_mode": "plan",
+        },
+    )
+    resp = await async_client.get(f"/api/tasks?space_id={SPACE_ID}")
+    assert resp.status_code == 200
+    board = resp.json()
+    assert len(board["backlog"]) == 1
+    assert board["backlog"][0]["agent_mode"] == "plan"
+
+
+async def test_list_tasks_board_summary_defaults_agent_mode_to_auto(async_client):
+    """Tasks created without agent_mode should appear in the board
+    summary with agent_mode=='auto'."""
+    await async_client.post(
+        "/api/tasks",
+        json={"space_id": SPACE_ID, "title": "Default Mode", "brief": ""},
+    )
+    resp = await async_client.get(f"/api/tasks?space_id={SPACE_ID}")
+    board = resp.json()
+    assert board["backlog"][0]["agent_mode"] == "auto"
+
+
 # ---------------------------------------------------------------------------
 # POST /api/tasks
 # ---------------------------------------------------------------------------
