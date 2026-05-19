@@ -76,6 +76,7 @@ class CreateTaskBody(BaseModel):
     brief: str = Field(default="", max_length=20_000)
     agent_model: Literal["default", "sonnet", "opus", "haiku"] = "default"
     agent_mode: Literal["plan", "auto", "ask"] = "auto"
+    priority: int = Field(default=3, ge=1, le=5)
 
 
 class UpdateTaskBody(BaseModel):
@@ -83,6 +84,12 @@ class UpdateTaskBody(BaseModel):
     brief: str | None = Field(default=None, max_length=20_000)
     agent_mode: Literal["plan", "auto", "ask"] | None = None
     agent_model: Literal["default", "sonnet", "opus", "haiku"] | None = None
+    priority: int | None = Field(default=None, ge=1, le=5)
+
+
+class ReorderBody(BaseModel):
+    lane: TaskState
+    task_ids: list[str] = Field(default_factory=list)
 
 
 class TransitionBody(BaseModel):
@@ -164,6 +171,12 @@ async def list_archived_tasks(
     return [_enrich_summary(summarize(t), space_by_id.get(t.space_id)) for t in tasks]
 
 
+@router.put("/reorder", status_code=status.HTTP_204_NO_CONTENT)
+async def reorder_tasks(body: ReorderBody, request: Request) -> Response:
+    await get_store(request).reorder(body.task_ids, body.lane)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.get("/{task_id}", response_model=TaskRead)
 async def get_task(task_id: str, request: Request) -> TaskRead:
     task = get_store(request).get(task_id)
@@ -185,6 +198,7 @@ async def create_task(body: CreateTaskBody, request: Request) -> TaskRead:
             brief=body.brief,
             agent_model=body.agent_model,
             agent_mode=body.agent_mode,
+            priority=body.priority,
         )
     except UnknownSpace:
         raise HTTPException(status_code=404, detail=f"Space {body.space_id} not found") from None
@@ -200,6 +214,7 @@ async def update_task(task_id: str, body: UpdateTaskBody, request: Request) -> T
         and body.brief is None
         and body.agent_mode is None
         and body.agent_model is None
+        and body.priority is None
     ):
         raise HTTPException(
             status_code=400,
@@ -212,6 +227,7 @@ async def update_task(task_id: str, body: UpdateTaskBody, request: Request) -> T
             brief=body.brief,
             agent_mode=body.agent_mode,
             agent_model=body.agent_model,
+            priority=body.priority,
         )
     except TaskNotFound:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found") from None

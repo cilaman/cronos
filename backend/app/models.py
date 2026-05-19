@@ -35,6 +35,8 @@ class Task(BaseModel):
     pending_messages: list[str] = Field(default_factory=list)
     agent_mode: AgentMode = "auto"
     agent_model: AgentModel = "default"
+    priority: int = 3  # 1 (highest) to 5 (lowest)
+    manual_order: int = 0  # lower value = higher in lane
 
 
 class TaskSummary(BaseModel):
@@ -51,6 +53,8 @@ class TaskSummary(BaseModel):
         default="",
         description="First ~200 chars of the brief, for card display.",
     )
+    priority: int = 3
+    manual_order: int = 0
     # Denormalized space fields so cards can render without a separate join.
     space_name: str | None = None
     space_color: str | None = None

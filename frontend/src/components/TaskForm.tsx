@@ -6,12 +6,21 @@ import { FormField } from "./ui/FormField";
 import { FormInput, FormSelect, FormTextarea } from "./ui/FormInput";
 import { Modal } from "./ui/Modal";
 
+const PRIORITY_OPTIONS = [
+  { value: 1, label: "P1", cls: "border-red-200 bg-red-50 text-red-600 dark:border-red-400/30 dark:bg-red-400/10 dark:text-red-400" },
+  { value: 2, label: "P2", cls: "border-orange-200 bg-orange-50 text-orange-600 dark:border-orange-400/30 dark:bg-orange-400/10 dark:text-orange-400" },
+  { value: 3, label: "P3", cls: "border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-400" },
+  { value: 4, label: "P4", cls: "border-teal-200 bg-teal-50 text-teal-600 dark:border-teal-400/30 dark:bg-teal-400/10 dark:text-teal-400" },
+  { value: 5, label: "P5", cls: "border-hairline bg-surface-2 text-ink-faint" },
+] as const;
+
 interface Props {
   heading: string;
   initialTitle?: string;
   initialBrief?: string;
   initialModel?: AgentModel;
   initialMode?: AgentMode;
+  initialPriority?: number;
   initialSpaceId?: string | null;
   showSpacePicker?: boolean;
   lockedSpaceId?: string | null;
@@ -22,6 +31,7 @@ interface Props {
     brief: string;
     agent_model: AgentModel;
     agent_mode: AgentMode;
+    priority: number;
     space_id?: string;
     startImmediately: boolean;
     files: File[];
@@ -35,6 +45,7 @@ export function TaskForm({
   initialBrief = "",
   initialModel = "default",
   initialMode = "auto",
+  initialPriority = 3,
   initialSpaceId = null,
   showSpacePicker = false,
   lockedSpaceId = null,
@@ -47,6 +58,7 @@ export function TaskForm({
   const [brief, setBrief] = useState(initialBrief);
   const [model, setModel] = useState<AgentModel>(initialModel);
   const [mode, setMode] = useState<AgentMode>(initialMode);
+  const [priority, setPriority] = useState(initialPriority);
   const [startImmediately, setStartImmediately] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [spaceId, setSpaceId] = useState<string | null>(
@@ -105,6 +117,7 @@ export function TaskForm({
             brief: brief.trim(),
             agent_model: model,
             agent_mode: mode,
+            priority,
             space_id: effectiveSpaceId ?? undefined,
             startImmediately,
             files,
@@ -159,6 +172,27 @@ export function TaskForm({
               </FormSelect>
             </FormField>
           </div>
+
+          <FormField label="Priority">
+            <div className="flex gap-1.5">
+              {PRIORITY_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setPriority(opt.value)}
+                  className={[
+                    "rounded border px-2.5 py-1 font-mono text-[11px] font-semibold uppercase tracking-wide transition",
+                    opt.cls,
+                    priority === opt.value
+                      ? "ring-2 ring-offset-1 ring-offset-canvas ring-current"
+                      : "opacity-50 hover:opacity-80",
+                  ].join(" ")}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </FormField>
 
           {showSpacePicker && (
             <FormField label="Space">

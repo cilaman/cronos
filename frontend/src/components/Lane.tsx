@@ -1,4 +1,5 @@
 import { useDroppable } from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { cn } from "../utils/cn";
 import { EmptyState } from "./ui/EmptyState";
 import { StickyToolbar } from "./ui/StickyToolbar";
@@ -11,10 +12,13 @@ interface Props {
   tasks: TaskSummary[];
   onOpen: (id: string) => void;
   onAdd: () => void;
+  compact?: boolean;
 }
 
-export function Lane({ state, label, tasks, onOpen, onAdd }: Props) {
+export function Lane({ state, label, tasks, onOpen, onAdd, compact = false }: Props) {
   const { isOver, setNodeRef } = useDroppable({ id: state });
+  const taskIds = tasks.map((t) => t.id);
+
   return (
     <section
       ref={setNodeRef}
@@ -44,13 +48,15 @@ export function Lane({ state, label, tasks, onOpen, onAdd }: Props) {
         )}
       </StickyToolbar>
       <div className="flex-1 space-y-2 overflow-x-hidden overflow-y-auto p-2">
-        {tasks.length === 0 ? (
-          <EmptyState title="No tasks" />
-        ) : (
-          tasks.map((task) => (
-            <Card key={task.id} task={task} onClick={() => onOpen(task.id)} />
-          ))
-        )}
+        <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
+          {tasks.length === 0 ? (
+            <EmptyState title="No tasks" />
+          ) : (
+            tasks.map((task) => (
+              <Card key={task.id} task={task} onClick={() => onOpen(task.id)} compact={compact} />
+            ))
+          )}
+        </SortableContext>
       </div>
     </section>
   );

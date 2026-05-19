@@ -33,6 +33,8 @@ export interface TaskSummary {
   updated_at: string;
   waiting_question: string | null;
   brief_preview: string;
+  priority: number;
+  manual_order: number;
   space_name: string | null;
   space_color: string | null;
   space_icon: string | null;
@@ -69,6 +71,8 @@ export interface Task {
   pending_messages: string[];
   agent_mode: AgentMode;
   agent_model: AgentModel;
+  priority: number;
+  manual_order: number;
   space_name: string | null;
   space_color: string | null;
   space_icon: string | null;

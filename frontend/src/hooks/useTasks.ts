@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import type { AgentMode, AgentModel, TaskState } from "../types";
 
+export type { AgentMode, AgentModel, TaskState };
+
 export function useBoard(spaceId: string | null = null) {
   return useQuery({
     queryKey: ["board", spaceId ?? "all"],
@@ -45,6 +47,7 @@ export function useUpdateTask(id: string) {
       brief?: string;
       agent_mode?: AgentMode;
       agent_model?: AgentModel;
+      priority?: number;
     }) => api.update(id, body),
     onSuccess: () => {
       invalidateBoards(qc);
@@ -141,6 +144,17 @@ export function useUnarchiveTask() {
       qc.invalidateQueries({ queryKey: ["task", id] });
       qc.invalidateQueries({ queryKey: ["spaces"] });
       qc.invalidateQueries({ queryKey: ["archived"] });
+    },
+  });
+}
+
+export function useReorderTasks() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ lane, task_ids }: { lane: TaskState; task_ids: string[] }) =>
+      api.reorder(lane, task_ids),
+    onSuccess: () => {
+      invalidateBoards(qc);
     },
   });
 }

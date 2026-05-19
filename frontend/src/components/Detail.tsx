@@ -266,6 +266,25 @@ function StatsPanel({ taskId }: { taskId: string }) {
   );
 }
 
+// ── Priority badge ────────────────────────────────────────────────────────────
+
+const PRIORITY_BADGE_STYLES: Record<number, string> = {
+  1: "border-red-200 bg-red-50 text-red-600 dark:border-red-400/30 dark:bg-red-400/10 dark:text-red-400",
+  2: "border-orange-200 bg-orange-50 text-orange-600 dark:border-orange-400/30 dark:bg-orange-400/10 dark:text-orange-400",
+  3: "border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-400",
+  4: "border-teal-200 bg-teal-50 text-teal-600 dark:border-teal-400/30 dark:bg-teal-400/10 dark:text-teal-400",
+  5: "border-hairline bg-surface-2 text-ink-faint",
+};
+
+function PriorityBadge({ priority }: { priority: number }) {
+  const cls = PRIORITY_BADGE_STYLES[priority] ?? PRIORITY_BADGE_STYLES[3];
+  return (
+    <span className={`rounded border px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wide ${cls}`}>
+      P{priority}
+    </span>
+  );
+}
+
 // ── Test result mini-badge ────────────────────────────────────────────────────
 
 function TaskTestBadge({ taskId }: { taskId: string }) {
@@ -421,6 +440,7 @@ export function Detail({ taskId, onClose }: Props) {
                     >
                       {task.state}
                     </span>
+                    <PriorityBadge priority={task.priority ?? 3} />
                     {task.space_name && (
                       <a
                         href={`/spaces/${task.space_id}`}
@@ -441,6 +461,24 @@ export function Detail({ taskId, onClose }: Props) {
                     {task.title}
                   </h2>
                   <div className="mt-3 flex flex-wrap items-center gap-4 text-xs">
+                    <label className="flex items-center gap-2 text-ink-muted">
+                      <span className="font-display text-[10px] uppercase tracking-[0.18em] text-ink-faint">
+                        Priority
+                      </span>
+                      <select
+                        value={task.priority ?? 3}
+                        onChange={(e) =>
+                          void updateTask.mutateAsync({ priority: Number(e.target.value) })
+                        }
+                        className="rounded border border-hairline-strong bg-canvas px-2 py-1 text-xs font-medium text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                      >
+                        <option value={1}>P1 — Highest</option>
+                        <option value={2}>P2 — High</option>
+                        <option value={3}>P3 — Medium</option>
+                        <option value={4}>P4 — Low</option>
+                        <option value={5}>P5 — Lowest</option>
+                      </select>
+                    </label>
                     <label className="flex items-center gap-2 text-ink-muted">
                       <span className="font-display text-[10px] uppercase tracking-[0.18em] text-ink-faint">
                         Mode
@@ -589,6 +627,7 @@ export function Detail({ taskId, onClose }: Props) {
           initialBrief={task.brief}
           initialModel={task.agent_model}
           initialMode={task.agent_mode}
+          initialPriority={task.priority ?? 3}
           submitting={updateTask.isPending}
           error={updateTask.error?.message ?? null}
           onCancel={() => setEditing(false)}
@@ -598,6 +637,7 @@ export function Detail({ taskId, onClose }: Props) {
               brief: body.brief,
               agent_model: body.agent_model,
               agent_mode: body.agent_mode,
+              priority: body.priority,
             });
             setEditing(false);
           }}
