@@ -1,14 +1,15 @@
 # Test Coverage — cronos-development
 
-**Updated**: 2026-05-19T14:57:00Z
-**Overall**: 73.41% (+2.99% vs previous)
-**Passed**: 507 | **Failed**: 0 | **Total**: 507
-**Backend**: 419 passed (pytest) | **Frontend**: 88 passed (vitest)
+**Updated**: 2026-05-20T11:30:00Z
+**Overall**: 73.11% (-0.30% vs previous)
+**Passed**: 511 | **Failed**: 0 | **Total**: 511
+**Backend**: 423 passed (pytest) | **Frontend**: 88 passed (vitest)
 
 ## Per-module coverage (backend)
 
 | Module | Coverage |
 |--------|----------|
+| app/__init__.py | 100% |
 | app/api/__init__.py | 100% |
 | app/api/activity.py | 100% |
 | app/models.py | 100% |
@@ -22,16 +23,45 @@
 | app/file_service.py | 90% |
 | app/stats_store.py | 85% |
 | app/trace_store.py | 84% |
-| app/test_report_store.py | 83% |
 | app/agent.py | 83% |
-| app/storage.py | 76% |
+| app/test_report_store.py | 83% |
+| app/storage.py | 77% |
 | app/api/test_reports.py | 70% |
 | app/space_storage.py | 59% |
-| app/worker.py | 58% |
-| app/api/tasks.py | 55% |
+| app/worker.py | 55% |
+| app/api/tasks.py | 54% |
 | app/worker_pool.py | 30% |
 | app/main.py | 29% |
 | app/git_ops.py | 21% |
+
+## Recent changes (2026-05-20 — HIGH-005 imported-task sanitization)
+
+Added 4 tests covering the new `_sanitize_imported_tasks()` security fix in
+`backend/app/api/spaces.py`. The function is invoked just before an imported
+space directory is moved into place; it forces every task to
+`state=backlog` with `claude_session_id=None`, clearing `pending_messages`
+and `waiting_question`. This blocks an attacker from importing a ZIP that
+auto-starts a hijacked Claude session on the operator's machine.
+
+New tests in `backend/tests/test_spaces_api.py`:
+
+- `test_import_active_task_is_forced_to_backlog` — ZIP carrying
+  `state: active` arrives on disk as `state: backlog`.
+- `test_import_task_with_session_id_is_stripped` — even a clean
+  backlog task arrives with `claude_session_id` cleared when the ZIP
+  set one.
+- `test_import_clean_backlog_task_is_unchanged` — backlog task with
+  no session id round-trips unchanged and emits zero
+  "Sanitizing imported task" warnings (asserted via `caplog`).
+- `test_import_waiting_task_with_question_and_pending_is_sanitized` —
+  full payload (`state: waiting` + session id + pending messages +
+  waiting question) is normalized: state→backlog, session→None,
+  pending→[], waiting_question→None.
+
+Each test reads the post-import file from disk via `parse_file()` to
+verify the persisted state (not just the API response). All 4 pass on
+first run; full backend (423) and frontend (88) suites green; no
+regressions.
 
 ## Recent changes (2026-05-19 — file_service coverage pass)
 

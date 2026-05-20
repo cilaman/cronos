@@ -30,7 +30,7 @@ from ..space_storage import (
     validate_color,
     validate_space_id,
 )
-from ..storage import TaskStore, slugify
+from ..storage import TaskStore, atomic_write, dump_task, parse_file, slugify
 from ..worker_pool import WorkerPool
 
 log = logging.getLogger(__name__)
@@ -345,6 +345,31 @@ def _safe_extract(zf: zipfile.ZipFile, dest_root: Path) -> str:
     return incoming_id
 
 
+def _sanitize_imported_tasks(space_dir: Path, space_id: str) -> None:
+    """Force all imported tasks to backlog state and strip session IDs."""
+    tasks_dir = space_dir / ".cronos" / "tasks"
+    if not tasks_dir.is_dir():
+        return
+    for task_file in tasks_dir.glob("*.md"):
+        try:
+            task = parse_file(task_file, space_id)
+        except ValueError:
+            continue
+        needs_update = task.state != TaskState.BACKLOG or task.claude_session_id is not None
+        if needs_update:
+            log.warning(
+                "Sanitizing imported task %s in space %s: state=%s session=%s -> state=backlog session=None",
+                task.id, space_id, task.state.value, task.claude_session_id,
+            )
+            task = task.model_copy(update={
+                "state": TaskState.BACKLOG,
+                "claude_session_id": None,
+                "pending_messages": [],
+                "waiting_question": None,
+            })
+            atomic_write(task_file, dump_task(task))
+
+
 @router.post("/import", response_model=Space, status_code=status.HTTP_201_CREATED)
 async def import_space(
     request: Request,
@@ -418,6 +443,9 @@ async def import_space(
                 renamed = staging / final_id
                 os.replace(staged_dir, renamed)
                 staged_dir = renamed
+
+            # Sanitize imported tasks before moving into place.
+            _sanitize_imported_tasks(staged_dir, final_id)
 
             # Move into place atomically.
             os.replace(staged_dir, final_dir)

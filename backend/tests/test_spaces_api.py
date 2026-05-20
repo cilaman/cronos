@@ -9,7 +9,9 @@ from pathlib import Path
 import pytest
 
 from app.api.spaces import _safe_extract
+from app.models import TaskState
 from app.space_storage import SpaceError, validate_color, validate_space_id
+from app.storage import parse_file
 
 from .conftest import SPACE_ID
 
@@ -234,6 +236,180 @@ async def test_import_space_with_rename(async_client):
     )
     assert resp.status_code == 201
     assert resp.json()["id"] == "renamed-space"
+
+
+# ---------------------------------------------------------------------------
+# Imported-task sanitization (HIGH-005)
+# ---------------------------------------------------------------------------
+
+
+def _task_md(
+    *,
+    task_id: str,
+    state: str,
+    claude_session_id: str | None = None,
+    pending_messages: list[str] | None = None,
+    waiting_question: str | None = None,
+) -> str:
+    """Build a frontmatter task markdown document."""
+    pending = pending_messages if pending_messages is not None else []
+    # YAML emits None as `null`; quote strings.
+    session_yaml = "null" if claude_session_id is None else f"'{claude_session_id}'"
+    wait_yaml = "null" if waiting_question is None else f"'{waiting_question}'"
+    pending_yaml = "[]" if not pending else (
+        "\n" + "\n".join(f"- '{m}'" for m in pending)
+    )
+    if isinstance(pending_yaml, str) and pending_yaml.startswith("\n"):
+        pending_block = f"pending_messages:{pending_yaml}"
+    else:
+        pending_block = f"pending_messages: {pending_yaml}"
+    return (
+        "---\n"
+        "agent_mode: auto\n"
+        "agent_model: default\n"
+        f"claude_session_id: {session_yaml}\n"
+        "created_at: '2024-01-01T00:00:00Z'\n"
+        f"id: {task_id}\n"
+        f"{pending_block}\n"
+        "priority: 3\n"
+        "manual_order: 0\n"
+        "space_id: imp-space\n"
+        f"state: {state}\n"
+        f"title: Task {task_id}\n"
+        "updated_at: '2024-01-01T00:00:00Z'\n"
+        f"waiting_question: {wait_yaml}\n"
+        "---\n\n"
+        "# Brief\n\n"
+        "Body brief.\n\n"
+        "# History\n\n"
+    )
+
+
+def _make_space_zip_with_tasks(space_id: str, yml: str, tasks: dict[str, str]) -> bytes:
+    """Build a zip with the given space.yml and a {filename: markdown} task map."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr(f"{space_id}/.cronos/space.yml", yml)
+        for filename, content in tasks.items():
+            zf.writestr(f"{space_id}/.cronos/tasks/{filename}", content)
+    return buf.getvalue()
+
+
+async def test_import_active_task_is_forced_to_backlog(async_client, space_store):
+    """A ZIP containing a task with state=active must arrive as state=backlog."""
+    task_md = _task_md(task_id="t-active", state="active")
+    zip_bytes = _make_space_zip_with_tasks(
+        "imp-space",
+        _VALID_SPACE_YML,
+        {"t-active.md": task_md},
+    )
+    resp = await async_client.post(
+        "/api/spaces/import",
+        files={"file": ("imp-space.zip", zip_bytes, "application/zip")},
+    )
+    assert resp.status_code == 201
+
+    # Verify on disk: the task file in the final location is backlog.
+    task_path = space_store.spaces_dir / "imp-space" / ".cronos" / "tasks" / "t-active.md"
+    assert task_path.exists()
+    task = parse_file(task_path, "imp-space")
+    assert task.state == TaskState.BACKLOG
+    assert task.claude_session_id is None
+
+
+async def test_import_task_with_session_id_is_stripped(async_client, space_store):
+    """A ZIP containing a task with a claude_session_id must arrive with it cleared."""
+    task_md = _task_md(
+        task_id="t-session",
+        state="backlog",  # Even backlog tasks must lose their session id.
+        claude_session_id="abc-123-def-session",
+    )
+    zip_bytes = _make_space_zip_with_tasks(
+        "imp-space",
+        _VALID_SPACE_YML,
+        {"t-session.md": task_md},
+    )
+    resp = await async_client.post(
+        "/api/spaces/import",
+        files={"file": ("imp-space.zip", zip_bytes, "application/zip")},
+    )
+    assert resp.status_code == 201
+
+    task_path = space_store.spaces_dir / "imp-space" / ".cronos" / "tasks" / "t-session.md"
+    assert task_path.exists()
+    task = parse_file(task_path, "imp-space")
+    assert task.claude_session_id is None
+    assert task.state == TaskState.BACKLOG
+
+
+async def test_import_clean_backlog_task_is_unchanged(async_client, space_store, caplog):
+    """A backlog task with no session id should import normally with no warnings."""
+    import logging as _logging
+
+    task_md = _task_md(
+        task_id="t-clean",
+        state="backlog",
+        claude_session_id=None,
+    )
+    zip_bytes = _make_space_zip_with_tasks(
+        "imp-space",
+        _VALID_SPACE_YML,
+        {"t-clean.md": task_md},
+    )
+
+    with caplog.at_level(_logging.WARNING, logger="app.api.spaces"):
+        resp = await async_client.post(
+            "/api/spaces/import",
+            files={"file": ("imp-space.zip", zip_bytes, "application/zip")},
+        )
+
+    assert resp.status_code == 201
+
+    task_path = space_store.spaces_dir / "imp-space" / ".cronos" / "tasks" / "t-clean.md"
+    assert task_path.exists()
+    task = parse_file(task_path, "imp-space")
+    assert task.state == TaskState.BACKLOG
+    assert task.claude_session_id is None
+
+    # No sanitization warning was emitted for the clean task.
+    sanitize_warnings = [
+        r for r in caplog.records
+        if r.levelno >= _logging.WARNING and "Sanitizing imported task" in r.getMessage()
+    ]
+    assert sanitize_warnings == []
+
+
+async def test_import_waiting_task_with_question_and_pending_is_sanitized(
+    async_client, space_store
+):
+    """waiting state + pending_messages + waiting_question must all be cleared."""
+    task_md = _task_md(
+        task_id="t-waiting",
+        state="waiting",
+        claude_session_id="sess-xyz",
+        pending_messages=["please continue", "follow up"],
+        waiting_question="What is the next step?",
+    )
+    zip_bytes = _make_space_zip_with_tasks(
+        "imp-space",
+        _VALID_SPACE_YML,
+        {"t-waiting.md": task_md},
+    )
+    resp = await async_client.post(
+        "/api/spaces/import",
+        files={"file": ("imp-space.zip", zip_bytes, "application/zip")},
+    )
+    assert resp.status_code == 201
+
+    task_path = (
+        space_store.spaces_dir / "imp-space" / ".cronos" / "tasks" / "t-waiting.md"
+    )
+    assert task_path.exists()
+    task = parse_file(task_path, "imp-space")
+    assert task.state == TaskState.BACKLOG
+    assert task.claude_session_id is None
+    assert task.pending_messages == []
+    assert task.waiting_question is None
 
 
 # ---------------------------------------------------------------------------
