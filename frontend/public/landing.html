@@ -1,0 +1,765 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Cronos is the internal project management platform used by ULTC to plan, assign, and automate software development tasks using Claude Code AI agents." />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="https://cronos.ultc.at/" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Cronos" />
+  <meta property="og:title" content="Cronos — Internal project management for ULTC" />
+  <meta property="og:description" content="Kanban task board with built-in AI agent execution. ULTC's internal platform for orchestrating Claude Code agents across software development work." />
+  <meta property="og:url" content="https://cronos.ultc.at/" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Cronos",
+    "description": "Cronos is the internal project management platform used by ULTC to plan, assign, and automate software development tasks using Claude Code AI agents.",
+    "url": "https://cronos.ultc.at/",
+    "applicationCategory": "BusinessApplication",
+    "operatingSystem": "Web",
+    "offers": { "@type": "Offer", "price": "0" },
+    "author": { "@type": "Organization", "name": "ULTC", "url": "https://cronos.ultc.at/" }
+  }
+  </script>
+
+  <title>Cronos — Internal project management for ULTC</title>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --canvas:   #fafaf7;
+      --surface:  #f0f0eb;
+      --border:   #e2e2dc;
+      --ink:      #1a1a14;
+      --ink-soft: #555550;
+      --ink-dim:  #888882;
+      --green:    #15862d;
+      --green-bg: #e8f5ec;
+      --green-dim:#0e6122;
+      --mono:     "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--canvas);
+      color: var(--ink);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(250, 250, 247, 0.92);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: var(--ink);
+    }
+    .logo-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 10px rgba(21, 134, 45, 0.5);
+      flex-shrink: 0;
+    }
+    .brand-name {
+      font-weight: 700;
+      font-size: 1.05rem;
+      letter-spacing: -0.02em;
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .nav-link {
+      font-size: 0.875rem;
+      color: var(--ink-soft);
+      text-decoration: none;
+      padding: 6px 10px;
+      border-radius: 6px;
+      transition: color 0.15s, background 0.15s;
+    }
+    .nav-link:hover { color: var(--ink); background: var(--surface); }
+    .btn-launch-sm {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #fff;
+      background: var(--green);
+      text-decoration: none;
+      padding: 7px 16px;
+      border-radius: 7px;
+      transition: background 0.15s, box-shadow 0.15s;
+    }
+    .btn-launch-sm:hover { background: var(--green-dim); box-shadow: 0 2px 8px rgba(21,134,45,0.3); }
+
+    /* ── HERO ── */
+    .hero {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 96px 24px 80px;
+      text-align: center;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: var(--green-bg);
+      color: var(--green);
+      border: 1px solid rgba(21,134,45,0.2);
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 5px 14px;
+      margin-bottom: 32px;
+    }
+    .hero-badge-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+    }
+    h1 {
+      font-size: clamp(2.4rem, 6vw, 4rem);
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      line-height: 1.1;
+      color: var(--ink);
+      margin-bottom: 24px;
+    }
+    h1 em {
+      font-style: normal;
+      color: var(--green);
+    }
+    .hero-sub {
+      font-size: clamp(1rem, 2.5vw, 1.2rem);
+      color: var(--ink-soft);
+      max-width: 580px;
+      margin: 0 auto 40px;
+      line-height: 1.7;
+    }
+    .hero-actions {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .btn-launch {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--green);
+      color: #fff;
+      font-weight: 700;
+      font-size: 1rem;
+      text-decoration: none;
+      padding: 13px 28px;
+      border-radius: 10px;
+      transition: background 0.15s, box-shadow 0.2s, transform 0.1s;
+      box-shadow: 0 2px 12px rgba(21,134,45,0.25);
+    }
+    .btn-launch:hover {
+      background: var(--green-dim);
+      box-shadow: 0 4px 20px rgba(21,134,45,0.35);
+      transform: translateY(-1px);
+    }
+    .btn-launch svg { width: 18px; height: 18px; }
+    .btn-about {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--ink-soft);
+      font-weight: 500;
+      font-size: 0.95rem;
+      text-decoration: none;
+      padding: 13px 20px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      transition: color 0.15s, background 0.15s, border-color 0.15s;
+    }
+    .btn-about:hover { color: var(--ink); background: var(--surface); border-color: #ccc; }
+    .hero-note {
+      margin-top: 20px;
+      font-size: 0.82rem;
+      color: var(--ink-dim);
+    }
+
+    /* ── TERMINAL BLOCK ── */
+    .terminal-wrap {
+      max-width: 720px;
+      margin: 64px auto 0;
+    }
+    .terminal {
+      background: #0f1710;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.12), 0 0 0 1px rgba(255,255,255,0.06);
+    }
+    .term-bar {
+      background: #1a2318;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .term-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .term-dot-r { background: #ff5f57; }
+    .term-dot-y { background: #ffbd2e; }
+    .term-dot-g { background: #28ca41; }
+    .term-label {
+      margin-left: 8px;
+      font-size: 0.75rem;
+      font-family: var(--mono);
+      color: #4a6b4d;
+    }
+    .term-body {
+      padding: 20px 24px 22px;
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      line-height: 1.75;
+    }
+    .t-dim  { color: #4a6b4d; }
+    .t-cmd  { color: #c3e88d; }
+    .t-out  { color: #89ddff; }
+    .t-ok   { color: #4aee80; }
+    .t-ann  { color: #ffcb6b; }
+    .t-muted{ color: #384d3a; }
+
+    /* ── SECTION SCAFFOLD ── */
+    section { padding: 80px 24px; }
+    .section-inner { max-width: 960px; margin: 0 auto; }
+    .section-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--green);
+      margin-bottom: 12px;
+    }
+    h2 {
+      font-size: clamp(1.6rem, 4vw, 2.2rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.2;
+      color: var(--ink);
+      margin-bottom: 16px;
+    }
+    .section-desc {
+      font-size: 1.05rem;
+      color: var(--ink-soft);
+      max-width: 560px;
+      line-height: 1.7;
+      margin-bottom: 48px;
+    }
+
+    /* ── FEATURES GRID ── */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 20px;
+    }
+    .feature-card {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px;
+      transition: box-shadow 0.2s, transform 0.15s;
+    }
+    .feature-card:hover {
+      box-shadow: 0 4px 24px rgba(0,0,0,0.07);
+      transform: translateY(-2px);
+    }
+    .feature-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: var(--green-bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+      font-size: 1.2rem;
+    }
+    .feature-card h3 {
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: var(--ink);
+      margin-bottom: 8px;
+    }
+    .feature-card p {
+      font-size: 0.9rem;
+      color: var(--ink-soft);
+      line-height: 1.65;
+    }
+
+    /* ── DIVIDER ── */
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 0;
+    }
+
+    /* ── HOW IT WORKS ── */
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 0;
+      position: relative;
+    }
+    .step {
+      padding: 32px 28px;
+      position: relative;
+    }
+    .step + .step {
+      border-left: 1px solid var(--border);
+    }
+    @media (max-width: 680px) {
+      .step + .step { border-left: none; border-top: 1px solid var(--border); }
+    }
+    .step-num {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: var(--green);
+      letter-spacing: 0.08em;
+      margin-bottom: 14px;
+      background: var(--green-bg);
+      border: 1px solid rgba(21,134,45,0.2);
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .step h3 {
+      font-size: 1.05rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: var(--ink);
+      margin-bottom: 8px;
+    }
+    .step p {
+      font-size: 0.88rem;
+      color: var(--ink-soft);
+      line-height: 1.65;
+    }
+    .steps-wrap {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    /* ── ABOUT ── */
+    .about-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px 64px;
+      align-items: start;
+    }
+    @media (max-width: 700px) {
+      .about-grid { grid-template-columns: 1fr; }
+    }
+    .about-body p {
+      font-size: 0.95rem;
+      color: var(--ink-soft);
+      line-height: 1.75;
+      margin-bottom: 16px;
+    }
+    .about-body p:last-child { margin-bottom: 0; }
+    .about-aside { display: flex; flex-direction: column; gap: 16px; }
+    .aside-card {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px 20px;
+    }
+    .aside-card-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+      margin-bottom: 6px;
+    }
+    .aside-card-value {
+      font-size: 0.9rem;
+      color: var(--ink);
+      line-height: 1.5;
+    }
+    .tag-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+    .tag {
+      font-size: 0.75rem;
+      font-family: var(--mono);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 3px 8px;
+      color: var(--ink-soft);
+    }
+
+    /* ── CTA BANNER ── */
+    .cta-banner {
+      background: var(--ink);
+      border-radius: 16px;
+      padding: 48px 40px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .cta-banner::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 60% 80% at 50% 100%, rgba(21,134,45,0.25) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .cta-banner h2 {
+      color: #f0f0eb;
+      margin-bottom: 12px;
+    }
+    .cta-banner p {
+      color: #888882;
+      font-size: 1rem;
+      margin-bottom: 32px;
+    }
+    .btn-launch-inv {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--green);
+      color: #fff;
+      font-weight: 700;
+      font-size: 1rem;
+      text-decoration: none;
+      padding: 13px 28px;
+      border-radius: 10px;
+      transition: background 0.15s, box-shadow 0.2s, transform 0.1s;
+      box-shadow: 0 2px 16px rgba(21,134,45,0.4);
+    }
+    .btn-launch-inv:hover {
+      background: var(--green-dim);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 24px rgba(21,134,45,0.5);
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 28px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      max-width: 960px;
+      margin: 0 auto;
+    }
+    .footer-brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+      font-size: 0.875rem;
+      color: var(--ink);
+      text-decoration: none;
+    }
+    .footer-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+    }
+    .footer-links { display: flex; gap: 4px; flex-wrap: wrap; }
+    .footer-link {
+      font-size: 0.82rem;
+      color: var(--ink-dim);
+      text-decoration: none;
+      padding: 4px 8px;
+      border-radius: 5px;
+      transition: color 0.15s, background 0.15s;
+    }
+    .footer-link:hover { color: var(--ink); background: var(--surface); }
+    .footer-copy {
+      font-size: 0.78rem;
+      color: var(--ink-dim);
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 600px) {
+      .hero { padding: 64px 20px 60px; }
+      section { padding: 60px 20px; }
+      .cta-banner { padding: 36px 24px; }
+      .step { padding: 24px 20px; }
+      .nav-links .nav-link { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-brand" href="/">
+    <div class="logo-dot"></div>
+    <span class="brand-name">Cronos</span>
+  </a>
+  <div class="nav-links">
+    <a class="nav-link" href="#features">Features</a>
+    <a class="nav-link" href="#how-it-works">How it works</a>
+    <a class="nav-link" href="/about.html">About</a>
+    <a class="btn-launch-sm" href="/app/">Launch App</a>
+  </div>
+</nav>
+
+<!-- ── HERO ── -->
+<section class="hero" style="padding-bottom: 0;">
+  <div class="hero-badge">
+    <div class="hero-badge-dot"></div>
+    Internal · ULTC
+  </div>
+  <h1>Run <em>AI agents</em>.<br>Ship faster.</h1>
+  <p class="hero-sub">
+    Cronos is the internal task management platform ULTC uses to plan, assign,
+    and automate software development work — with Claude Code agents that write
+    code, run tests, and report back in real time.
+  </p>
+  <div class="hero-actions">
+    <a class="btn-launch" href="/app/">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="10" cy="10" r="8"/>
+        <polyline points="10 6 14 10 10 14"/>
+        <line x1="6" y1="10" x2="14" y2="10"/>
+      </svg>
+      Launch App
+    </a>
+    <a class="btn-about" href="/about.html">About Cronos</a>
+  </div>
+  <p class="hero-note">Authorized ULTC team members only &middot; credentials required</p>
+
+  <div class="terminal-wrap">
+    <div class="terminal">
+      <div class="term-bar">
+        <div class="term-dot term-dot-r"></div>
+        <div class="term-dot term-dot-y"></div>
+        <div class="term-dot term-dot-g"></div>
+        <span class="term-label">cronos · agent session</span>
+      </div>
+      <div class="term-body">
+        <div><span class="t-dim">cronos &gt;</span> <span class="t-cmd">dispatch task #142 "Refactor auth middleware to use JWT"</span></div>
+        <div class="t-muted">&nbsp;</div>
+        <div><span class="t-ann">▶ agent</span> <span class="t-dim">starting workspace · branch feat/auth-jwt</span></div>
+        <div><span class="t-dim">  ↳</span> <span class="t-out">reading codebase · 12 files scanned</span></div>
+        <div><span class="t-dim">  ↳</span> <span class="t-out">writing backend/auth/jwt.py</span></div>
+        <div><span class="t-dim">  ↳</span> <span class="t-out">updating tests · 3 new assertions</span></div>
+        <div><span class="t-dim">  ↳</span> <span class="t-out">running pytest … 47 passed</span></div>
+        <div class="t-muted">&nbsp;</div>
+        <div><span class="t-ok">✓ done</span> <span class="t-dim">· PR opened · review requested</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" style="margin-top: 80px;" />
+
+<!-- ── FEATURES ── -->
+<section id="features">
+  <div class="section-inner">
+    <div class="section-label">Features</div>
+    <h2>Everything your team needs to<br>ship with AI agents</h2>
+    <p class="section-desc">
+      Cronos combines a familiar Kanban workflow with first-class AI agent execution,
+      so you can go from task description to merged code without leaving the board.
+    </p>
+
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">&#9783;</div>
+        <h3>Kanban Board</h3>
+        <p>Drag-and-drop task management with customizable lanes — backlog, in progress, review, and done. Multiple boards across separate workspaces.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#9889;</div>
+        <h3>AI Agent Execution</h3>
+        <p>Dispatch any task to a Claude Code agent with one click. The agent reads the codebase, makes the changes, and reports every tool call back to the board.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#9654;</div>
+        <h3>Live Execution Logs</h3>
+        <p>Watch the agent work in real time. A structured log captures every file read, edit, and shell command so you know exactly what ran and why.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#128221;</div>
+        <h3>Markdown Task Editor</h3>
+        <p>Write detailed task briefs in Markdown with a split-pane editor and live preview — so agents receive clear, structured instructions every time.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#128202;</div>
+        <h3>Stats &amp; Activity</h3>
+        <p>Per-space statistics track throughput, cycle time, and agent success rate. Activity feeds show who did what and when across every task.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#128274;</div>
+        <h3>Private by Default</h3>
+        <p>Cronos runs entirely on ULTC's own infrastructure. No data leaves your VPS. Access is gated by HTTP basic authentication on every request.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- ── HOW IT WORKS ── -->
+<section id="how-it-works">
+  <div class="section-inner">
+    <div class="section-label">How it works</div>
+    <h2>From task to merged code<br>in three steps</h2>
+    <p class="section-desc">
+      Cronos removes the manual scaffolding between a good idea and working code.
+    </p>
+
+    <div class="steps-wrap">
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">01</div>
+          <h3>Create a task</h3>
+          <p>Write a task card with a title and a Markdown brief describing the desired outcome, acceptance criteria, and any relevant context. Add it to the board lane of your choice.</p>
+        </div>
+        <div class="step">
+          <div class="step-num">02</div>
+          <h3>Dispatch to an agent</h3>
+          <p>Click "Run agent" and Cronos queues the task for a Claude Code agent. The agent spins up an isolated workspace, reads the codebase, and begins working — no human steering required.</p>
+        </div>
+        <div class="step">
+          <div class="step-num">03</div>
+          <h3>Review &amp; merge</h3>
+          <p>Follow live execution logs as the agent writes code and runs tests. When it's done, review the diff or the opened pull request, leave feedback, and merge.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- ── ABOUT ── -->
+<section id="about">
+  <div class="section-inner">
+    <div class="section-label">About</div>
+    <div class="about-grid">
+      <div>
+        <h2>Built by ULTC,<br>for ULTC</h2>
+        <div class="about-body">
+          <p>
+            Cronos started as a lightweight internal tool to help the ULTC engineering team manage
+            the growing volume of work they were handing off to AI coding assistants. What began
+            as a simple task list quickly grew into a full Kanban platform with first-class support
+            for agent orchestration.
+          </p>
+          <p>
+            Today Cronos handles the entire lifecycle of agent-executed tasks: planning on the
+            board, structured briefing in the editor, agent dispatch, real-time log streaming,
+            evaluation scoring, and archival — all in one place.
+          </p>
+          <p>
+            The application runs on a single private VPS managed by ULTC. No third-party analytics,
+            no external telemetry. Task data, code context, and execution logs stay on the machine.
+          </p>
+        </div>
+      </div>
+      <div class="about-aside">
+        <div class="aside-card">
+          <div class="aside-card-label">Operator</div>
+          <div class="aside-card-value">ULTC — internal engineering team</div>
+        </div>
+        <div class="aside-card">
+          <div class="aside-card-label">Access</div>
+          <div class="aside-card-value">Authorized team members only.<br>HTTP basic authentication.</div>
+        </div>
+        <div class="aside-card">
+          <div class="aside-card-label">Infrastructure</div>
+          <div class="aside-card-value">Self-hosted on private VPS.<br>Docker + Caddy.</div>
+        </div>
+        <div class="aside-card">
+          <div class="aside-card-label">Stack</div>
+          <div class="aside-card-value">
+            <div class="tag-row">
+              <span class="tag">React</span>
+              <span class="tag">FastAPI</span>
+              <span class="tag">Claude API</span>
+              <span class="tag">Caddy</span>
+              <span class="tag">Docker</span>
+            </div>
+          </div>
+        </div>
+        <div class="aside-card">
+          <div class="aside-card-label">AI engine</div>
+          <div class="aside-card-value">Anthropic Claude Code — agents execute tasks in isolated workspaces.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- ── CTA ── -->
+<section>
+  <div class="section-inner">
+    <div class="cta-banner">
+      <h2>Ready to open the board?</h2>
+      <p>Sign in with your ULTC credentials to access Cronos.</p>
+      <a class="btn-launch-inv" href="/app/">
+        <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="10" cy="10" r="8"/>
+          <polyline points="10 6 14 10 10 14"/>
+          <line x1="6" y1="10" x2="14" y2="10"/>
+        </svg>
+        Launch Cronos
+      </a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <a class="footer-brand" href="/">
+    <div class="footer-dot"></div>
+    Cronos
+  </a>
+  <div class="footer-links">
+    <a class="footer-link" href="/about.html">About</a>
+    <a class="footer-link" href="/terms.html">Terms</a>
+    <a class="footer-link" href="/privacy.html">Privacy</a>
+    <a class="footer-link" href="/app/">App</a>
+  </div>
+  <span class="footer-copy">&copy; 2026 ULTC</span>
+</footer>
+
+</body>
+</html>

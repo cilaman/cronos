@@ -1,11 +1,11 @@
-# Production: TLS via Let's Encrypt + HTTP basic auth.
+# Production: TLS via Let's Encrypt + HTTP basic auth on the app.
 # Required env: DOMAIN, BASIC_AUTH_USER, BASIC_AUTH_HASH (bcrypt).
 # Generate the hash with:
 #   docker run --rm caddy caddy hash-password --plaintext '<password>'
 
 {$DOMAIN} {
-    # Public crawler-facing paths bypass basic auth so web filters can classify the site.
-    @private not path /robots.txt /sitemap.xml /about.html /terms.html /privacy.html
+    # Public paths: landing page, static info pages, crawler files — no auth.
+    @private not path / /robots.txt /sitemap.xml /about.html /terms.html /privacy.html
     basicauth @private {
         {$BASIC_AUTH_USER} {$BASIC_AUTH_HASH}
     }
@@ -22,9 +22,24 @@
         reverse_proxy backend:8000
     }
 
-    handle {
+    # Landing page at root — serve landing.html without auth.
+    handle / {
+        root * /srv
+        rewrite * /landing.html
+        file_server
+    }
+
+    # React SPA lives under /app/. Fallback to index.html for client-side routing.
+    @app path /app /app/*
+    handle @app {
         root * /srv
         try_files {path} /index.html
+        file_server
+    }
+
+    # Serve remaining static files (robots.txt, sitemap.xml, about.html, etc.).
+    handle {
+        root * /srv
         file_server
     }
 }
