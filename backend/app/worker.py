@@ -150,6 +150,8 @@ class Worker:
             await self._publish(task_id, event)
 
         space = self.space_store.get(task.space_id) if self.space_store else None
+        run_exception: str | None = None
+        result = None
         try:
             result = await run_agent(
                 task,
@@ -159,20 +161,50 @@ class Worker:
                 space=space,
             )
         except FileNotFoundError as e:
+            run_exception = f"claude binary not found: {e}"
             await self._publish(
                 task_id,
-                {"type": "run_error", "error": f"claude binary not found: {e}"},
+                {"type": "run_error", "error": run_exception},
             )
             log.exception("Failed to spawn claude for %s", task_id)
-            self._current_cancel = None
-            return
         except Exception as e:
-            await self._publish(task_id, {"type": "run_error", "error": str(e)})
+            run_exception = str(e)
+            await self._publish(task_id, {"type": "run_error", "error": run_exception})
             log.exception("Agent error on %s", task_id)
+        finally:
             self._current_cancel = None
+
+        if run_exception is not None:
+            # Transition task to WAITING so it doesn't remain stuck in ACTIVE.
+            ended_at = datetime.now(tz=UTC)
+            timestamp = ended_at.strftime("%Y-%m-%dT%H:%M:%SZ")
+            history_entry = f"```\n{timestamp} [agent]\n(agent error: {run_exception})\n```"
+            try:
+                await self.store.finalize_run(
+                    task_id,
+                    new_state=TaskState.WAITING,
+                    session_id=None,
+                    waiting_question=f"Agent failed to start: {run_exception}",
+                    history_entry=history_entry,
+                )
+            except Exception:
+                log.exception("Failed to finalize errored task %s", task_id)
+            await self._publish(
+                task_id,
+                {
+                    "type": "run_end",
+                    "task_id": task_id,
+                    "status": None,
+                    "new_state": TaskState.WAITING.value,
+                },
+            )
+            for q in list(self._subscribers.get(task_id, [])):
+                try:
+                    q.put_nowait(_DONE_SENTINEL)
+                except asyncio.QueueFull:
+                    pass
             return
 
-        self._current_cancel = None
         await self._finalize(task_id, result, started_at=started_at)
 
     async def _finalize(
