@@ -32,6 +32,7 @@
     # React SPA lives under /app/. Fallback to index.html for client-side routing.
     @app path /app /app/*
     handle @app {
+        uri strip_prefix /app
         root * /srv
         try_files {path} /index.html
         file_server
