@@ -299,6 +299,17 @@ async def stop_task(task_id: str, request: Request) -> TaskRead:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
     worker = get_worker_for_task(request, task_id)
     if not worker.stop_current(task_id):
+        # Nothing is actively running. If the task is stuck in active state
+        # (e.g. the worker crashed mid-run without finalizing), reset it to
+        # backlog so the user can un-stick it without a backend restart.
+        if task.state == TaskState.ACTIVE:
+            try:
+                updated = await store.transition(
+                    task_id, TaskState.BACKLOG, allowed=USER_TRANSITIONS
+                )
+                return _build_task_read(updated, get_space_store(request).get(updated.space_id))
+            except (InvalidTransition, StorageError) as e:
+                raise HTTPException(status_code=409, detail=str(e)) from None
         raise HTTPException(
             status_code=409,
             detail="Task is not currently running",
