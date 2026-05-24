@@ -2,7 +2,7 @@ import { NavLink } from "react-router-dom";
 import { cn } from "../utils/cn";
 import { useSpaces } from "../hooks/useSpaces";
 import type { SpaceSummary } from "../types";
-import { ThemeToggle } from "./ThemeToggle";
+import { ThemePicker } from "./ThemePicker";
 
 const primaryNavLinkClasses = ({ isActive }: { isActive: boolean }) =>
   cn(
@@ -172,7 +172,7 @@ export function Sidebar({ onClose }: Props) {
       </div>
 
       <div className="mt-auto flex items-center justify-between border-t border-hairline px-3 py-2">
-        <ThemeToggle />
+        <ThemePicker />
         <span className="font-mono text-[10px] tracking-[0.14em] text-ink-faint">
           v0.0.1
         </span>

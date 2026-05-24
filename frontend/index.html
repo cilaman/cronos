@@ -38,12 +38,17 @@
       (function () {
         try {
           var stored = localStorage.getItem("cronos-theme");
-          var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-          var dark = stored ? stored === "dark" : prefersDark;
-          if (dark) {
-            document.documentElement.classList.add("dark");
-            var meta = document.querySelector('meta[name="theme-color"]');
-            if (meta) meta.setAttribute("content", "#07100c");
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (stored === "neon") {
+            document.documentElement.classList.add("dark", "neon");
+            if (meta) meta.setAttribute("content", "#050314");
+          } else {
+            var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+            var dark = stored ? stored === "dark" : prefersDark;
+            if (dark) {
+              document.documentElement.classList.add("dark");
+              if (meta) meta.setAttribute("content", "#07100c");
+            }
           }
         } catch (e) {}
       })();
