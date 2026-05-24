@@ -9,6 +9,7 @@ import pytest
 
 from app.models import TaskState
 from app.storage import (
+    CycleError,
     InvalidTransition,
     TaskNotFound,
     TaskStore,
@@ -19,6 +20,8 @@ from app.storage import (
     parse_file,
     slugify,
     summarize,
+    validate_depends_on,
+    validate_parent,
 )
 
 from .conftest import SPACE_ID
@@ -894,3 +897,259 @@ async def test_sqlite_index_query_by_type(task_store):
 
     assert goal_ids == {g1.id, g2.id}
     assert issue_ids == {i1.id}
+
+
+# ---------------------------------------------------------------------------
+# Cycle detection: validate_parent / validate_depends_on — arc-1 task 2
+# ---------------------------------------------------------------------------
+#
+# These exercise pure in-memory predicates that gate parent_id / depends_on
+# writes. They take a `by_id: dict[str, Task]` and never touch disk, so we
+# build the index by hand instead of spinning up a TaskStore.
+
+
+def _mk(task_id: str, *, space: str = SPACE_ID, parent: str | None = None,
+        deps: list[str] | None = None):
+    """Build a minimal Task suitable for the cycle validators' by_id dict."""
+    from app.models import Task
+
+    now = datetime(2025, 6, 1, 12, 0, tzinfo=UTC)
+    return Task(
+        id=task_id,
+        space_id=space,
+        title=task_id,
+        state=TaskState.BACKLOG,
+        created_at=now,
+        updated_at=now,
+        brief="",
+        history="",
+        parent_id=parent,
+        depends_on=list(deps or []),
+    )
+
+
+def _index(*tasks) -> dict:
+    """Build an id -> Task index from positional Task args."""
+    return {t.id: t for t in tasks}
+
+
+# ---- validate_parent ----
+
+
+def test_validate_parent_none_is_noop():
+    """candidate_parent_id=None means 'clear parent' — always valid."""
+    a = _mk("A")
+    # Should not raise — assertion is the absence of an exception.
+    validate_parent("A", None, SPACE_ID, _index(a))
+
+
+def test_validate_parent_self_reference_raises():
+    """A task may not be its own parent."""
+    a = _mk("A")
+
+    with pytest.raises(CycleError) as excinfo:
+        validate_parent("A", "A", SPACE_ID, _index(a))
+
+    # Acceptance: message must reflect the self-cycle as "A -> A".
+    assert "A -> A" in str(excinfo.value)
+
+
+def test_validate_parent_direct_cycle_raises():
+    """A.parent=B; setting B.parent=A would create a length-2 cycle."""
+    # A points to B as its parent. The candidate would make B point back to A.
+    a = _mk("A", parent="B")
+    b = _mk("B")
+
+    with pytest.raises(CycleError) as excinfo:
+        validate_parent("B", "A", SPACE_ID, _index(a, b))
+
+    # The walked path starts at the would-be edge (B -> A) and continues up
+    # the existing chain (A -> B) until it hits the start node again.
+    assert "B -> A -> B" in str(excinfo.value)
+
+
+def test_validate_parent_transitive_cycle_raises():
+    """A.parent=B, B.parent=C, set C.parent=A — a length-3 cycle."""
+    # Existing chain: A -> B -> C (toward root). Candidate: C.parent = A.
+    a = _mk("A", parent="B")
+    b = _mk("B", parent="C")
+    c = _mk("C")
+    by_id = _index(a, b, c)
+
+    with pytest.raises(CycleError) as excinfo:
+        validate_parent("C", "A", SPACE_ID, by_id)
+
+    msg = str(excinfo.value)
+    # All three nodes must appear in the cycle path.
+    assert "A" in msg and "B" in msg and "C" in msg
+    # The path begins with the edge being added (C -> A) and closes on C.
+    assert msg.startswith("C -> A")
+    assert msg.endswith("-> C")
+
+
+def test_validate_parent_cross_space_raises():
+    """A parent that lives in a different space must be rejected."""
+    a = _mk("A", space=SPACE_ID)
+    other = _mk("B", space="other-space")
+    by_id = _index(a, other)
+
+    with pytest.raises(CycleError) as excinfo:
+        validate_parent("A", "B", SPACE_ID, by_id)
+
+    # Should not present as a cycle but as a not-found-in-space error.
+    msg = str(excinfo.value)
+    assert "B" in msg
+    assert SPACE_ID in msg
+
+
+def test_validate_parent_missing_candidate_raises():
+    """A parent id that isn't in the index at all is rejected."""
+    a = _mk("A")
+
+    with pytest.raises(CycleError) as excinfo:
+        validate_parent("A", "ghost", SPACE_ID, _index(a))
+
+    assert "ghost" in str(excinfo.value)
+
+
+def test_validate_parent_valid_deep_hierarchy_no_error():
+    """Depth-3 chain A->B->C exists; setting D.parent=A is legal."""
+    a = _mk("A", parent="B")
+    b = _mk("B", parent="C")
+    c = _mk("C")
+    d = _mk("D")
+    by_id = _index(a, b, c, d)
+
+    # Should not raise — D is a brand-new node so no cycle is possible.
+    validate_parent("D", "A", SPACE_ID, by_id)
+
+
+def test_validate_parent_orphaned_ancestor_does_not_loop():
+    """If an ancestor chain points at a missing node, the walk halts cleanly.
+
+    Defensive: an invalid on-disk state (parent_id pointing at a deleted
+    task) must not cause validate_parent to hang or to mask a real cycle.
+    """
+    a = _mk("A", parent="GHOST")  # parent doesn't exist in by_id
+    b = _mk("B")
+
+    # Should terminate without raising — there's no cycle involving B.
+    validate_parent("B", "A", SPACE_ID, _index(a, b))
+
+
+# ---- validate_depends_on ----
+
+
+def test_validate_depends_on_empty_list_is_noop():
+    """An empty deps list is always valid."""
+    a = _mk("A")
+
+    validate_depends_on("A", [], SPACE_ID, _index(a))
+
+
+def test_validate_depends_on_self_reference_raises():
+    """A task may not depend on itself."""
+    a = _mk("A")
+
+    with pytest.raises(CycleError) as excinfo:
+        validate_depends_on("A", ["A"], SPACE_ID, _index(a))
+
+    assert "A -> A" in str(excinfo.value)
+
+
+def test_validate_depends_on_direct_cycle_raises():
+    """A.depends_on=[B]; adding B.depends_on=[A] would close a 2-cycle."""
+    a = _mk("A", deps=["B"])
+    b = _mk("B")
+
+    with pytest.raises(CycleError) as excinfo:
+        validate_depends_on("B", ["A"], SPACE_ID, _index(a, b))
+
+    # Path must show B -> A -> B (the candidate edge + the existing chain).
+    assert "B -> A -> B" in str(excinfo.value)
+
+
+def test_validate_depends_on_transitive_cycle_raises():
+    """A.depends_on=[B], B.depends_on=[C]; adding C.depends_on=[A] cycles."""
+    a = _mk("A", deps=["B"])
+    b = _mk("B", deps=["C"])
+    c = _mk("C")
+
+    with pytest.raises(CycleError) as excinfo:
+        validate_depends_on("C", ["A"], SPACE_ID, _index(a, b, c))
+
+    msg = str(excinfo.value)
+    assert "A" in msg and "B" in msg and "C" in msg
+    # The reconstructed path closes on C (the task being mutated).
+    assert msg.startswith("C -> A")
+    assert msg.endswith("-> C")
+
+
+def test_validate_depends_on_cross_space_raises():
+    """A dep that lives in a different space must be rejected."""
+    a = _mk("A", space=SPACE_ID)
+    other = _mk("B", space="other-space")
+
+    with pytest.raises(CycleError) as excinfo:
+        validate_depends_on("A", ["B"], SPACE_ID, _index(a, other))
+
+    msg = str(excinfo.value)
+    assert "B" in msg
+    assert SPACE_ID in msg
+
+
+def test_validate_depends_on_missing_dep_raises():
+    """A dep id that isn't in the index at all is rejected."""
+    a = _mk("A")
+
+    with pytest.raises(CycleError) as excinfo:
+        validate_depends_on("A", ["ghost"], SPACE_ID, _index(a))
+
+    assert "ghost" in str(excinfo.value)
+
+
+def test_validate_depends_on_valid_dag_no_error():
+    """Multiple deps with shared sub-deps but no cycle — should accept."""
+    # Build a small DAG:
+    #   B -> D
+    #   C -> D
+    # We add a new task A with deps=[B, C]. D is shared, no cycle anywhere.
+    b = _mk("B", deps=["D"])
+    c = _mk("C", deps=["D"])
+    d = _mk("D")
+    a = _mk("A")  # newly created, no deps yet
+    by_id = _index(a, b, c, d)
+
+    # Should not raise — A is a sink, not reachable from B/C/D.
+    validate_depends_on("A", ["B", "C"], SPACE_ID, by_id)
+
+
+def test_validate_depends_on_one_good_one_bad_still_raises():
+    """If any dep in the list creates a cycle, the whole call fails.
+
+    Guards against an off-by-one bug where only the first dep is checked.
+    """
+    # A.depends_on=[B]; B.depends_on=[]. Try to set B.depends_on=[C, A].
+    # C is fine, A closes the cycle B -> A -> B.
+    a = _mk("A", deps=["B"])
+    b = _mk("B")
+    c = _mk("C")
+
+    with pytest.raises(CycleError):
+        validate_depends_on("B", ["C", "A"], SPACE_ID, _index(a, b, c))
+
+
+def test_validate_depends_on_cross_space_takes_priority_over_self():
+    """When a dep is both missing-in-space AND not self, the missing error fires.
+
+    Locks in that the cross-space check runs before the cycle BFS — important
+    so the user sees the right error message ("not found in space") rather
+    than a misleading cycle path.
+    """
+    a = _mk("A", space=SPACE_ID)
+    other = _mk("X", space="other-space")
+
+    with pytest.raises(CycleError) as excinfo:
+        validate_depends_on("A", ["X"], SPACE_ID, _index(a, other))
+
+    assert "not found in space" in str(excinfo.value)

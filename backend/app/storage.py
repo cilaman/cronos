@@ -72,6 +72,112 @@ class UnknownSpace(StorageError):
     pass
 
 
+class CycleError(ValueError):
+    """Raised when a parent_id or depends_on assignment would create a cycle or cross-space reference."""
+
+
+# ---------- validators ----------
+
+
+def validate_parent(
+    task_id: str,
+    candidate_parent_id: str | None,
+    space_id: str,
+    by_id: dict[str, Task],
+) -> None:
+    """Raise CycleError if setting task_id.parent_id = candidate_parent_id creates a cycle.
+
+    Also raises for self-reference and cross-space parents.
+    O(N) in tasks-per-space — walks the ancestor chain without re-reading files.
+    """
+    if candidate_parent_id is None:
+        return
+    if candidate_parent_id == task_id:
+        raise CycleError(f"{task_id} -> {task_id}")
+    candidate = by_id.get(candidate_parent_id)
+    if candidate is None or candidate.space_id != space_id:
+        raise CycleError(
+            f"Parent {candidate_parent_id!r} not found in space {space_id!r}"
+        )
+    # Walk the ancestor chain of candidate_parent_id upward.
+    # If we reach task_id it means task_id is already an ancestor of the candidate,
+    # so making the candidate a parent of task_id would create a cycle.
+    path = [task_id, candidate_parent_id]
+    seen: set[str] = {task_id, candidate_parent_id}
+    current_id = candidate_parent_id
+    while True:
+        node = by_id.get(current_id)
+        if node is None:
+            break
+        next_id = node.parent_id
+        if next_id is None:
+            break
+        if next_id == task_id:
+            path.append(next_id)
+            raise CycleError(" -> ".join(path))
+        if next_id in seen:
+            break
+        seen.add(next_id)
+        path.append(next_id)
+        current_id = next_id
+
+
+def _dep_cycle_path(
+    target_id: str,
+    start_id: str,
+    by_id: dict[str, Task],
+) -> list[str] | None:
+    """BFS through depends_on links starting at start_id; return cycle path if target_id is found."""
+    came_from: dict[str, str | None] = {start_id: None}
+    queue: list[str] = [start_id]
+    while queue:
+        current_id = queue.pop(0)
+        node = by_id.get(current_id)
+        if node is None:
+            continue
+        for next_id in node.depends_on:
+            if next_id == target_id:
+                # Reconstruct: target_id -> start_id -> ... -> current_id -> target_id
+                path = [target_id]
+                curr: str | None = current_id
+                while curr is not None:
+                    path.append(curr)
+                    curr = came_from.get(curr)
+                path.append(target_id)
+                path.reverse()
+                return path
+            if next_id not in came_from:
+                came_from[next_id] = current_id
+                queue.append(next_id)
+    return None
+
+
+def validate_depends_on(
+    task_id: str,
+    candidate_depends_on: list[str],
+    space_id: str,
+    by_id: dict[str, Task],
+) -> None:
+    """Raise CycleError if any dep in candidate_depends_on would create a cycle.
+
+    A cycle exists when task_id is reachable from a dep via the depends_on chain.
+    Also raises for self-references and cross-space deps.
+    O(N) in tasks-per-space — uses BFS without re-reading files.
+    """
+    for dep_id in candidate_depends_on:
+        if dep_id == task_id:
+            raise CycleError(f"{task_id} -> {task_id}")
+        dep = by_id.get(dep_id)
+        if dep is None or dep.space_id != space_id:
+            raise CycleError(
+                f"Dependency {dep_id!r} not found in space {space_id!r}"
+            )
+    for dep_id in candidate_depends_on:
+        path = _dep_cycle_path(task_id, dep_id, by_id)
+        if path is not None:
+            raise CycleError(" -> ".join(path))
+
+
 # ---------- parsing ----------
 
 
