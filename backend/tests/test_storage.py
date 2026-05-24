@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -422,3 +424,473 @@ async def test_task_store_board_summary_default_agent_mode_auto(task_store):
     matches = [s for s in board.backlog if s.id == task.id]
     assert len(matches) == 1
     assert matches[0].agent_mode == "auto"
+
+
+# ---------------------------------------------------------------------------
+# Hierarchy fields (type / parent_id / depends_on) — arc-1 task 1
+# ---------------------------------------------------------------------------
+
+
+def _write_raw_md(tmp_path: Path, name: str, frontmatter_yaml: str, body: str = "") -> Path:
+    """Write a raw markdown file with the given frontmatter block.
+
+    Uses python-frontmatter's exact serialization style so the test asserts
+    on parse behavior of inputs that mirror what dump_task writes.
+    """
+    path = tmp_path / f"{name}.md"
+    path.write_text(f"---\n{frontmatter_yaml.strip()}\n---\n{body}", encoding="utf-8")
+    return path
+
+
+def test_parse_file_reads_hierarchy_fields(tmp_path):
+    """parse_file lifts type, parent_id, depends_on from frontmatter."""
+    path = _write_raw_md(
+        tmp_path,
+        "task-with-hierarchy",
+        """
+id: task-with-hierarchy
+space_id: test-space
+title: Child Task
+state: backlog
+created_at: 2025-06-01T12:00:00Z
+updated_at: 2025-06-01T12:00:00Z
+type: goal
+parent_id: parent-task-1
+depends_on:
+  - dep-1
+  - dep-2
+""",
+        "# Brief\n\nA child task.\n",
+    )
+
+    task = parse_file(path, SPACE_ID)
+
+    assert task.type == "goal"
+    assert task.parent_id == "parent-task-1"
+    assert task.depends_on == ["dep-1", "dep-2"]
+
+
+def test_parse_file_back_compat_defaults_when_fields_missing(tmp_path):
+    """A pre-existing task file without the new keys parses with defaults."""
+    path = _write_raw_md(
+        tmp_path,
+        "legacy-task",
+        """
+id: legacy-task
+space_id: test-space
+title: Legacy Task
+state: backlog
+created_at: 2025-01-01T00:00:00Z
+updated_at: 2025-01-01T00:00:00Z
+""",
+        "# Brief\n\nFrom before the migration.\n",
+    )
+
+    task = parse_file(path, SPACE_ID)
+
+    assert task.type == "task"
+    assert task.parent_id is None
+    assert task.depends_on == []
+
+
+def test_parse_file_invalid_type_falls_back_to_task(tmp_path):
+    """An unknown `type:` value is coerced back to the default `task`.
+
+    This guards against a future enum widening crashing parse on rollback,
+    and against ZIP-imported task files with a garbage type.
+    """
+    path = _write_raw_md(
+        tmp_path,
+        "bad-type",
+        """
+id: bad-type
+space_id: test-space
+title: Bad Type
+state: backlog
+created_at: 2025-01-01T00:00:00Z
+updated_at: 2025-01-01T00:00:00Z
+type: epic
+parent_id: p
+""",
+        "# Brief\n\nfoo\n",
+    )
+
+    task = parse_file(path, SPACE_ID)
+
+    assert task.type == "task"
+    # parent_id is independent of the type sanitization
+    assert task.parent_id == "p"
+
+
+def test_parse_file_depends_on_non_list_falls_back_to_empty(tmp_path):
+    """If `depends_on:` is a scalar instead of a list, we yield []."""
+    path = _write_raw_md(
+        tmp_path,
+        "bad-depends",
+        """
+id: bad-depends
+space_id: test-space
+title: Bad Depends
+state: backlog
+created_at: 2025-01-01T00:00:00Z
+updated_at: 2025-01-01T00:00:00Z
+depends_on: not-a-list
+""",
+        "# Brief\n\nfoo\n",
+    )
+
+    task = parse_file(path, SPACE_ID)
+
+    assert task.depends_on == []
+
+
+def test_dump_task_emits_hierarchy_frontmatter(tmp_path):
+    """dump_task writes type/parent_id/depends_on into the frontmatter."""
+    from app.models import Task
+
+    now = datetime(2025, 6, 1, 12, 0, tzinfo=UTC)
+    task = Task(
+        id="dump-hier",
+        space_id=SPACE_ID,
+        title="Hierarchy",
+        state=TaskState.BACKLOG,
+        created_at=now,
+        updated_at=now,
+        brief="b",
+        history="",
+        type="issue",
+        parent_id="parent-x",
+        depends_on=["d1", "d2"],
+    )
+
+    serialized = dump_task(task)
+
+    # Assert on the frontmatter keys/values, not on whitespace formatting.
+    import frontmatter as fm
+    parsed = fm.loads(serialized)
+    assert parsed["type"] == "issue"
+    assert parsed["parent_id"] == "parent-x"
+    assert parsed["depends_on"] == ["d1", "d2"]
+
+
+def test_dump_task_round_trip_preserves_hierarchy_fields(tmp_path):
+    """Full disk round-trip: dump_task -> file -> parse_file restores fields."""
+    from app.models import Task
+
+    now = datetime(2025, 6, 1, 12, 0, tzinfo=UTC)
+    original = Task(
+        id="round-trip-hier",
+        space_id=SPACE_ID,
+        title="RT",
+        state=TaskState.BACKLOG,
+        created_at=now,
+        updated_at=now,
+        brief="b",
+        history="",
+        type="goal",
+        parent_id="p-1",
+        depends_on=["a", "b", "c"],
+    )
+    path = tmp_path / "rt.md"
+    path.write_text(dump_task(original), encoding="utf-8")
+
+    parsed = parse_file(path, SPACE_ID)
+
+    assert parsed.type == "goal"
+    assert parsed.parent_id == "p-1"
+    assert parsed.depends_on == ["a", "b", "c"]
+
+
+def test_summarize_propagates_hierarchy_fields():
+    """TaskSummary surfaces type and parent_id (depends_on is intentionally not on summary)."""
+    task = _make_task(type="goal", parent_id="parent-99")
+
+    summary = summarize(task)
+
+    assert summary.type == "goal"
+    assert summary.parent_id == "parent-99"
+
+
+def test_summarize_defaults_hierarchy_fields():
+    """A bare Task summarizes with type='task' and parent_id=None."""
+    task = _make_task()
+
+    summary = summarize(task)
+
+    assert summary.type == "task"
+    assert summary.parent_id is None
+
+
+# --- TaskStore.create / update with hierarchy ---
+
+
+async def test_task_store_create_with_hierarchy_fields(task_store, tmp_spaces_dir):
+    """Create accepts type/parent_id/depends_on and persists them to disk."""
+    task = await task_store.create(
+        space_id=SPACE_ID,
+        title="Child of Parent",
+        brief="b",
+        type="goal",
+        parent_id="parent-id-1",
+        depends_on=["dep-a", "dep-b"],
+    )
+
+    # Returned task carries the fields
+    assert task.type == "goal"
+    assert task.parent_id == "parent-id-1"
+    assert task.depends_on == ["dep-a", "dep-b"]
+
+    # Re-parsed from disk to prove persistence (not just in-memory model)
+    path = tmp_spaces_dir / SPACE_ID / ".cronos" / "tasks" / f"{task.id}.md"
+    reloaded = parse_file(path, SPACE_ID)
+    assert reloaded.type == "goal"
+    assert reloaded.parent_id == "parent-id-1"
+    assert reloaded.depends_on == ["dep-a", "dep-b"]
+
+
+async def test_task_store_create_defaults_when_hierarchy_fields_omitted(task_store):
+    """Omitting the new fields yields type='task', parent_id=None, depends_on=[]."""
+    task = await task_store.create(space_id=SPACE_ID, title="Defaults", brief="")
+
+    assert task.type == "task"
+    assert task.parent_id is None
+    assert task.depends_on == []
+
+
+async def test_task_store_create_invalid_type_raises(task_store):
+    """create() rejects unknown type values rather than silently coercing."""
+    from app.storage import StorageError
+
+    with pytest.raises(StorageError):
+        await task_store.create(
+            space_id=SPACE_ID, title="bad", brief="", type="epic"
+        )
+
+
+async def test_task_store_update_hierarchy_fields(task_store, tmp_spaces_dir):
+    """update accepts type, parent_id, depends_on and persists them."""
+    task = await task_store.create(space_id=SPACE_ID, title="Mutable", brief="")
+    assert task.type == "task"  # baseline
+
+    updated = await task_store.update(
+        task.id,
+        type="issue",
+        parent_id="new-parent",
+        depends_on=["x", "y"],
+    )
+
+    assert updated.type == "issue"
+    assert updated.parent_id == "new-parent"
+    assert updated.depends_on == ["x", "y"]
+
+    # Persisted to disk
+    path = tmp_spaces_dir / SPACE_ID / ".cronos" / "tasks" / f"{task.id}.md"
+    reloaded = parse_file(path, SPACE_ID)
+    assert reloaded.type == "issue"
+    assert reloaded.parent_id == "new-parent"
+    assert reloaded.depends_on == ["x", "y"]
+
+
+async def test_task_store_update_depends_on_can_be_empty_list(task_store):
+    """Passing depends_on=[] clears the list (not the same as None=no-op)."""
+    task = await task_store.create(
+        space_id=SPACE_ID,
+        title="ClearDeps",
+        brief="",
+        depends_on=["one", "two"],
+    )
+
+    updated = await task_store.update(task.id, depends_on=[])
+
+    assert updated.depends_on == []
+
+
+async def test_task_store_update_invalid_type_raises(task_store):
+    """update() rejects an unknown type."""
+    from app.storage import StorageError
+
+    task = await task_store.create(space_id=SPACE_ID, title="t", brief="")
+    with pytest.raises(StorageError):
+        await task_store.update(task.id, type="epic")
+
+
+# --- SQLite secondary index ---
+
+
+def _query_sqlite_row(db_path: Path, task_id: str) -> tuple | None:
+    """Return the (id, space_id, state, title, type, parent_id, depends_on_json) row, or None."""
+    con = sqlite3.connect(db_path)
+    try:
+        row = con.execute(
+            "SELECT id, space_id, state, title, type, parent_id, depends_on_json"
+            " FROM tasks WHERE id = ?",
+            (task_id,),
+        ).fetchone()
+        return row
+    finally:
+        con.close()
+
+
+async def test_sqlite_index_populated_after_reload_all(tmp_spaces_dir, space_store):
+    """reload_all() rebuilds the SQLite tasks table from MD files on disk."""
+    # Seed an on-disk task with hierarchy fields directly (bypass TaskStore.create).
+    from app.models import Task
+
+    now = datetime(2025, 6, 1, 12, 0, tzinfo=UTC)
+    seed = Task(
+        id="seeded-goal",
+        space_id=SPACE_ID,
+        title="Seeded Goal",
+        state=TaskState.BACKLOG,
+        created_at=now,
+        updated_at=now,
+        brief="",
+        history="",
+        type="goal",
+        parent_id="root",
+        depends_on=["dep1", "dep2"],
+    )
+    tasks_dir = tmp_spaces_dir / SPACE_ID / ".cronos" / "tasks"
+    tasks_dir.mkdir(parents=True, exist_ok=True)
+    (tasks_dir / f"{seed.id}.md").write_text(dump_task(seed), encoding="utf-8")
+
+    store = TaskStore(tmp_spaces_dir)
+    await store.reload_all()
+
+    row = _query_sqlite_row(store._db_path, "seeded-goal")
+    assert row is not None
+    assert row[0] == "seeded-goal"
+    assert row[1] == SPACE_ID
+    assert row[2] == "backlog"
+    assert row[3] == "Seeded Goal"
+    assert row[4] == "goal"
+    assert row[5] == "root"
+    assert json.loads(row[6]) == ["dep1", "dep2"]
+
+
+async def test_sqlite_index_upserts_on_create(task_store):
+    """TaskStore.create writes a matching row into the SQLite index."""
+    task = await task_store.create(
+        space_id=SPACE_ID,
+        title="Indexed Goal",
+        brief="",
+        type="goal",
+        parent_id="parent-x",
+        depends_on=["d"],
+    )
+
+    row = _query_sqlite_row(task_store._db_path, task.id)
+
+    assert row is not None
+    assert row[4] == "goal"
+    assert row[5] == "parent-x"
+    assert json.loads(row[6]) == ["d"]
+
+
+async def test_sqlite_index_upserts_on_update(task_store):
+    """TaskStore.update reflects the new hierarchy values in SQLite."""
+    task = await task_store.create(space_id=SPACE_ID, title="t", brief="")
+
+    await task_store.update(
+        task.id,
+        type="issue",
+        parent_id="new-parent",
+        depends_on=["alpha"],
+    )
+
+    row = _query_sqlite_row(task_store._db_path, task.id)
+    assert row is not None
+    assert row[4] == "issue"
+    assert row[5] == "new-parent"
+    assert json.loads(row[6]) == ["alpha"]
+
+
+async def test_sqlite_index_removes_row_on_delete(task_store):
+    """TaskStore.delete must remove the row from the SQLite index.
+
+    Without this, the secondary index keeps a dangling reference to a
+    soft-deleted task, which will leak into any future hierarchy/parent_id
+    query built on top of the index.
+    """
+    task = await task_store.create(space_id=SPACE_ID, title="GoneSoon", brief="")
+    # Sanity: row exists before delete.
+    assert _query_sqlite_row(task_store._db_path, task.id) is not None
+
+    await task_store.delete(task.id)
+
+    row = _query_sqlite_row(task_store._db_path, task.id)
+    assert row is None, "SQLite row not removed after delete (index leak)"
+
+
+async def test_sqlite_index_indexes_exist(task_store):
+    """The two new secondary indices are created by _ensure_db_schema()."""
+    con = sqlite3.connect(task_store._db_path)
+    try:
+        names = {
+            r[0]
+            for r in con.execute(
+                "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='tasks'"
+            ).fetchall()
+        }
+    finally:
+        con.close()
+
+    assert "idx_tasks_space_parent" in names
+    assert "idx_tasks_space_type" in names
+
+
+async def test_sqlite_index_query_by_parent_id(task_store):
+    """Sanity-check the (space_id, parent_id) lookup pattern the index supports."""
+    parent = await task_store.create(
+        space_id=SPACE_ID, title="Parent", brief="", type="goal"
+    )
+    child_1 = await task_store.create(
+        space_id=SPACE_ID, title="Child A", brief="", parent_id=parent.id
+    )
+    child_2 = await task_store.create(
+        space_id=SPACE_ID, title="Child B", brief="", parent_id=parent.id
+    )
+    # Unrelated task in the same space, no parent.
+    await task_store.create(space_id=SPACE_ID, title="Loner", brief="")
+
+    con = sqlite3.connect(task_store._db_path)
+    try:
+        rows = con.execute(
+            "SELECT id FROM tasks WHERE space_id = ? AND parent_id = ?",
+            (SPACE_ID, parent.id),
+        ).fetchall()
+    finally:
+        con.close()
+
+    ids = {r[0] for r in rows}
+    assert ids == {child_1.id, child_2.id}
+
+
+async def test_sqlite_index_query_by_type(task_store):
+    """Sanity-check the (space_id, type) lookup pattern the index supports."""
+    g1 = await task_store.create(space_id=SPACE_ID, title="G1", brief="", type="goal")
+    await task_store.create(space_id=SPACE_ID, title="T1", brief="", type="task")
+    i1 = await task_store.create(space_id=SPACE_ID, title="I1", brief="", type="issue")
+    g2 = await task_store.create(space_id=SPACE_ID, title="G2", brief="", type="goal")
+
+    con = sqlite3.connect(task_store._db_path)
+    try:
+        goal_ids = {
+            r[0]
+            for r in con.execute(
+                "SELECT id FROM tasks WHERE space_id = ? AND type = 'goal'",
+                (SPACE_ID,),
+            ).fetchall()
+        }
+        issue_ids = {
+            r[0]
+            for r in con.execute(
+                "SELECT id FROM tasks WHERE space_id = ? AND type = 'issue'",
+                (SPACE_ID,),
+            ).fetchall()
+        }
+    finally:
+        con.close()
+
+    assert goal_ids == {g1.id, g2.id}
+    assert issue_ids == {i1.id}

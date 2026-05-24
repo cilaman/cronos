@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import re
 import secrets
+import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -114,6 +116,14 @@ def parse_file(path: Path, space_id: str) -> Task:
         manual_order = int(meta.get("manual_order", 0) or 0)
     except (TypeError, ValueError):
         manual_order = 0
+    task_type = meta.get("type", "task")
+    if task_type not in ("task", "goal", "issue"):
+        task_type = "task"
+    parent_id = meta.get("parent_id") or None
+    raw_depends = meta.get("depends_on") or []
+    if not isinstance(raw_depends, list):
+        raw_depends = []
+    depends_on = [str(d) for d in raw_depends if isinstance(d, (str, int, float))]
     try:
         return Task(
             id=meta.get("id") or path.stem,
@@ -131,6 +141,9 @@ def parse_file(path: Path, space_id: str) -> Task:
             agent_model=agent_model,
             priority=priority,
             manual_order=manual_order,
+            type=task_type,
+            parent_id=parent_id,
+            depends_on=depends_on,
         )
     except (KeyError, ValidationError) as e:
         raise ValueError(f"Invalid task file {path.name}: {e}") from e
@@ -153,6 +166,8 @@ def summarize(task: Task) -> TaskSummary:
         priority=task.priority,
         manual_order=task.manual_order,
         agent_mode=task.agent_mode,
+        type=task.type,
+        parent_id=task.parent_id,
     )
 
 
@@ -179,6 +194,9 @@ def dump_task(task: Task) -> str:
         "pending_messages": list(task.pending_messages),
         "priority": task.priority,
         "manual_order": task.manual_order,
+        "type": task.type,
+        "parent_id": task.parent_id,
+        "depends_on": list(task.depends_on),
     }
     body_parts = ["# Brief", "", task.brief.strip() or ""]
     if task.history.strip():
@@ -239,9 +257,74 @@ class TaskStore:
 
     def __init__(self, spaces_dir: Path) -> None:
         self.spaces_dir = spaces_dir
+        self._db_path = spaces_dir.parent / "cronos-index.db"
         self._by_id: dict[str, Task] = {}
         self._path_by_id: dict[str, Path] = {}
         self._lock = asyncio.Lock()
+
+    # ---- SQLite index ----
+
+    def _ensure_db_schema(self) -> None:
+        """Create or migrate the SQLite tasks index. Idempotent."""
+        con = sqlite3.connect(self._db_path)
+        try:
+            con.execute("""
+                CREATE TABLE IF NOT EXISTS tasks (
+                    id TEXT NOT NULL PRIMARY KEY,
+                    space_id TEXT NOT NULL,
+                    state TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    type TEXT NOT NULL DEFAULT 'task',
+                    parent_id TEXT NULL,
+                    depends_on_json TEXT NOT NULL DEFAULT '[]'
+                )
+            """)
+            for col, defn in [
+                ("type", "TEXT NOT NULL DEFAULT 'task'"),
+                ("parent_id", "TEXT NULL"),
+                ("depends_on_json", "TEXT NOT NULL DEFAULT '[]'"),
+            ]:
+                try:
+                    con.execute(f"ALTER TABLE tasks ADD COLUMN {col} {defn}")
+                except sqlite3.OperationalError:
+                    pass  # column already exists
+            con.execute(
+                "CREATE INDEX IF NOT EXISTS idx_tasks_space_parent ON tasks(space_id, parent_id)"
+            )
+            con.execute(
+                "CREATE INDEX IF NOT EXISTS idx_tasks_space_type ON tasks(space_id, type)"
+            )
+            con.commit()
+        finally:
+            con.close()
+
+    def _db_upsert(self, task: Task) -> None:
+        con = sqlite3.connect(self._db_path)
+        try:
+            con.execute(
+                "INSERT OR REPLACE INTO tasks (id, space_id, state, title, type, parent_id, depends_on_json)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    task.id,
+                    task.space_id,
+                    task.state.value,
+                    task.title,
+                    task.type,
+                    task.parent_id,
+                    json.dumps(task.depends_on),
+                ),
+            )
+            con.commit()
+        finally:
+            con.close()
+
+    def _db_delete(self, task_id: str) -> None:
+        con = sqlite3.connect(self._db_path)
+        try:
+            con.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+            con.commit()
+        finally:
+            con.close()
 
     # ---- helpers ----
 
@@ -276,6 +359,7 @@ class TaskStore:
             self._path_by_id.clear()
             if not self.spaces_dir.exists():
                 log.info("Spaces dir %s does not exist yet", self.spaces_dir)
+                self._ensure_db_schema()
                 return
             for space_dir in sorted(self.spaces_dir.iterdir()):
                 if not space_dir.is_dir() or space_dir.name in RESERVED_SPACE_DIRS:
@@ -293,6 +377,27 @@ class TaskStore:
                     self._by_id[task.id] = task
                     self._path_by_id[task.id] = path
             log.info("Loaded %d tasks from %s", len(self._by_id), self.spaces_dir)
+            self._ensure_db_schema()
+            con = sqlite3.connect(self._db_path)
+            try:
+                con.execute("DELETE FROM tasks")
+                for task in self._by_id.values():
+                    con.execute(
+                        "INSERT INTO tasks (id, space_id, state, title, type, parent_id, depends_on_json)"
+                        " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        (
+                            task.id,
+                            task.space_id,
+                            task.state.value,
+                            task.title,
+                            task.type,
+                            task.parent_id,
+                            json.dumps(task.depends_on),
+                        ),
+                    )
+                con.commit()
+            finally:
+                con.close()
 
     async def reindex_path(self, path: Path) -> None:
         async with self._lock:
@@ -309,6 +414,7 @@ class TaskStore:
             if stale_id:
                 self._by_id.pop(stale_id, None)
                 self._path_by_id.pop(stale_id, None)
+                self._db_delete(stale_id)
                 log.info("Removed task %s (file deleted)", stale_id)
             return
         try:
@@ -318,6 +424,7 @@ class TaskStore:
             return
         self._by_id[task.id] = task
         self._path_by_id[task.id] = path
+        self._db_upsert(task)
 
     def get(self, task_id: str) -> Task | None:
         return self._by_id.get(task_id)
@@ -373,11 +480,16 @@ class TaskStore:
         agent_model: AgentModel = "default",
         agent_mode: AgentMode = "auto",
         priority: int = 3,
+        type: str = "task",
+        parent_id: str | None = None,
+        depends_on: list[str] | None = None,
     ) -> Task:
         if agent_model not in VALID_AGENT_MODELS:
             raise StorageError(f"Invalid agent_model: {agent_model}")
         if agent_mode not in VALID_AGENT_MODES:
             raise StorageError(f"Invalid agent_mode: {agent_mode}")
+        if type not in ("task", "goal", "issue"):
+            raise StorageError(f"Invalid type: {type}")
         tasks_dir = self.tasks_dir_for(space_id)
         if not tasks_dir.is_dir():
             raise UnknownSpace(space_id)
@@ -397,6 +509,9 @@ class TaskStore:
                 agent_mode=agent_mode,
                 priority=max(1, min(5, priority)),
                 manual_order=0,
+                type=type,
+                parent_id=parent_id,
+                depends_on=depends_on or [],
             )
             path = tasks_dir / f"{task_id}.md"
             atomic_write(path, dump_task(task))
@@ -413,11 +528,16 @@ class TaskStore:
         agent_mode: AgentMode | None = None,
         agent_model: AgentModel | None = None,
         priority: int | None = None,
+        type: str | None = None,
+        parent_id: str | None = None,
+        depends_on: list[str] | None = None,
     ) -> Task:
         if agent_mode is not None and agent_mode not in VALID_AGENT_MODES:
             raise StorageError(f"Invalid agent_mode: {agent_mode}")
         if agent_model is not None and agent_model not in VALID_AGENT_MODELS:
             raise StorageError(f"Invalid agent_model: {agent_model}")
+        if type is not None and type not in ("task", "goal", "issue"):
+            raise StorageError(f"Invalid type: {type}")
         async with self._lock:
             task = self._by_id.get(task_id)
             if task is None:
@@ -431,6 +551,12 @@ class TaskStore:
             }
             if priority is not None:
                 update_dict["priority"] = max(1, min(5, priority))
+            if type is not None:
+                update_dict["type"] = type
+            if parent_id is not None:
+                update_dict["parent_id"] = parent_id
+            if depends_on is not None:
+                update_dict["depends_on"] = depends_on
             updated = task.model_copy(update=update_dict)
             path = self._path_by_id[task_id]
             atomic_write(path, dump_task(updated))
@@ -610,6 +736,7 @@ class TaskStore:
             os.replace(path, dest)
             self._by_id.pop(task_id, None)
             self._path_by_id.pop(task_id, None)
+            self._db_delete(task_id)
             log.info("Trashed task %s -> %s", task_id, dest.name)
 
     async def reorder(self, task_ids: list[str], lane: TaskState) -> None:
