@@ -524,3 +524,269 @@ async def test_update_task_invalid_type_returns_422(async_client):
     )
 
     assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Dependency / child gating over HTTP — arc-1 task 3
+# ---------------------------------------------------------------------------
+
+
+async def _create(async_client, **fields) -> dict:
+    """Helper: POST a task and return the response body, asserting 201."""
+    payload = {"space_id": SPACE_ID, "title": "T", "brief": "", **fields}
+    resp = await async_client.post("/api/tasks", json=payload)
+    assert resp.status_code == 201, resp.text
+    return resp.json()
+
+
+# ---- POST /api/tasks/{id}/start ----
+
+
+async def test_start_task_blocked_by_unmet_dependencies_returns_409(async_client):
+    """POST /start must refuse to start a task whose deps are still open."""
+    dep = await _create(async_client, title="Dep")
+    blocked = await _create(async_client, title="Blocked", depends_on=[dep["id"]])
+
+    resp = await async_client.post(f"/api/tasks/{blocked['id']}/start")
+
+    assert resp.status_code == 409
+    body = resp.json()
+    # Error message must surface the offending dep id so the UI can render it.
+    detail = body.get("detail", "")
+    assert "unmet dependencies" in detail
+    assert dep["id"] in detail
+
+    # Task must remain in backlog — no side effect from a refused start.
+    get_resp = await async_client.get(f"/api/tasks/{blocked['id']}")
+    assert get_resp.json()["state"] == "backlog"
+
+
+async def test_start_task_succeeds_after_dependency_moved_to_done(async_client, task_store):
+    """Once all blockers reach `done`, POST /start returns 200 and activates."""
+    from app.storage import USER_TRANSITIONS as _UT, WORKER_TRANSITIONS as _WT
+
+    dep = await _create(async_client, title="Dep")
+    blocked = await _create(async_client, title="Will Run", depends_on=[dep["id"]])
+
+    # Drive dep to done via the storage layer (active->done is worker-only).
+    await task_store.transition(dep["id"], TaskState.ACTIVE, allowed=_UT)
+    await task_store.transition(dep["id"], TaskState.DONE, allowed=_WT)
+
+    resp = await async_client.post(f"/api/tasks/{blocked['id']}/start")
+
+    assert resp.status_code == 200
+    assert resp.json()["state"] == "active"
+
+
+async def test_start_task_succeeds_with_no_dependencies(async_client):
+    """Happy path: a task with depends_on=[] starts cleanly."""
+    task = await _create(async_client, title="Simple")
+
+    resp = await async_client.post(f"/api/tasks/{task['id']}/start")
+
+    assert resp.status_code == 200
+    assert resp.json()["state"] == "active"
+
+
+async def test_start_task_succeeds_when_dep_is_archived(async_client, task_store):
+    """An archived dep is terminal and must not block start."""
+    from app.storage import USER_TRANSITIONS as _UT, WORKER_TRANSITIONS as _WT
+
+    dep = await _create(async_client, title="Dep")
+    blocked = await _create(async_client, title="Will Run", depends_on=[dep["id"]])
+
+    await task_store.transition(dep["id"], TaskState.ACTIVE, allowed=_UT)
+    await task_store.transition(dep["id"], TaskState.DONE, allowed=_WT)
+    await task_store.transition(dep["id"], TaskState.ARCHIVED, allowed=_UT)
+
+    resp = await async_client.post(f"/api/tasks/{blocked['id']}/start")
+
+    assert resp.status_code == 200
+    assert resp.json()["state"] == "active"
+
+
+async def test_start_task_not_found_returns_404(async_client):
+    """Unknown task id under /start is a 404, not a 409."""
+    resp = await async_client.post("/api/tasks/no-such-task/start")
+    assert resp.status_code == 404
+
+
+async def test_start_task_already_active_returns_409(async_client):
+    """Only backlog tasks can be started — calling /start twice is rejected."""
+    task = await _create(async_client, title="Started")
+    first = await async_client.post(f"/api/tasks/{task['id']}/start")
+    assert first.status_code == 200
+
+    second = await async_client.post(f"/api/tasks/{task['id']}/start")
+    assert second.status_code == 409
+
+
+# ---- PATCH /api/tasks/{id}/state -> done on a goal ----
+
+
+async def test_state_done_on_goal_blocked_by_open_children_returns_409(
+    async_client, task_store
+):
+    """PATCH /state {"state":"done"} on a goal with open children -> 409.
+
+    The goal must be in WAITING for the user transition to DONE to be legal
+    (USER_TRANSITIONS allows waiting->done but not active->done). We force
+    the state through the storage layer to reach the gate.
+    """
+    from app.models import Task as TaskModel
+    from datetime import datetime as _dt, timezone as _tz
+
+    goal = await _create(async_client, title="Goal", type="goal")
+    child = await _create(async_client, title="Child", parent_id=goal["id"])
+
+    # Force-set the goal to WAITING so the user can attempt waiting -> done.
+    # Bypass the state-machine to set up the test scenario.
+    stored = task_store.get(goal["id"])
+    task_store._by_id[goal["id"]] = stored.model_copy(
+        update={"state": TaskState.WAITING, "updated_at": _dt.now(tz=_tz.utc)}
+    )
+
+    resp = await async_client.patch(
+        f"/api/tasks/{goal['id']}/state", json={"state": "done"}
+    )
+
+    assert resp.status_code == 409
+    detail = resp.json().get("detail", "")
+    assert "open children" in detail
+    assert child["id"] in detail
+    # Goal stays in waiting.
+    assert task_store.get(goal["id"]).state == TaskState.WAITING
+
+
+async def test_state_done_on_goal_allowed_after_children_done(
+    async_client, task_store
+):
+    """Once every child reaches done, the user can close the goal via /state."""
+    from app.storage import USER_TRANSITIONS as _UT, WORKER_TRANSITIONS as _WT
+    from datetime import datetime as _dt, timezone as _tz
+
+    goal = await _create(async_client, title="Goal", type="goal")
+    child = await _create(async_client, title="Child", parent_id=goal["id"])
+
+    # Walk child to done.
+    await task_store.transition(child["id"], TaskState.ACTIVE, allowed=_UT)
+    await task_store.transition(child["id"], TaskState.DONE, allowed=_WT)
+
+    # Force-set goal to WAITING so the user transition to DONE is legal.
+    stored = task_store.get(goal["id"])
+    task_store._by_id[goal["id"]] = stored.model_copy(
+        update={"state": TaskState.WAITING, "updated_at": _dt.now(tz=_tz.utc)}
+    )
+
+    resp = await async_client.patch(
+        f"/api/tasks/{goal['id']}/state", json={"state": "done"}
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["state"] == "done"
+
+
+async def test_state_done_on_non_goal_not_blocked_by_open_children(
+    async_client, task_store
+):
+    """A regular task (type='task') with open children is NOT a goal — gate must
+    not fire. This guards against a future regression that widens the gate
+    to all parents.
+    """
+    from datetime import datetime as _dt, timezone as _tz
+
+    parent = await _create(async_client, title="Parent Task", type="task")
+    await _create(async_client, title="Child", parent_id=parent["id"])
+
+    # Force-set parent to WAITING so the user-DONE transition is legal.
+    stored = task_store.get(parent["id"])
+    task_store._by_id[parent["id"]] = stored.model_copy(
+        update={"state": TaskState.WAITING, "updated_at": _dt.now(tz=_tz.utc)}
+    )
+
+    resp = await async_client.patch(
+        f"/api/tasks/{parent['id']}/state", json={"state": "done"}
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["state"] == "done"
+
+
+# ---- TaskRead.unmet_dependencies ----
+
+
+async def test_get_task_unmet_dependencies_empty_for_no_deps(async_client):
+    """The DTO carries an empty list when the task has no deps at all."""
+    task = await _create(async_client, title="Lonely")
+
+    resp = await async_client.get(f"/api/tasks/{task['id']}")
+
+    assert resp.status_code == 200
+    assert resp.json()["unmet_dependencies"] == []
+
+
+async def test_get_task_unmet_dependencies_lists_open_blockers(async_client):
+    """When deps are open, the DTO surfaces them in `unmet_dependencies`."""
+    d1 = await _create(async_client, title="D1")
+    d2 = await _create(async_client, title="D2")
+    blocked = await _create(
+        async_client, title="Blocked", depends_on=[d1["id"], d2["id"]]
+    )
+
+    resp = await async_client.get(f"/api/tasks/{blocked['id']}")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    # Both deps are still backlog -> both blocking.
+    assert set(body["unmet_dependencies"]) == {d1["id"], d2["id"]}
+
+
+async def test_get_task_unmet_dependencies_empty_once_deps_done(async_client, task_store):
+    """The DTO's `unmet_dependencies` shrinks as deps move to terminal."""
+    from app.storage import USER_TRANSITIONS as _UT, WORKER_TRANSITIONS as _WT
+
+    dep = await _create(async_client, title="Dep")
+    blocked = await _create(async_client, title="B", depends_on=[dep["id"]])
+
+    # Initially blocked.
+    initial = await async_client.get(f"/api/tasks/{blocked['id']}")
+    assert initial.json()["unmet_dependencies"] == [dep["id"]]
+
+    # Move dep to done.
+    await task_store.transition(dep["id"], TaskState.ACTIVE, allowed=_UT)
+    await task_store.transition(dep["id"], TaskState.DONE, allowed=_WT)
+
+    final = await async_client.get(f"/api/tasks/{blocked['id']}")
+    assert final.json()["unmet_dependencies"] == []
+
+
+async def test_get_task_unmet_dependencies_reports_missing_dep_id(async_client):
+    """A dangling dep id (target never existed) is reported as unmet.
+
+    Echoes the storage-layer contract — defensive against silent skips when
+    a dependency was deleted out from under a task.
+    """
+    blocked = await _create(async_client, title="Dangling", depends_on=["ghost-id"])
+
+    resp = await async_client.get(f"/api/tasks/{blocked['id']}")
+
+    assert resp.status_code == 200
+    assert resp.json()["unmet_dependencies"] == ["ghost-id"]
+
+
+async def test_create_task_response_includes_unmet_dependencies(async_client):
+    """POST /api/tasks response also carries unmet_dependencies (TaskRead shape)."""
+    dep = await _create(async_client, title="Dep")
+    resp = await async_client.post(
+        "/api/tasks",
+        json={
+            "space_id": SPACE_ID,
+            "title": "WithDeps",
+            "brief": "",
+            "depends_on": [dep["id"]],
+        },
+    )
+
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["unmet_dependencies"] == [dep["id"]]

@@ -178,6 +178,28 @@ def validate_depends_on(
             raise CycleError(" -> ".join(path))
 
 
+_TERMINAL_STATES: frozenset[str] = frozenset({"done", "archived"})
+
+
+def unmet_deps(task: Task, by_id: dict[str, Task]) -> list[str]:
+    """Return ids of depends_on entries that are not yet done or archived."""
+    result = []
+    for dep_id in task.depends_on:
+        dep = by_id.get(dep_id)
+        if dep is None or dep.state.value not in _TERMINAL_STATES:
+            result.append(dep_id)
+    return result
+
+
+def open_children(goal_id: str, by_id: dict[str, Task]) -> list[str]:
+    """Return ids of child tasks of a goal that are not done or archived."""
+    return [
+        t.id
+        for t in by_id.values()
+        if t.parent_id == goal_id and t.state.value not in _TERMINAL_STATES
+    ]
+
+
 # ---------- parsing ----------
 
 
@@ -686,6 +708,18 @@ class TaskStore:
                 raise InvalidTransition(
                     f"Cannot move task from {task.state.value} to {new_state.value}"
                 )
+            if task.state == TaskState.BACKLOG and new_state == TaskState.ACTIVE:
+                blockers = unmet_deps(task, self._by_id)
+                if blockers:
+                    raise InvalidTransition(
+                        f"Cannot start task: unmet dependencies: {', '.join(blockers)}"
+                    )
+            if task.type == "goal" and new_state == TaskState.DONE:
+                open_child_ids = open_children(task_id, self._by_id)
+                if open_child_ids:
+                    raise InvalidTransition(
+                        f"Cannot mark goal done: open children: {', '.join(open_child_ids)}"
+                    )
             updated = task.model_copy(
                 update={
                     "state": new_state,
@@ -768,6 +802,12 @@ class TaskStore:
                 )
                 should_enqueue = False
             else:
+                if task.state == TaskState.BACKLOG:
+                    blockers = unmet_deps(task, self._by_id)
+                    if blockers:
+                        raise InvalidTransition(
+                            f"Cannot start task: unmet dependencies: {', '.join(blockers)}"
+                        )
                 updated = task.model_copy(
                     update={
                         "state": TaskState.ACTIVE,
