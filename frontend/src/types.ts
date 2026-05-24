@@ -39,9 +39,16 @@ export interface TaskSummary {
   space_name: string | null;
   space_color: string | null;
   space_icon: string | null;
+  type?: TaskType;
+  parent_id?: string | null;
+  parent_title?: string | null;
+  depends_on?: string[];
+  unmet_dependencies?: Array<{ id: string; title: string }>;
 }
 
 export type AgentMode = "plan" | "auto" | "ask";
+
+export type TaskType = "task" | "goal" | "issue";
 
 export const AGENT_MODES: { value: AgentMode; label: string }[] = [
   { value: "plan", label: "Planning" },
@@ -77,6 +84,11 @@ export interface Task {
   space_name: string | null;
   space_color: string | null;
   space_icon: string | null;
+  type?: TaskType;
+  parent_id?: string | null;
+  parent_title?: string | null;
+  depends_on?: string[];
+  unmet_dependencies?: Array<{ id: string; title: string }>;
 }
 
 export interface Board {

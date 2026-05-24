@@ -13,9 +13,11 @@ interface Props {
   onOpen: (id: string) => void;
   onAdd: () => void;
   compact?: boolean;
+  onOpenTask?: (id: string) => void;
+  blocksCountMap?: Record<string, number>;
 }
 
-export function Lane({ state, label, tasks, onOpen, onAdd, compact = false }: Props) {
+export function Lane({ state, label, tasks, onOpen, onAdd, compact = false, onOpenTask, blocksCountMap }: Props) {
   const { isOver, setNodeRef } = useDroppable({ id: state });
   const taskIds = tasks.map((t) => t.id);
 
@@ -53,7 +55,14 @@ export function Lane({ state, label, tasks, onOpen, onAdd, compact = false }: Pr
             <EmptyState title="No tasks" />
           ) : (
             tasks.map((task) => (
-              <Card key={task.id} task={task} onClick={() => onOpen(task.id)} compact={compact} />
+              <Card
+                key={task.id}
+                task={task}
+                onClick={() => onOpen(task.id)}
+                compact={compact}
+                onOpenTask={onOpenTask}
+                blocksCount={blocksCountMap?.[task.id] ?? 0}
+              />
             ))
           )}
         </SortableContext>

@@ -1,0 +1,407 @@
+import { describe, it, expect, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { DndContext } from "@dnd-kit/core";
+import { SortableContext } from "@dnd-kit/sortable";
+import { Card } from "../Card";
+import type { TaskSummary } from "../../types";
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function makeTask(overrides: Partial<TaskSummary> = {}): TaskSummary {
+  return {
+    id: "task-1",
+    space_id: "space-1",
+    title: "Wire up the thing",
+    state: "backlog",
+    created_at: "2024-01-15T14:00:00Z",
+    updated_at: "2024-01-15T14:30:00Z",
+    waiting_question: null,
+    brief_preview: "A short description of what needs doing.",
+    priority: 3,
+    manual_order: 0,
+    agent_mode: "auto",
+    space_name: "Cronos",
+    space_color: "#0F766E",
+    space_icon: "🛰️",
+    ...overrides,
+  };
+}
+
+function renderCard(props: Parameters<typeof Card>[0]) {
+  return render(
+    <DndContext>
+      <SortableContext items={[props.task.id]}>
+        <Card {...props} />
+      </SortableContext>
+    </DndContext>,
+  );
+}
+
+/**
+ * Return the root <div> that Card renders (the element with data-task-type).
+ * The outer wrapper from <DndContext> sits above it.
+ */
+function getCardRoot(container: HTMLElement): HTMLElement {
+  const root = container.querySelector("[data-task-type]");
+  if (!root) throw new Error("Card root with data-task-type not found");
+  return root as HTMLElement;
+}
+
+// ---------------------------------------------------------------------------
+// Plain task (no type / parent / deps)
+// ---------------------------------------------------------------------------
+
+describe("Card — plain task (no type, no parent, no deps)", () => {
+  it("renders without GOAL or ISSUE type badge", () => {
+    const task = makeTask();
+
+    renderCard({ task, onClick: () => {} });
+
+    // The type badge uses the literal type name as text.
+    expect(screen.queryByText("goal")).not.toBeInTheDocument();
+    expect(screen.queryByText("issue")).not.toBeInTheDocument();
+  });
+
+  it("renders no parent breadcrumb", () => {
+    const task = makeTask();
+
+    renderCard({ task, onClick: () => {} });
+
+    // The breadcrumb begins with the up arrow character.
+    expect(screen.queryByText(/↑/)).not.toBeInTheDocument();
+  });
+
+  it("renders no dependency pills (no 'Blocked by' or 'Blocks')", () => {
+    const task = makeTask();
+
+    renderCard({ task, onClick: () => {} });
+
+    expect(screen.queryByText(/Blocked by/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Blocks/i)).not.toBeInTheDocument();
+  });
+
+  it("defaults data-task-type to 'task' when type is unset", () => {
+    const task = makeTask();
+
+    const { container } = renderCard({ task, onClick: () => {} });
+
+    expect(getCardRoot(container).getAttribute("data-task-type")).toBe("task");
+  });
+
+  it("does not apply the goal top-border styling for a plain task", () => {
+    const task = makeTask();
+
+    const { container } = renderCard({ task, onClick: () => {} });
+
+    const button = container.querySelector("button");
+    expect(button).not.toBeNull();
+    // The goal-specific class is only added for type=goal.
+    expect(button!.className).not.toContain("border-t-ink");
+    // Inline borderTopWidth is only set for goals.
+    expect(button!.style.borderTopWidth).toBe("");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// type=goal
+// ---------------------------------------------------------------------------
+
+describe("Card — type=goal", () => {
+  it("renders the GOAL badge text", () => {
+    const task = makeTask({ type: "goal" });
+
+    renderCard({ task, onClick: () => {} });
+
+    // The badge text is the lower-case type; the uppercase visual is via CSS.
+    const badge = screen.getByText("goal");
+    expect(badge).toBeInTheDocument();
+    expect(badge.className).toContain("uppercase");
+  });
+
+  it("sets data-task-type='goal' on the root", () => {
+    const task = makeTask({ type: "goal" });
+
+    const { container } = renderCard({ task, onClick: () => {} });
+
+    expect(getCardRoot(container).getAttribute("data-task-type")).toBe("goal");
+  });
+
+  it("applies the thicker top border styling for goals", () => {
+    const task = makeTask({ type: "goal" });
+
+    const { container } = renderCard({ task, onClick: () => {} });
+
+    const button = container.querySelector("button");
+    expect(button).not.toBeNull();
+    expect(button!.className).toContain("border-t-ink");
+    expect(button!.style.borderTopWidth).toBe("2px");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// type=issue
+// ---------------------------------------------------------------------------
+
+describe("Card — type=issue", () => {
+  it("renders the ISSUE badge text", () => {
+    const task = makeTask({ type: "issue" });
+
+    renderCard({ task, onClick: () => {} });
+
+    const badge = screen.getByText("issue");
+    expect(badge).toBeInTheDocument();
+    expect(badge.className).toContain("uppercase");
+  });
+
+  it("sets data-task-type='issue' on the root", () => {
+    const task = makeTask({ type: "issue" });
+
+    const { container } = renderCard({ task, onClick: () => {} });
+
+    expect(getCardRoot(container).getAttribute("data-task-type")).toBe("issue");
+  });
+
+  it("does NOT apply the goal-only thicker top border for issues", () => {
+    const task = makeTask({ type: "issue" });
+
+    const { container } = renderCard({ task, onClick: () => {} });
+
+    const button = container.querySelector("button");
+    expect(button).not.toBeNull();
+    expect(button!.className).not.toContain("border-t-ink");
+    expect(button!.style.borderTopWidth).toBe("");
+  });
+
+  it("does not render a type badge when type is the default 'task'", () => {
+    const task = makeTask({ type: "task" });
+
+    renderCard({ task, onClick: () => {} });
+
+    // No badge text should appear for the default type.
+    expect(screen.queryByText("task")).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Parent breadcrumb
+// ---------------------------------------------------------------------------
+
+describe("Card — parent breadcrumb", () => {
+  it("renders the breadcrumb when parent_id and parent_title are set", () => {
+    const task = makeTask({
+      parent_id: "parent-42",
+      parent_title: "Quarterly roadmap",
+    });
+
+    renderCard({ task, onClick: () => {} });
+
+    expect(screen.getByText(/↑\s*Quarterly roadmap/)).toBeInTheDocument();
+  });
+
+  it("does not render the breadcrumb when only parent_id is set", () => {
+    const task = makeTask({ parent_id: "parent-42", parent_title: null });
+
+    renderCard({ task, onClick: () => {} });
+
+    expect(screen.queryByText(/↑/)).not.toBeInTheDocument();
+  });
+
+  it("does not render the breadcrumb when only parent_title is set", () => {
+    const task = makeTask({ parent_id: null, parent_title: "Lonely title" });
+
+    renderCard({ task, onClick: () => {} });
+
+    expect(screen.queryByText(/↑/)).not.toBeInTheDocument();
+  });
+
+  it("calls onOpenTask with the parent id when the breadcrumb is clicked", async () => {
+    const onOpenTask = vi.fn();
+    const onClick = vi.fn();
+    const task = makeTask({
+      parent_id: "parent-42",
+      parent_title: "Quarterly roadmap",
+    });
+
+    renderCard({ task, onClick, onOpenTask });
+    const user = userEvent.setup();
+    const crumb = screen.getByText(/↑\s*Quarterly roadmap/);
+    await user.click(crumb);
+
+    expect(onOpenTask).toHaveBeenCalledTimes(1);
+    expect(onOpenTask).toHaveBeenCalledWith("parent-42");
+  });
+
+  it("does not bubble the click to the card's onClick handler", async () => {
+    const onOpenTask = vi.fn();
+    const onClick = vi.fn();
+    const task = makeTask({
+      parent_id: "parent-42",
+      parent_title: "Quarterly roadmap",
+    });
+
+    renderCard({ task, onClick, onOpenTask });
+    const user = userEvent.setup();
+    await user.click(screen.getByText(/↑\s*Quarterly roadmap/));
+
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it("does not throw when the breadcrumb is clicked without an onOpenTask prop", async () => {
+    const onClick = vi.fn();
+    const task = makeTask({
+      parent_id: "parent-42",
+      parent_title: "Quarterly roadmap",
+    });
+
+    renderCard({ task, onClick });
+    const user = userEvent.setup();
+    // Should not throw, and onClick on the outer button must not fire.
+    await user.click(screen.getByText(/↑\s*Quarterly roadmap/));
+
+    expect(onClick).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// unmet_dependencies → "Blocked by N" pill
+// ---------------------------------------------------------------------------
+
+describe("Card — Blocked by pill", () => {
+  it("renders 'Blocked by 2' pill when unmet_dependencies has 2 items", () => {
+    const task = makeTask({
+      unmet_dependencies: [
+        { id: "dep-1", title: "Migrate the schema" },
+        { id: "dep-2", title: "Approve the design" },
+      ],
+    });
+
+    renderCard({ task, onClick: () => {} });
+
+    expect(screen.getByText(/Blocked by 2/i)).toBeInTheDocument();
+  });
+
+  it("lists blocker titles in the title attribute (tooltip)", () => {
+    const task = makeTask({
+      unmet_dependencies: [
+        { id: "dep-1", title: "Migrate the schema" },
+        { id: "dep-2", title: "Approve the design" },
+      ],
+    });
+
+    renderCard({ task, onClick: () => {} });
+
+    const pill = screen.getByText(/Blocked by 2/i);
+    expect(pill.getAttribute("title")).toBe(
+      "Migrate the schema, Approve the design",
+    );
+  });
+
+  it("does not render the pill when unmet_dependencies is empty", () => {
+    const task = makeTask({ unmet_dependencies: [] });
+
+    renderCard({ task, onClick: () => {} });
+
+    expect(screen.queryByText(/Blocked by/i)).not.toBeInTheDocument();
+  });
+
+  it("does not render the pill when unmet_dependencies is undefined", () => {
+    const task = makeTask({ unmet_dependencies: undefined });
+
+    renderCard({ task, onClick: () => {} });
+
+    expect(screen.queryByText(/Blocked by/i)).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// blocksCount prop → "Blocks N" pill
+// ---------------------------------------------------------------------------
+
+describe("Card — Blocks pill", () => {
+  it("renders 'Blocks 3' pill when blocksCount=3", () => {
+    const task = makeTask();
+
+    renderCard({ task, onClick: () => {}, blocksCount: 3 });
+
+    expect(screen.getByText(/^Blocks 3$/)).toBeInTheDocument();
+  });
+
+  it("does not render the pill when blocksCount=0 (default)", () => {
+    const task = makeTask();
+
+    renderCard({ task, onClick: () => {} });
+
+    expect(screen.queryByText(/^Blocks /)).not.toBeInTheDocument();
+  });
+
+  it("does not render the pill when blocksCount is explicitly 0", () => {
+    const task = makeTask();
+
+    renderCard({ task, onClick: () => {}, blocksCount: 0 });
+
+    expect(screen.queryByText(/^Blocks /)).not.toBeInTheDocument();
+  });
+
+  it("renders the pill for a count of 1", () => {
+    const task = makeTask();
+
+    renderCard({ task, onClick: () => {}, blocksCount: 1 });
+
+    expect(screen.getByText(/^Blocks 1$/)).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// All-combined: a goal that blocks others and is blocked
+// ---------------------------------------------------------------------------
+
+describe("Card — combined goal that blocks others and is blocked", () => {
+  it("renders the goal badge, parent breadcrumb, blocked-by, and blocks pills together", async () => {
+    const onOpenTask = vi.fn();
+    const task = makeTask({
+      type: "goal",
+      parent_id: "parent-99",
+      parent_title: "Annual plan",
+      unmet_dependencies: [
+        { id: "dep-1", title: "Finalize budget" },
+        { id: "dep-2", title: "Hire designer" },
+      ],
+    });
+
+    const { container } = renderCard({
+      task,
+      onClick: () => {},
+      onOpenTask,
+      blocksCount: 4,
+    });
+
+    // Type badge + data-task-type
+    expect(screen.getByText("goal")).toBeInTheDocument();
+    expect(getCardRoot(container).getAttribute("data-task-type")).toBe("goal");
+
+    // Goal-specific border styling
+    const button = container.querySelector("button");
+    expect(button!.className).toContain("border-t-ink");
+    expect(button!.style.borderTopWidth).toBe("2px");
+
+    // Parent breadcrumb
+    const crumb = screen.getByText(/↑\s*Annual plan/);
+    expect(crumb).toBeInTheDocument();
+
+    // Both dependency pills
+    const blockedBy = screen.getByText(/Blocked by 2/i);
+    expect(blockedBy).toBeInTheDocument();
+    expect(blockedBy.getAttribute("title")).toBe(
+      "Finalize budget, Hire designer",
+    );
+    expect(screen.getByText(/^Blocks 4$/)).toBeInTheDocument();
+
+    // Breadcrumb still wired up
+    const user = userEvent.setup();
+    await user.click(crumb);
+    expect(onOpenTask).toHaveBeenCalledWith("parent-99");
+  });
+});

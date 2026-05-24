@@ -3,7 +3,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { cn } from "../utils/cn";
 import { formatRelative } from "../utils/format";
 import { SpaceTag } from "./ui/SpaceTag";
-import type { AgentMode, TaskSummary } from "../types";
+import type { AgentMode, TaskSummary, TaskType } from "../types";
 
 const PRIORITY_STYLES: Record<number, { badge: string; dot: string }> = {
   1: {
@@ -40,14 +40,21 @@ const MODE_LABELS: Record<AgentMode, string> = {
   ask: "Ask",
 };
 
+const TYPE_BADGE_STYLES: Partial<Record<TaskType, string>> = {
+  goal: "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-400/30 dark:bg-violet-400/10 dark:text-violet-400",
+  issue: "border-orange-200 bg-orange-50 text-orange-600 dark:border-orange-400/30 dark:bg-orange-400/10 dark:text-orange-400",
+};
+
 interface Props {
   task: TaskSummary;
   onClick: () => void;
   compact?: boolean;
   isDragOverlay?: boolean;
+  onOpenTask?: (id: string) => void;
+  blocksCount?: number;
 }
 
-export function Card({ task, onClick, compact = false, isDragOverlay = false }: Props) {
+export function Card({ task, onClick, compact = false, isDragOverlay = false, onOpenTask, blocksCount = 0 }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id, disabled: isDragOverlay });
 
@@ -64,19 +71,31 @@ export function Card({ task, onClick, compact = false, isDragOverlay = false }: 
   const pStyle = PRIORITY_STYLES[priority] ?? PRIORITY_STYLES[3];
   const mode = task.agent_mode ?? "auto";
   const showModeBadge = !compact || mode !== "auto";
+  const taskType = task.type ?? "task";
+  const isGoal = taskType === "goal";
+  const typeBadgeStyle = TYPE_BADGE_STYLES[taskType];
+  const blockedBy = task.unmet_dependencies ?? [];
 
   return (
     <div
       ref={setNodeRef}
       style={style}
       {...(!isDragOverlay ? attributes : {})}
+      data-task-type={taskType}
       className={cn("group", isDragging && !isDragOverlay && "opacity-40")}
     >
       <button
         type="button"
         onClick={onClick}
-        style={{ borderLeftColor: borderColor, borderLeftWidth: 3 }}
-        className="relative block w-full rounded-md border border-hairline bg-surface-2 py-3 pl-2.5 pr-3 text-left shadow-inset-hairline transition hover:-translate-y-px hover:border-hairline-strong hover:bg-surface-3 hover:shadow-lift focus:outline-none focus-visible:ring-1 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface-1"
+        style={{
+          borderLeftColor: borderColor,
+          borderLeftWidth: 3,
+          ...(isGoal ? { borderTopWidth: 2 } : {}),
+        }}
+        className={cn(
+          "relative block w-full rounded-md border border-hairline bg-surface-2 py-3 pl-2.5 pr-3 text-left shadow-inset-hairline transition hover:-translate-y-px hover:border-hairline-strong hover:bg-surface-3 hover:shadow-lift focus:outline-none focus-visible:ring-1 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface-1",
+          isGoal && "border-t-ink",
+        )}
       >
         <span
           {...(!isDragOverlay ? listeners : {})}
@@ -100,6 +119,16 @@ export function Card({ task, onClick, compact = false, isDragOverlay = false }: 
           >
             P{priority}
           </span>
+          {typeBadgeStyle && (
+            <span
+              className={cn(
+                "inline-flex items-center rounded border px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide",
+                typeBadgeStyle,
+              )}
+            >
+              {taskType}
+            </span>
+          )}
           {task.space_name && (
             <SpaceTag
               color={task.space_color}
@@ -120,6 +149,26 @@ export function Card({ task, onClick, compact = false, isDragOverlay = false }: 
           )}
         </div>
 
+        {task.parent_id && task.parent_title && (
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenTask?.(task.parent_id!);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.stopPropagation();
+                onOpenTask?.(task.parent_id!);
+              }
+            }}
+            className="mb-1 block cursor-pointer truncate font-mono text-[10px] uppercase tracking-[0.1em] text-ink-faint hover:text-ink-muted"
+          >
+            ↑ {task.parent_title}
+          </span>
+        )}
+
         <h3 className="text-sm font-semibold leading-snug text-ink">{task.title}</h3>
         {task.brief_preview && !compact && (
           <p className="mt-1.5 hidden text-xs leading-relaxed text-ink-muted line-clamp-3 sm:block">
@@ -132,6 +181,25 @@ export function Card({ task, onClick, compact = false, isDragOverlay = false }: 
             {task.waiting_question}
           </p>
         )}
+
+        {(blockedBy.length > 0 || blocksCount > 0) && (
+          <div className="mt-1.5 flex flex-wrap gap-1">
+            {blockedBy.length > 0 && (
+              <span
+                title={blockedBy.map((d) => d.title).join(", ")}
+                className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide text-amber-700 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-400"
+              >
+                Blocked by {blockedBy.length}
+              </span>
+            )}
+            {blocksCount > 0 && (
+              <span className="inline-flex items-center rounded border border-hairline bg-surface-2 px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide text-ink-muted">
+                Blocks {blocksCount}
+              </span>
+            )}
+          </div>
+        )}
+
         <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.15em] text-ink-faint">
           {formatRelative(task.updated_at)}
         </p>
