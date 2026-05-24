@@ -15,11 +15,14 @@ from app.storage import (
     TaskStore,
     UnknownSpace,
     USER_TRANSITIONS,
+    WORKER_TRANSITIONS,
     dump_task,
     generate_task_id,
+    open_children,
     parse_file,
     slugify,
     summarize,
+    unmet_deps,
     validate_depends_on,
     validate_parent,
 )
@@ -1272,3 +1275,465 @@ def test_validate_parent_does_not_mutate_inputs():
     assert set(by_id.keys()) == keys_before
     for tid, t in by_id.items():
         assert t.parent_id == parents_before[tid], f"{tid}.parent_id mutated"
+
+
+# ---------------------------------------------------------------------------
+# Dependency / child gating — arc-1 task 3 (unmet_deps / open_children)
+# ---------------------------------------------------------------------------
+#
+# These are pure in-memory predicates. They run on a by_id index built by hand
+# so the assertions are about logic, not disk I/O.
+
+
+def _mk_state(task_id: str, state: TaskState, *, parent: str | None = None,
+              deps: list[str] | None = None, task_type: str = "task"):
+    """Like _mk but lets the caller pick the task's state and type."""
+    from app.models import Task
+
+    now = datetime(2025, 6, 1, 12, 0, tzinfo=UTC)
+    return Task(
+        id=task_id,
+        space_id=SPACE_ID,
+        title=task_id,
+        state=state,
+        created_at=now,
+        updated_at=now,
+        brief="",
+        history="",
+        type=task_type,
+        parent_id=parent,
+        depends_on=list(deps or []),
+    )
+
+
+# ---- unmet_deps() ----
+
+
+def test_unmet_deps_no_dependencies_returns_empty():
+    """A task with depends_on=[] has no blockers — return []."""
+    t = _mk_state("T", TaskState.BACKLOG)
+
+    assert unmet_deps(t, _index(t)) == []
+
+
+def test_unmet_deps_all_done_returns_empty():
+    """Every dep is in `done` — task is unblocked."""
+    d1 = _mk_state("D1", TaskState.DONE)
+    d2 = _mk_state("D2", TaskState.DONE)
+    t = _mk_state("T", TaskState.BACKLOG, deps=["D1", "D2"])
+
+    assert unmet_deps(t, _index(t, d1, d2)) == []
+
+
+def test_unmet_deps_all_archived_returns_empty():
+    """`archived` is terminal too — also counts as unblocked."""
+    d1 = _mk_state("D1", TaskState.ARCHIVED)
+    t = _mk_state("T", TaskState.BACKLOG, deps=["D1"])
+
+    assert unmet_deps(t, _index(t, d1)) == []
+
+
+def test_unmet_deps_mixed_done_and_archived_returns_empty():
+    """A mix of done + archived deps is still fully terminal."""
+    d1 = _mk_state("D1", TaskState.DONE)
+    d2 = _mk_state("D2", TaskState.ARCHIVED)
+    t = _mk_state("T", TaskState.BACKLOG, deps=["D1", "D2"])
+
+    assert unmet_deps(t, _index(t, d1, d2)) == []
+
+
+def test_unmet_deps_lists_open_blockers():
+    """Deps that are not done/archived are reported by id, in the deps order."""
+    d1 = _mk_state("D1", TaskState.DONE)
+    d2 = _mk_state("D2", TaskState.BACKLOG)
+    d3 = _mk_state("D3", TaskState.ACTIVE)
+    d4 = _mk_state("D4", TaskState.WAITING)
+    t = _mk_state("T", TaskState.BACKLOG, deps=["D1", "D2", "D3", "D4"])
+
+    blockers = unmet_deps(t, _index(t, d1, d2, d3, d4))
+
+    # D1 (done) is terminal; the rest are open. Order follows depends_on.
+    assert blockers == ["D2", "D3", "D4"]
+
+
+def test_unmet_deps_missing_dep_id_treated_as_unmet():
+    """A dangling depends_on id (target deleted/never existed) is unmet.
+
+    Defensive: we must not silently treat 'unknown dep' as 'satisfied' — that
+    would let a task start even though a real dependency was never run.
+    """
+    t = _mk_state("T", TaskState.BACKLOG, deps=["GHOST"])
+
+    assert unmet_deps(t, _index(t)) == ["GHOST"]
+
+
+def test_unmet_deps_waiting_state_is_not_terminal():
+    """`waiting` is NOT in the terminal set — should be reported as a blocker.
+
+    Locks in the contract that 'done or archived' is the *only* terminal
+    classification (matches `_TERMINAL_STATES`).
+    """
+    d = _mk_state("D", TaskState.WAITING)
+    t = _mk_state("T", TaskState.BACKLOG, deps=["D"])
+
+    assert unmet_deps(t, _index(t, d)) == ["D"]
+
+
+def test_unmet_deps_active_state_is_not_terminal():
+    """A dep that's actively running still blocks — until it finishes."""
+    d = _mk_state("D", TaskState.ACTIVE)
+    t = _mk_state("T", TaskState.BACKLOG, deps=["D"])
+
+    assert unmet_deps(t, _index(t, d)) == ["D"]
+
+
+def test_unmet_deps_preserves_dependency_order():
+    """The returned blocker list mirrors the order in `depends_on`.
+
+    Important for the error message users see: stable order makes the
+    UI display deterministic across reloads.
+    """
+    a = _mk_state("A", TaskState.BACKLOG)
+    b = _mk_state("B", TaskState.BACKLOG)
+    c = _mk_state("C", TaskState.BACKLOG)
+    t = _mk_state("T", TaskState.BACKLOG, deps=["C", "A", "B"])
+
+    assert unmet_deps(t, _index(t, a, b, c)) == ["C", "A", "B"]
+
+
+# ---- open_children() ----
+
+
+def test_open_children_no_children_returns_empty():
+    """A goal with no children at all has no open children."""
+    g = _mk_state("G", TaskState.ACTIVE, task_type="goal")
+
+    assert open_children("G", _index(g)) == []
+
+
+def test_open_children_all_done_returns_empty():
+    """A goal whose every child is `done` is ready to close."""
+    g = _mk_state("G", TaskState.ACTIVE, task_type="goal")
+    c1 = _mk_state("C1", TaskState.DONE, parent="G")
+    c2 = _mk_state("C2", TaskState.DONE, parent="G")
+
+    assert open_children("G", _index(g, c1, c2)) == []
+
+
+def test_open_children_all_archived_returns_empty():
+    """Archived children are also terminal — should not block goal-done."""
+    g = _mk_state("G", TaskState.ACTIVE, task_type="goal")
+    c1 = _mk_state("C1", TaskState.ARCHIVED, parent="G")
+
+    assert open_children("G", _index(g, c1)) == []
+
+
+def test_open_children_lists_open_ones():
+    """Children in backlog/active/waiting are all reported."""
+    g = _mk_state("G", TaskState.ACTIVE, task_type="goal")
+    closed = _mk_state("CLOSED", TaskState.DONE, parent="G")
+    backlog = _mk_state("BACKLOG_C", TaskState.BACKLOG, parent="G")
+    active = _mk_state("ACTIVE_C", TaskState.ACTIVE, parent="G")
+    waiting = _mk_state("WAITING_C", TaskState.WAITING, parent="G")
+
+    result = open_children("G", _index(g, closed, backlog, active, waiting))
+
+    # All three non-terminal children should appear; CLOSED must not.
+    assert set(result) == {"BACKLOG_C", "ACTIVE_C", "WAITING_C"}
+    assert "CLOSED" not in result
+
+
+def test_open_children_ignores_other_parents_children():
+    """A child of a different goal must not appear in this goal's open list.
+
+    Guards against an off-by-one where the predicate forgets to filter on
+    parent_id (would return every open task in the space).
+    """
+    g1 = _mk_state("G1", TaskState.ACTIVE, task_type="goal")
+    g2 = _mk_state("G2", TaskState.ACTIVE, task_type="goal")
+    c_g1 = _mk_state("C_G1", TaskState.BACKLOG, parent="G1")
+    c_g2 = _mk_state("C_G2", TaskState.BACKLOG, parent="G2")
+    loner = _mk_state("LONER", TaskState.BACKLOG)  # no parent
+
+    result = open_children("G1", _index(g1, g2, c_g1, c_g2, loner))
+
+    assert result == ["C_G1"]
+
+
+def test_open_children_ignores_root_level_tasks():
+    """Tasks with parent_id=None must not be attributed to any goal."""
+    g = _mk_state("G", TaskState.ACTIVE, task_type="goal")
+    rootless = _mk_state("RL", TaskState.BACKLOG)  # parent=None by default
+
+    assert open_children("G", _index(g, rootless)) == []
+
+
+# ---- TaskStore.transition gates ----
+
+
+async def test_transition_backlog_to_active_blocked_by_unmet_deps(task_store):
+    """A backlog task cannot move to active while any dep is open."""
+    dep = await task_store.create(space_id=SPACE_ID, title="Dep", brief="")
+    blocked = await task_store.create(
+        space_id=SPACE_ID,
+        title="Blocked",
+        brief="",
+        depends_on=[dep.id],
+    )
+
+    with pytest.raises(InvalidTransition) as excinfo:
+        await task_store.transition(
+            blocked.id, TaskState.ACTIVE, allowed=USER_TRANSITIONS
+        )
+
+    # Message must surface the offending id so the API can echo it back.
+    msg = str(excinfo.value)
+    assert "unmet dependencies" in msg
+    assert dep.id in msg
+    # Task must remain in backlog — gate is enforced *before* state mutation.
+    assert task_store.get(blocked.id).state == TaskState.BACKLOG
+
+
+async def test_transition_backlog_to_active_allowed_after_deps_done(task_store):
+    """Once every dep reaches `done`, the same transition succeeds."""
+    dep = await task_store.create(space_id=SPACE_ID, title="Dep", brief="")
+    # Walk dep through active -> done so we get a legal terminal state.
+    await task_store.transition(dep.id, TaskState.ACTIVE, allowed=USER_TRANSITIONS)
+    await task_store.transition(dep.id, TaskState.DONE, allowed=WORKER_TRANSITIONS)
+
+    blocked = await task_store.create(
+        space_id=SPACE_ID,
+        title="Blocked Then Free",
+        brief="",
+        depends_on=[dep.id],
+    )
+
+    updated = await task_store.transition(
+        blocked.id, TaskState.ACTIVE, allowed=USER_TRANSITIONS
+    )
+
+    assert updated.state == TaskState.ACTIVE
+
+
+async def test_transition_backlog_to_active_allowed_when_deps_archived(task_store):
+    """Archived deps also unblock — archived is a terminal state."""
+    dep = await task_store.create(space_id=SPACE_ID, title="Dep", brief="")
+    # Walk dep through active -> done -> archived.
+    await task_store.transition(dep.id, TaskState.ACTIVE, allowed=USER_TRANSITIONS)
+    await task_store.transition(dep.id, TaskState.DONE, allowed=WORKER_TRANSITIONS)
+    await task_store.transition(dep.id, TaskState.ARCHIVED, allowed=USER_TRANSITIONS)
+
+    blocked = await task_store.create(
+        space_id=SPACE_ID,
+        title="Blocked",
+        brief="",
+        depends_on=[dep.id],
+    )
+
+    updated = await task_store.transition(
+        blocked.id, TaskState.ACTIVE, allowed=USER_TRANSITIONS
+    )
+
+    assert updated.state == TaskState.ACTIVE
+
+
+async def test_transition_backlog_to_active_unblocked_when_no_deps(task_store):
+    """Sanity: a task with depends_on=[] is never blocked by the new gate."""
+    task = await task_store.create(space_id=SPACE_ID, title="No Deps", brief="")
+
+    updated = await task_store.transition(
+        task.id, TaskState.ACTIVE, allowed=USER_TRANSITIONS
+    )
+
+    assert updated.state == TaskState.ACTIVE
+
+
+async def test_transition_backlog_to_active_multi_dep_lists_all_blockers(task_store):
+    """When multiple deps are open, the error names all of them."""
+    d1 = await task_store.create(space_id=SPACE_ID, title="D1", brief="")
+    d2 = await task_store.create(space_id=SPACE_ID, title="D2", brief="")
+    blocked = await task_store.create(
+        space_id=SPACE_ID,
+        title="Blocked",
+        brief="",
+        depends_on=[d1.id, d2.id],
+    )
+
+    with pytest.raises(InvalidTransition) as excinfo:
+        await task_store.transition(
+            blocked.id, TaskState.ACTIVE, allowed=USER_TRANSITIONS
+        )
+
+    msg = str(excinfo.value)
+    assert d1.id in msg
+    assert d2.id in msg
+
+
+async def test_transition_goal_to_done_blocked_by_open_children(task_store):
+    """A goal cannot move to done while any child is non-terminal.
+
+    The goal-done gate fires regardless of the `allowed` set, so we exercise
+    it via the worker path (ACTIVE -> DONE) which is the realistic route.
+    """
+    goal = await task_store.create(
+        space_id=SPACE_ID, title="Parent Goal", brief="", type="goal"
+    )
+    child = await task_store.create(
+        space_id=SPACE_ID,
+        title="Child",
+        brief="",
+        parent_id=goal.id,
+    )
+    # Move goal to active so worker can attempt active->done.
+    await task_store.transition(goal.id, TaskState.ACTIVE, allowed=USER_TRANSITIONS)
+
+    with pytest.raises(InvalidTransition) as excinfo:
+        await task_store.transition(
+            goal.id, TaskState.DONE, allowed=WORKER_TRANSITIONS
+        )
+
+    msg = str(excinfo.value)
+    assert "open children" in msg
+    assert child.id in msg
+    # Goal must remain in active — gate enforced before state mutation.
+    assert task_store.get(goal.id).state == TaskState.ACTIVE
+
+
+async def test_transition_goal_to_done_allowed_after_children_done(task_store):
+    """Once every child reaches done, the goal can be closed."""
+    goal = await task_store.create(
+        space_id=SPACE_ID, title="Parent Goal", brief="", type="goal"
+    )
+    child = await task_store.create(
+        space_id=SPACE_ID, title="Child", brief="", parent_id=goal.id
+    )
+    # Move child to done.
+    await task_store.transition(child.id, TaskState.ACTIVE, allowed=USER_TRANSITIONS)
+    await task_store.transition(child.id, TaskState.DONE, allowed=WORKER_TRANSITIONS)
+    # Move goal to active.
+    await task_store.transition(goal.id, TaskState.ACTIVE, allowed=USER_TRANSITIONS)
+
+    updated = await task_store.transition(
+        goal.id, TaskState.DONE, allowed=WORKER_TRANSITIONS
+    )
+
+    assert updated.state == TaskState.DONE
+
+
+async def test_transition_goal_to_done_gate_does_not_fire_for_task_type(task_store):
+    """A non-goal parent should NOT trip the goal-done gate.
+
+    The gate condition is `task.type == "goal"`. If a regression widens this
+    to "any task with children" it would block normal sub-task hierarchies.
+    """
+    parent = await task_store.create(
+        space_id=SPACE_ID, title="Parent Task", brief="", type="task"
+    )
+    # Give it an open child to make this assertion meaningful.
+    await task_store.create(
+        space_id=SPACE_ID, title="Child", brief="", parent_id=parent.id
+    )
+    await task_store.transition(parent.id, TaskState.ACTIVE, allowed=USER_TRANSITIONS)
+
+    # Should succeed: gate only applies to type='goal'.
+    updated = await task_store.transition(
+        parent.id, TaskState.DONE, allowed=WORKER_TRANSITIONS
+    )
+
+    assert updated.state == TaskState.DONE
+
+
+async def test_transition_invalid_transition_check_runs_before_gate(task_store):
+    """If the `(state, new_state)` pair isn't allowed, the gate is never reached.
+
+    Locks in the order: legality check first, dependency gate second. Without
+    this order a misuse of the API would surface a misleading 'unmet deps'
+    error instead of the real 'transition not allowed' one.
+    """
+    dep = await task_store.create(space_id=SPACE_ID, title="Dep", brief="")
+    task = await task_store.create(
+        space_id=SPACE_ID, title="T", brief="", depends_on=[dep.id]
+    )
+
+    with pytest.raises(InvalidTransition) as excinfo:
+        # BACKLOG -> DONE is not in USER_TRANSITIONS.
+        await task_store.transition(
+            task.id, TaskState.DONE, allowed=USER_TRANSITIONS
+        )
+
+    # The message should report the illegal transition, NOT the deps gate.
+    msg = str(excinfo.value)
+    assert "Cannot move task from backlog to done" in msg
+    assert "unmet dependencies" not in msg
+
+
+# ---- TaskStore.apply_reply gates ----
+
+
+async def test_apply_reply_backlog_blocked_by_unmet_deps(task_store):
+    """A reply to a backlog task with unmet deps must NOT auto-activate it.
+
+    apply_reply normally drives backlog -> active. The new gate makes that
+    transition fail loudly with InvalidTransition so the caller can surface
+    the blockers to the user (instead of silently starting a task whose
+    dependencies aren't done).
+    """
+    dep = await task_store.create(space_id=SPACE_ID, title="Dep", brief="")
+    blocked = await task_store.create(
+        space_id=SPACE_ID,
+        title="Blocked",
+        brief="",
+        depends_on=[dep.id],
+    )
+
+    with pytest.raises(InvalidTransition) as excinfo:
+        await task_store.apply_reply(blocked.id, "please start")
+
+    msg = str(excinfo.value)
+    assert "unmet dependencies" in msg
+    assert dep.id in msg
+    # Task remains in backlog with no mutation.
+    stored = task_store.get(blocked.id)
+    assert stored.state == TaskState.BACKLOG
+    # No history entry should have been appended on the failed call.
+    assert "please start" not in stored.history
+
+
+async def test_apply_reply_backlog_allowed_after_deps_done(task_store):
+    """Same flow as above but with deps satisfied — reply must promote to active."""
+    dep = await task_store.create(space_id=SPACE_ID, title="Dep", brief="")
+    await task_store.transition(dep.id, TaskState.ACTIVE, allowed=USER_TRANSITIONS)
+    await task_store.transition(dep.id, TaskState.DONE, allowed=WORKER_TRANSITIONS)
+
+    unblocked = await task_store.create(
+        space_id=SPACE_ID,
+        title="Will Start",
+        brief="",
+        depends_on=[dep.id],
+    )
+
+    outcome = await task_store.apply_reply(unblocked.id, "go")
+
+    assert outcome.task.state == TaskState.ACTIVE
+    assert outcome.should_enqueue is True
+
+
+async def test_apply_reply_active_path_unaffected_by_dep_gate(task_store):
+    """A reply to an already-active task is appended to pending_messages.
+
+    The dep gate is scoped to the backlog branch only. An active task with
+    open deps (e.g. dep was reset to backlog after the task started) must
+    not be blocked from receiving follow-up messages.
+    """
+    dep = await task_store.create(space_id=SPACE_ID, title="Dep", brief="")
+    # Drive a task to ACTIVE first, then mutate its deps via update().
+    task = await task_store.create(space_id=SPACE_ID, title="Running", brief="")
+    await task_store.transition(task.id, TaskState.ACTIVE, allowed=USER_TRANSITIONS)
+    # Now retroactively add an open dep.
+    await task_store.update(task.id, depends_on=[dep.id])
+
+    outcome = await task_store.apply_reply(task.id, "hello agent")
+
+    assert outcome.task.state == TaskState.ACTIVE
+    assert outcome.should_enqueue is False
+    assert "hello agent" in outcome.task.pending_messages

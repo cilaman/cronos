@@ -23,6 +23,7 @@ from ..storage import (
     TaskStore,
     UnknownSpace,
     summarize,
+    unmet_deps,
 )
 from ..worker import Worker, sse_events
 from ..worker_pool import WorkerPool
@@ -68,6 +69,7 @@ class TaskRead(Task):
     space_name: str | None = None
     space_color: str | None = None
     space_icon: str | None = None
+    unmet_dependencies: list[str] = []
 
 
 class CreateTaskBody(BaseModel):
@@ -136,12 +138,14 @@ def _enrich_board(board: Board, space_store: SpaceStore) -> Board:
     )
 
 
-def _build_task_read(task: Task, space: Space | None) -> TaskRead:
+def _build_task_read(task: Task, space: Space | None, store: TaskStore | None = None) -> TaskRead:
+    unmet: list[str] = unmet_deps(task, store._by_id) if store is not None else []
     return TaskRead(
         **task.model_dump(),
         space_name=space.name if space else None,
         space_color=space.color if space else None,
         space_icon=space.icon if space else None,
+        unmet_dependencies=unmet,
     )
 
 
@@ -185,11 +189,12 @@ async def reorder_tasks(body: ReorderBody, request: Request) -> Response:
 
 @router.get("/{task_id}", response_model=TaskRead)
 async def get_task(task_id: str, request: Request) -> TaskRead:
-    task = get_store(request).get(task_id)
+    store = get_store(request)
+    task = store.get(task_id)
     if task is None:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
     space = get_space_store(request).get(task.space_id)
-    return _build_task_read(task, space)
+    return _build_task_read(task, space, store)
 
 
 @router.post("", response_model=TaskRead, status_code=status.HTTP_201_CREATED)
@@ -213,7 +218,8 @@ async def create_task(body: CreateTaskBody, request: Request) -> TaskRead:
         raise HTTPException(status_code=404, detail=f"Space {body.space_id} not found") from None
     except StorageError as e:
         raise HTTPException(status_code=400, detail=str(e)) from None
-    return _build_task_read(task, space_store.get(body.space_id))
+    store = get_store(request)
+    return _build_task_read(task, space_store.get(body.space_id), store)
 
 
 @router.patch("/{task_id}", response_model=TaskRead)
@@ -248,7 +254,8 @@ async def update_task(task_id: str, body: UpdateTaskBody, request: Request) -> T
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found") from None
     except StorageError as e:
         raise HTTPException(status_code=400, detail=str(e)) from None
-    return _build_task_read(task, get_space_store(request).get(task.space_id))
+    store = get_store(request)
+    return _build_task_read(task, get_space_store(request).get(task.space_id), store)
 
 
 @router.patch("/{task_id}/state", response_model=TaskRead)
@@ -267,7 +274,7 @@ async def transition_task(
         raise HTTPException(status_code=400, detail=str(e)) from None
     if updated.state == TaskState.ACTIVE:
         await get_worker_for_task(request, task_id).enqueue(task_id)
-    return _build_task_read(updated, get_space_store(request).get(updated.space_id))
+    return _build_task_read(updated, get_space_store(request).get(updated.space_id), get_store(request))
 
 
 @router.post("/{task_id}/start", response_model=TaskRead)
@@ -281,11 +288,14 @@ async def start_task(task_id: str, request: Request) -> TaskRead:
             status_code=409,
             detail=f"Only backlog tasks can be started (current state: {task.state.value})",
         )
-    updated = await store.transition(
-        task_id, TaskState.ACTIVE, allowed=USER_TRANSITIONS
-    )
+    try:
+        updated = await store.transition(
+            task_id, TaskState.ACTIVE, allowed=USER_TRANSITIONS
+        )
+    except InvalidTransition as e:
+        raise HTTPException(status_code=409, detail=str(e)) from None
     await get_worker_for_task(request, task_id).enqueue(task_id)
-    return _build_task_read(updated, get_space_store(request).get(updated.space_id))
+    return _build_task_read(updated, get_space_store(request).get(updated.space_id), store)
 
 
 @router.post("/{task_id}/reply", response_model=TaskRead)
@@ -303,7 +313,7 @@ async def reply_to_task(task_id: str, body: ReplyBody, request: Request) -> Task
         await get_worker_for_task(request, task_id).enqueue(
             task_id, user_message=body.message
         )
-    return _build_task_read(outcome.task, get_space_store(request).get(outcome.task.space_id))
+    return _build_task_read(outcome.task, get_space_store(request).get(outcome.task.space_id), store)
 
 
 @router.post("/{task_id}/stop", response_model=TaskRead)
@@ -322,14 +332,14 @@ async def stop_task(task_id: str, request: Request) -> TaskRead:
                 updated = await store.transition(
                     task_id, TaskState.BACKLOG, allowed=USER_TRANSITIONS
                 )
-                return _build_task_read(updated, get_space_store(request).get(updated.space_id))
+                return _build_task_read(updated, get_space_store(request).get(updated.space_id), store)
             except (InvalidTransition, StorageError) as e:
                 raise HTTPException(status_code=409, detail=str(e)) from None
         raise HTTPException(
             status_code=409,
             detail="Task is not currently running",
         )
-    return _build_task_read(task, get_space_store(request).get(task.space_id))
+    return _build_task_read(task, get_space_store(request).get(task.space_id), store)
 
 
 @router.get("/{task_id}/stream")
