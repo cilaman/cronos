@@ -140,7 +140,7 @@ export function MarkdownEditorModal({ file, fileUrl, onSave, savePending, onClos
         </div>
 
         {/* Editor body */}
-        <div className="cronos-md-editor min-h-0 flex-1 overflow-hidden" data-color-mode={theme}>
+        <div className="cronos-md-editor min-h-0 flex-1 overflow-hidden" data-color-mode={theme === "light" ? "light" : "dark"}>
           {error ? (
             <p className="p-4 text-sm text-danger">{error}</p>
           ) : content === null ? (
