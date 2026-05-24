@@ -148,6 +148,39 @@ export function useUnarchiveTask() {
   });
 }
 
+export function usePromoteTask(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.promote(id),
+    onSuccess: (updated) => {
+      qc.setQueryData(["task", id], updated);
+      invalidateBoards(qc);
+    },
+  });
+}
+
+export function useSetParent(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (parentId: string | null) => api.setParent(id, parentId),
+    onSuccess: (updated) => {
+      qc.setQueryData(["task", id], updated);
+      invalidateBoards(qc);
+    },
+  });
+}
+
+export function useSetDependsOn(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => api.setDependsOn(id, ids),
+    onSuccess: (updated) => {
+      qc.setQueryData(["task", id], updated);
+      invalidateBoards(qc);
+    },
+  });
+}
+
 export function useReorderTasks() {
   const qc = useQueryClient();
   return useMutation({

@@ -1,9 +1,9 @@
 # Test Coverage — cronos-development
 
-**Updated**: 2026-05-24T18:55:00Z
-**Overall**: 77.67% (+1.44% vs previous run)
-**Passed**: 614 | **Failed**: 0 | **Total**: 614
-**Backend**: 526 passed (pytest) | **Frontend**: 88 passed (vitest)
+**Updated**: 2026-05-24T20:25:00Z
+**Backend (pytest)**: 78.67% (+0.85% vs previous run) — 599 passed, 0 failed
+**Frontend (vitest)**: 183 passed, 0 failed (13 files, +4 files this session)
+**Tester rounds this session**: 1 (no regressions)
 
 ## Per-module coverage (backend, sorted ascending)
 
@@ -11,8 +11,8 @@
 |--------|----------|---------------|
 | app/git_ops.py | 21% | +0 |
 | app/main.py | 29% | +0 |
-| app/api/tasks.py | 59% | +4 |
 | app/space_storage.py | 59% | +0 |
+| app/api/tasks.py | 61% | +2 |
 | app/api/test_reports.py | 70% | +0 |
 | app/worker.py | 75% | +0 |
 | app/worker_pool.py | 80% | +0 |
@@ -20,7 +20,7 @@
 | app/test_report_store.py | 83% | +0 |
 | app/trace_store.py | 84% | +0 |
 | app/stats_store.py | 85% | +0 |
-| app/storage.py | 87% | +7 |
+| app/storage.py | 87% | +0 |
 | app/file_service.py | 90% | +0 |
 | app/api/spaces.py | 90% | +0 |
 | app/trace_parser.py | 91% | +0 |
@@ -39,9 +39,122 @@
 |--------|----------|--------------------------|-------|
 | app/git_ops.py | 21% | 31,36,50-65,74-77,100-113,121-126,136-183,... | user git state — security-sensitive |
 | app/main.py | 29% | 41-45,53-63,71-88,100-120,125-201,221-247 | lifespan/watcher uncovered |
-| app/api/tasks.py | 59% | 56,59,117,170-181,186-187,217-220,255-256,273-274,303-316,321-342,347-348,360,365-376,386-399,409-423,433-453,476-479,486-487 | file upload/stop/reply/transition branches |
 | app/space_storage.py | 59% | 52-56,67-76,86,101-102,149-150,156-160,169-170,176-177,180-182,185-194,198-199,203-231,263-266,270,275-278,286-296,369-399,409-426,452,455 | space lifecycle ops |
+| app/api/tasks.py | 61% | 56,59,117,170-181,186-187,217-220,255-256,273-274,306-311,313,321-342,347-348,360,365-376,386-399,409-423,433-453,476-479,486-487 | file upload/stop branches; PATCH not-found |
 | app/api/test_reports.py | 70% | 15,20,69-74,79-87 | small module — easy wins |
+
+## Recent changes (2026-05-24 — arc-1 task 3 gap-fill on DTO endpoints)
+
+Added 9 more tests targeting the `_build_task_read(..., store=...)` wiring
+across every TaskRead-returning endpoint. The arc-1/3 commit added a new
+`store` parameter that several call sites pass; if any of those threadings
+regressed, the DTO would silently report `unmet_dependencies=[]` even when
+blockers existed.
+
+### Tests added in `backend/tests/test_api_tasks.py` (+5)
+
+- `test_start_response_includes_unmet_dependencies` — POST /start success
+  response carries the field (empty list on success).
+- `test_patch_state_response_includes_unmet_dependencies` — PATCH /state
+  carries the field (open backlog -> active path, deps satisfied).
+- `test_patch_task_response_includes_unmet_dependencies` — PATCH /api/tasks/{id}
+  carries the field; populated when adding an open dep via the update.
+- `test_reply_response_includes_unmet_dependencies` — POST /reply carries the
+  field on the active reply path (regression guard for the new `store=` arg).
+
+### Tests added in `backend/tests/test_storage.py` (+5)
+
+- `test_apply_reply_waiting_path_unaffected_by_dep_gate` — waiting->active
+  reply with open deps must succeed (gate is BACKLOG-only). Locks the gate's
+  exact-match scoping.
+- `test_apply_reply_done_path_unaffected_by_dep_gate` — done->active reply
+  with open deps must succeed. Same scoping argument.
+- `test_unmet_deps_does_not_treat_self_as_satisfied` — self-referential dep
+  (data-corruption scenario; create() blocks it) still reports as unmet
+  because the task itself is BACKLOG (non-terminal). Lock policy.
+- `test_unmet_deps_returns_independent_list` — caller mutation does not
+  poison subsequent calls (defensive against shared-list bugs).
+- `test_open_children_returns_independent_list` — same independence
+  contract for the sibling helper.
+
+## Recent changes (2026-05-24 — arc-1/6 detail panel hierarchy UI)
+
+Task arc-1/6 added a new HierarchySection inside `Detail.tsx` plus three new
+API methods (`promote`, `setParent`, `setDependsOn`) and three new hooks
+(`usePromoteTask`, `useSetParent`, `useSetDependsOn`). Added 68 new frontend
+tests across four files plus four new exports from `Detail.tsx` so the pure
+helpers can be unit-tested.
+
+### Tests added in `frontend/src/__tests__/Detail-helpers.test.ts` (17)
+
+Pure tests for the two new helpers:
+
+- `extractDetail` — 8 tests covering: pure-JSON body, JSON-with-prefix,
+  no-brace passthrough, malformed JSON passthrough, missing-detail field,
+  empty-string falsy fallback, non-string-detail runtime behavior, and a
+  brace-in-path placement check.
+- `getDescendantIds` — 9 tests covering: no children, immediate children,
+  multi-level traversal, root-id exclusion, sibling-tree isolation, **cyclic
+  parent-graph defensive termination**, missing root, empty task list, and
+  sibling-vs-descendant distinction.
+
+### Tests added in `frontend/src/__tests__/api-hierarchy.test.ts` (15)
+
+Mocks `globalThis.fetch` and asserts URL, method, body, headers, and error
+propagation for each new method. The error-propagation tests are the
+important ones — they lock the wrapper's "<status> <statusText> on <path>:
+<body>" error-message format that `extractDetail` parses.
+
+### Tests added in `frontend/src/hooks/__tests__/useTasks-hierarchy.test.tsx` (13)
+
+Uses a real `QueryClient` with retries disabled and `vi.mock`s `../../api`.
+Asserts: argument forwarding, cache writes via `setQueryData(["task", id])`,
+board cache invalidation (verified by extracting and invoking the
+`predicate` function passed to `invalidateQueries`), error surfacing, and
+the "cache untouched on error" contract for `useSetDependsOn`.
+
+### Tests added in `frontend/src/components/__tests__/HierarchySection.test.tsx` (23)
+
+Mocks `useBoard`, `usePromoteTask`, `useSetParent`, `useSetDependsOn` so the
+test controls hook state directly. Wraps in `MemoryRouter` for the
+`useSearchParams` dependency. Covers:
+
+- TypeBadge rendering for all three types and the `undefined → 'task'` default.
+- Promote button visibility: hidden for goals, visible for task/issue/undefined.
+- Promote button: disabled + "Promoting…" while pending; calls mutateAsync on
+  click; surfaces extracted detail on error.
+- Children section: hidden for non-goals, hidden for goals without children,
+  visible for goals with children; lists each child with state badge; hidden
+  while board data is loading.
+- Top-level structure: Hierarchy heading, Parent / Depends on labels,
+  dependency chips that resolve titles from the board (with id fallback), and
+  the parent breadcrumb with Change/Remove buttons.
+
+### Source change: 4 named exports added to `frontend/src/components/Detail.tsx`
+
+`extractDetail`, `getDescendantIds`, `TypeBadge`, `HierarchySection` are now
+named exports so the helpers and the section can be unit-tested in isolation
+without exercising the full Detail modal. No behavior change.
+
+All 599 backend tests + 183 frontend tests pass; no regressions.
+
+All 535 backend tests pass; no regressions.
+
+## Recent changes (2026-05-24 — arc-1 task 3: block backlog->active when deps unmet)
+
+Added 41 tests covering the new dependency / child gates implemented on the
+arc-1/3 branch (`backend/app/storage.py` + `backend/app/api/tasks.py`):
+
+- `_TERMINAL_STATES = {done, archived}`
+- `unmet_deps(task, by_id) -> list[str]`
+- `open_children(goal_id, by_id) -> list[str]`
+- `TaskStore.transition()` gates: backlog→active blocked by unmet deps,
+  goal→done blocked by open children.
+- `TaskStore.apply_reply()` gate: backlog→active blocked by unmet deps.
+- `POST /api/tasks/{id}/start` returns 409 with the blockers' ids in
+  `detail` when deps are open.
+- `TaskRead.unmet_dependencies: list[str]` surfaced on every task DTO
+  (GET, POST, PATCH, /start, /reply responses).
 
 ## Recent changes (2026-05-24 — arc-1 task 3: block backlog->active when deps unmet)
 
