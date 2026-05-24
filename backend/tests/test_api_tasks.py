@@ -790,3 +790,86 @@ async def test_create_task_response_includes_unmet_dependencies(async_client):
     assert resp.status_code == 201
     body = resp.json()
     assert body["unmet_dependencies"] == [dep["id"]]
+
+
+async def test_start_response_includes_unmet_dependencies(async_client):
+    """POST /start success response also surfaces unmet_dependencies (empty when
+    the task could start — i.e. all deps were satisfied)."""
+    task = await _create(async_client, title="SoloStart")
+
+    resp = await async_client.post(f"/api/tasks/{task['id']}/start")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    # The field must be present on the TaskRead shape regardless of whether
+    # any blockers existed. A successful start implies an empty list.
+    assert "unmet_dependencies" in body
+    assert body["unmet_dependencies"] == []
+
+
+async def test_patch_state_response_includes_unmet_dependencies(async_client, task_store):
+    """PATCH /state response carries unmet_dependencies (TaskRead shape).
+
+    Regression guard: every endpoint returning TaskRead must include the new
+    field. PATCH /state previously called _build_task_read without `store=`,
+    which would have returned an empty list even when blockers existed.
+    """
+    from app.storage import USER_TRANSITIONS as _UT, WORKER_TRANSITIONS as _WT
+
+    dep = await _create(async_client, title="Dep")
+    # Drive the dep to done so the gate doesn't block our subject transition.
+    await task_store.transition(dep["id"], TaskState.ACTIVE, allowed=_UT)
+    await task_store.transition(dep["id"], TaskState.DONE, allowed=_WT)
+
+    task = await _create(async_client, title="HasDoneDep", depends_on=[dep["id"]])
+
+    resp = await async_client.patch(
+        f"/api/tasks/{task['id']}/state", json={"state": "active"}
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "unmet_dependencies" in body
+    assert body["unmet_dependencies"] == []
+
+
+async def test_patch_task_response_includes_unmet_dependencies(async_client):
+    """PATCH /api/tasks/{id} (field updates) response carries unmet_dependencies.
+
+    Regression: a previous version of `_build_task_read` would have returned
+    an empty list here even with open blockers. Asserts the store wiring on
+    this code path.
+    """
+    dep = await _create(async_client, title="StillOpen")
+    blocked = await _create(async_client, title="BlockedX")
+
+    # Update the blocked task to add a dep that's still in backlog.
+    resp = await async_client.patch(
+        f"/api/tasks/{blocked['id']}", json={"depends_on": [dep["id"]]}
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["unmet_dependencies"] == [dep["id"]]
+
+
+async def test_reply_response_includes_unmet_dependencies(async_client, task_store):
+    """POST /api/tasks/{id}/reply response carries unmet_dependencies.
+
+    The reply succeeds (active task), and the resulting TaskRead must include
+    an `unmet_dependencies` list. With no deps on the reply target, the list
+    is empty — but its presence is the assertion.
+    """
+    task = await _create(async_client, title="ActiveReplyTarget")
+    # Drive it active so the reply path takes the ACTIVE branch (append to
+    # pending_messages, no transition involved — so the dep gate doesn't fire).
+    await async_client.post(f"/api/tasks/{task['id']}/start")
+
+    resp = await async_client.post(
+        f"/api/tasks/{task['id']}/reply", json={"message": "ping"}
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "unmet_dependencies" in body
+    assert body["unmet_dependencies"] == []

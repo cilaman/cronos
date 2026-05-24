@@ -1737,3 +1737,95 @@ async def test_apply_reply_active_path_unaffected_by_dep_gate(task_store):
     assert outcome.task.state == TaskState.ACTIVE
     assert outcome.should_enqueue is False
     assert "hello agent" in outcome.task.pending_messages
+
+
+async def test_apply_reply_waiting_path_unaffected_by_dep_gate(task_store):
+    """A reply to a WAITING task promotes to ACTIVE even with open deps.
+
+    The dep gate guards only the backlog branch of apply_reply (the
+    "agent never started" entry point). A task that already entered the
+    pipeline (active->waiting) was past the gate; replying to a clarifying
+    question must not retroactively block on a freshly-introduced dep.
+    """
+    dep = await task_store.create(space_id=SPACE_ID, title="Dep", brief="")
+    task = await task_store.create(space_id=SPACE_ID, title="Q?", brief="")
+    # Drive it through backlog -> active -> waiting.
+    await task_store.transition(task.id, TaskState.ACTIVE, allowed=USER_TRANSITIONS)
+    await task_store.transition(task.id, TaskState.WAITING, allowed=WORKER_TRANSITIONS)
+    # Retroactively add an open dep.
+    await task_store.update(task.id, depends_on=[dep.id])
+
+    outcome = await task_store.apply_reply(task.id, "answer")
+
+    # Promotes to ACTIVE despite open deps — gate is BACKLOG-only.
+    assert outcome.task.state == TaskState.ACTIVE
+    assert outcome.should_enqueue is True
+
+
+async def test_apply_reply_done_path_unaffected_by_dep_gate(task_store):
+    """A reply to a DONE task re-promotes to ACTIVE — open deps must not block.
+
+    Same scoping argument as the waiting case: once past the original
+    backlog gate, follow-up turns are not re-gated. Locks in the
+    `task.state == TaskState.BACKLOG` exact match (not e.g. `!= ACTIVE`).
+    """
+    dep = await task_store.create(space_id=SPACE_ID, title="Dep", brief="")
+    task = await task_store.create(space_id=SPACE_ID, title="Closed", brief="")
+    # Walk task to done.
+    await task_store.transition(task.id, TaskState.ACTIVE, allowed=USER_TRANSITIONS)
+    await task_store.transition(task.id, TaskState.DONE, allowed=WORKER_TRANSITIONS)
+    # Retroactively add an open dep.
+    await task_store.update(task.id, depends_on=[dep.id])
+
+    outcome = await task_store.apply_reply(task.id, "reopen")
+
+    assert outcome.task.state == TaskState.ACTIVE
+    assert outcome.should_enqueue is True
+
+
+# ---- unmet_deps edge cases ----
+
+
+def test_unmet_deps_does_not_treat_self_as_satisfied():
+    """If a task self-references in depends_on (data corruption only;
+    create() blocks this), the gate still reports it as unmet because the
+    task itself is in BACKLOG, not a terminal state.
+
+    Locks in the policy: terminal-state check uses the dep's CURRENT state,
+    not its identity. A backlog task cannot be its own satisfied dependency.
+    """
+    t = _mk_state("T", TaskState.BACKLOG, deps=["T"])
+
+    # Task is in the index but its own state (BACKLOG) is non-terminal.
+    assert unmet_deps(t, _index(t)) == ["T"]
+
+
+def test_unmet_deps_returns_independent_list():
+    """Repeated calls must return fresh lists — no shared mutable state.
+
+    Defensive against a regression where callers mutate the result and
+    accidentally poison the next caller.
+    """
+    d = _mk_state("D", TaskState.BACKLOG)
+    t = _mk_state("T", TaskState.BACKLOG, deps=["D"])
+    by_id = _index(t, d)
+
+    first = unmet_deps(t, by_id)
+    first.append("MUTATED")
+    second = unmet_deps(t, by_id)
+
+    assert second == ["D"]
+    assert "MUTATED" not in second
+
+
+def test_open_children_returns_independent_list():
+    """Same independence contract on open_children."""
+    g = _mk_state("G", TaskState.ACTIVE, task_type="goal")
+    c = _mk_state("C", TaskState.BACKLOG, parent="G")
+    by_id = _index(g, c)
+
+    first = open_children("G", by_id)
+    first.append("MUTATED")
+    second = open_children("G", by_id)
+
+    assert second == ["C"]
