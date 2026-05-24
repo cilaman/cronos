@@ -77,6 +77,18 @@ export function Board({ spaceId, onAddTask, compact = false, sortMode = "manual"
     };
   }, [data, sortMode]);
 
+  const blocksCountMap = useMemo<Record<string, number>>(() => {
+    if (!sortedData) return {};
+    const allTasks = LANES.flatMap(({ state }) => sortedData[state]);
+    const counts: Record<string, number> = {};
+    for (const task of allTasks) {
+      for (const depId of task.depends_on ?? []) {
+        counts[depId] = (counts[depId] ?? 0) + 1;
+      }
+    }
+    return counts;
+  }, [sortedData]);
+
   function onDragStart(e: DragStartEvent) {
     if (!sortedData) return;
     const taskId = String(e.active.id);
@@ -153,6 +165,8 @@ export function Board({ spaceId, onAddTask, compact = false, sortMode = "manual"
               onOpen={setOpenId}
               onAdd={onAddTask}
               compact={compact}
+              onOpenTask={setOpenId}
+              blocksCountMap={blocksCountMap}
             />
           ))}
         </div>
