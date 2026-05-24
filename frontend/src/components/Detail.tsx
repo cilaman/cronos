@@ -1,11 +1,15 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
   useArchiveTask,
+  useBoard,
   useDeleteTask,
+  usePromoteTask,
   useReplyToTask,
+  useSetDependsOn,
+  useSetParent,
   useStartTask,
   useStopTask,
   useTask,
@@ -21,7 +25,10 @@ import {
   type AgentMode,
   type AgentModel,
   type RunStats,
+  type Task,
   type TaskStats,
+  type TaskSummary,
+  type TaskType,
 } from "../types";
 import { ChatInput } from "./ChatInput";
 import { ConversationStream } from "./ConversationStream";
@@ -307,6 +314,470 @@ function TaskTestBadge({ taskId }: { taskId: string }) {
   );
 }
 
+// ── Hierarchy helpers ─────────────────────────────────────────────────────────
+
+export function extractDetail(msg: string): string {
+  try {
+    const idx = msg.indexOf("{");
+    if (idx >= 0) {
+      const obj = JSON.parse(msg.slice(idx)) as { detail?: string };
+      if (obj.detail) return obj.detail;
+    }
+  } catch {
+    // fall through
+  }
+  return msg;
+}
+
+export function getDescendantIds(tasks: TaskSummary[], rootId: string): Set<string> {
+  const result = new Set<string>();
+  const queue = [rootId];
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    for (const t of tasks) {
+      if (t.parent_id === current && !result.has(t.id)) {
+        result.add(t.id);
+        queue.push(t.id);
+      }
+    }
+  }
+  return result;
+}
+
+const TYPE_BADGE_STYLES: Partial<Record<TaskType, string>> = {
+  goal: "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-400/30 dark:bg-violet-400/10 dark:text-violet-400",
+  issue: "border-orange-200 bg-orange-50 text-orange-600 dark:border-orange-400/30 dark:bg-orange-400/10 dark:text-orange-400",
+};
+
+export function TypeBadge({ type }: { type: TaskType }) {
+  const cls =
+    TYPE_BADGE_STYLES[type] ?? "border-hairline bg-surface-2 text-ink-muted";
+  return (
+    <span
+      className={`rounded border px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wide ${cls}`}
+    >
+      {type}
+    </span>
+  );
+}
+
+// ── Parent picker ─────────────────────────────────────────────────────────────
+
+interface ParentPickerProps {
+  currentParentId: string | null;
+  currentParentTitle: string | null;
+  candidates: TaskSummary[];
+  onSelect: (parentId: string | null) => Promise<unknown>;
+  isPending: boolean;
+  error: string | null;
+  onOpenTask: (id: string) => void;
+}
+
+function ParentPicker({
+  currentParentId,
+  currentParentTitle,
+  candidates,
+  onSelect,
+  isPending,
+  error,
+  onOpenTask,
+}: ParentPickerProps) {
+  const [editing, setEditing] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const filtered = candidates
+    .filter(
+      (t) =>
+        t.title.toLowerCase().includes(search.toLowerCase()) ||
+        t.id.includes(search),
+    )
+    .slice(0, 8);
+
+  async function handleSelect(id: string | null) {
+    try {
+      await onSelect(id);
+      setEditing(false);
+      setSearch("");
+    } catch {
+      // error shown via error prop
+    }
+  }
+
+  return (
+    <div>
+      <p className="font-display text-[10px] uppercase tracking-[0.18em] text-ink-faint">
+        Parent
+      </p>
+      {currentParentId && !editing ? (
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => onOpenTask(currentParentId)}
+            className="flex items-center gap-1 rounded border border-hairline bg-surface-2 px-2 py-1 font-mono text-[11px] text-ink-muted transition hover:border-hairline-strong hover:text-ink"
+          >
+            <span className="text-ink-faint">↑</span>
+            <span className="max-w-[200px] truncate">
+              {currentParentTitle ?? currentParentId}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="rounded border border-hairline px-2 py-1 text-[11px] text-ink-muted transition hover:border-hairline-strong hover:text-ink"
+          >
+            Change
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleSelect(null)}
+            disabled={isPending}
+            className="rounded border border-hairline px-2 py-1 text-[11px] text-ink-muted transition hover:border-danger/50 hover:text-danger disabled:opacity-50"
+          >
+            Remove
+          </button>
+        </div>
+      ) : (
+        <div className="relative mt-1">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onFocus={() => setEditing(true)}
+            onBlur={() =>
+              setTimeout(() => {
+                setEditing(false);
+                setSearch("");
+              }, 150)
+            }
+            autoFocus={editing && !currentParentId}
+            placeholder={
+              candidates.length === 0 ? "No tasks available" : "Search tasks…"
+            }
+            className="w-full rounded border border-hairline-strong bg-canvas px-2 py-1 text-xs text-ink placeholder-ink-faint focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+          />
+          {editing && filtered.length > 0 && (
+            <div className="absolute z-10 mt-0.5 w-full overflow-hidden rounded border border-hairline-strong bg-surface-1 shadow-lift">
+              {filtered.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onMouseDown={() => void handleSelect(t.id)}
+                  className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-xs hover:bg-surface-2"
+                >
+                  <span className="truncate text-ink">{t.title}</span>
+                  <span className="shrink-0 font-mono text-[10px] text-ink-faint">
+                    {t.id}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+          {currentParentId && editing && (
+            <button
+              type="button"
+              onMouseDown={() => {
+                setEditing(false);
+                setSearch("");
+              }}
+              className="mt-1 text-[11px] text-ink-muted transition hover:text-ink"
+            >
+              Cancel
+            </button>
+          )}
+        </div>
+      )}
+      {error && (
+        <p className="mt-1 rounded border border-danger/30 bg-danger/10 px-2 py-1 text-[11px] text-danger">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ── Dependency picker ─────────────────────────────────────────────────────────
+
+interface DependencyPickerProps {
+  currentDeps: string[];
+  allTasks: TaskSummary[];
+  candidates: TaskSummary[];
+  onUpdate: (ids: string[]) => Promise<unknown>;
+  isPending: boolean;
+  error: string | null;
+  onOpenTask: (id: string) => void;
+}
+
+function DependencyPicker({
+  currentDeps,
+  allTasks,
+  candidates,
+  onUpdate,
+  isPending,
+  error,
+  onOpenTask,
+}: DependencyPickerProps) {
+  const [search, setSearch] = useState("");
+
+  const taskMap = useMemo(
+    () => new Map(allTasks.map((t) => [t.id, t])),
+    [allTasks],
+  );
+
+  const filtered = candidates
+    .filter(
+      (t) =>
+        !currentDeps.includes(t.id) &&
+        (t.title.toLowerCase().includes(search.toLowerCase()) ||
+          t.id.includes(search)),
+    )
+    .slice(0, 8);
+
+  async function handleAdd(id: string) {
+    try {
+      await onUpdate([...currentDeps, id]);
+      setSearch("");
+    } catch {
+      // error shown via error prop
+    }
+  }
+
+  async function handleRemove(id: string) {
+    try {
+      await onUpdate(currentDeps.filter((d) => d !== id));
+    } catch {
+      // error shown via error prop
+    }
+  }
+
+  return (
+    <div>
+      <p className="font-display text-[10px] uppercase tracking-[0.18em] text-ink-faint">
+        Depends on
+      </p>
+      <div className="mt-1 space-y-2">
+        {currentDeps.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {currentDeps.map((depId) => {
+              const dep = taskMap.get(depId);
+              return (
+                <div
+                  key={depId}
+                  className="flex items-center gap-1 rounded border border-hairline-strong bg-surface-2 px-2 py-0.5"
+                >
+                  <button
+                    type="button"
+                    onClick={() => onOpenTask(depId)}
+                    className="font-mono text-[11px] text-ink-muted transition hover:text-ink"
+                  >
+                    {dep?.title ?? depId}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleRemove(depId)}
+                    disabled={isPending}
+                    aria-label="Remove dependency"
+                    className="ml-0.5 text-ink-faint transition hover:text-danger"
+                  >
+                    <span className="text-[10px]">✕</span>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <div className="relative">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onBlur={() => setTimeout(() => setSearch(""), 150)}
+            placeholder="Add dependency…"
+            className="w-full rounded border border-hairline-strong bg-canvas px-2 py-1 text-xs text-ink placeholder-ink-faint focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+          />
+          {search && filtered.length > 0 && (
+            <div className="absolute z-10 mt-0.5 w-full overflow-hidden rounded border border-hairline-strong bg-surface-1 shadow-lift">
+              {filtered.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onMouseDown={() => void handleAdd(t.id)}
+                  className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-xs hover:bg-surface-2"
+                >
+                  <span className="truncate text-ink">{t.title}</span>
+                  <span className="shrink-0 font-mono text-[10px] text-ink-faint">
+                    {t.id}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+      {error && (
+        <p className="mt-1 rounded border border-danger/30 bg-danger/10 px-2 py-1 text-[11px] text-danger">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ── Hierarchy section ─────────────────────────────────────────────────────────
+
+export function HierarchySection({ task }: { task: Task }) {
+  const [, setSearchParams] = useSearchParams();
+  const promote = usePromoteTask(task.id);
+  const setParent = useSetParent(task.id);
+  const setDependsOn = useSetDependsOn(task.id);
+  const { data: board } = useBoard(task.space_id);
+  const [promoteToast, setPromoteToast] = useState(false);
+
+  const allTasks = useMemo(
+    () =>
+      board
+        ? [
+            ...board.backlog,
+            ...board.active,
+            ...board.waiting,
+            ...board.done,
+          ]
+        : [],
+    [board],
+  );
+
+  const descendantIds = useMemo(
+    () => getDescendantIds(allTasks, task.id),
+    [allTasks, task.id],
+  );
+
+  const parentCandidates = useMemo(
+    () =>
+      allTasks.filter((t) => t.id !== task.id && !descendantIds.has(t.id)),
+    [allTasks, task.id, descendantIds],
+  );
+
+  const depCandidates = useMemo(
+    () => allTasks.filter((t) => t.id !== task.id),
+    [allTasks, task.id],
+  );
+
+  const children = useMemo(
+    () => allTasks.filter((t) => t.parent_id === task.id),
+    [allTasks, task.id],
+  );
+
+  function openTask(id: string) {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("task", id);
+        return next;
+      },
+      { replace: true },
+    );
+  }
+
+  async function handlePromote() {
+    try {
+      await promote.mutateAsync();
+      setPromoteToast(true);
+      setTimeout(() => setPromoteToast(false), 3000);
+    } catch {
+      // error shown via promote.error
+    }
+  }
+
+  return (
+    <section>
+      <h3 className="font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
+        Hierarchy
+      </h3>
+      <div className="mt-2 space-y-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <TypeBadge type={task.type ?? "task"} />
+          {(task.type ?? "task") !== "goal" && (
+            <button
+              type="button"
+              onClick={() => void handlePromote()}
+              disabled={promote.isPending}
+              className="rounded border border-hairline px-2 py-0.5 text-[11px] text-ink-muted transition hover:border-violet-300 hover:text-violet-600 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:border-violet-400/50 dark:hover:text-violet-400"
+            >
+              {promote.isPending ? "Promoting…" : "Promote to Goal"}
+            </button>
+          )}
+          {promoteToast && (
+            <span className="text-[11px] text-accent-bright">
+              Promoted to goal
+            </span>
+          )}
+          {promote.error && (
+            <span className="text-[11px] text-danger">
+              {extractDetail(promote.error.message)}
+            </span>
+          )}
+        </div>
+
+        <ParentPicker
+          currentParentId={task.parent_id ?? null}
+          currentParentTitle={task.parent_title ?? null}
+          candidates={parentCandidates}
+          onSelect={(parentId) => setParent.mutateAsync(parentId)}
+          isPending={setParent.isPending}
+          error={
+            setParent.error
+              ? extractDetail(setParent.error.message)
+              : null
+          }
+          onOpenTask={openTask}
+        />
+
+        <DependencyPicker
+          currentDeps={task.depends_on ?? []}
+          allTasks={allTasks}
+          candidates={depCandidates}
+          onUpdate={(ids) => setDependsOn.mutateAsync(ids)}
+          isPending={setDependsOn.isPending}
+          error={
+            setDependsOn.error
+              ? extractDetail(setDependsOn.error.message)
+              : null
+          }
+          onOpenTask={openTask}
+        />
+
+        {task.type === "goal" && children.length > 0 && (
+          <div>
+            <p className="font-display text-[10px] uppercase tracking-[0.18em] text-ink-faint">
+              Children
+            </p>
+            <div className="mt-1 space-y-1">
+              {children.map((child) => (
+                <button
+                  key={child.id}
+                  type="button"
+                  onClick={() => openTask(child.id)}
+                  className="flex w-full items-center gap-2 rounded border border-hairline px-2.5 py-1.5 text-left transition hover:border-hairline-strong hover:bg-surface-2"
+                >
+                  <span
+                    className={`rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] ${
+                      STATE_BADGE[child.state] ?? STATE_BADGE.backlog
+                    }`}
+                  >
+                    {child.state}
+                  </span>
+                  <span className="truncate text-xs text-ink">
+                    {child.title}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 interface Props {
@@ -583,6 +1054,8 @@ export function Detail({ taskId, onClose }: Props) {
                           <ReactMarkdown remarkPlugins={[remarkGfm]}>{task.brief}</ReactMarkdown>
                         </div>
                       </section>
+
+                      <HierarchySection task={task} />
 
                       <ConversationStream task={task} />
                     </div>
