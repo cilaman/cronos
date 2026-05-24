@@ -355,6 +355,258 @@ describe("Card — Blocks pill", () => {
 });
 
 // ---------------------------------------------------------------------------
+// density="tight" — single-line stacked variant
+// ---------------------------------------------------------------------------
+
+describe("Card — density='tight'", () => {
+  it("renders the title in a single-line truncated <h3>", () => {
+    const task = makeTask({
+      title: "A very very very very very long title that should be truncated",
+    });
+
+    renderCard({ task, onClick: () => {}, density: "tight" });
+
+    const heading = screen.getByRole("heading", { level: 3 });
+    expect(heading).toBeInTheDocument();
+    expect(heading.textContent).toBe(
+      "A very very very very very long title that should be truncated",
+    );
+    expect(heading.className).toContain("truncate");
+  });
+
+  it("does NOT render brief_preview in tight mode", () => {
+    const task = makeTask({ brief_preview: "Should not be visible in tight" });
+
+    renderCard({ task, onClick: () => {}, density: "tight" });
+
+    expect(
+      screen.queryByText("Should not be visible in tight"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("does NOT render waiting_question in tight mode", () => {
+    const task = makeTask({
+      waiting_question: "Hidden tight-mode question?",
+    });
+
+    renderCard({ task, onClick: () => {}, density: "tight" });
+
+    expect(
+      screen.queryByText(/Hidden tight-mode question\?/),
+    ).not.toBeInTheDocument();
+  });
+
+  it("does NOT render the parent breadcrumb in tight mode", () => {
+    const task = makeTask({
+      parent_id: "parent-99",
+      parent_title: "Should not show in tight",
+    });
+
+    renderCard({ task, onClick: () => {}, density: "tight" });
+
+    expect(screen.queryByText(/↑/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Should not show in tight/),
+    ).not.toBeInTheDocument();
+  });
+
+  it("sets data-density='tight' on the root element", () => {
+    const task = makeTask();
+
+    const { container } = renderCard({
+      task,
+      onClick: () => {},
+      density: "tight",
+    });
+
+    expect(getCardRoot(container).getAttribute("data-density")).toBe("tight");
+  });
+
+  it("renders a state dot with aria-label matching the task's state", () => {
+    const task = makeTask({ state: "active" });
+
+    renderCard({ task, onClick: () => {}, density: "tight" });
+
+    const stateDot = screen.getByLabelText("active");
+    expect(stateDot).toBeInTheDocument();
+    // It's a colored circle (uses rounded-full + a size class).
+    expect(stateDot.className).toContain("rounded-full");
+  });
+
+  it("renders a priority dot with aria-label containing 'priority'", () => {
+    const task = makeTask({ priority: 1 });
+
+    renderCard({ task, onClick: () => {}, density: "tight" });
+
+    const priorityDot = screen.getByLabelText(/priority 1/i);
+    expect(priorityDot).toBeInTheDocument();
+    expect(priorityDot.className).toContain("rounded-full");
+  });
+
+  it("renders a 'Blocked by N' pill when unmet_dependencies is set", () => {
+    const task = makeTask({
+      unmet_dependencies: [
+        { id: "dep-1", title: "Migrate the schema" },
+        { id: "dep-2", title: "Approve the design" },
+        { id: "dep-3", title: "Land the migration" },
+      ],
+    });
+
+    renderCard({ task, onClick: () => {}, density: "tight" });
+
+    const pill = screen.getByText(/Blocked by 3/i);
+    expect(pill).toBeInTheDocument();
+    expect(pill.getAttribute("title")).toBe(
+      "Migrate the schema, Approve the design, Land the migration",
+    );
+  });
+
+  it("renders a 'Blocks N' pill when blocksCount > 0", () => {
+    const task = makeTask();
+
+    renderCard({
+      task,
+      onClick: () => {},
+      density: "tight",
+      blocksCount: 5,
+    });
+
+    expect(screen.getByText(/^Blocks 5$/)).toBeInTheDocument();
+  });
+
+  it("renders the type pill text for type='goal'", () => {
+    const task = makeTask({ type: "goal" });
+
+    renderCard({ task, onClick: () => {}, density: "tight" });
+
+    const badge = screen.getByText("goal");
+    expect(badge).toBeInTheDocument();
+    expect(badge.className).toContain("uppercase");
+  });
+
+  it("renders the type pill text for type='issue'", () => {
+    const task = makeTask({ type: "issue" });
+
+    renderCard({ task, onClick: () => {}, density: "tight" });
+
+    const badge = screen.getByText("issue");
+    expect(badge).toBeInTheDocument();
+    expect(badge.className).toContain("uppercase");
+  });
+
+  it("does NOT render a type pill for default type='task'", () => {
+    const task = makeTask({ type: "task" });
+
+    renderCard({ task, onClick: () => {}, density: "tight" });
+
+    expect(screen.queryByText("task")).not.toBeInTheDocument();
+  });
+
+  it("uses a flex-col justify-center layout with min-h-[44px] tap target", () => {
+    const task = makeTask();
+
+    const { container } = renderCard({
+      task,
+      onClick: () => {},
+      density: "tight",
+    });
+
+    const button = container.querySelector("button");
+    expect(button).not.toBeNull();
+    expect(button!.className).toContain("flex-col");
+    expect(button!.className).toContain("justify-center");
+    expect(button!.className).toContain("min-h-[44px]");
+  });
+
+  it("still invokes onClick when the tight card is clicked", async () => {
+    const onClick = vi.fn();
+    const task = makeTask({ title: "Clickable tight card" });
+
+    renderCard({ task, onClick, density: "tight" });
+
+    const user = userEvent.setup();
+    const heading = screen.getByRole("heading", { level: 3 });
+    // Click the inner button via the heading (heading is inside the <button>).
+    await user.click(heading);
+
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// data-density attribute for non-tight values
+// ---------------------------------------------------------------------------
+
+describe("Card — data-density for non-tight values", () => {
+  it("sets data-density='default' on the root when density is omitted", () => {
+    const task = makeTask();
+
+    const { container } = renderCard({ task, onClick: () => {} });
+
+    expect(getCardRoot(container).getAttribute("data-density")).toBe("default");
+  });
+
+  it("sets data-density='default' when explicitly set to 'default'", () => {
+    const task = makeTask();
+
+    const { container } = renderCard({
+      task,
+      onClick: () => {},
+      density: "default",
+    });
+
+    expect(getCardRoot(container).getAttribute("data-density")).toBe("default");
+  });
+
+  it("sets data-density='compact' when density='compact'", () => {
+    const task = makeTask();
+
+    const { container } = renderCard({
+      task,
+      onClick: () => {},
+      density: "compact",
+    });
+
+    expect(getCardRoot(container).getAttribute("data-density")).toBe("compact");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Layout test — 6 tight cards stacked in a 640px-tall container
+// ---------------------------------------------------------------------------
+
+describe("Card — tight density stack layout", () => {
+  it("renders all 6 tight cards' titles when stacked vertically", () => {
+    const tasks = Array.from({ length: 6 }, (_, i) =>
+      makeTask({
+        id: `task-${i + 1}`,
+        title: `Tight stacked card #${i + 1}`,
+      }),
+    );
+
+    render(
+      <div style={{ height: 640, display: "flex", flexDirection: "column" }}>
+        <DndContext>
+          <SortableContext items={tasks.map((t) => t.id)}>
+            {tasks.map((t) => (
+              <Card key={t.id} task={t} onClick={() => {}} density="tight" />
+            ))}
+          </SortableContext>
+        </DndContext>
+      </div>,
+    );
+
+    for (let i = 1; i <= 6; i++) {
+      expect(
+        screen.getByText(`Tight stacked card #${i}`),
+      ).toBeInTheDocument();
+    }
+    // And every rendered card should advertise data-density='tight'.
+    expect(document.querySelectorAll('[data-density="tight"]').length).toBe(6);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // All-combined: a goal that blocks others and is blocked
 // ---------------------------------------------------------------------------
 

@@ -3,7 +3,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { cn } from "../utils/cn";
 import { formatRelative } from "../utils/format";
 import { SpaceTag } from "./ui/SpaceTag";
-import type { AgentMode, TaskSummary, TaskType } from "../types";
+import type { AgentMode, TaskSummary, TaskState, TaskType } from "../types";
 
 const PRIORITY_STYLES: Record<number, { badge: string; dot: string }> = {
   1: {
@@ -45,16 +45,39 @@ const TYPE_BADGE_STYLES: Partial<Record<TaskType, string>> = {
   issue: "border-orange-200 bg-orange-50 text-orange-600 dark:border-orange-400/30 dark:bg-orange-400/10 dark:text-orange-400",
 };
 
+const STATE_DOT_STYLES: Record<TaskState, string> = {
+  backlog: "bg-ink-faint",
+  active: "bg-emerald-500",
+  waiting: "bg-amber-500",
+  done: "bg-sky-500",
+  archived: "bg-ink-faint/40",
+};
+
+function formatCompactAge(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return "—";
+  const seconds = Math.round((Date.now() - then) / 1000);
+  const abs = Math.abs(seconds);
+  if (abs < 60) return "now";
+  if (abs < 3600) return `${Math.round(seconds / 60)}m`;
+  if (abs < 86_400) return `${Math.round(seconds / 3600)}h`;
+  if (abs < 86_400 * 30) return `${Math.round(seconds / 86_400)}d`;
+  if (abs < 86_400 * 365) return `${Math.round(seconds / (86_400 * 30))}mo`;
+  return `${Math.round(seconds / (86_400 * 365))}y`;
+}
+
 interface Props {
   task: TaskSummary;
   onClick: () => void;
   compact?: boolean;
+  density?: "default" | "compact" | "tight";
   isDragOverlay?: boolean;
   onOpenTask?: (id: string) => void;
   blocksCount?: number;
 }
 
-export function Card({ task, onClick, compact = false, isDragOverlay = false, onOpenTask, blocksCount = 0 }: Props) {
+export function Card({ task, onClick, compact = false, density = "default", isDragOverlay = false, onOpenTask, blocksCount = 0 }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id, disabled: isDragOverlay });
 
@@ -76,12 +99,78 @@ export function Card({ task, onClick, compact = false, isDragOverlay = false, on
   const typeBadgeStyle = TYPE_BADGE_STYLES[taskType];
   const blockedBy = task.unmet_dependencies ?? [];
 
+  if (density === "tight") {
+    return (
+      <div
+        ref={setNodeRef}
+        style={style}
+        {...(!isDragOverlay ? attributes : {})}
+        data-task-type={taskType}
+        data-density="tight"
+        className={cn("group", isDragging && !isDragOverlay && "opacity-40")}
+      >
+        <button
+          type="button"
+          onClick={onClick}
+          style={{
+            borderLeftColor: borderColor,
+            borderLeftWidth: 3,
+            ...(isGoal ? { borderTopWidth: 2 } : {}),
+          }}
+          className={cn(
+            "relative flex min-h-[44px] w-full flex-col justify-center rounded-md border border-hairline bg-surface-2 py-2 pl-2.5 pr-3 text-left shadow-inset-hairline transition hover:-translate-y-px hover:border-hairline-strong hover:bg-surface-3 hover:shadow-lift focus:outline-none focus-visible:ring-1 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface-1",
+            isGoal && "border-t-ink",
+          )}
+        >
+          <h3 className="truncate text-sm font-semibold leading-snug text-ink">{task.title}</h3>
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+            <span
+              className={cn("h-1.5 w-1.5 shrink-0 rounded-full", STATE_DOT_STYLES[task.state])}
+              aria-label={task.state}
+            />
+            <span
+              className={cn("h-1.5 w-1.5 shrink-0 rounded-full", pStyle.dot)}
+              aria-label={`priority ${priority}`}
+            />
+            <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-ink-faint">
+              {formatCompactAge(task.updated_at)}
+            </span>
+            {typeBadgeStyle && (
+              <span
+                className={cn(
+                  "inline-flex items-center rounded border px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide",
+                  typeBadgeStyle,
+                )}
+              >
+                {taskType}
+              </span>
+            )}
+            {blockedBy.length > 0 && (
+              <span
+                title={blockedBy.map((d) => d.title).join(", ")}
+                className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide text-amber-700 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-400"
+              >
+                Blocked by {blockedBy.length}
+              </span>
+            )}
+            {blocksCount > 0 && (
+              <span className="inline-flex items-center rounded border border-hairline bg-surface-2 px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide text-ink-muted">
+                Blocks {blocksCount}
+              </span>
+            )}
+          </div>
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div
       ref={setNodeRef}
       style={style}
       {...(!isDragOverlay ? attributes : {})}
       data-task-type={taskType}
+      data-density={density}
       className={cn("group", isDragging && !isDragOverlay && "opacity-40")}
     >
       <button
