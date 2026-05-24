@@ -94,6 +94,18 @@ export const api = {
     }),
   stop: (id: string) =>
     request<Task>(`/api/tasks/${id}/stop`, { method: "POST", body: "{}" }),
+  promote: (id: string) =>
+    request<Task>(`/api/tasks/${id}/promote`, { method: "POST", body: "{}" }),
+  setParent: (id: string, parent_id: string | null) =>
+    request<Task>(`/api/tasks/${id}/parent`, {
+      method: "PATCH",
+      body: JSON.stringify({ parent_id }),
+    }),
+  setDependsOn: (id: string, depends_on: string[]) =>
+    request<Task>(`/api/tasks/${id}/depends_on`, {
+      method: "PATCH",
+      body: JSON.stringify({ depends_on }),
+    }),
 
   // --- spaces ---
   spaces: () => request<SpacesResponse>("/api/spaces"),

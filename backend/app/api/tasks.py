@@ -17,12 +17,14 @@ from ..models import Board, Space, Task, TaskState, TaskSummary
 from ..space_storage import SpaceStore
 from ..storage import (
     USER_TRANSITIONS,
+    CycleError,
     InvalidTransition,
     StorageError,
     TaskNotFound,
     TaskStore,
     UnknownSpace,
     summarize,
+    unmet_deps,
 )
 from ..worker import Worker, sse_events
 from ..worker_pool import WorkerPool
@@ -68,6 +70,7 @@ class TaskRead(Task):
     space_name: str | None = None
     space_color: str | None = None
     space_icon: str | None = None
+    unmet_dependencies: list[str] = []
 
 
 class CreateTaskBody(BaseModel):
@@ -77,6 +80,9 @@ class CreateTaskBody(BaseModel):
     agent_model: Literal["default", "sonnet", "opus", "haiku"] = "default"
     agent_mode: Literal["plan", "auto", "ask"] = "auto"
     priority: int = Field(default=3, ge=1, le=5)
+    type: Literal["task", "goal", "issue"] = "task"
+    parent_id: str | None = None
+    depends_on: list[str] = Field(default_factory=list)
 
 
 class UpdateTaskBody(BaseModel):
@@ -85,6 +91,9 @@ class UpdateTaskBody(BaseModel):
     agent_mode: Literal["plan", "auto", "ask"] | None = None
     agent_model: Literal["default", "sonnet", "opus", "haiku"] | None = None
     priority: int | None = Field(default=None, ge=1, le=5)
+    type: Literal["task", "goal", "issue"] | None = None
+    parent_id: str | None = None
+    depends_on: list[str] | None = None
 
 
 class ReorderBody(BaseModel):
@@ -102,6 +111,14 @@ class ReplyBody(BaseModel):
 
 class UpdateFileBody(BaseModel):
     content: str = Field(max_length=10_000_000)
+
+
+class ParentBody(BaseModel):
+    parent_id: str | None
+
+
+class DependsOnBody(BaseModel):
+    depends_on: list[str] = Field(default_factory=list)
 
 
 def _enrich_summary(summary: TaskSummary, space: Space | None) -> TaskSummary:
@@ -130,12 +147,14 @@ def _enrich_board(board: Board, space_store: SpaceStore) -> Board:
     )
 
 
-def _build_task_read(task: Task, space: Space | None) -> TaskRead:
+def _build_task_read(task: Task, space: Space | None, store: TaskStore | None = None) -> TaskRead:
+    unmet: list[str] = unmet_deps(task, store._by_id) if store is not None else []
     return TaskRead(
         **task.model_dump(),
         space_name=space.name if space else None,
         space_color=space.color if space else None,
         space_icon=space.icon if space else None,
+        unmet_dependencies=unmet,
     )
 
 
@@ -168,7 +187,13 @@ async def list_archived_tasks(
         if t.state == TaskState.ARCHIVED and (scope is None or t.space_id == scope)
     ]
     tasks.sort(key=lambda t: t.updated_at, reverse=True)
-    return [_enrich_summary(summarize(t), space_by_id.get(t.space_id)) for t in tasks]
+    return [
+        _enrich_summary(
+            summarize(t).model_copy(update={"unmet_dependencies": unmet_deps(t, store._by_id)}),
+            space_by_id.get(t.space_id),
+        )
+        for t in tasks
+    ]
 
 
 @router.put("/reorder", status_code=status.HTTP_204_NO_CONTENT)
@@ -179,11 +204,12 @@ async def reorder_tasks(body: ReorderBody, request: Request) -> Response:
 
 @router.get("/{task_id}", response_model=TaskRead)
 async def get_task(task_id: str, request: Request) -> TaskRead:
-    task = get_store(request).get(task_id)
+    store = get_store(request)
+    task = store.get(task_id)
     if task is None:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
     space = get_space_store(request).get(task.space_id)
-    return _build_task_read(task, space)
+    return _build_task_read(task, space, store)
 
 
 @router.post("", response_model=TaskRead, status_code=status.HTTP_201_CREATED)
@@ -199,12 +225,16 @@ async def create_task(body: CreateTaskBody, request: Request) -> TaskRead:
             agent_model=body.agent_model,
             agent_mode=body.agent_mode,
             priority=body.priority,
+            type=body.type,
+            parent_id=body.parent_id,
+            depends_on=body.depends_on,
         )
     except UnknownSpace:
         raise HTTPException(status_code=404, detail=f"Space {body.space_id} not found") from None
     except StorageError as e:
         raise HTTPException(status_code=400, detail=str(e)) from None
-    return _build_task_read(task, space_store.get(body.space_id))
+    store = get_store(request)
+    return _build_task_read(task, space_store.get(body.space_id), store)
 
 
 @router.patch("/{task_id}", response_model=TaskRead)
@@ -215,10 +245,13 @@ async def update_task(task_id: str, body: UpdateTaskBody, request: Request) -> T
         and body.agent_mode is None
         and body.agent_model is None
         and body.priority is None
+        and body.type is None
+        and body.parent_id is None
+        and body.depends_on is None
     ):
         raise HTTPException(
             status_code=400,
-            detail="Provide title, brief, agent_mode, or agent_model to update",
+            detail="Provide title, brief, agent_mode, agent_model, type, parent_id, or depends_on to update",
         )
     try:
         task = await get_store(request).update(
@@ -228,12 +261,16 @@ async def update_task(task_id: str, body: UpdateTaskBody, request: Request) -> T
             agent_mode=body.agent_mode,
             agent_model=body.agent_model,
             priority=body.priority,
+            type=body.type,
+            parent_id=body.parent_id,
+            depends_on=body.depends_on,
         )
     except TaskNotFound:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found") from None
     except StorageError as e:
         raise HTTPException(status_code=400, detail=str(e)) from None
-    return _build_task_read(task, get_space_store(request).get(task.space_id))
+    store = get_store(request)
+    return _build_task_read(task, get_space_store(request).get(task.space_id), store)
 
 
 @router.patch("/{task_id}/state", response_model=TaskRead)
@@ -252,7 +289,7 @@ async def transition_task(
         raise HTTPException(status_code=400, detail=str(e)) from None
     if updated.state == TaskState.ACTIVE:
         await get_worker_for_task(request, task_id).enqueue(task_id)
-    return _build_task_read(updated, get_space_store(request).get(updated.space_id))
+    return _build_task_read(updated, get_space_store(request).get(updated.space_id), get_store(request))
 
 
 @router.post("/{task_id}/start", response_model=TaskRead)
@@ -266,11 +303,14 @@ async def start_task(task_id: str, request: Request) -> TaskRead:
             status_code=409,
             detail=f"Only backlog tasks can be started (current state: {task.state.value})",
         )
-    updated = await store.transition(
-        task_id, TaskState.ACTIVE, allowed=USER_TRANSITIONS
-    )
+    try:
+        updated = await store.transition(
+            task_id, TaskState.ACTIVE, allowed=USER_TRANSITIONS
+        )
+    except InvalidTransition as e:
+        raise HTTPException(status_code=409, detail=str(e)) from None
     await get_worker_for_task(request, task_id).enqueue(task_id)
-    return _build_task_read(updated, get_space_store(request).get(updated.space_id))
+    return _build_task_read(updated, get_space_store(request).get(updated.space_id), store)
 
 
 @router.post("/{task_id}/reply", response_model=TaskRead)
@@ -288,7 +328,7 @@ async def reply_to_task(task_id: str, body: ReplyBody, request: Request) -> Task
         await get_worker_for_task(request, task_id).enqueue(
             task_id, user_message=body.message
         )
-    return _build_task_read(outcome.task, get_space_store(request).get(outcome.task.space_id))
+    return _build_task_read(outcome.task, get_space_store(request).get(outcome.task.space_id), store)
 
 
 @router.post("/{task_id}/stop", response_model=TaskRead)
@@ -307,14 +347,14 @@ async def stop_task(task_id: str, request: Request) -> TaskRead:
                 updated = await store.transition(
                     task_id, TaskState.BACKLOG, allowed=USER_TRANSITIONS
                 )
-                return _build_task_read(updated, get_space_store(request).get(updated.space_id))
+                return _build_task_read(updated, get_space_store(request).get(updated.space_id), store)
             except (InvalidTransition, StorageError) as e:
                 raise HTTPException(status_code=409, detail=str(e)) from None
         raise HTTPException(
             status_code=409,
             detail="Task is not currently running",
         )
-    return _build_task_read(task, get_space_store(request).get(task.space_id))
+    return _build_task_read(task, get_space_store(request).get(task.space_id), store)
 
 
 @router.get("/{task_id}/stream")
@@ -329,6 +369,52 @@ async def stream_task(task_id: str, request: Request) -> StreamingResponse:
             "Connection": "keep-alive",
         },
     )
+
+
+@router.get("/{task_id}/tree", response_model=list[TaskRead])
+async def get_task_tree(task_id: str, request: Request) -> list[TaskRead]:
+    store = get_store(request)
+    task = store.get(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+    space_store = get_space_store(request)
+    space_by_id = {s.id: s for s in space_store.list_all()}
+    tasks = store.subtree(task_id)
+    return [_build_task_read(t, space_by_id.get(t.space_id), store) for t in tasks]
+
+
+@router.post("/{task_id}/promote", response_model=TaskRead)
+async def promote_task(task_id: str, request: Request) -> TaskRead:
+    store = get_store(request)
+    try:
+        task = await store.promote(task_id)
+    except TaskNotFound:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found") from None
+    return _build_task_read(task, get_space_store(request).get(task.space_id), store)
+
+
+@router.patch("/{task_id}/parent", response_model=TaskRead)
+async def set_task_parent(task_id: str, body: ParentBody, request: Request) -> TaskRead:
+    store = get_store(request)
+    try:
+        task = await store.set_parent(task_id, body.parent_id)
+    except TaskNotFound:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found") from None
+    except CycleError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from None
+    return _build_task_read(task, get_space_store(request).get(task.space_id), store)
+
+
+@router.patch("/{task_id}/depends_on", response_model=TaskRead)
+async def set_task_depends_on(task_id: str, body: DependsOnBody, request: Request) -> TaskRead:
+    store = get_store(request)
+    try:
+        task = await store.set_depends_on(task_id, body.depends_on)
+    except TaskNotFound:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found") from None
+    except CycleError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from None
+    return _build_task_read(task, get_space_store(request).get(task.space_id), store)
 
 
 def _task_workspace(task: Task):

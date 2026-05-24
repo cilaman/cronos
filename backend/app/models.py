@@ -37,6 +37,9 @@ class Task(BaseModel):
     agent_model: AgentModel = "default"
     priority: int = 3  # 1 (highest) to 5 (lowest)
     manual_order: int = 0  # lower value = higher in lane
+    type: Literal["task", "goal", "issue"] = "task"
+    parent_id: str | None = None
+    depends_on: list[str] = Field(default_factory=list)
 
 
 class TaskSummary(BaseModel):
@@ -56,6 +59,10 @@ class TaskSummary(BaseModel):
     priority: int = 3
     manual_order: int = 0
     agent_mode: AgentMode = "auto"
+    type: Literal["task", "goal", "issue"] = "task"
+    parent_id: str | None = None
+    depends_on: list[str] = Field(default_factory=list)
+    unmet_dependencies: list[str] = []
     # Denormalized space fields so cards can render without a separate join.
     space_name: str | None = None
     space_color: str | None = None
