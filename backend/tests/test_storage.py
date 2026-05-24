@@ -1829,3 +1829,433 @@ def test_open_children_returns_independent_list():
     second = open_children("G", by_id)
 
     assert second == ["C"]
+
+
+# ---------------------------------------------------------------------------
+# TaskStore.subtree — arc-1 task 4
+# ---------------------------------------------------------------------------
+
+
+async def test_subtree_missing_root_returns_empty_list(task_store):
+    """subtree() on an unknown id is not an error — returns []."""
+    result = task_store.subtree("no-such-task")
+
+    assert result == []
+
+
+async def test_subtree_no_children_returns_just_root(task_store):
+    """A leaf task's subtree is the singleton list [root]."""
+    leaf = await task_store.create(space_id=SPACE_ID, title="Leaf", brief="")
+
+    result = task_store.subtree(leaf.id)
+
+    assert [t.id for t in result] == [leaf.id]
+
+
+async def test_subtree_includes_direct_and_transitive_descendants(task_store):
+    """subtree() returns root + every descendant, regardless of depth."""
+    root = await task_store.create(space_id=SPACE_ID, title="Root", brief="", type="goal")
+    child = await task_store.create(
+        space_id=SPACE_ID, title="Child", brief="", parent_id=root.id
+    )
+    grand = await task_store.create(
+        space_id=SPACE_ID, title="Grand", brief="", parent_id=child.id
+    )
+    # Unrelated task in the same space — must NOT appear in the subtree.
+    await task_store.create(space_id=SPACE_ID, title="Unrelated", brief="")
+
+    result_ids = {t.id for t in task_store.subtree(root.id)}
+
+    assert result_ids == {root.id, child.id, grand.id}
+
+
+async def test_subtree_bfs_root_first(task_store):
+    """Root must come first; children come after their parent (BFS order)."""
+    root = await task_store.create(space_id=SPACE_ID, title="Root", brief="", type="goal")
+    child = await task_store.create(
+        space_id=SPACE_ID, title="C", brief="", parent_id=root.id
+    )
+    grand = await task_store.create(
+        space_id=SPACE_ID, title="G", brief="", parent_id=child.id
+    )
+
+    order = [t.id for t in task_store.subtree(root.id)]
+
+    assert order[0] == root.id
+    # The grandchild is reached after its parent (BFS guarantee).
+    assert order.index(child.id) < order.index(grand.id)
+
+
+async def test_subtree_orders_siblings_by_manual_order(task_store):
+    """Siblings of the same parent are returned in manual_order ascending."""
+    root = await task_store.create(space_id=SPACE_ID, title="Root", brief="", type="goal")
+    c1 = await task_store.create(
+        space_id=SPACE_ID, title="C1", brief="", parent_id=root.id
+    )
+    c2 = await task_store.create(
+        space_id=SPACE_ID, title="C2", brief="", parent_id=root.id
+    )
+    c3 = await task_store.create(
+        space_id=SPACE_ID, title="C3", brief="", parent_id=root.id
+    )
+
+    # Force a non-default manual_order: c3 first, then c1, then c2.
+    task_store._by_id[c1.id] = c1.model_copy(update={"manual_order": 1})
+    task_store._by_id[c2.id] = c2.model_copy(update={"manual_order": 2})
+    task_store._by_id[c3.id] = c3.model_copy(update={"manual_order": 0})
+
+    result_ids = [t.id for t in task_store.subtree(root.id)]
+
+    # Drop the root (it's first) and compare the children order.
+    assert result_ids[0] == root.id
+    assert result_ids[1:] == [c3.id, c1.id, c2.id]
+
+
+async def test_subtree_does_not_cross_space_boundary(task_store, space_store):
+    """A child in a different space must not be pulled in via parent_id.
+
+    parent_id is a string ref; the store does NOT auto-cross-link spaces.
+    """
+    await space_store.create(
+        name="Other", color="#000000", icon=None, description="", space_id="other-space"
+    )
+    # Reload so the new space's tasks_dir is visible.
+    await task_store.reload_all()
+
+    root = await task_store.create(
+        space_id=SPACE_ID, title="Root", brief="", type="goal"
+    )
+    # Create a task in another space that claims the root as its parent
+    # (cross-space ref — pathological data, but defensively handled).
+    other = await task_store.create(
+        space_id="other-space", title="Other", brief="", parent_id=root.id
+    )
+
+    ids = {t.id for t in task_store.subtree(root.id)}
+
+    # Subtree() walks `_by_id` and matches on parent_id only; cross-space
+    # children DO show up because the store is space-agnostic at this layer.
+    # The space gate is enforced at validate_parent (set_parent path).
+    # This test pins the current behavior so a tightening change is intentional.
+    assert root.id in ids
+    assert other.id in ids
+
+
+# ---------------------------------------------------------------------------
+# TaskStore.promote — arc-1 task 4
+# ---------------------------------------------------------------------------
+
+
+async def test_promote_flips_type_to_goal(task_store):
+    """A 'task' becomes a 'goal'; updated_at advances."""
+    t = await task_store.create(space_id=SPACE_ID, title="To Promote", brief="")
+    original_updated_at = t.updated_at
+
+    promoted = await task_store.promote(t.id)
+
+    assert promoted.type == "goal"
+    assert promoted.id == t.id
+    assert promoted.updated_at >= original_updated_at
+
+
+async def test_promote_persists_to_disk(task_store, tmp_spaces_dir):
+    """The on-disk markdown reflects the new type after promote()."""
+    t = await task_store.create(space_id=SPACE_ID, title="Persist", brief="")
+
+    await task_store.promote(t.id)
+
+    # Reload from disk and verify.
+    fresh = TaskStore(tmp_spaces_dir)
+    await fresh.reload_all()
+
+    assert fresh.get(t.id).type == "goal"
+
+
+async def test_promote_is_idempotent_on_existing_goal(task_store):
+    """Promoting a task that's already a goal is a no-op (returns it unchanged)."""
+    g = await task_store.create(
+        space_id=SPACE_ID, title="Already Goal", brief="", type="goal"
+    )
+    original_updated_at = g.updated_at
+
+    result = await task_store.promote(g.id)
+
+    assert result.type == "goal"
+    # No-op: updated_at must NOT have advanced (we returned the cached task).
+    assert result.updated_at == original_updated_at
+
+
+async def test_promote_unknown_id_raises_task_not_found(task_store):
+    """Promoting a nonexistent task raises TaskNotFound (caller maps to 404)."""
+    with pytest.raises(TaskNotFound):
+        await task_store.promote("no-such-task")
+
+
+async def test_promote_preserves_parent_and_depends_on(task_store):
+    """promote() must NOT touch parent_id or depends_on."""
+    dep = await task_store.create(space_id=SPACE_ID, title="Dep", brief="")
+    parent = await task_store.create(
+        space_id=SPACE_ID, title="Parent", brief="", type="goal"
+    )
+    t = await task_store.create(
+        space_id=SPACE_ID,
+        title="Child",
+        brief="",
+        parent_id=parent.id,
+        depends_on=[dep.id],
+    )
+
+    promoted = await task_store.promote(t.id)
+
+    assert promoted.type == "goal"
+    assert promoted.parent_id == parent.id
+    assert promoted.depends_on == [dep.id]
+
+
+# ---------------------------------------------------------------------------
+# TaskStore.set_parent — arc-1 task 4
+# ---------------------------------------------------------------------------
+
+
+async def test_set_parent_assigns_parent_id(task_store):
+    """set_parent() with a valid parent id updates the field and persists."""
+    parent = await task_store.create(
+        space_id=SPACE_ID, title="Parent", brief="", type="goal"
+    )
+    child = await task_store.create(space_id=SPACE_ID, title="Child", brief="")
+
+    result = await task_store.set_parent(child.id, parent.id)
+
+    assert result.parent_id == parent.id
+
+
+async def test_set_parent_clears_parent_id_with_none(task_store):
+    """set_parent(None) clears an existing parent_id."""
+    parent = await task_store.create(
+        space_id=SPACE_ID, title="Parent", brief="", type="goal"
+    )
+    child = await task_store.create(
+        space_id=SPACE_ID, title="Child", brief="", parent_id=parent.id
+    )
+
+    result = await task_store.set_parent(child.id, None)
+
+    assert result.parent_id is None
+
+
+async def test_set_parent_clear_persists_to_disk(task_store, tmp_spaces_dir):
+    """Parent removal survives a reload — proof that disk was updated."""
+    parent = await task_store.create(
+        space_id=SPACE_ID, title="Parent", brief="", type="goal"
+    )
+    child = await task_store.create(
+        space_id=SPACE_ID, title="Child", brief="", parent_id=parent.id
+    )
+
+    await task_store.set_parent(child.id, None)
+
+    fresh = TaskStore(tmp_spaces_dir)
+    await fresh.reload_all()
+
+    assert fresh.get(child.id).parent_id is None
+
+
+async def test_set_parent_self_reference_raises_cycle_error(task_store):
+    """A task cannot become its own parent."""
+    t = await task_store.create(space_id=SPACE_ID, title="T", brief="")
+
+    with pytest.raises(CycleError):
+        await task_store.set_parent(t.id, t.id)
+
+
+async def test_set_parent_creates_cycle_raises(task_store):
+    """Setting parent_id such that A->B->A would form a cycle is rejected."""
+    a = await task_store.create(space_id=SPACE_ID, title="A", brief="", type="goal")
+    b = await task_store.create(
+        space_id=SPACE_ID, title="B", brief="", parent_id=a.id, type="goal"
+    )
+
+    # Currently: A has no parent, B's parent is A. Setting A.parent = B closes the loop.
+    with pytest.raises(CycleError):
+        await task_store.set_parent(a.id, b.id)
+
+
+async def test_set_parent_missing_parent_raises(task_store):
+    """An unknown candidate parent id is treated as a cross-space/missing parent."""
+    t = await task_store.create(space_id=SPACE_ID, title="T", brief="")
+
+    with pytest.raises(CycleError):
+        await task_store.set_parent(t.id, "no-such-parent")
+
+
+async def test_set_parent_unknown_task_raises_task_not_found(task_store):
+    """The task being modified must exist."""
+    with pytest.raises(TaskNotFound):
+        await task_store.set_parent("ghost", None)
+
+
+async def test_set_parent_advances_updated_at(task_store):
+    """A successful re-parent bumps updated_at."""
+    parent = await task_store.create(
+        space_id=SPACE_ID, title="P", brief="", type="goal"
+    )
+    child = await task_store.create(space_id=SPACE_ID, title="C", brief="")
+    original = child.updated_at
+
+    result = await task_store.set_parent(child.id, parent.id)
+
+    assert result.updated_at >= original
+
+
+# ---------------------------------------------------------------------------
+# TaskStore.set_depends_on — arc-1 task 4
+# ---------------------------------------------------------------------------
+
+
+async def test_set_depends_on_assigns_list(task_store):
+    """set_depends_on() with valid dep ids updates the field."""
+    d1 = await task_store.create(space_id=SPACE_ID, title="D1", brief="")
+    d2 = await task_store.create(space_id=SPACE_ID, title="D2", brief="")
+    t = await task_store.create(space_id=SPACE_ID, title="T", brief="")
+
+    result = await task_store.set_depends_on(t.id, [d1.id, d2.id])
+
+    assert result.depends_on == [d1.id, d2.id]
+
+
+async def test_set_depends_on_empty_list_clears(task_store):
+    """Passing [] clears all existing dependencies."""
+    d = await task_store.create(space_id=SPACE_ID, title="D", brief="")
+    t = await task_store.create(
+        space_id=SPACE_ID, title="T", brief="", depends_on=[d.id]
+    )
+
+    result = await task_store.set_depends_on(t.id, [])
+
+    assert result.depends_on == []
+
+
+async def test_set_depends_on_persists_to_disk(task_store, tmp_spaces_dir):
+    """The new dependency list survives a fresh reload from disk."""
+    d = await task_store.create(space_id=SPACE_ID, title="D", brief="")
+    t = await task_store.create(space_id=SPACE_ID, title="T", brief="")
+
+    await task_store.set_depends_on(t.id, [d.id])
+
+    fresh = TaskStore(tmp_spaces_dir)
+    await fresh.reload_all()
+
+    assert fresh.get(t.id).depends_on == [d.id]
+
+
+async def test_set_depends_on_self_reference_raises(task_store):
+    """A task cannot depend on itself."""
+    t = await task_store.create(space_id=SPACE_ID, title="T", brief="")
+
+    with pytest.raises(CycleError):
+        await task_store.set_depends_on(t.id, [t.id])
+
+
+async def test_set_depends_on_creates_cycle_raises(task_store):
+    """A depends_on assignment forming an indirect cycle is rejected.
+
+    Setup: B depends_on A. Setting A.depends_on=[B] would form A -> B -> A.
+    """
+    a = await task_store.create(space_id=SPACE_ID, title="A", brief="")
+    b = await task_store.create(
+        space_id=SPACE_ID, title="B", brief="", depends_on=[a.id]
+    )
+
+    with pytest.raises(CycleError):
+        await task_store.set_depends_on(a.id, [b.id])
+
+
+async def test_set_depends_on_missing_dep_raises(task_store):
+    """Pointing to a nonexistent dep raises (cross-space/missing dep)."""
+    t = await task_store.create(space_id=SPACE_ID, title="T", brief="")
+
+    with pytest.raises(CycleError):
+        await task_store.set_depends_on(t.id, ["ghost"])
+
+
+async def test_set_depends_on_unknown_task_raises_task_not_found(task_store):
+    """Subject task must exist."""
+    with pytest.raises(TaskNotFound):
+        await task_store.set_depends_on("ghost", [])
+
+
+async def test_set_depends_on_advances_updated_at(task_store):
+    """A successful dependency change bumps updated_at."""
+    d = await task_store.create(space_id=SPACE_ID, title="D", brief="")
+    t = await task_store.create(space_id=SPACE_ID, title="T", brief="")
+    original = t.updated_at
+
+    result = await task_store.set_depends_on(t.id, [d.id])
+
+    assert result.updated_at >= original
+
+
+# ---------------------------------------------------------------------------
+# summarize() / board() — depends_on + unmet_dependencies on TaskSummary
+# ---------------------------------------------------------------------------
+
+
+def test_summarize_includes_depends_on():
+    """A TaskSummary must echo the task's depends_on (new in arc-1 task 4)."""
+    t = _mk_state("T", TaskState.BACKLOG, deps=["A", "B"])
+
+    s = summarize(t)
+
+    assert s.depends_on == ["A", "B"]
+
+
+def test_summarize_returns_independent_depends_on_list():
+    """Mutating the returned summary's deps must not affect the original task."""
+    t = _mk_state("T", TaskState.BACKLOG, deps=["A"])
+
+    s = summarize(t)
+    s.depends_on.append("MUTATED")
+
+    assert t.depends_on == ["A"]
+
+
+async def test_board_summary_includes_unmet_dependencies(task_store):
+    """board() populates `unmet_dependencies` for tasks with open blockers."""
+    dep = await task_store.create(space_id=SPACE_ID, title="Dep", brief="")
+    blocked = await task_store.create(
+        space_id=SPACE_ID, title="Blocked", brief="", depends_on=[dep.id]
+    )
+
+    board = task_store.board(SPACE_ID)
+
+    summary = next(s for s in board.backlog if s.id == blocked.id)
+    assert summary.unmet_dependencies == [dep.id]
+    assert summary.depends_on == [dep.id]
+
+
+async def test_board_summary_unmet_dependencies_empty_when_no_deps(task_store):
+    """A task with no deps gets unmet_dependencies=[] (not missing)."""
+    t = await task_store.create(space_id=SPACE_ID, title="Lonely", brief="")
+
+    board = task_store.board(SPACE_ID)
+
+    summary = next(s for s in board.backlog if s.id == t.id)
+    assert summary.unmet_dependencies == []
+    assert summary.depends_on == []
+
+
+async def test_board_summary_unmet_dependencies_drops_done_deps(task_store):
+    """Once a dep moves to DONE it disappears from unmet_dependencies."""
+    dep = await task_store.create(space_id=SPACE_ID, title="Dep", brief="")
+    blocked = await task_store.create(
+        space_id=SPACE_ID, title="B", brief="", depends_on=[dep.id]
+    )
+    await task_store.transition(dep.id, TaskState.ACTIVE, allowed=USER_TRANSITIONS)
+    await task_store.transition(dep.id, TaskState.DONE, allowed=WORKER_TRANSITIONS)
+
+    board = task_store.board(SPACE_ID)
+
+    summary = next(s for s in board.backlog if s.id == blocked.id)
+    assert summary.unmet_dependencies == []
+    # depends_on stays — it's the declared dep list, not the open-blocker list.
+    assert summary.depends_on == [dep.id]

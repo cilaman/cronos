@@ -296,6 +296,7 @@ def summarize(task: Task) -> TaskSummary:
         agent_mode=task.agent_mode,
         type=task.type,
         parent_id=task.parent_id,
+        depends_on=list(task.depends_on),
     )
 
 
@@ -587,7 +588,11 @@ class TaskStore:
         for task in self._by_id.values():
             if scope is not None and task.space_id != scope:
                 continue
-            lanes[task.state].append(summarize(task))
+            s = summarize(task)
+            blockers = unmet_deps(task, self._by_id)
+            if blockers:
+                s = s.model_copy(update={"unmet_dependencies": blockers})
+            lanes[task.state].append(s)
         for items in lanes.values():
             items.sort(key=lambda t: (t.manual_order, -t.updated_at.timestamp()))
         return Board(
@@ -867,6 +872,70 @@ class TaskStore:
             atomic_write(path, dump_task(updated))
             self._reindex_locked(path)
             return messages
+
+    def subtree(self, root_id: str) -> list[Task]:
+        """Return root task + all descendants in BFS order. Returns [] if root not found."""
+        root = self._by_id.get(root_id)
+        if root is None:
+            return []
+        result = [root]
+        queue = [root_id]
+        while queue:
+            current_id = queue.pop(0)
+            children = sorted(
+                [t for t in self._by_id.values() if t.parent_id == current_id],
+                key=lambda t: (t.manual_order, t.id),
+            )
+            for child in children:
+                result.append(child)
+                queue.append(child.id)
+        return result
+
+    async def promote(self, task_id: str) -> Task:
+        """Set type to 'goal'. Idempotent if already a goal."""
+        async with self._lock:
+            task = self._by_id.get(task_id)
+            if task is None:
+                raise TaskNotFound(task_id)
+            if task.type == "goal":
+                return task
+            updated = task.model_copy(
+                update={"type": "goal", "updated_at": datetime.now(tz=UTC)}
+            )
+            path = self._path_by_id[task_id]
+            atomic_write(path, dump_task(updated))
+            self._reindex_locked(path)
+            return self._by_id[task_id]
+
+    async def set_parent(self, task_id: str, parent_id: str | None) -> Task:
+        """Set or clear parent_id. Calls validate_parent; raises CycleError on cycle."""
+        async with self._lock:
+            task = self._by_id.get(task_id)
+            if task is None:
+                raise TaskNotFound(task_id)
+            validate_parent(task_id, parent_id, task.space_id, self._by_id)
+            updated = task.model_copy(
+                update={"parent_id": parent_id, "updated_at": datetime.now(tz=UTC)}
+            )
+            path = self._path_by_id[task_id]
+            atomic_write(path, dump_task(updated))
+            self._reindex_locked(path)
+            return self._by_id[task_id]
+
+    async def set_depends_on(self, task_id: str, depends_on: list[str]) -> Task:
+        """Set depends_on list. Calls validate_depends_on; raises CycleError on cycle."""
+        async with self._lock:
+            task = self._by_id.get(task_id)
+            if task is None:
+                raise TaskNotFound(task_id)
+            validate_depends_on(task_id, depends_on, task.space_id, self._by_id)
+            updated = task.model_copy(
+                update={"depends_on": depends_on, "updated_at": datetime.now(tz=UTC)}
+            )
+            path = self._path_by_id[task_id]
+            atomic_write(path, dump_task(updated))
+            self._reindex_locked(path)
+            return self._by_id[task_id]
 
     async def delete(self, task_id: str) -> None:
         """Soft-delete: move the file into the per-space `.trash/` so nothing is destroyed."""

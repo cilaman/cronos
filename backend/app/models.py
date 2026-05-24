@@ -61,6 +61,8 @@ class TaskSummary(BaseModel):
     agent_mode: AgentMode = "auto"
     type: Literal["task", "goal", "issue"] = "task"
     parent_id: str | None = None
+    depends_on: list[str] = Field(default_factory=list)
+    unmet_dependencies: list[str] = []
     # Denormalized space fields so cards can render without a separate join.
     space_name: str | None = None
     space_color: str | None = None
