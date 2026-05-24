@@ -352,3 +352,175 @@ async def test_delete_task_then_get_returns_404(async_client):
 
     get_resp = await async_client.get(f"/api/tasks/{task_id}")
     assert get_resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Hierarchy fields (type / parent_id / depends_on) over HTTP — arc-1 task 1
+# ---------------------------------------------------------------------------
+
+
+async def test_create_task_with_hierarchy_fields(async_client):
+    """POST /api/tasks accepts and echoes type, parent_id, depends_on."""
+    resp = await async_client.post(
+        "/api/tasks",
+        json={
+            "space_id": SPACE_ID,
+            "title": "Child Task",
+            "brief": "",
+            "type": "goal",
+            "parent_id": "parent-1",
+            "depends_on": ["dep-a", "dep-b"],
+        },
+    )
+
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["type"] == "goal"
+    assert data["parent_id"] == "parent-1"
+    assert data["depends_on"] == ["dep-a", "dep-b"]
+
+
+async def test_create_task_defaults_hierarchy_fields(async_client):
+    """Omitting the new fields yields type='task', parent_id=None, depends_on=[]."""
+    resp = await async_client.post(
+        "/api/tasks",
+        json={"space_id": SPACE_ID, "title": "Defaults", "brief": ""},
+    )
+
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["type"] == "task"
+    assert data["parent_id"] is None
+    assert data["depends_on"] == []
+
+
+async def test_create_task_invalid_type_returns_422(async_client):
+    """Pydantic Literal validation rejects unknown type values at the API edge."""
+    resp = await async_client.post(
+        "/api/tasks",
+        json={
+            "space_id": SPACE_ID,
+            "title": "Bad",
+            "brief": "",
+            "type": "epic",
+        },
+    )
+
+    assert resp.status_code == 422
+
+
+async def test_update_task_hierarchy_fields(async_client):
+    """PATCH /api/tasks/{id} updates type, parent_id, depends_on."""
+    create_resp = await async_client.post(
+        "/api/tasks",
+        json={"space_id": SPACE_ID, "title": "Will Mutate", "brief": ""},
+    )
+    task_id = create_resp.json()["id"]
+
+    resp = await async_client.patch(
+        f"/api/tasks/{task_id}",
+        json={
+            "type": "issue",
+            "parent_id": "new-parent",
+            "depends_on": ["d1"],
+        },
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["type"] == "issue"
+    assert data["parent_id"] == "new-parent"
+    assert data["depends_on"] == ["d1"]
+
+
+async def test_update_task_only_type_succeeds(async_client):
+    """Updating just `type` (no other fields) is allowed and persists."""
+    create_resp = await async_client.post(
+        "/api/tasks",
+        json={"space_id": SPACE_ID, "title": "Type Only", "brief": ""},
+    )
+    task_id = create_resp.json()["id"]
+
+    resp = await async_client.patch(
+        f"/api/tasks/{task_id}", json={"type": "goal"}
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["type"] == "goal"
+
+
+async def test_update_task_only_depends_on_succeeds(async_client):
+    """Updating just `depends_on` is a valid request — exercises the
+    PATCH 'no fields' guard (it should NOT trigger when depends_on is set)."""
+    create_resp = await async_client.post(
+        "/api/tasks",
+        json={"space_id": SPACE_ID, "title": "Deps Only", "brief": ""},
+    )
+    task_id = create_resp.json()["id"]
+
+    resp = await async_client.patch(
+        f"/api/tasks/{task_id}", json={"depends_on": ["x", "y"]}
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["depends_on"] == ["x", "y"]
+
+
+async def test_get_task_includes_hierarchy_fields(async_client):
+    """GET /api/tasks/{id} round-trips the new fields through the read model."""
+    create_resp = await async_client.post(
+        "/api/tasks",
+        json={
+            "space_id": SPACE_ID,
+            "title": "Fetch Hier",
+            "brief": "",
+            "type": "issue",
+            "parent_id": "p",
+            "depends_on": ["a"],
+        },
+    )
+    task_id = create_resp.json()["id"]
+
+    resp = await async_client.get(f"/api/tasks/{task_id}")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["type"] == "issue"
+    assert data["parent_id"] == "p"
+    assert data["depends_on"] == ["a"]
+
+
+async def test_board_summary_includes_type_and_parent_id(async_client):
+    """Board card summaries expose type + parent_id (depends_on is intentionally NOT on summary)."""
+    await async_client.post(
+        "/api/tasks",
+        json={
+            "space_id": SPACE_ID,
+            "title": "Goal On Board",
+            "brief": "",
+            "type": "goal",
+            "parent_id": "root",
+        },
+    )
+
+    resp = await async_client.get(f"/api/tasks?space_id={SPACE_ID}")
+
+    assert resp.status_code == 200
+    summary = resp.json()["backlog"][0]
+    assert summary["type"] == "goal"
+    assert summary["parent_id"] == "root"
+
+
+async def test_update_task_invalid_type_returns_422(async_client):
+    """PATCH with an unknown type is rejected at the Pydantic boundary."""
+    create_resp = await async_client.post(
+        "/api/tasks",
+        json={"space_id": SPACE_ID, "title": "T", "brief": ""},
+    )
+    task_id = create_resp.json()["id"]
+
+    resp = await async_client.patch(
+        f"/api/tasks/{task_id}", json={"type": "epic"}
+    )
+
+    assert resp.status_code == 422

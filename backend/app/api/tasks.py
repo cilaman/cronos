@@ -77,6 +77,9 @@ class CreateTaskBody(BaseModel):
     agent_model: Literal["default", "sonnet", "opus", "haiku"] = "default"
     agent_mode: Literal["plan", "auto", "ask"] = "auto"
     priority: int = Field(default=3, ge=1, le=5)
+    type: Literal["task", "goal", "issue"] = "task"
+    parent_id: str | None = None
+    depends_on: list[str] = Field(default_factory=list)
 
 
 class UpdateTaskBody(BaseModel):
@@ -85,6 +88,9 @@ class UpdateTaskBody(BaseModel):
     agent_mode: Literal["plan", "auto", "ask"] | None = None
     agent_model: Literal["default", "sonnet", "opus", "haiku"] | None = None
     priority: int | None = Field(default=None, ge=1, le=5)
+    type: Literal["task", "goal", "issue"] | None = None
+    parent_id: str | None = None
+    depends_on: list[str] | None = None
 
 
 class ReorderBody(BaseModel):
@@ -199,6 +205,9 @@ async def create_task(body: CreateTaskBody, request: Request) -> TaskRead:
             agent_model=body.agent_model,
             agent_mode=body.agent_mode,
             priority=body.priority,
+            type=body.type,
+            parent_id=body.parent_id,
+            depends_on=body.depends_on,
         )
     except UnknownSpace:
         raise HTTPException(status_code=404, detail=f"Space {body.space_id} not found") from None
@@ -215,10 +224,13 @@ async def update_task(task_id: str, body: UpdateTaskBody, request: Request) -> T
         and body.agent_mode is None
         and body.agent_model is None
         and body.priority is None
+        and body.type is None
+        and body.parent_id is None
+        and body.depends_on is None
     ):
         raise HTTPException(
             status_code=400,
-            detail="Provide title, brief, agent_mode, or agent_model to update",
+            detail="Provide title, brief, agent_mode, agent_model, type, parent_id, or depends_on to update",
         )
     try:
         task = await get_store(request).update(
@@ -228,6 +240,9 @@ async def update_task(task_id: str, body: UpdateTaskBody, request: Request) -> T
             agent_mode=body.agent_mode,
             agent_model=body.agent_model,
             priority=body.priority,
+            type=body.type,
+            parent_id=body.parent_id,
+            depends_on=body.depends_on,
         )
     except TaskNotFound:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found") from None
