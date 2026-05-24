@@ -1153,3 +1153,122 @@ def test_validate_depends_on_cross_space_takes_priority_over_self():
         validate_depends_on("A", ["X"], SPACE_ID, _index(a, other))
 
     assert "not found in space" in str(excinfo.value)
+
+
+# ---- contract / defensive-data tests ----
+
+
+def test_cycle_error_is_value_error_subclass():
+    """API callers may want to catch ValueError generically — lock the inheritance.
+
+    If someone re-bases CycleError on Exception directly, code that does
+    `except ValueError` to handle bad input would silently miss cycle errors.
+    """
+    assert issubclass(CycleError, ValueError)
+    # And an instance is catchable as ValueError.
+    try:
+        raise CycleError("boom")
+    except ValueError as e:
+        assert str(e) == "boom"
+
+
+def test_validate_parent_preexisting_ancestor_cycle_does_not_hang():
+    """Defensive: a corrupt on-disk parent chain that already cycles (and that
+    does NOT include task_id) must terminate without raising or looping forever.
+
+    Setup: P -> Q -> P (existing cycle between two unrelated tasks).
+    Adding NEW.parent = P should succeed because NEW is not in the cycle.
+    Exercises the `next_id in seen -> break` defensive guard in validate_parent.
+    """
+    p = _mk("P", parent="Q")
+    q = _mk("Q", parent="P")  # closes a pre-existing P<->Q cycle
+    new_task = _mk("NEW")
+
+    # Should not raise and must not hang. The walker should detect the revisit
+    # of P (or Q) via the `seen` set and break out of the loop.
+    validate_parent("NEW", "P", SPACE_ID, _index(p, q, new_task))
+
+
+def test_validate_depends_on_deep_transitive_cycle_raises():
+    """Length-5 dep chain catches BFS bugs that only show at depth >= 3.
+
+    Existing chain: A -> B -> C -> D -> E.  Setting E.depends_on=[A] cycles.
+    A shallow (depth-1) BFS or one that confuses BFS/DFS direction would
+    miss this.
+    """
+    a = _mk("A", deps=["B"])
+    b = _mk("B", deps=["C"])
+    c = _mk("C", deps=["D"])
+    d = _mk("D", deps=["E"])
+    e = _mk("E")
+    by_id = _index(a, b, c, d, e)
+
+    with pytest.raises(CycleError) as excinfo:
+        validate_depends_on("E", ["A"], SPACE_ID, by_id)
+
+    msg = str(excinfo.value)
+    # Path must traverse the full chain and close on E.
+    for node in ("A", "B", "C", "D", "E"):
+        assert node in msg, f"expected {node} in cycle path, got {msg!r}"
+    assert msg.startswith("E -> A")
+    assert msg.endswith("-> E")
+
+
+def test_validate_depends_on_diamond_dag_is_accepted():
+    """Fan-out + fan-in (diamond) is a valid DAG; BFS revisit must not flag it.
+
+    Shape:
+        A -> B -> D
+        A -> C -> D
+    Adding A.depends_on=[B, C] where both B and C lead to shared D is legal.
+    A naive BFS that doesn't dedupe via `came_from` could revisit D and
+    falsely report a cycle.
+    """
+    d = _mk("D")
+    b = _mk("B", deps=["D"])
+    c = _mk("C", deps=["D"])
+    a = _mk("A")  # candidate: set A.depends_on=[B, C]
+    by_id = _index(a, b, c, d)
+
+    # Should not raise: D is shared but no path leads back to A.
+    validate_depends_on("A", ["B", "C"], SPACE_ID, by_id)
+
+
+def test_validate_depends_on_does_not_mutate_inputs():
+    """The validator must be a pure predicate — no mutation of by_id or the
+    candidate list. Otherwise callers that pass live references get surprises.
+    """
+    a = _mk("A", deps=["B"])
+    b = _mk("B")
+    c = _mk("C")
+    by_id = _index(a, b, c)
+    candidate = ["C"]
+
+    # Snapshot relevant state.
+    deps_before = {tid: list(t.depends_on) for tid, t in by_id.items()}
+    keys_before = set(by_id.keys())
+
+    validate_depends_on("A", candidate, SPACE_ID, by_id)
+
+    assert candidate == ["C"], "candidate list must not be mutated"
+    assert set(by_id.keys()) == keys_before, "by_id keys must not change"
+    for tid, t in by_id.items():
+        assert t.depends_on == deps_before[tid], f"{tid}.depends_on mutated"
+
+
+def test_validate_parent_does_not_mutate_inputs():
+    """Same pure-predicate contract for validate_parent."""
+    a = _mk("A", parent="B")
+    b = _mk("B", parent="C")
+    c = _mk("C")
+    d = _mk("D")
+    by_id = _index(a, b, c, d)
+
+    parents_before = {tid: t.parent_id for tid, t in by_id.items()}
+    keys_before = set(by_id.keys())
+
+    validate_parent("D", "A", SPACE_ID, by_id)
+
+    assert set(by_id.keys()) == keys_before
+    for tid, t in by_id.items():
+        assert t.parent_id == parents_before[tid], f"{tid}.parent_id mutated"
