@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 
 from . import autopilot_pr
 from .agent import AgentResult, Status, run_agent
+from . import goal_sync
 from .models import TaskState
 from .space_storage import SpaceStore
 from .stats import RunStats, _tier_from_real_model, compute_cost, extract_tokens_and_tools
@@ -15,6 +16,10 @@ from .stats_store import StatsStore
 from .storage import InvalidTransition, TaskStore, USER_TRANSITIONS
 from .trace_parser import extract_run_trace
 from .trace_store import TraceStore
+
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from .worker_pool import WorkerPool
 
 log = logging.getLogger("cronos.worker")
 
@@ -83,6 +88,7 @@ class Worker:
         stats_store: StatsStore | None = None,
         trace_store: TraceStore | None = None,
         on_idle: Callable[[Worker], Awaitable[None]] | None = None,
+        pool: WorkerPool | None = None,
     ) -> None:
         self.store = store
         self.space_store = space_store
@@ -90,6 +96,7 @@ class Worker:
         self.trace_store = trace_store
         self.on_idle = on_idle
         self._space_id: str | None = None
+        self._pool = pool
         self._queue: asyncio.Queue[tuple[str, str | None]] = asyncio.Queue()
         self._subscribers: dict[str, list[asyncio.Queue[dict]]] = defaultdict(list)
         # Snapshot of the current run's published events per task. Lets a
@@ -378,6 +385,12 @@ class Worker:
                         )
                 except Exception:
                     log.exception("autopilot_pr: post-DONE flow failed for %s", task_id)
+
+        # Propagate new state to parent goal when this task is a child run standalone.
+        try:
+            await goal_sync.propagate_to_parent(task_id, self.store, self._pool)
+        except Exception:
+            log.exception("Failed to propagate state to parent goal for %s", task_id)
 
         exit_reason = (
             "STOPPED" if result.stopped
