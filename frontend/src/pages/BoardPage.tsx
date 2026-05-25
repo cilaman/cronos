@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { Board } from "../components/Board";
 import { BoardToolbar } from "../components/BoardToolbar";
 import { TaskForm } from "../components/TaskForm";
 import { useSpaces } from "../hooks/useSpaces";
 import { useCreateTask } from "../hooks/useTasks";
+import { useViews } from "../hooks/useViews";
 import { api } from "../api";
+import type { TaskState } from "../types";
 import {
   readBoardSpaceFilter,
   writeBoardSpaceFilter,
@@ -20,6 +22,7 @@ export function BoardPage() {
   const { spaceId: routeSpaceId } = useParams();
   const scoped = routeSpaceId ?? null;
 
+  const [searchParams, setSearchParams] = useSearchParams();
   const [filter, setFilter] = useState<string | null>(() =>
     scoped ?? readBoardSpaceFilter(),
   );
@@ -30,6 +33,30 @@ export function BoardPage() {
   const [workError, setWorkError] = useState<string | null>(null);
   const { data: spacesData } = useSpaces();
   const createTask = useCreateTask();
+
+  // The space the board is actually scoped to.
+  const boardSpaceId = scoped ?? filter;
+
+  // View ID from URL — null means "use the space's default view".
+  const urlViewId = searchParams.get("view");
+
+  // Load views for the current space (only when scoped to one space).
+  const { data: views } = useViews(boardSpaceId);
+
+  // Resolve the active view object for lane visibility.
+  const activeView = useMemo(() => {
+    if (!views || !boardSpaceId) return null;
+    if (urlViewId !== null) {
+      return views.find((v) => v.id === urlViewId) ?? views.find((v) => v.default) ?? null;
+    }
+    return views.find((v) => v.default) ?? views[0] ?? null;
+  }, [views, boardSpaceId, urlViewId]);
+
+  // Lane states the board should render (hide others).
+  const activeLaneStates = useMemo<TaskState[] | undefined>(() => {
+    if (!activeView) return undefined;
+    return activeView.lanes;
+  }, [activeView]);
 
   // Keep filter aligned with the URL when navigating between scoped/unscoped.
   useEffect(() => {
@@ -44,6 +71,35 @@ export function BoardPage() {
   useEffect(() => {
     if (!scoped) writeBoardSpaceFilter(filter);
   }, [scoped, filter]);
+
+  // Silently reset to default when the bookmarked view no longer exists.
+  useEffect(() => {
+    if (urlViewId && views && !views.find((v) => v.id === urlViewId)) {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete("view");
+          return next;
+        },
+        { replace: true },
+      );
+    }
+  }, [urlViewId, views, setSearchParams]);
+
+  function handleViewChange(newViewId: string | null) {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (newViewId) {
+          next.set("view", newViewId);
+        } else {
+          next.delete("view");
+        }
+        return next;
+      },
+      { replace: false },
+    );
+  }
 
   const initialSpaceForCreate = useMemo(() => {
     return (
@@ -70,9 +126,21 @@ export function BoardPage() {
           setSortMode(next);
           writeBoardSortMode(next);
         }}
+        viewId={urlViewId}
+        onViewChange={scoped ? handleViewChange : undefined}
+        onManageViews={() => {
+          // Stub — wired in arc-3/4 (ViewEditor modal)
+        }}
       />
       <div className="min-h-0 flex-1">
-        <Board spaceId={filter} onAddTask={() => setCreating(true)} compact={compact} sortMode={sortMode} />
+        <Board
+          spaceId={filter}
+          onAddTask={() => setCreating(true)}
+          compact={compact}
+          sortMode={sortMode}
+          viewId={urlViewId}
+          activeLaneStates={activeLaneStates}
+        />
       </div>
 
       {creating && (

@@ -99,6 +99,18 @@ export interface Board {
   archived: TaskSummary[];
 }
 
+// --- Views ---
+
+export interface View {
+  id: string;
+  name: string;
+  lanes: TaskState[];
+  type_filter: TaskType[] | null;
+  default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 // --- Spaces ---
 
 export interface SpaceSummary {
