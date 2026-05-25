@@ -397,3 +397,64 @@ async def test_delete_space_then_get_returns_404(async_client):
     await async_client.delete("/api/spaces/gone-space")
     resp = await async_client.get("/api/spaces/gone-space")
     assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# GET /api/spaces — SpaceSummary now includes `autopilot` (arc-4/5 UI relies
+# on this for the Sidebar autopilot indicator and the dashboard listing).
+# ---------------------------------------------------------------------------
+
+
+async def test_list_spaces_summary_includes_autopilot_default(async_client):
+    """The /api/spaces listing endpoint must include `autopilot` on each summary.
+
+    A regression here would break the dashboard's per-space autopilot
+    indicator and would force the UI to fetch each space individually
+    just to know its autopilot state.
+    """
+    resp = await async_client.get("/api/spaces")
+    spaces = resp.json()["spaces"]
+    space = next(s for s in spaces if s["id"] == SPACE_ID)
+    assert space["autopilot"] == "disabled"
+
+
+async def test_list_spaces_summary_reflects_enabled_autopilot(async_client):
+    """After PATCHing autopilot=enabled, the listing reflects it."""
+    await async_client.patch(
+        f"/api/spaces/{SPACE_ID}", json={"autopilot": "enabled"}
+    )
+    resp = await async_client.get("/api/spaces")
+    space = next(s for s in resp.json()["spaces"] if s["id"] == SPACE_ID)
+    assert space["autopilot"] == "enabled"
+
+
+async def test_list_spaces_summary_reflects_paused_autopilot(async_client):
+    await async_client.patch(
+        f"/api/spaces/{SPACE_ID}", json={"autopilot": "paused"}
+    )
+    resp = await async_client.get("/api/spaces")
+    space = next(s for s in resp.json()["spaces"] if s["id"] == SPACE_ID)
+    assert space["autopilot"] == "paused"
+
+
+async def test_list_spaces_summary_autopilot_independent_per_space(async_client):
+    """Two spaces with different autopilot states report independently.
+
+    Regression guard: if `_summarize_space` ever cached the value across
+    spaces (or read from the wrong instance) this test catches it.
+    """
+    # Seed a second space.
+    await async_client.post(
+        "/api/spaces",
+        json={"name": "Other", "color": "#0F766E", "space_id": "other-space"},
+    )
+
+    # Flip ONLY the second space to enabled.
+    await async_client.patch(
+        "/api/spaces/other-space", json={"autopilot": "enabled"}
+    )
+
+    resp = await async_client.get("/api/spaces")
+    by_id = {s["id"]: s for s in resp.json()["spaces"]}
+    assert by_id[SPACE_ID]["autopilot"] == "disabled"
+    assert by_id["other-space"]["autopilot"] == "enabled"

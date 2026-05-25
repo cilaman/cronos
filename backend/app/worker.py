@@ -3,9 +3,10 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections import defaultdict, deque
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import UTC, datetime
 
+from . import autopilot_pr
 from .agent import AgentResult, Status, run_agent
 from .models import TaskState
 from .space_storage import SpaceStore
@@ -81,11 +82,14 @@ class Worker:
         space_store: SpaceStore | None = None,
         stats_store: StatsStore | None = None,
         trace_store: TraceStore | None = None,
+        on_idle: Callable[[Worker], Awaitable[None]] | None = None,
     ) -> None:
         self.store = store
         self.space_store = space_store
         self.stats_store = stats_store
         self.trace_store = trace_store
+        self.on_idle = on_idle
+        self._space_id: str | None = None
         self._queue: asyncio.Queue[tuple[str, str | None]] = asyncio.Queue()
         self._subscribers: dict[str, list[asyncio.Queue[dict]]] = defaultdict(list)
         # Snapshot of the current run's published events per task. Lets a
@@ -172,6 +176,15 @@ class Worker:
                 log.exception("Unhandled error processing task %s", task_id)
             finally:
                 self._current_id = None
+                if (
+                    self._queue.empty()
+                    and self.on_idle is not None
+                    and not self._stop.is_set()
+                ):
+                    try:
+                        await self.on_idle(self)
+                    except Exception:
+                        log.exception("on_idle hook error for space %s", self._space_id)
         log.info("Worker loop stopped")
 
     async def _run_one(self, task_id: str, user_message: str | None) -> None:
@@ -344,6 +357,27 @@ class Worker:
             )
         except Exception:
             log.exception("Failed to persist finalize for %s", task_id)
+
+        if new_state == TaskState.DONE and self.space_store is not None:
+            task_done = self.store.get(task_id)
+            space_for_pr = self.space_store.get(task_done.space_id) if task_done else None
+            if task_done is not None and space_for_pr is not None:
+                try:
+                    pr_result = await autopilot_pr.run_post_done_flow(
+                        task_done, space_for_pr, self.store
+                    )
+                    if pr_result.pr_url:
+                        await self._publish(
+                            task_id,
+                            {"type": "pr_opened", "pr_url": pr_result.pr_url},
+                        )
+                    elif pr_result.proposed_pr_path:
+                        await self._publish(
+                            task_id,
+                            {"type": "pr_opened", "proposed_pr_path": pr_result.proposed_pr_path},
+                        )
+                except Exception:
+                    log.exception("autopilot_pr: post-DONE flow failed for %s", task_id)
 
         exit_reason = (
             "STOPPED" if result.stopped

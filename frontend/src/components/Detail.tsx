@@ -1055,6 +1055,43 @@ export function Detail({ taskId, onClose }: Props) {
                         </div>
                       </section>
 
+                      {task.state === "done" && (task.pr_url || task.proposed_pr_path) && (
+                        <section>
+                          <h3 className="font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
+                            Pull Request
+                          </h3>
+                          <div className="mt-2">
+                            {task.pr_url ? (
+                              <a
+                                href={task.pr_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 rounded border border-hairline bg-surface-2 px-3 py-1.5 text-[12px] text-ink-muted transition hover:border-accent hover:text-accent-bright"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                  <circle cx="18" cy="18" r="3" /><circle cx="6" cy="6" r="3" />
+                                  <path d="M13 6h3a2 2 0 0 1 2 2v7" /><line x1="6" y1="9" x2="6" y2="21" />
+                                </svg>
+                                {task.pr_url}
+                              </a>
+                            ) : task.proposed_pr_path ? (
+                              <div className="flex items-center gap-2">
+                                <code className="break-all rounded border border-hairline bg-canvas px-2 py-1 font-mono text-[11px] text-ink">
+                                  {task.proposed_pr_path}
+                                </code>
+                                <button
+                                  type="button"
+                                  onClick={() => void navigator.clipboard.writeText(task.proposed_pr_path!)}
+                                  className="shrink-0 rounded border border-hairline-strong bg-surface-2 px-2 py-1 text-[11px] text-ink-muted transition hover:border-hairline-strong hover:text-ink"
+                                >
+                                  Copy path
+                                </button>
+                              </div>
+                            ) : null}
+                          </div>
+                        </section>
+                      )}
+
                       <HierarchySection task={task} />
 
                       <ConversationStream task={task} />

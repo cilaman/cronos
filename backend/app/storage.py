@@ -272,6 +272,8 @@ def parse_file(path: Path, space_id: str) -> Task:
             type=task_type,
             parent_id=parent_id,
             depends_on=depends_on,
+            pr_url=meta.get("pr_url") or None,
+            proposed_pr_path=meta.get("proposed_pr_path") or None,
         )
     except (KeyError, ValidationError) as e:
         raise ValueError(f"Invalid task file {path.name}: {e}") from e
@@ -297,6 +299,8 @@ def summarize(task: Task) -> TaskSummary:
         type=task.type,
         parent_id=task.parent_id,
         depends_on=list(task.depends_on),
+        pr_url=task.pr_url,
+        proposed_pr_path=task.proposed_pr_path,
     )
 
 
@@ -326,6 +330,8 @@ def dump_task(task: Task) -> str:
         "type": task.type,
         "parent_id": task.parent_id,
         "depends_on": list(task.depends_on),
+        "pr_url": task.pr_url,
+        "proposed_pr_path": task.proposed_pr_path,
     }
     body_parts = ["# Brief", "", task.brief.strip() or ""]
     if task.history.strip():
@@ -768,6 +774,48 @@ class TaskStore:
                     "claude_session_id": session_id or task.claude_session_id,
                     "waiting_question": waiting_question,
                     "history": history,
+                    "updated_at": datetime.now(tz=UTC),
+                }
+            )
+            path = self._path_by_id[task_id]
+            atomic_write(path, dump_task(updated))
+            self._reindex_locked(path)
+            return self._by_id[task_id]
+
+    async def set_pr_refs(
+        self,
+        task_id: str,
+        *,
+        pr_url: str | None,
+        proposed_pr_path: str | None,
+    ) -> Task:
+        """Persist PR URL and/or proposed PR path on a task."""
+        async with self._lock:
+            task = self._by_id.get(task_id)
+            if task is None:
+                raise TaskNotFound(task_id)
+            updated = task.model_copy(
+                update={
+                    "pr_url": pr_url,
+                    "proposed_pr_path": proposed_pr_path,
+                    "updated_at": datetime.now(tz=UTC),
+                }
+            )
+            path = self._path_by_id[task_id]
+            atomic_write(path, dump_task(updated))
+            self._reindex_locked(path)
+            return self._by_id[task_id]
+
+    async def autopilot_conflict(self, task_id: str, waiting_question: str) -> Task:
+        """Move a DONE task to WAITING with a conflict message (autopilot rebase failure)."""
+        async with self._lock:
+            task = self._by_id.get(task_id)
+            if task is None:
+                raise TaskNotFound(task_id)
+            updated = task.model_copy(
+                update={
+                    "state": TaskState.WAITING,
+                    "waiting_question": waiting_question,
                     "updated_at": datetime.now(tz=UTC),
                 }
             )

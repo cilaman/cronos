@@ -1347,3 +1347,121 @@ async def test_list_archived_summary_includes_unmet_dependencies(
     # Dep is still in BACKLOG -> unmet from this archived task's POV.
     assert target["unmet_dependencies"] == [dep["id"]]
     assert target["depends_on"] == [dep["id"]]
+
+
+# ---------------------------------------------------------------------------
+# _enrich_summary — denormalized space fields (arc-4/5)
+# ---------------------------------------------------------------------------
+
+
+async def test_board_summary_includes_space_autopilot_disabled_by_default(async_client):
+    """Tasks in a freshly created space surface space_autopilot='disabled'.
+
+    The frontend Card uses this field to render the AUTO pill. If the API
+    forgot to set it the pill would never appear, even when autopilot is on.
+    """
+    await async_client.post(
+        "/api/tasks",
+        json={"space_id": SPACE_ID, "title": "AutopilotDefault", "brief": ""},
+    )
+    resp = await async_client.get(f"/api/tasks?space_id={SPACE_ID}")
+    board = resp.json()
+    assert board["backlog"][0]["space_autopilot"] == "disabled"
+
+
+async def test_board_summary_reflects_space_autopilot_enabled(async_client):
+    """After PATCHing autopilot=enabled, tasks in that space carry the new value."""
+    # Create a task and then flip the space autopilot.
+    await async_client.post(
+        "/api/tasks",
+        json={"space_id": SPACE_ID, "title": "AutoEnabled", "brief": ""},
+    )
+    patch = await async_client.patch(
+        f"/api/spaces/{SPACE_ID}", json={"autopilot": "enabled"}
+    )
+    assert patch.status_code == 200
+
+    resp = await async_client.get(f"/api/tasks?space_id={SPACE_ID}")
+    board = resp.json()
+    assert len(board["backlog"]) == 1
+    assert board["backlog"][0]["space_autopilot"] == "enabled"
+
+
+async def test_board_summary_reflects_space_autopilot_paused(async_client):
+    """Card's AUTO pill must NOT light up on 'paused' — verify the API field flows."""
+    await async_client.post(
+        "/api/tasks",
+        json={"space_id": SPACE_ID, "title": "PausedTask", "brief": ""},
+    )
+    await async_client.patch(
+        f"/api/spaces/{SPACE_ID}", json={"autopilot": "paused"}
+    )
+
+    resp = await async_client.get(f"/api/tasks?space_id={SPACE_ID}")
+    board = resp.json()
+    assert board["backlog"][0]["space_autopilot"] == "paused"
+
+
+async def test_board_summary_includes_pr_url_when_set(async_client, task_store):
+    """A DONE task with pr_url surfaces it on the board summary so the
+    Card can render the GitPullRequest icon link without a Detail fetch.
+    """
+    create = await async_client.post(
+        "/api/tasks",
+        json={"space_id": SPACE_ID, "title": "PR set", "brief": ""},
+    )
+    task_id = create.json()["id"]
+    await task_store.set_pr_refs(
+        task_id,
+        pr_url="https://github.com/owner/repo/pull/77",
+        proposed_pr_path=None,
+    )
+
+    resp = await async_client.get(f"/api/tasks?space_id={SPACE_ID}")
+    board = resp.json()
+    matches = [t for t in board["backlog"] if t["id"] == task_id]
+    assert len(matches) == 1
+    assert matches[0]["pr_url"] == "https://github.com/owner/repo/pull/77"
+    assert matches[0]["proposed_pr_path"] is None
+
+
+async def test_board_summary_includes_proposed_pr_path_when_set(async_client, task_store):
+    """A task with proposed_pr_path (no GitHub remote) surfaces the path so
+    the Card can render the FileText copy-path button.
+    """
+    create = await async_client.post(
+        "/api/tasks",
+        json={"space_id": SPACE_ID, "title": "Proposed PR", "brief": ""},
+    )
+    task_id = create.json()["id"]
+    await task_store.set_pr_refs(
+        task_id,
+        pr_url=None,
+        proposed_pr_path="/repo/.cronos/pull_requests/p.md",
+    )
+
+    resp = await async_client.get(f"/api/tasks?space_id={SPACE_ID}")
+    board = resp.json()
+    matches = [t for t in board["backlog"] if t["id"] == task_id]
+    assert len(matches) == 1
+    assert matches[0]["pr_url"] is None
+    assert matches[0]["proposed_pr_path"] == "/repo/.cronos/pull_requests/p.md"
+
+
+async def test_board_summary_pr_fields_default_to_none(async_client):
+    """A freshly created task has both pr fields = None (not absent / not empty string).
+
+    The frontend treats `null` as the falsy signal to hide the PR icons.
+    An empty string ("") would render an icon with an empty href — bug.
+    """
+    create = await async_client.post(
+        "/api/tasks",
+        json={"space_id": SPACE_ID, "title": "Fresh", "brief": ""},
+    )
+    task_id = create.json()["id"]
+
+    resp = await async_client.get(f"/api/tasks?space_id={SPACE_ID}")
+    board = resp.json()
+    target = next(t for t in board["backlog"] if t["id"] == task_id)
+    assert target["pr_url"] is None
+    assert target["proposed_pr_path"] is None

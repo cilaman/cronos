@@ -51,6 +51,8 @@ class Task(BaseModel):
     type: Literal["task", "goal", "issue"] = "task"
     parent_id: str | None = None
     depends_on: list[str] = Field(default_factory=list)
+    pr_url: str | None = None
+    proposed_pr_path: str | None = None
 
 
 class TaskSummary(BaseModel):
@@ -74,10 +76,13 @@ class TaskSummary(BaseModel):
     parent_id: str | None = None
     depends_on: list[str] = Field(default_factory=list)
     unmet_dependencies: list[str] = []
+    pr_url: str | None = None
+    proposed_pr_path: str | None = None
     # Denormalized space fields so cards can render without a separate join.
     space_name: str | None = None
     space_color: str | None = None
     space_icon: str | None = None
+    space_autopilot: str | None = None
 
 
 class Board(BaseModel):
@@ -131,6 +136,7 @@ class SpaceSummary(BaseModel):
     icon: str | None = None
     task_counts: dict[TaskState, int] = Field(default_factory=dict)
     last_activity_at: datetime | None = None
+    autopilot: Literal["disabled", "enabled", "paused"] = "disabled"
 
 
 class SpacesResponse(BaseModel):
