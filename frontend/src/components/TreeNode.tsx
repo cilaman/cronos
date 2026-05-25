@@ -1,3 +1,4 @@
+import { createContext, useContext } from "react";
 import { useDroppable, useDndContext } from "@dnd-kit/core";
 import { cn } from "../utils/cn";
 import { Card } from "./Card";
@@ -8,6 +9,9 @@ export interface TreeNode {
   children: TreeNode[];
   isOrphan: boolean;
 }
+
+// Context provides the tree container ref for keyboard navigation
+export const TreeKbdCtx = createContext<React.RefObject<HTMLDivElement | null> | null>(null);
 
 // Thin gap zone between tree nodes — drop here to reorder as sibling.
 // The outer div is the full hit area; the inner line is the visual indicator.
@@ -42,34 +46,89 @@ interface Props {
 
 export function TreeNode({ node, depth, expanded, onToggle, onOpenTask }: Props) {
   const { active, over } = useDndContext();
+  const containerRef = useContext(TreeKbdCtx);
   const task = node.task;
   const isExpanded = expanded.has(task.id);
   const hasChildren = node.children.length > 0;
   const isActive = task.state === "active";
 
-  // Highlight card body when another card is dragged over it (reparent target).
-  // The card's own sortable id is used; gap: and gap-end: ids are handled separately.
   const isReparentHovered =
     active !== null &&
     active.id !== task.id &&
     over?.id === task.id;
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (!containerRef?.current) return;
+    const items = Array.from(
+      containerRef.current.querySelectorAll<HTMLDivElement>('[role="treeitem"]'),
+    );
+    const idx = items.indexOf(e.currentTarget);
+
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault();
+        items[idx + 1]?.focus();
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        items[idx - 1]?.focus();
+        break;
+      case "ArrowLeft":
+        e.preventDefault();
+        if (hasChildren && isExpanded) {
+          onToggle(task.id);
+        } else if (task.parent_id) {
+          const parentEl = containerRef.current.querySelector<HTMLElement>(
+            `[data-task-id="${task.parent_id}"][role="treeitem"]`,
+          );
+          parentEl?.focus();
+        }
+        break;
+      case "ArrowRight":
+        e.preventDefault();
+        if (hasChildren && !isExpanded) {
+          onToggle(task.id);
+        } else if (hasChildren && isExpanded) {
+          // Focus first child — it is the next visible treeitem
+          items[idx + 1]?.focus();
+        }
+        break;
+      case "Enter":
+        e.preventDefault();
+        onOpenTask?.(task.id);
+        break;
+    }
+  }
 
   return (
     <div>
       {/* Sibling-insert gap above this card */}
       <GapZone id={`gap:${task.id}`} depth={depth} />
 
+      {/*
+        role="treeitem" on the row div (not the outer wrapper) so that
+        querySelectorAll('[role="treeitem"]') returns only the rows, not the
+        children containers, preserving correct DOM-order navigation.
+      */}
       <div
-        className="flex items-center gap-1"
+        role="treeitem"
+        tabIndex={0}
+        aria-expanded={hasChildren ? isExpanded : undefined}
+        aria-level={depth + 1}
+        data-task-id={task.id}
+        onKeyDown={handleKeyDown}
+        className="flex items-center gap-1 outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-accent/60"
         style={{ paddingLeft: `calc(${depth} * var(--tree-indent, 1.25rem))` }}
       >
+        {/* Chevron: 40×40 tap target even though the icon is smaller */}
         <button
           type="button"
+          tabIndex={-1}
           onClick={() => hasChildren && onToggle(task.id)}
           aria-label={isExpanded ? "Collapse" : "Expand"}
           aria-expanded={hasChildren ? isExpanded : undefined}
           className={[
-            "flex h-5 w-5 shrink-0 items-center justify-center rounded text-ink-faint transition-transform duration-100",
+            "flex h-10 w-10 shrink-0 items-center justify-center rounded text-ink-faint transition-transform duration-100",
             !hasChildren ? "invisible pointer-events-none" : "hover:text-ink",
             isExpanded ? "rotate-90" : "",
           ]
@@ -101,8 +160,7 @@ export function TreeNode({ node, depth, expanded, onToggle, onOpenTask }: Props)
           />
         )}
 
-        {/* Card body — drop zone for reparenting; the card's sortable id
-            registers it as the droppable target when `over.id === task.id` */}
+        {/* Card body — drop zone for reparenting */}
         <div
           className={cn(
             "min-w-0 flex-1 rounded-md transition-all duration-100",
@@ -120,7 +178,7 @@ export function TreeNode({ node, depth, expanded, onToggle, onOpenTask }: Props)
       </div>
 
       {isExpanded && hasChildren && (
-        <div>
+        <div role="group">
           {node.children.map((child) => (
             <TreeNode
               key={child.task.id}

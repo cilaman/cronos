@@ -1,9 +1,10 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { createRef } from "react";
+import { render, screen, within, act, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Tree, buildTree } from "../Tree";
+import { Tree, buildTree, type TreeHandle } from "../Tree";
 import type { TaskSummary } from "../../types";
 
 // ---------------------------------------------------------------------------
@@ -32,14 +33,24 @@ function makeTask(overrides: Partial<TaskSummary> = {}): TaskSummary {
 
 function renderTree(
   tasks: TaskSummary[],
-  options: { initialEntries?: string[]; onOpenTask?: (id: string) => void } = {},
+  options: {
+    initialEntries?: string[];
+    onOpenTask?: (id: string) => void;
+    spaceId?: string | null;
+    ref?: React.Ref<TreeHandle>;
+  } = {},
 ) {
   const entries = options.initialEntries ?? ["/"];
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
       <MemoryRouter initialEntries={entries}>
-        <Tree tasks={tasks} onOpenTask={options.onOpenTask} />
+        <Tree
+          tasks={tasks}
+          onOpenTask={options.onOpenTask}
+          spaceId={options.spaceId}
+          ref={options.ref}
+        />
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -692,5 +703,651 @@ describe("<Tree /> — sort order observable in DOM", () => {
       "M-child",
       "Z-child",
     ]);
+  });
+});
+
+// ===========================================================================
+// ARIA tree structure (role="tree", role="treeitem", aria-expanded, aria-level)
+// ===========================================================================
+
+describe("<Tree /> — ARIA tree structure", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it("renders a container with role='tree'", () => {
+    renderTree([makeTask({ id: "a", title: "A" })]);
+
+    expect(screen.getByRole("tree")).toBeInTheDocument();
+  });
+
+  it("renders each rendered row with role='treeitem'", () => {
+    const tasks = [
+      makeTask({ id: "r1", title: "R1" }),
+      makeTask({ id: "r2", title: "R2" }),
+      makeTask({ id: "r3", title: "R3" }),
+    ];
+
+    renderTree(tasks);
+
+    // Three roots, no children expanded → exactly three treeitems.
+    expect(screen.getAllByRole("treeitem")).toHaveLength(3);
+  });
+
+  it("leaf row has no aria-expanded attribute (attribute absent)", () => {
+    renderTree([makeTask({ id: "leaf", title: "Lone leaf" })]);
+
+    const treeitems = screen.getAllByRole("treeitem");
+    // For a leaf, aria-expanded={undefined} → React omits the attribute entirely.
+    expect(treeitems[0]!.hasAttribute("aria-expanded")).toBe(false);
+  });
+
+  it("parent row has aria-expanded='false' when collapsed", () => {
+    const tasks = [
+      makeTask({ id: "p", title: "Parent" }),
+      makeTask({ id: "k", title: "Kid", parent_id: "p" }),
+    ];
+
+    renderTree(tasks);
+
+    // Only the parent is rendered (child hidden) → one treeitem with aria-expanded="false".
+    const treeitems = screen.getAllByRole("treeitem");
+    expect(treeitems).toHaveLength(1);
+    expect(treeitems[0]!.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("parent row has aria-expanded='true' when expanded", async () => {
+    const tasks = [
+      makeTask({ id: "p", title: "Parent" }),
+      makeTask({ id: "k", title: "Kid", parent_id: "p" }),
+    ];
+
+    renderTree(tasks);
+
+    const user = userEvent.setup();
+    await user.click(findToggleButtonByTitle("Parent"));
+
+    // Find the parent row by data-task-id to avoid confusing it with the child row.
+    const parentRow = document.querySelector(
+      '[data-task-id="p"][role="treeitem"]',
+    );
+    expect(parentRow).not.toBeNull();
+    expect(parentRow!.getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("row has aria-level='1' at depth 0", () => {
+    renderTree([makeTask({ id: "root", title: "Root" })]);
+
+    const row = document.querySelector('[data-task-id="root"][role="treeitem"]');
+    expect(row).not.toBeNull();
+    expect(row!.getAttribute("aria-level")).toBe("1");
+  });
+
+  it("row has aria-level='2' at depth 1 (child of an expanded root)", async () => {
+    const tasks = [
+      makeTask({ id: "p", title: "Parent" }),
+      makeTask({ id: "k", title: "Kid", parent_id: "p" }),
+    ];
+
+    renderTree(tasks);
+
+    const user = userEvent.setup();
+    await user.click(findToggleButtonByTitle("Parent"));
+
+    const childRow = document.querySelector(
+      '[data-task-id="k"][role="treeitem"]',
+    );
+    expect(childRow).not.toBeNull();
+    expect(childRow!.getAttribute("aria-level")).toBe("2");
+  });
+
+  it("each row exposes its task id via data-task-id", () => {
+    const tasks = [
+      makeTask({ id: "alpha", title: "Alpha" }),
+      makeTask({ id: "beta", title: "Beta" }),
+    ];
+
+    renderTree(tasks);
+
+    expect(
+      document.querySelector('[data-task-id="alpha"][role="treeitem"]'),
+    ).not.toBeNull();
+    expect(
+      document.querySelector('[data-task-id="beta"][role="treeitem"]'),
+    ).not.toBeNull();
+  });
+
+  it("treeitem row is keyboard-focusable (tabIndex=0)", () => {
+    renderTree([makeTask({ id: "root", title: "Root" })]);
+
+    const row = document.querySelector(
+      '[data-task-id="root"][role="treeitem"]',
+    ) as HTMLElement;
+    expect(row.tabIndex).toBe(0);
+  });
+
+  it("children container has role='group' when a parent is expanded", async () => {
+    const tasks = [
+      makeTask({ id: "p", title: "Parent" }),
+      makeTask({ id: "k", title: "Kid", parent_id: "p" }),
+    ];
+
+    renderTree(tasks);
+
+    const user = userEvent.setup();
+    await user.click(findToggleButtonByTitle("Parent"));
+
+    expect(document.querySelector('[role="group"]')).not.toBeNull();
+  });
+});
+
+// ===========================================================================
+// localStorage persistence of expanded set
+// ===========================================================================
+
+describe("<Tree /> — localStorage persistence of expanded state", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    vi.useRealTimers();
+  });
+
+  it("on mount, restores expanded IDs from localStorage (null spaceId → _all key)", () => {
+    window.localStorage.setItem(
+      "cronos:tree:expanded:_all",
+      JSON.stringify(["p"]),
+    );
+    const tasks = [
+      makeTask({ id: "p", title: "Parent" }),
+      makeTask({ id: "k", title: "Kid", parent_id: "p" }),
+    ];
+
+    renderTree(tasks);
+
+    // Child renders because the parent's id was in the persisted expanded set.
+    expect(
+      screen.getByRole("heading", { level: 3, name: "Kid" }),
+    ).toBeInTheDocument();
+  });
+
+  it("on mount with spaceId, reads from the space-keyed localStorage entry", () => {
+    window.localStorage.setItem(
+      "cronos:tree:expanded:space-42",
+      JSON.stringify(["p"]),
+    );
+    const tasks = [
+      makeTask({ id: "p", title: "Parent" }),
+      makeTask({ id: "k", title: "Kid", parent_id: "p" }),
+    ];
+
+    renderTree(tasks, { spaceId: "space-42" });
+
+    expect(
+      screen.getByRole("heading", { level: 3, name: "Kid" }),
+    ).toBeInTheDocument();
+  });
+
+  it("does NOT read from another space's key (no bleed-through across spaces)", () => {
+    window.localStorage.setItem(
+      "cronos:tree:expanded:space-A",
+      JSON.stringify(["p"]),
+    );
+    const tasks = [
+      makeTask({ id: "p", title: "Parent" }),
+      makeTask({ id: "k", title: "Kid", parent_id: "p" }),
+    ];
+
+    // Rendering for space-B must NOT pick up space-A's persisted state.
+    renderTree(tasks, { spaceId: "space-B" });
+
+    expect(
+      screen.queryByRole("heading", { level: 3, name: "Kid" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("does NOT read from _all when a spaceId is provided", () => {
+    window.localStorage.setItem(
+      "cronos:tree:expanded:_all",
+      JSON.stringify(["p"]),
+    );
+    const tasks = [
+      makeTask({ id: "p", title: "Parent" }),
+      makeTask({ id: "k", title: "Kid", parent_id: "p" }),
+    ];
+
+    renderTree(tasks, { spaceId: "space-A" });
+
+    expect(
+      screen.queryByRole("heading", { level: 3, name: "Kid" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("debounces the localStorage write 200ms after a chevron click (null spaceId)", () => {
+    vi.useFakeTimers();
+    try {
+      const tasks = [
+        makeTask({ id: "p", title: "Parent" }),
+        makeTask({ id: "k", title: "Kid", parent_id: "p" }),
+      ];
+
+      renderTree(tasks);
+
+      // fireEvent is synchronous — no need to wire userEvent into fake timers.
+      act(() => {
+        fireEvent.click(findToggleButtonByTitle("Parent"));
+      });
+
+      // Before the debounce fires, nothing has been written yet.
+      // (The mount-effect also schedules a write of [], but it hasn't fired.)
+      expect(window.localStorage.getItem("cronos:tree:expanded:_all")).toBeNull();
+
+      // Flush the 200ms debounce.
+      act(() => {
+        vi.runAllTimers();
+      });
+
+      const raw = window.localStorage.getItem("cronos:tree:expanded:_all");
+      expect(raw).not.toBeNull();
+      expect(JSON.parse(raw!)).toContain("p");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("writes under the space-keyed key when spaceId is provided", () => {
+    vi.useFakeTimers();
+    try {
+      const tasks = [
+        makeTask({ id: "p", title: "Parent" }),
+        makeTask({ id: "k", title: "Kid", parent_id: "p" }),
+      ];
+
+      renderTree(tasks, { spaceId: "space-42" });
+
+      act(() => {
+        fireEvent.click(findToggleButtonByTitle("Parent"));
+      });
+
+      act(() => {
+        vi.runAllTimers();
+      });
+
+      const raw = window.localStorage.getItem("cronos:tree:expanded:space-42");
+      expect(raw).not.toBeNull();
+      expect(JSON.parse(raw!)).toContain("p");
+      // Did NOT write to _all.
+      expect(window.localStorage.getItem("cronos:tree:expanded:_all")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("different spaceId values write to different localStorage keys", () => {
+    vi.useFakeTimers();
+    try {
+      const tasks = [
+        makeTask({ id: "p", title: "Parent" }),
+        makeTask({ id: "k", title: "Kid", parent_id: "p" }),
+      ];
+
+      // Render the first tree for space-A, expand the parent, flush the debounce.
+      const first = renderTree(tasks, { spaceId: "space-A" });
+      act(() => {
+        fireEvent.click(findToggleButtonByTitle("Parent"));
+      });
+      act(() => {
+        vi.runAllTimers();
+      });
+      first.unmount();
+
+      // Now render for a different spaceId; it must not see space-A's state.
+      renderTree(tasks, { spaceId: "space-B" });
+      // The kid is not visible — space-B has no persisted state.
+      expect(
+        screen.queryByRole("heading", { level: 3, name: "Kid" }),
+      ).not.toBeInTheDocument();
+
+      // Flush any pending debounce for space-B (initial empty write).
+      act(() => {
+        vi.runAllTimers();
+      });
+
+      // The two keys are independent — space-A still contains "p",
+      // and space-B contains either nothing or an empty list (never "p").
+      const a = window.localStorage.getItem("cronos:tree:expanded:space-A");
+      const b = window.localStorage.getItem("cronos:tree:expanded:space-B");
+      expect(a).not.toBeNull();
+      expect(JSON.parse(a!)).toContain("p");
+      if (b !== null) {
+        expect(JSON.parse(b)).not.toContain("p");
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+// ===========================================================================
+// TreeHandle ref — expandAll / collapseAll
+// ===========================================================================
+
+describe("<Tree /> — TreeHandle ref imperative API", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it("ref.current.expandAll() expands every node that has children", () => {
+    const tasks = [
+      makeTask({ id: "p1", title: "P1" }),
+      makeTask({ id: "p1c", title: "P1 Kid", parent_id: "p1" }),
+      makeTask({ id: "p2", title: "P2" }),
+      makeTask({ id: "p2c", title: "P2 Kid", parent_id: "p2" }),
+      makeTask({ id: "leaf", title: "Leaf" }),
+    ];
+
+    const ref = createRef<TreeHandle>();
+    renderTree(tasks, { ref });
+
+    // Children hidden initially.
+    expect(
+      screen.queryByRole("heading", { level: 3, name: "P1 Kid" }),
+    ).not.toBeInTheDocument();
+
+    act(() => {
+      ref.current!.expandAll();
+    });
+
+    expect(
+      screen.getByRole("heading", { level: 3, name: "P1 Kid" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { level: 3, name: "P2 Kid" }),
+    ).toBeInTheDocument();
+
+    // Both parents now report aria-expanded="true".
+    expect(
+      document
+        .querySelector('[data-task-id="p1"][role="treeitem"]')!
+        .getAttribute("aria-expanded"),
+    ).toBe("true");
+    expect(
+      document
+        .querySelector('[data-task-id="p2"][role="treeitem"]')!
+        .getAttribute("aria-expanded"),
+    ).toBe("true");
+  });
+
+  it("ref.current.collapseAll() collapses every expanded node", () => {
+    const tasks = [
+      makeTask({ id: "p1", title: "P1" }),
+      makeTask({ id: "p1c", title: "P1 Kid", parent_id: "p1" }),
+      makeTask({ id: "p2", title: "P2" }),
+      makeTask({ id: "p2c", title: "P2 Kid", parent_id: "p2" }),
+    ];
+
+    const ref = createRef<TreeHandle>();
+    renderTree(tasks, { ref });
+
+    act(() => {
+      ref.current!.expandAll();
+    });
+    // Sanity: expansion worked.
+    expect(
+      screen.getByRole("heading", { level: 3, name: "P1 Kid" }),
+    ).toBeInTheDocument();
+
+    act(() => {
+      ref.current!.collapseAll();
+    });
+
+    expect(
+      screen.queryByRole("heading", { level: 3, name: "P1 Kid" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { level: 3, name: "P2 Kid" }),
+    ).not.toBeInTheDocument();
+    expect(
+      document
+        .querySelector('[data-task-id="p1"][role="treeitem"]')!
+        .getAttribute("aria-expanded"),
+    ).toBe("false");
+  });
+
+  it("ref.current.expandAll() is a no-op on a tree with no parents", () => {
+    const tasks = [
+      makeTask({ id: "a", title: "A" }),
+      makeTask({ id: "b", title: "B" }),
+    ];
+
+    const ref = createRef<TreeHandle>();
+    renderTree(tasks, { ref });
+
+    // No throw, nothing to expand → no parent rows to flip.
+    expect(() =>
+      act(() => {
+        ref.current!.expandAll();
+      }),
+    ).not.toThrow();
+
+    // Leaves still have no aria-expanded.
+    const rows = screen.getAllByRole("treeitem");
+    for (const row of rows) {
+      expect(row.hasAttribute("aria-expanded")).toBe(false);
+    }
+  });
+});
+
+// ===========================================================================
+// Keyboard navigation: ArrowDown/Up/Left/Right + Enter
+// ===========================================================================
+
+describe("<Tree /> — keyboard navigation", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  /**
+   * Find the treeitem row whose data-task-id matches the given id. Returns
+   * the live element (not a clone), so .focus() / dispatchEvent work.
+   */
+  function rowFor(taskId: string): HTMLElement {
+    const el = document.querySelector(
+      `[data-task-id="${taskId}"][role="treeitem"]`,
+    );
+    if (!el) throw new Error(`No treeitem row for task id "${taskId}"`);
+    return el as HTMLElement;
+  }
+
+  it("ArrowDown on the first node moves focus to the second node", () => {
+    const tasks = [
+      makeTask({ id: "a", title: "A", manual_order: 0 }),
+      makeTask({ id: "b", title: "B", manual_order: 1 }),
+    ];
+
+    renderTree(tasks);
+
+    const first = rowFor("a");
+    first.focus();
+    expect(document.activeElement).toBe(first);
+
+    fireEvent.keyDown(first, { key: "ArrowDown" });
+
+    expect(document.activeElement).toBe(rowFor("b"));
+  });
+
+  it("ArrowUp on the second node moves focus to the first node", () => {
+    const tasks = [
+      makeTask({ id: "a", title: "A", manual_order: 0 }),
+      makeTask({ id: "b", title: "B", manual_order: 1 }),
+    ];
+
+    renderTree(tasks);
+
+    const second = rowFor("b");
+    second.focus();
+    fireEvent.keyDown(second, { key: "ArrowUp" });
+
+    expect(document.activeElement).toBe(rowFor("a"));
+  });
+
+  it("ArrowRight on a collapsed parent expands it (aria-expanded → true)", () => {
+    const tasks = [
+      makeTask({ id: "p", title: "Parent" }),
+      makeTask({ id: "k", title: "Kid", parent_id: "p" }),
+    ];
+
+    renderTree(tasks);
+
+    const parent = rowFor("p");
+    parent.focus();
+    expect(parent.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.keyDown(parent, { key: "ArrowRight" });
+
+    // Re-query after re-render.
+    expect(rowFor("p").getAttribute("aria-expanded")).toBe("true");
+    expect(
+      screen.getByRole("heading", { level: 3, name: "Kid" }),
+    ).toBeInTheDocument();
+  });
+
+  it("ArrowRight on an expanded parent with children moves focus to the first child", () => {
+    const tasks = [
+      makeTask({ id: "p", title: "Parent" }),
+      makeTask({ id: "k", title: "Kid", parent_id: "p" }),
+    ];
+
+    renderTree(tasks);
+
+    // Expand first by clicking the chevron.
+    act(() => {
+      fireEvent.click(findToggleButtonByTitle("Parent"));
+    });
+
+    const parent = rowFor("p");
+    parent.focus();
+    fireEvent.keyDown(parent, { key: "ArrowRight" });
+
+    expect(document.activeElement).toBe(rowFor("k"));
+  });
+
+  it("ArrowLeft on an expanded parent collapses it (aria-expanded → false)", () => {
+    const tasks = [
+      makeTask({ id: "p", title: "Parent" }),
+      makeTask({ id: "k", title: "Kid", parent_id: "p" }),
+    ];
+
+    renderTree(tasks);
+
+    act(() => {
+      fireEvent.click(findToggleButtonByTitle("Parent"));
+    });
+
+    const parent = rowFor("p");
+    parent.focus();
+    expect(parent.getAttribute("aria-expanded")).toBe("true");
+
+    fireEvent.keyDown(parent, { key: "ArrowLeft" });
+
+    expect(rowFor("p").getAttribute("aria-expanded")).toBe("false");
+    expect(
+      screen.queryByRole("heading", { level: 3, name: "Kid" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("ArrowLeft on a leaf whose parent exists focuses the parent row", () => {
+    const tasks = [
+      makeTask({ id: "p", title: "Parent" }),
+      makeTask({ id: "k", title: "Kid", parent_id: "p" }),
+    ];
+
+    renderTree(tasks);
+
+    // Make the child visible.
+    act(() => {
+      fireEvent.click(findToggleButtonByTitle("Parent"));
+    });
+
+    const child = rowFor("k");
+    child.focus();
+    fireEvent.keyDown(child, { key: "ArrowLeft" });
+
+    expect(document.activeElement).toBe(rowFor("p"));
+  });
+
+  it("Enter on a node calls onOpenTask with that node's task id", () => {
+    const onOpenTask = vi.fn();
+    const tasks = [makeTask({ id: "press-me", title: "Press me" })];
+
+    renderTree(tasks, { onOpenTask });
+
+    const row = rowFor("press-me");
+    row.focus();
+    fireEvent.keyDown(row, { key: "Enter" });
+
+    expect(onOpenTask).toHaveBeenCalledTimes(1);
+    expect(onOpenTask).toHaveBeenCalledWith("press-me");
+  });
+
+  it("ArrowUp on the first node is a no-op (focus stays, no throw)", () => {
+    const tasks = [
+      makeTask({ id: "a", title: "A", manual_order: 0 }),
+      makeTask({ id: "b", title: "B", manual_order: 1 }),
+    ];
+
+    renderTree(tasks);
+
+    const first = rowFor("a");
+    first.focus();
+
+    expect(() => {
+      fireEvent.keyDown(first, { key: "ArrowUp" });
+    }).not.toThrow();
+
+    // Focus did not move (no prior treeitem to go to).
+    expect(document.activeElement).toBe(first);
+  });
+
+  it("ArrowDown on the last visible node is a no-op (focus stays, no throw)", () => {
+    const tasks = [
+      makeTask({ id: "a", title: "A", manual_order: 0 }),
+      makeTask({ id: "b", title: "B", manual_order: 1 }),
+    ];
+
+    renderTree(tasks);
+
+    const last = rowFor("b");
+    last.focus();
+
+    expect(() => {
+      fireEvent.keyDown(last, { key: "ArrowDown" });
+    }).not.toThrow();
+
+    expect(document.activeElement).toBe(last);
+  });
+
+  it("ArrowRight on a leaf is a no-op (no throw, no focus change)", () => {
+    const tasks = [makeTask({ id: "leaf", title: "Leaf" })];
+
+    renderTree(tasks);
+    const row = rowFor("leaf");
+    row.focus();
+
+    expect(() => {
+      fireEvent.keyDown(row, { key: "ArrowRight" });
+    }).not.toThrow();
+    expect(document.activeElement).toBe(row);
+  });
+
+  it("ArrowLeft on a root leaf with no parent is a no-op (no throw)", () => {
+    const tasks = [makeTask({ id: "root-leaf", title: "Root leaf" })];
+
+    renderTree(tasks);
+    const row = rowFor("root-leaf");
+    row.focus();
+
+    expect(() => {
+      fireEvent.keyDown(row, { key: "ArrowLeft" });
+    }).not.toThrow();
+    expect(document.activeElement).toBe(row);
   });
 });

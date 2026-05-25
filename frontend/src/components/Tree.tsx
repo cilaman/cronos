@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { forwardRef, useImperativeHandle, useState, useMemo, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   DndContext,
@@ -15,11 +15,17 @@ import { SortableContext } from "@dnd-kit/sortable";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import { useReorderTasks } from "../hooks/useTasks";
+import { readTreeExpanded, writeTreeExpanded } from "../lib/storage";
 import type { TaskState, TaskSummary } from "../types";
 import { Card } from "./Card";
-import { TreeNode as TreeNodeComponent, GapZone, type TreeNode } from "./TreeNode";
+import { TreeNode as TreeNodeComponent, GapZone, TreeKbdCtx, type TreeNode } from "./TreeNode";
 
 export { type TreeNode };
+
+export interface TreeHandle {
+  expandAll: () => void;
+  collapseAll: () => void;
+}
 
 export function buildTree(tasks: TaskSummary[]): TreeNode[] {
   const taskSet = new Set(tasks.map((t) => t.id));
@@ -82,6 +88,20 @@ function getAncestorIds(roots: TreeNode[], targetId: string): Set<string> {
   return result;
 }
 
+function collectExpandableIds(nodes: TreeNode[]): Set<string> {
+  const ids = new Set<string>();
+  function walk(list: TreeNode[]) {
+    for (const node of list) {
+      if (node.children.length > 0) {
+        ids.add(node.task.id);
+        walk(node.children);
+      }
+    }
+  }
+  walk(nodes);
+  return ids;
+}
+
 function flattenIds(nodes: TreeNode[]): string[] {
   const ids: string[] = [];
   function collect(list: TreeNode[]) {
@@ -113,22 +133,33 @@ const noOpStrategy = () => null;
 
 interface Props {
   tasks: TaskSummary[];
-  spaceId?: string;
+  spaceId?: string | null;
   onOpenTask?: (id: string) => void;
 }
 
-export function Tree({ tasks, onOpenTask }: Props) {
+export const Tree = forwardRef<TreeHandle, Props>(function Tree(
+  { tasks, spaceId, onOpenTask },
+  ref,
+) {
   const [searchParams] = useSearchParams();
   const openId = searchParams.get("task");
 
   const roots = useMemo(() => buildTree(tasks), [tasks]);
 
-  const [expanded, setExpanded] = useState<Set<string>>(() =>
-    openId ? getAncestorIds(roots, openId) : new Set<string>()
-  );
+  const [expanded, setExpanded] = useState<Set<string>>(() => {
+    // Merge persisted IDs with ancestors of the currently-open task
+    const saved = new Set(readTreeExpanded(spaceId ?? null));
+    if (openId) {
+      for (const id of getAncestorIds(roots, openId)) saved.add(id);
+    }
+    return saved;
+  });
 
   const prevOpenIdRef = useRef<string | null>(openId);
+  const writeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
+  // Auto-expand ancestors when the open task changes
   useEffect(() => {
     if (openId && openId !== prevOpenIdRef.current) {
       const ancestors = getAncestorIds(roots, openId);
@@ -142,6 +173,22 @@ export function Tree({ tasks, onOpenTask }: Props) {
     }
     prevOpenIdRef.current = openId;
   }, [openId, roots]);
+
+  // Debounced persistence — write 200ms after the last toggle
+  useEffect(() => {
+    if (writeTimerRef.current) clearTimeout(writeTimerRef.current);
+    writeTimerRef.current = setTimeout(() => {
+      writeTreeExpanded(spaceId ?? null, Array.from(expanded));
+    }, 200);
+    return () => {
+      if (writeTimerRef.current) clearTimeout(writeTimerRef.current);
+    };
+  }, [expanded, spaceId]);
+
+  useImperativeHandle(ref, () => ({
+    expandAll: () => setExpanded(collectExpandableIds(roots)),
+    collapseAll: () => setExpanded(new Set<string>()),
+  }), [roots]);
 
   const handleToggle = (id: string) =>
     setExpanded((prev) => {
@@ -275,22 +322,29 @@ export function Tree({ tasks, onOpenTask }: Props) {
         onDragCancel={onDragCancel}
       >
         <SortableContext items={allIds} strategy={noOpStrategy}>
-          <div
-            style={{ "--tree-indent": "1.25rem" } as React.CSSProperties}
-            className="flex flex-col p-2"
-          >
-            {roots.map((node) => (
-              <TreeNodeComponent
-                key={node.task.id}
-                node={node}
-                depth={0}
-                expanded={expanded}
-                onToggle={handleToggle}
-                onOpenTask={onOpenTask}
-              />
-            ))}
-            <GapZone id="gap-end:root" depth={0} />
-          </div>
+          <TreeKbdCtx.Provider value={containerRef}>
+            {/*
+              role="tree" on the container; indent shrinks on small screens
+              (0.9rem) and expands on sm+ (1.25rem) so depth-3 still fits on 375px.
+            */}
+            <div
+              ref={containerRef}
+              role="tree"
+              className="flex flex-col p-2 [--tree-indent:0.9rem] sm:[--tree-indent:1.25rem]"
+            >
+              {roots.map((node) => (
+                <TreeNodeComponent
+                  key={node.task.id}
+                  node={node}
+                  depth={0}
+                  expanded={expanded}
+                  onToggle={handleToggle}
+                  onOpenTask={onOpenTask}
+                />
+              ))}
+              <GapZone id="gap-end:root" depth={0} />
+            </div>
+          </TreeKbdCtx.Provider>
         </SortableContext>
 
         <DragOverlay dropAnimation={null}>
@@ -315,4 +369,4 @@ export function Tree({ tasks, onOpenTask }: Props) {
       )}
     </>
   );
-}
+});
