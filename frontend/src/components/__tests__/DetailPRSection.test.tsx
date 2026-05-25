@@ -45,6 +45,7 @@ vi.mock("../../hooks/useTasks", () => ({
         archived: [],
       } as Board,
     }),
+  useRoutePreview: () => ({ data: undefined }),
 }));
 
 vi.mock("../../hooks/useStats", () => ({
