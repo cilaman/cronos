@@ -8,6 +8,7 @@ import {
   useDeleteTask,
   usePromoteTask,
   useReplyToTask,
+  useRoutePreview,
   useSetDependsOn,
   useSetParent,
   useStartTask,
@@ -826,8 +827,12 @@ export function Detail({ taskId, onClose }: Props) {
   const startTask = useStartTask(taskId);
   const stopTask = useStopTask(taskId);
   const transitionTask = useTransitionTask();
+  const { data: routePreviewData } = useRoutePreview(
+    task?.type === "goal" ? taskId : null
+  );
   const [editing, setEditing] = useState(false);
   const [activeTab, setActiveTab] = useState<"details" | "stats" | "trace" | "files">("details");
+  const [routeToast, setRouteToast] = useState<string | null>(null);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -856,7 +861,11 @@ export function Detail({ taskId, onClose }: Props) {
   }
 
   async function onSend(message: string) {
-    await replyTask.mutateAsync(message);
+    const result = await replyTask.mutateAsync(message);
+    if (result.routed_to) {
+      setRouteToast(`Sent to ${result.routed_to.title}`);
+      setTimeout(() => setRouteToast(null), 3000);
+    }
   }
 
   async function onStart() {
@@ -1119,6 +1128,12 @@ export function Detail({ taskId, onClose }: Props) {
                       isSending={replyTask.isPending}
                       error={chatError}
                       onSend={onSend}
+                      routeHint={
+                        routePreviewData?.routed_to
+                          ? `→ will route to: ${routePreviewData.routed_to.title}`
+                          : undefined
+                      }
+                      routeToast={routeToast}
                     />
                   </div>
 

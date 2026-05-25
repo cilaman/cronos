@@ -921,6 +921,42 @@ class TaskStore:
             self._reindex_locked(path)
             return messages
 
+    async def append_pending(self, task_id: str, message: str) -> Task:
+        """Append message to pending_messages without any state transition."""
+        async with self._lock:
+            task = self._by_id.get(task_id)
+            if task is None:
+                raise TaskNotFound(task_id)
+            updated = task.model_copy(
+                update={
+                    "pending_messages": [*task.pending_messages, message],
+                    "updated_at": datetime.now(tz=UTC),
+                }
+            )
+            path = self._path_by_id[task_id]
+            atomic_write(path, dump_task(updated))
+            self._reindex_locked(path)
+            return self._by_id[task_id]
+
+    async def record_user_message(self, task_id: str, message: str) -> Task:
+        """Append a user message to history only, with no state change or enqueue."""
+        message = message.strip()
+        async with self._lock:
+            task = self._by_id.get(task_id)
+            if task is None:
+                raise TaskNotFound(task_id)
+            now = datetime.now(tz=UTC)
+            entry = f"```\n{_iso(now)} [user]\n{message}\n```"
+            history = task.history.strip()
+            history = (history + "\n\n" + entry) if history else entry
+            updated = task.model_copy(
+                update={"history": history, "updated_at": now}
+            )
+            path = self._path_by_id[task_id]
+            atomic_write(path, dump_task(updated))
+            self._reindex_locked(path)
+            return self._by_id[task_id]
+
     def subtree(self, root_id: str) -> list[Task]:
         """Return root task + all descendants in BFS order. Returns [] if root not found."""
         root = self._by_id.get(root_id)

@@ -4,6 +4,7 @@ import type {
   AgentModel,
   Board,
   GlobalStats,
+  ReplyResponse,
   RunTrace,
   Space,
   SpacesResponse,
@@ -98,10 +99,12 @@ export const api = {
   start: (id: string) =>
     request<Task>(`/api/tasks/${id}/start`, { method: "POST", body: "{}" }),
   reply: (id: string, message: string) =>
-    request<Task>(`/api/tasks/${id}/reply`, {
+    request<ReplyResponse>(`/api/tasks/${id}/reply`, {
       method: "POST",
       body: JSON.stringify({ message }),
     }),
+  routePreview: (id: string) =>
+    request<ReplyResponse>(`/api/tasks/${id}/route-preview`),
   stop: (id: string) =>
     request<Task>(`/api/tasks/${id}/stop`, { method: "POST", body: "{}" }),
   promote: (id: string) =>
