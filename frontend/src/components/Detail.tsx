@@ -881,7 +881,7 @@ export function Detail({ taskId, onClose }: Props) {
     <>
       <Modal onClose={onClose} className="z-30">
         <div
-          className="flex h-full w-full max-w-5xl flex-col overflow-hidden border border-hairline bg-surface-1 shadow-lift sm:h-auto sm:max-h-[90vh] sm:rounded-lg"
+          className="flex h-full w-full max-w-5xl flex-col overflow-hidden border border-hairline bg-surface-1 shadow-lift sm:h-auto sm:max-h-[90vh] sm:rounded-lg glass-pane"
           onClick={(e) => e.stopPropagation()}
         >
           {isLoading && <DetailSkeleton />}

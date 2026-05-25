@@ -65,6 +65,8 @@ export default {
         lift: "0 8px 24px -8px var(--shadow-lift-outer), 0 2px 4px -2px var(--shadow-lift-inner)",
         "accent-glow":
           "0 0 0 1px rgb(var(--color-accent) / 0.4), 0 0 16px -2px rgb(var(--color-accent) / 0.25)",
+        "neon-glow":
+          "0 0 0 1px rgb(var(--color-accent) / 0.5), 0 0 20px -2px rgb(var(--color-accent) / 0.45), 0 0 48px -8px rgb(var(--color-accent) / 0.2)",
       },
       backgroundImage: {
         grain: "var(--bg-grain)",

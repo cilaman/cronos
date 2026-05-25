@@ -78,43 +78,45 @@
       linear-gradient(to bottom, rgb(255 255 255 / 0.03) 1px, transparent 1px);
   }
 
-  /* Neon — deep indigo-black canvas, electric violet accent, glassy surfaces.
+  /* Neon — deep midnight navy canvas, electric cyan-blue accent, glassy surfaces.
    * Must come after .dark so these vars win when both classes are on <html>.
-   * The .dark class stays so Tailwind dark: variants (badges, etc.) still fire. */
+   * The .dark class stays so Tailwind dark: variants (badges, etc.) still fire.
+   * Purple appears as a gentle accent: accent-deep, hairlines, and grain tint. */
   .neon {
-    /* Cosmic void canvas */
-    --color-canvas: 5 3 20;
-    --color-surface-1: 12 9 40;
-    --color-surface-2: 19 16 58;
-    --color-surface-3: 28 24 80;
+    /* Deep midnight navy — true dark blue, not purple-black */
+    --color-canvas: 3 7 30;
+    --color-surface-1: 8 14 52;
+    --color-surface-2: 12 22 68;
+    --color-surface-3: 18 30 88;
 
-    /* Lavender-white ink */
-    --color-ink: 232 224 255;
-    --color-ink-muted: 169 155 224;
-    --color-ink-faint: 112 96 176;
+    /* Cool blue-white ink — crisp and electric */
+    --color-ink: 214 236 255;
+    --color-ink-muted: 126 166 218;
+    --color-ink-faint: 66 102 168;
 
-    /* Electric violet accent */
-    --color-accent: 167 139 250;
-    --color-accent-bright: 196 181 253;
-    --color-accent-dim: 124 58 237;
-    --color-accent-deep: 76 29 149;
+    /* Electric cyan-blue primary accent — the neon glow */
+    --color-accent: 0 210 255;
+    --color-accent-bright: 90 230 255;
+    --color-accent-dim: 0 132 200;
+    /* Purple as the deep accent — gentle purple presence */
+    --color-accent-deep: 108 68 220;
 
-    /* Subtle purple-blue borders */
-    --color-hairline: 30 26 64;
-    --color-hairline-strong: 46 40 96;
+    /* Blue-purple hairlines — purple woven into the structure */
+    --color-hairline: 22 28 78;
+    --color-hairline-strong: 38 46 118;
 
     /* Semantic chrome stays warm for contrast */
     --color-warning: 251 191 36;
     --color-danger: 248 113 113;
 
-    /* Violet-tinted atmosphere */
-    --shadow-inset-hairline: rgb(167 139 250 / 0.10);
-    --shadow-lift-outer: rgb(0 0 0 / 0.75);
-    --shadow-lift-inner: rgb(0 0 0 / 0.55);
-    --bg-grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.1  0 0 0 0 0.05  0 0 0 0 0.25  0 0 0 0.45 0'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.14'/></svg>");
+    /* Glass-like atmosphere — electric blue top highlight, deep navy shadows */
+    --shadow-inset-hairline: rgb(0 210 255 / 0.16);
+    --shadow-lift-outer: rgb(0 4 28 / 0.84);
+    --shadow-lift-inner: rgb(0 6 42 / 0.68);
+    --bg-grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.02  0 0 0 0 0.08  0 0 0 0 0.28  0 0 0 0.4 0'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.18'/></svg>");
     --bg-hairline-grid:
-      linear-gradient(to right, rgb(167 139 250 / 0.05) 1px, transparent 1px),
-      linear-gradient(to bottom, rgb(167 139 250 / 0.05) 1px, transparent 1px);
+      linear-gradient(to right, rgb(0 210 255 / 0.07) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(0 210 255 / 0.07) 1px, transparent 1px);
   }
 
   .font-mono {
@@ -126,6 +128,24 @@
     input, textarea, select {
       font-size: 1rem;
     }
+  }
+}
+
+@layer utilities {
+  /* Glass-morphism panel — semi-transparent surface with backdrop blur.
+   * In neon mode, adds an electric-blue top edge and deep navy shadow.
+   * Apply to cards/modals that float over the textured canvas. */
+  .glass-pane {
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+  }
+  .neon .glass-pane {
+    background: rgb(var(--color-surface-1) / 0.62);
+    border: 1px solid rgb(var(--color-accent) / 0.10);
+    box-shadow:
+      inset 0 1px 0 0 rgb(0 210 255 / 0.10),
+      0 8px 32px -8px rgb(0 4 28 / 0.80),
+      0 0 0 1px rgb(var(--color-hairline));
   }
 }
 

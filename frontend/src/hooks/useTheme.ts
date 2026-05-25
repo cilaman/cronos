@@ -7,7 +7,7 @@ export const THEMES: readonly Theme[] = ["light", "dark", "neon"] as const;
 export const THEME_META: Record<Theme, { label: string; metaColor: string }> = {
   light: { label: "Light", metaColor: "#fafaf7" },
   dark:  { label: "Dark",  metaColor: "#07100c" },
-  neon:  { label: "Neon",  metaColor: "#050314" },
+  neon:  { label: "Neon",  metaColor: "#03071e" },
 };
 
 const STORAGE_KEY = "cronos-theme";
