@@ -5,7 +5,7 @@ import type { Theme } from "../hooks/useTheme";
 const SWATCH: Record<Theme, { canvas: string; surface: string; accent: string }> = {
   light: { canvas: "#fafaf7", surface: "#ffffff", accent: "#15803d" },
   dark:  { canvas: "#07100c", surface: "#111b1b", accent: "#4ade80" },
-  neon:  { canvas: "#050314", surface: "#0c0928", accent: "#a78bfa" },
+  neon:  { canvas: "#03071e", surface: "#080e34", accent: "#00d2ff" },
 };
 
 export function ThemePicker() {
