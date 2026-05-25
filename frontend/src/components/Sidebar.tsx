@@ -25,38 +25,61 @@ function ActiveStrip({ color }: { color?: string }) {
 function SpaceRow({ space, onClose }: { space: SpaceSummary; onClose?: () => void }) {
   const open = (space.task_counts.active ?? 0) + (space.task_counts.waiting ?? 0);
   return (
-    <NavLink
-      to={`/spaces/${space.id}`}
-      onClick={onClose}
-      className={({ isActive }) =>
-        cn(
-          "group relative flex h-8 items-center gap-2 rounded px-3 text-[12px] transition",
-          isActive
-            ? "bg-surface-2 text-ink shadow-inset-hairline"
-            : "text-ink-muted hover:bg-surface-2/60 hover:text-ink",
-        )
-      }
-    >
-      {({ isActive }) => (
-        <>
-          {isActive && <ActiveStrip color={space.color} />}
-          <span
-            aria-hidden
-            className="h-2 w-2 shrink-0 rounded-sm"
-            style={{ backgroundColor: space.color }}
-          />
-          <span aria-hidden className="shrink-0 text-[13px] leading-none">
-            {space.icon ?? "·"}
-          </span>
-          <span className="min-w-0 flex-1 truncate">{space.name}</span>
-          {open > 0 && (
-            <span className="font-mono text-[10px] tabular-nums text-ink-faint">
-              {String(open).padStart(2, "0")}
+    <div className="group relative flex items-center gap-0.5">
+      <NavLink
+        to={`/spaces/${space.id}`}
+        onClick={onClose}
+        className={({ isActive }) =>
+          cn(
+            "relative flex min-w-0 flex-1 h-8 items-center gap-2 rounded px-3 text-[12px] transition",
+            isActive
+              ? "bg-surface-2 text-ink shadow-inset-hairline"
+              : "text-ink-muted hover:bg-surface-2/60 hover:text-ink",
+          )
+        }
+      >
+        {({ isActive }) => (
+          <>
+            {isActive && <ActiveStrip color={space.color} />}
+            <span
+              aria-hidden
+              className="h-2 w-2 shrink-0 rounded-sm"
+              style={{ backgroundColor: space.color }}
+            />
+            <span aria-hidden className="shrink-0 text-[13px] leading-none">
+              {space.icon ?? "·"}
             </span>
-          )}
-        </>
-      )}
-    </NavLink>
+            <span className="min-w-0 flex-1 truncate">{space.name}</span>
+            {open > 0 && (
+              <span className="font-mono text-[10px] tabular-nums text-ink-faint">
+                {String(open).padStart(2, "0")}
+              </span>
+            )}
+          </>
+        )}
+      </NavLink>
+      <NavLink
+        to={`/spaces/${space.id}/tree`}
+        onClick={onClose}
+        title="Tree view"
+        aria-label={`${space.name} tree view`}
+        className={({ isActive }) =>
+          cn(
+            "flex h-6 w-6 shrink-0 items-center justify-center rounded text-ink-faint opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100",
+            isActive ? "opacity-100 text-accent-bright" : "hover:bg-surface-2 hover:text-ink",
+          )
+        }
+      >
+        <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+          <circle cx="5.5" cy="1.5" r="1"/>
+          <circle cx="1.5" cy="8.5" r="1"/>
+          <circle cx="9.5" cy="8.5" r="1"/>
+          <line x1="5.5" y1="2.5" x2="5.5" y2="5"/>
+          <line x1="5.5" y1="5" x2="1.5" y2="7.5"/>
+          <line x1="5.5" y1="5" x2="9.5" y2="7.5"/>
+        </svg>
+      </NavLink>
+    </div>
   );
 }
 
@@ -106,6 +129,14 @@ export function Sidebar({ onClose }: Props) {
             <>
               {isActive && <ActiveStrip />}
               Board
+            </>
+          )}
+        </NavLink>
+        <NavLink to="/tree" className={primaryNavLinkClasses} onClick={onClose}>
+          {({ isActive }) => (
+            <>
+              {isActive && <ActiveStrip />}
+              Tree
             </>
           )}
         </NavLink>
