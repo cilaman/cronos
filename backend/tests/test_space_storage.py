@@ -1,12 +1,17 @@
 from __future__ import annotations
 
-import pytest
+from datetime import UTC, datetime
 
+import pytest
+from pydantic import ValidationError
+
+from app.models import Space, TaskState, View
 from app.space_storage import (
     SpaceError,
     SpaceExists,
     SpaceNotFound,
     SpaceStore,
+    _dump_view,
     dump_space,
     parse_space_yaml,
     validate_color,
@@ -469,3 +474,255 @@ async def test_set_autopilot_preserves_other_fields(space_store):
     assert after.color == color_before
     assert after.description == desc_before
     assert after.autopilot == "enabled"
+
+
+# ---------------------------------------------------------------------------
+# View model validation — arc-3/1
+# ---------------------------------------------------------------------------
+
+_NOW = datetime(2024, 1, 1, tzinfo=UTC)
+
+
+def _view(**kwargs) -> View:
+    defaults = dict(id="test", name="Test", lanes=[TaskState.BACKLOG], created_at=_NOW, updated_at=_NOW)
+    defaults.update(kwargs)
+    return View(**defaults)
+
+
+def test_view_id_valid():
+    _view(id="all")
+    _view(id="my-view-123")
+    _view(id="a" * 32)
+
+
+def test_view_id_invalid_uppercase():
+    with pytest.raises(ValidationError):
+        _view(id="MyView")
+
+
+def test_view_id_invalid_spaces():
+    with pytest.raises(ValidationError):
+        _view(id="my view")
+
+
+def test_view_id_too_long():
+    with pytest.raises(ValidationError):
+        _view(id="a" * 33)
+
+
+def test_view_empty_lanes_raises():
+    with pytest.raises(ValidationError):
+        _view(lanes=[])
+
+
+def test_space_duplicate_view_ids_raises():
+    v1 = _view(id="dup", name="First")
+    v2 = _view(id="dup", name="Second")
+    with pytest.raises(ValidationError, match="Duplicate view id"):
+        Space(
+            id="s",
+            name="S",
+            color="#15803D",
+            created_at=_NOW,
+            updated_at=_NOW,
+            views=[v1, v2],
+        )
+
+
+def test_view_type_filter_valid():
+    v = _view(type_filter=["task", "goal"])
+    assert v.type_filter == ["task", "goal"]
+
+
+def test_view_type_filter_invalid():
+    with pytest.raises(ValidationError):
+        _view(type_filter=["invalid-type"])
+
+
+# ---------------------------------------------------------------------------
+# _dump_view serialization — arc-3/1
+# ---------------------------------------------------------------------------
+
+
+def test_dump_view_omits_type_filter_when_none():
+    d = _dump_view(_view(type_filter=None))
+    assert "type_filter" not in d
+
+
+def test_dump_view_includes_type_filter_when_set():
+    d = _dump_view(_view(id="t", type_filter=["task"]))
+    assert d["type_filter"] == ["task"]
+
+
+def test_dump_view_lanes_are_strings():
+    d = _dump_view(_view(lanes=[TaskState.BACKLOG, TaskState.ACTIVE]))
+    assert d["lanes"] == ["backlog", "active"]
+
+
+# ---------------------------------------------------------------------------
+# Views YAML round-trip — arc-3/1
+# ---------------------------------------------------------------------------
+
+_MINIMAL_YAML = (
+    "name: Test\n"
+    "color: '#15803D'\n"
+    "icon: null\n"
+    "description: ''\n"
+    "created_at: '2024-01-01T00:00:00Z'\n"
+    "updated_at: '2024-01-01T00:00:00Z'\n"
+    "git_repo_url: null\n"
+    "git_branch: null\n"
+    "git_share_cronos: false\n"
+    "agent_defaults: {}\n"
+    "autopilot: disabled\n"
+)
+
+
+def _write_space_yml(parent, space_id: str, extra: str = "") -> object:
+    """Write a minimal space.yml and return the path."""
+    from pathlib import Path
+    space_dir = Path(parent) / space_id / ".cronos"
+    space_dir.mkdir(parents=True, exist_ok=True)
+    yml = space_dir / "space.yml"
+    yml.write_text(_MINIMAL_YAML + extra, encoding="utf-8")
+    return yml
+
+
+def test_parse_space_yaml_seeds_default_view_when_missing(tmp_spaces_dir):
+    """A space.yml without a views key gets a seeded 'All lanes' default view."""
+    yml = _write_space_yml(tmp_spaces_dir, "seed-missing")
+    space = parse_space_yaml(yml)
+
+    assert len(space.views) == 1
+    v = space.views[0]
+    assert v.id == "all"
+    assert v.name == "All lanes"
+    assert v.default is True
+    assert set(v.lanes) == {TaskState.BACKLOG, TaskState.ACTIVE, TaskState.WAITING, TaskState.DONE}
+    # File must be updated on disk
+    assert "views:" in yml.read_text()
+
+
+def test_parse_space_yaml_seeds_default_view_when_empty(tmp_spaces_dir):
+    """A space.yml with views: [] gets the same seed."""
+    yml = _write_space_yml(tmp_spaces_dir, "seed-empty", "views: []\n")
+    space = parse_space_yaml(yml)
+
+    assert len(space.views) == 1
+    assert space.views[0].id == "all"
+    assert "views:" in yml.read_text()
+
+
+def test_parse_space_yaml_normalises_duplicate_defaults(tmp_spaces_dir):
+    """When two views have default: true, only the last one survives; file updated."""
+    views_yaml = (
+        "views:\n"
+        "  - id: first\n"
+        "    name: First\n"
+        "    lanes: [backlog]\n"
+        "    default: true\n"
+        "    created_at: '2024-01-01T00:00:00Z'\n"
+        "    updated_at: '2024-01-01T00:00:00Z'\n"
+        "  - id: second\n"
+        "    name: Second\n"
+        "    lanes: [active]\n"
+        "    default: true\n"
+        "    created_at: '2024-01-01T00:00:00Z'\n"
+        "    updated_at: '2024-01-01T00:00:00Z'\n"
+    )
+    yml = _write_space_yml(tmp_spaces_dir, "dup-default", views_yaml)
+    space = parse_space_yaml(yml)
+
+    defaults = [v for v in space.views if v.default]
+    assert len(defaults) == 1
+    assert defaults[0].id == "second"  # last-write-wins
+
+    # Reload from disk: the fix should have been persisted
+    space2 = parse_space_yaml(yml)
+    assert len([v for v in space2.views if v.default]) == 1
+
+
+def test_dump_parse_round_trip_with_views(tmp_spaces_dir):
+    """Three custom views save, reload, and re-dump byte-equal."""
+    v1 = View(
+        id="all",
+        name="All lanes",
+        lanes=[TaskState.BACKLOG, TaskState.ACTIVE, TaskState.WAITING, TaskState.DONE],
+        default=True,
+        created_at=_NOW,
+        updated_at=_NOW,
+    )
+    v2 = View(
+        id="active-only",
+        name="Active only",
+        lanes=[TaskState.ACTIVE],
+        type_filter=["task", "goal"],
+        created_at=_NOW,
+        updated_at=_NOW,
+    )
+    v3 = View(
+        id="done-backlog",
+        name="Done and backlog",
+        lanes=[TaskState.DONE, TaskState.BACKLOG],
+        created_at=_NOW,
+        updated_at=_NOW,
+    )
+    space = Space(
+        id="rt-views",
+        name="RT Views",
+        color="#15803D",
+        created_at=_NOW,
+        updated_at=_NOW,
+        views=[v1, v2, v3],
+    )
+    space_dir = tmp_spaces_dir / "rt-views" / ".cronos"
+    space_dir.mkdir(parents=True, exist_ok=True)
+    yml = space_dir / "space.yml"
+
+    first_dump = dump_space(space)
+    yml.write_text(first_dump, encoding="utf-8")
+
+    parsed = parse_space_yaml(yml)
+    second_dump = dump_space(parsed)
+
+    assert first_dump == second_dump
+
+
+async def test_store_create_then_reload_seeds_views(tmp_spaces_dir):
+    """A freshly-created space gets a seeded view on first reload."""
+    store = SpaceStore(tmp_spaces_dir)
+    await store.create(name="View Seed", color="#15803D", space_id="view-seed")
+
+    store2 = SpaceStore(tmp_spaces_dir)
+    await store2.reload_all()
+    space = store2.get("view-seed")
+
+    assert space is not None
+    assert len(space.views) == 1
+    assert space.views[0].id == "all"
+    assert space.views[0].default is True
+
+
+async def test_dump_space_includes_views_key(space_store):
+    """dump_space always emits a views: key."""
+    space = space_store.get(SPACE_ID)
+    assert "views:" in dump_space(space)
+
+
+async def test_existing_views_survive_reload(tmp_spaces_dir):
+    """Views written to space.yml are loaded back correctly."""
+    views_yaml = (
+        "views:\n"
+        "  - id: work\n"
+        "    name: Work items\n"
+        "    lanes: [active, waiting]\n"
+        "    default: true\n"
+        "    created_at: '2024-01-01T00:00:00Z'\n"
+        "    updated_at: '2024-01-01T00:00:00Z'\n"
+    )
+    yml = _write_space_yml(tmp_spaces_dir, "views-persist", views_yaml)
+    space = parse_space_yaml(yml)
+
+    assert len(space.views) == 1
+    assert space.views[0].id == "work"
+    assert space.views[0].lanes == [TaskState.ACTIVE, TaskState.WAITING]
