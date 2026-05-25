@@ -40,6 +40,8 @@ class Task(BaseModel):
     type: Literal["task", "goal", "issue"] = "task"
     parent_id: str | None = None
     depends_on: list[str] = Field(default_factory=list)
+    pr_url: str | None = None
+    proposed_pr_path: str | None = None
 
 
 class TaskSummary(BaseModel):

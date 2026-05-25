@@ -982,3 +982,224 @@ async def test_run_goal_injects_goal_context(worker, task_store, monkeypatch):
     assert ctx is not None
     assert "My Goal" in ctx
     assert "The full goal brief." in ctx
+
+
+# ---------------------------------------------------------------------------
+# _finalize: autopilot post-DONE PR hook
+# ---------------------------------------------------------------------------
+
+
+from app.autopilot_pr import PostDoneResult  # noqa: E402
+
+
+@pytest.fixture
+async def worker_with_space(task_store, space_store, tmp_spaces_dir):
+    """A Worker wired to a real SpaceStore so the post-DONE autopilot hook can fire."""
+    return Worker(
+        store=task_store,
+        space_store=space_store,
+        stats_store=StatsStore(tmp_spaces_dir),
+        trace_store=TraceStore(tmp_spaces_dir),
+    )
+
+
+async def test_finalize_done_calls_run_post_done_flow(
+    worker_with_space, task_store, monkeypatch
+):
+    """When a task reaches DONE and space_store is set, autopilot_pr.run_post_done_flow is invoked."""
+    import app.worker as worker_module
+
+    called: list[tuple[str, str]] = []
+
+    async def fake_flow(task, space, store):
+        called.append((task.id, space.id))
+        return PostDoneResult(committed=True, pushed=True)
+
+    monkeypatch.setattr(worker_module.autopilot_pr, "run_post_done_flow", fake_flow)
+
+    task_id = await _active_task(task_store, title="Will finish")
+    result = _make_result(exit_code=0, status=Status.DONE)
+
+    await worker_with_space._finalize(task_id, result)
+
+    assert called == [(task_id, SPACE_ID)]
+
+
+async def test_finalize_waiting_does_not_call_run_post_done_flow(
+    worker_with_space, task_store, monkeypatch
+):
+    """When a task ends in WAITING (non-DONE), the post-DONE flow is NOT invoked."""
+    import app.worker as worker_module
+
+    called: list[tuple] = []
+
+    async def fake_flow(task, space, store):
+        called.append((task.id, space.id))
+        return PostDoneResult()
+
+    monkeypatch.setattr(worker_module.autopilot_pr, "run_post_done_flow", fake_flow)
+
+    task_id = await _active_task(task_store)
+    # status=WAIT → WAITING state.
+    result = _make_result(exit_code=0, status=Status.WAIT, context="hold up")
+
+    await worker_with_space._finalize(task_id, result)
+
+    assert called == []
+
+
+async def test_finalize_done_without_space_store_skips_post_done_flow(
+    worker, task_store, monkeypatch
+):
+    """The default `worker` fixture has space_store=None — post-DONE flow must not fire."""
+    import app.worker as worker_module
+
+    called: list[tuple] = []
+
+    async def fake_flow(task, space, store):
+        called.append((task.id, space.id))
+        return PostDoneResult()
+
+    monkeypatch.setattr(worker_module.autopilot_pr, "run_post_done_flow", fake_flow)
+
+    task_id = await _active_task(task_store)
+    result = _make_result(exit_code=0, status=Status.DONE)
+
+    await worker._finalize(task_id, result)
+
+    assert called == []
+
+
+async def test_finalize_publishes_pr_opened_when_pr_url_returned(
+    worker_with_space, task_store, monkeypatch
+):
+    """When run_post_done_flow returns pr_url, a 'pr_opened' event with that URL is published."""
+    import app.worker as worker_module
+
+    async def fake_flow(task, space, store):
+        return PostDoneResult(
+            committed=True,
+            pushed=True,
+            pr_url="https://github.com/x/y/pull/55",
+        )
+
+    monkeypatch.setattr(worker_module.autopilot_pr, "run_post_done_flow", fake_flow)
+
+    task_id = await _active_task(task_store)
+    result = _make_result(exit_code=0, status=Status.DONE)
+
+    await worker_with_space._finalize(task_id, result)
+
+    buf = worker_with_space._run_buffer.get(task_id, [])
+    pr_events = [e for e in buf if e.get("type") == "pr_opened"]
+    assert len(pr_events) == 1
+    assert pr_events[0]["pr_url"] == "https://github.com/x/y/pull/55"
+    # The proposed_pr_path branch must NOT fire concurrently.
+    assert "proposed_pr_path" not in pr_events[0]
+
+
+async def test_finalize_publishes_pr_opened_with_proposed_pr_path_when_no_pr_url(
+    worker_with_space, task_store, monkeypatch
+):
+    """When pr_url is None but proposed_pr_path is set, the event carries proposed_pr_path."""
+    import app.worker as worker_module
+
+    async def fake_flow(task, space, store):
+        return PostDoneResult(
+            committed=True,
+            pushed=True,
+            pr_url=None,
+            proposed_pr_path="/data/spaces/x/.cronos/pull_requests/t.md",
+        )
+
+    monkeypatch.setattr(worker_module.autopilot_pr, "run_post_done_flow", fake_flow)
+
+    task_id = await _active_task(task_store)
+    result = _make_result(exit_code=0, status=Status.DONE)
+
+    await worker_with_space._finalize(task_id, result)
+
+    buf = worker_with_space._run_buffer.get(task_id, [])
+    pr_events = [e for e in buf if e.get("type") == "pr_opened"]
+    assert len(pr_events) == 1
+    assert pr_events[0]["proposed_pr_path"] == "/data/spaces/x/.cronos/pull_requests/t.md"
+    # No pr_url key set.
+    assert "pr_url" not in pr_events[0]
+
+
+async def test_finalize_does_not_publish_pr_opened_when_both_refs_are_none(
+    worker_with_space, task_store, monkeypatch
+):
+    """If post-DONE flow returns neither pr_url nor proposed_pr_path, no pr_opened event."""
+    import app.worker as worker_module
+
+    async def fake_flow(task, space, store):
+        return PostDoneResult(committed=False)
+
+    monkeypatch.setattr(worker_module.autopilot_pr, "run_post_done_flow", fake_flow)
+
+    task_id = await _active_task(task_store)
+    result = _make_result(exit_code=0, status=Status.DONE)
+
+    await worker_with_space._finalize(task_id, result)
+
+    buf = worker_with_space._run_buffer.get(task_id, [])
+    pr_events = [e for e in buf if e.get("type") == "pr_opened"]
+    assert pr_events == []
+
+
+async def test_finalize_swallows_run_post_done_flow_exception(
+    worker_with_space, task_store, monkeypatch, caplog
+):
+    """If run_post_done_flow raises, _finalize logs but does not propagate.
+
+    Locks the safety contract: an autopilot failure must not crash the worker
+    nor corrupt the run finalization (task already moved to DONE).
+    """
+    import logging as logging_mod
+
+    import app.worker as worker_module
+
+    async def fake_flow(task, space, store):
+        raise RuntimeError("autopilot exploded")
+
+    monkeypatch.setattr(worker_module.autopilot_pr, "run_post_done_flow", fake_flow)
+
+    task_id = await _active_task(task_store)
+    result = _make_result(exit_code=0, status=Status.DONE)
+
+    with caplog.at_level(logging_mod.ERROR, logger="cronos.worker"):
+        await worker_with_space._finalize(task_id, result)
+
+    # Task is still DONE (state was persisted before the autopilot hook).
+    assert task_store.get(task_id).state == TaskState.DONE
+    # Error was logged.
+    error_records = [
+        r for r in caplog.record_tuples
+        if r[0] == "cronos.worker" and r[1] == logging_mod.ERROR
+    ]
+    assert any("autopilot_pr" in r[2] for r in error_records)
+
+
+async def test_finalize_done_publishes_run_end_after_pr_opened(
+    worker_with_space, task_store, monkeypatch
+):
+    """The pr_opened event is published BEFORE run_end so SSE clients see it pre-EOF."""
+    import app.worker as worker_module
+
+    async def fake_flow(task, space, store):
+        return PostDoneResult(pr_url="https://github.com/x/y/pull/1")
+
+    monkeypatch.setattr(worker_module.autopilot_pr, "run_post_done_flow", fake_flow)
+
+    task_id = await _active_task(task_store)
+    result = _make_result(exit_code=0, status=Status.DONE)
+
+    await worker_with_space._finalize(task_id, result)
+
+    buf = worker_with_space._run_buffer.get(task_id, [])
+    event_types = [e.get("type") for e in buf]
+    # pr_opened must precede run_end.
+    pr_idx = event_types.index("pr_opened")
+    run_end_idx = event_types.index("run_end")
+    assert pr_idx < run_end_idx
