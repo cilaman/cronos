@@ -51,6 +51,7 @@ export function useUpdateSpace(id: string) {
       icon?: string | null;
       clear_icon?: boolean;
       description?: string;
+      autopilot?: "disabled" | "enabled" | "paused";
     }) => api.updateSpace(id, body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["spaces"] });

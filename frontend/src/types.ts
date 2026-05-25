@@ -39,11 +39,14 @@ export interface TaskSummary {
   space_name: string | null;
   space_color: string | null;
   space_icon: string | null;
+  space_autopilot?: string | null;
   type?: TaskType;
   parent_id?: string | null;
   parent_title?: string | null;
   depends_on?: string[];
   unmet_dependencies?: Array<{ id: string; title: string }>;
+  pr_url?: string | null;
+  proposed_pr_path?: string | null;
 }
 
 export type AgentMode = "plan" | "auto" | "ask";
@@ -89,6 +92,8 @@ export interface Task {
   parent_title?: string | null;
   depends_on?: string[];
   unmet_dependencies?: Array<{ id: string; title: string }>;
+  pr_url?: string | null;
+  proposed_pr_path?: string | null;
 }
 
 export interface Board {
@@ -108,12 +113,15 @@ export interface SpaceSummary {
   icon: string | null;
   task_counts: Record<TaskState, number>;
   last_activity_at: string | null;
+  autopilot?: AutopilotMode;
 }
 
 export interface SpacesResponse {
   spaces: SpaceSummary[];
   totals: Record<TaskState, number>;
 }
+
+export type AutopilotMode = "disabled" | "enabled" | "paused";
 
 export interface Space {
   id: string;
@@ -127,6 +135,7 @@ export interface Space {
   git_branch: string | null;
   git_share_cronos: boolean;
   agent_defaults: Record<string, string>;
+  autopilot: AutopilotMode;
 }
 
 export type FileCategory =

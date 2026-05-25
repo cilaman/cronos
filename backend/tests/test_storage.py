@@ -2521,3 +2521,80 @@ async def test_autopilot_conflict_persists_to_disk(task_store, tmp_spaces_dir):
     reloaded = fresh.get(task.id)
     assert reloaded.state == TaskState.WAITING
     assert reloaded.waiting_question == "Conflict on x.py"
+
+
+# ---------------------------------------------------------------------------
+# summarize() — PR ref propagation (arc-4/5 UI: Card + Detail rely on these
+# being denormalized onto TaskSummary so cards/lists render without an extra
+# fetch).
+# ---------------------------------------------------------------------------
+
+
+def test_summarize_propagates_pr_url():
+    """A task with pr_url surfaces it on the summary verbatim."""
+    task = _make_task(pr_url="https://github.com/owner/repo/pull/12")
+
+    summary = summarize(task)
+
+    assert summary.pr_url == "https://github.com/owner/repo/pull/12"
+
+
+def test_summarize_propagates_proposed_pr_path():
+    """A task with proposed_pr_path (no remote) surfaces it on the summary."""
+    task = _make_task(proposed_pr_path="/repo/.cronos/pull_requests/t.md")
+
+    summary = summarize(task)
+
+    assert summary.proposed_pr_path == "/repo/.cronos/pull_requests/t.md"
+
+
+def test_summarize_pr_fields_default_to_none():
+    """A bare Task summarizes with both PR fields set to None.
+
+    The frontend Card relies on `pr_url == null` being falsy to decide whether
+    to render the GitPullRequest link icon. If summarize() ever emitted an
+    empty string here the icon would still render with href='' — a regression
+    we want to catch.
+    """
+    task = _make_task()
+
+    summary = summarize(task)
+
+    assert summary.pr_url is None
+    assert summary.proposed_pr_path is None
+
+
+def test_summarize_propagates_both_pr_fields_independently():
+    """pr_url and proposed_pr_path are independent — both can be set at once.
+
+    The Card UI gives pr_url precedence, but the summary itself must carry
+    both so the Detail panel (which renders them differently) can decide.
+    """
+    task = _make_task(
+        pr_url="https://github.com/o/r/pull/1",
+        proposed_pr_path="/p.md",
+    )
+
+    summary = summarize(task)
+
+    assert summary.pr_url == "https://github.com/o/r/pull/1"
+    assert summary.proposed_pr_path == "/p.md"
+
+
+async def test_task_store_board_summary_includes_pr_refs(task_store):
+    """End-to-end: a task with pr_url surfaces it on board() summaries.
+
+    This is what the Card on the kanban actually reads from the API.
+    """
+    task = await task_store.create(space_id=SPACE_ID, title="PR task", brief="")
+    await task_store.set_pr_refs(
+        task.id,
+        pr_url="https://github.com/o/r/pull/55",
+        proposed_pr_path=None,
+    )
+
+    board = task_store.board(SPACE_ID)
+    matches = [s for s in board.backlog if s.id == task.id]
+    assert len(matches) == 1
+    assert matches[0].pr_url == "https://github.com/o/r/pull/55"
+    assert matches[0].proposed_pr_path is None

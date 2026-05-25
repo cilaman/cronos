@@ -299,6 +299,8 @@ def summarize(task: Task) -> TaskSummary:
         type=task.type,
         parent_id=task.parent_id,
         depends_on=list(task.depends_on),
+        pr_url=task.pr_url,
+        proposed_pr_path=task.proposed_pr_path,
     )
 
 
