@@ -6,6 +6,27 @@ export const STORAGE_KEYS = {
   boardSortMode: "cronos.boardSortMode",
 } as const;
 
+// Tree expand/collapse state — keyed per space (or "_all" for the all-spaces view)
+export function readTreeExpanded(spaceId: string | null): string[] {
+  const key = `cronos:tree:expanded:${spaceId ?? "_all"}`;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return [];
+    return JSON.parse(raw) as string[];
+  } catch {
+    return [];
+  }
+}
+
+export function writeTreeExpanded(spaceId: string | null, ids: string[]): void {
+  const key = `cronos:tree:expanded:${spaceId ?? "_all"}`;
+  try {
+    localStorage.setItem(key, JSON.stringify(ids));
+  } catch {
+    // localStorage unavailable — silently fall back
+  }
+}
+
 export function readBoardSpaceFilter(): string | null {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEYS.boardSpaceFilter);
