@@ -24,6 +24,14 @@ export function canUserTransition(from: TaskState, to: TaskState): boolean {
   return USER_TRANSITIONS_SET.has(`${from}->${to}`);
 }
 
+export interface ChildProgressItem {
+  id: string;
+  title: string;
+  state: TaskState;
+  priority: number;
+  updated_at: string;
+}
+
 export interface TaskSummary {
   id: string;
   space_id: string;
@@ -47,7 +55,7 @@ export interface TaskSummary {
   unmet_dependencies?: Array<{ id: string; title: string }>;
   pr_url?: string | null;
   proposed_pr_path?: string | null;
-  children_progress?: { done: number; total: number; waiting: number } | null;
+  children_progress?: { done: number; total: number; waiting: number; items?: ChildProgressItem[] } | null;
   is_running?: boolean;
 }
 

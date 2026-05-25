@@ -55,10 +55,19 @@ class Task(BaseModel):
     proposed_pr_path: str | None = None
 
 
+class ChildItem(BaseModel):
+    id: str
+    title: str
+    state: TaskState
+    priority: int
+    updated_at: datetime
+
+
 class ChildrenProgress(BaseModel):
     done: int
     total: int
     waiting: int
+    items: list[ChildItem] = Field(default_factory=list)
 
 
 class TaskSummary(BaseModel):

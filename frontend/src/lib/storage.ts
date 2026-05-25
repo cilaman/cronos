@@ -85,3 +85,24 @@ export function writeBoardSortMode(mode: BoardSortMode): void {
     // localStorage unavailable (private mode) — silently fall back.
   }
 }
+
+// Board goal expand/collapse state — keyed per space (or "_all" for the all-spaces view)
+export function readBoardGoalExpanded(spaceId: string | null): string[] {
+  const key = `cronos:board:goal-expanded:${spaceId ?? "_all"}`;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return [];
+    return JSON.parse(raw) as string[];
+  } catch {
+    return [];
+  }
+}
+
+export function writeBoardGoalExpanded(spaceId: string | null, ids: string[]): void {
+  const key = `cronos:board:goal-expanded:${spaceId ?? "_all"}`;
+  try {
+    localStorage.setItem(key, JSON.stringify(ids));
+  } catch {
+    // localStorage unavailable — silently fall back
+  }
+}

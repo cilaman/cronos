@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { Board } from "../components/Board";
 import { BoardToolbar } from "../components/BoardToolbar";
@@ -16,6 +16,8 @@ import {
   writeCardViewMode,
   readBoardSortMode,
   writeBoardSortMode,
+  readBoardGoalExpanded,
+  writeBoardGoalExpanded,
   type BoardSortMode,
 } from "../lib/storage";
 
@@ -29,6 +31,10 @@ export function BoardPage() {
   );
   const [compact, setCompact] = useState(() => readCardViewMode() === "minimal");
   const [sortMode, setSortMode] = useState<BoardSortMode>(() => readBoardSortMode());
+  const [expandedGoals, setExpandedGoals] = useState<Set<string>>(
+    () => new Set(readBoardGoalExpanded(scoped ?? readBoardSpaceFilter())),
+  );
+  const [hideExpandedChildren, setHideExpandedChildren] = useState(false);
   const [creating, setCreating] = useState(false);
   const [managingViews, setManagingViews] = useState(false);
   const [isWorking, setIsWorking] = useState(false);
@@ -59,6 +65,21 @@ export function BoardPage() {
     if (!activeView) return undefined;
     return activeView.lanes;
   }, [activeView]);
+
+  const toggleGoal = useCallback((id: string) => {
+    setExpandedGoals((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      writeBoardGoalExpanded(boardSpaceId, [...next]);
+      return next;
+    });
+  }, [boardSpaceId]);
+
+  // Re-load expanded state when the board space changes.
+  useEffect(() => {
+    setExpandedGoals(new Set(readBoardGoalExpanded(boardSpaceId)));
+  }, [boardSpaceId]);
 
   // Keep filter aligned with the URL when navigating between scoped/unscoped.
   useEffect(() => {
@@ -131,6 +152,8 @@ export function BoardPage() {
         viewId={urlViewId}
         onViewChange={scoped ? handleViewChange : undefined}
         onManageViews={boardSpaceId ? () => setManagingViews(true) : undefined}
+        hideExpandedChildren={hideExpandedChildren}
+        onHideExpandedChildrenToggle={() => setHideExpandedChildren((v) => !v)}
       />
       <div className="min-h-0 flex-1">
         <Board
@@ -140,6 +163,9 @@ export function BoardPage() {
           sortMode={sortMode}
           viewId={urlViewId}
           activeLaneStates={activeLaneStates}
+          expandedGoals={expandedGoals}
+          onToggleGoal={toggleGoal}
+          hideExpandedChildren={hideExpandedChildren}
         />
       </div>
 

@@ -1650,7 +1650,9 @@ async def test_goal_with_mixed_children_states_gets_correct_children_progress(
     assert summary is not None
     progress = summary["children_progress"]
     assert progress is not None, "goal with children must have children_progress"
-    assert progress == {"done": 1, "total": 4, "waiting": 1}
+    assert progress["done"] == 1
+    assert progress["total"] == 4
+    assert progress["waiting"] == 1
     # Defensive: the un-counted children (backlog, active) are in `total`
     # but neither in `done` nor `waiting`.
     assert progress["total"] - progress["done"] - progress["waiting"] == 2
@@ -1749,7 +1751,11 @@ async def test_goal_with_all_children_done_reports_full_progress(
     summary = await _find_in_board(async_client, goal["id"])
 
     assert summary is not None
-    assert summary["children_progress"] == {"done": 2, "total": 2, "waiting": 0}
+    cp = summary["children_progress"]
+    assert cp is not None
+    assert cp["done"] == 2
+    assert cp["total"] == 2
+    assert cp["waiting"] == 0
 
 
 async def test_children_of_other_goals_do_not_leak_into_progress(async_client):
@@ -1769,9 +1775,13 @@ async def test_children_of_other_goals_do_not_leak_into_progress(async_client):
     sum_b = await _find_in_board(async_client, goal_b["id"])
 
     assert sum_a is not None
-    assert sum_a["children_progress"] == {"done": 0, "total": 1, "waiting": 0}
+    cp_a = sum_a["children_progress"]
+    assert cp_a is not None
+    assert cp_a["done"] == 0 and cp_a["total"] == 1 and cp_a["waiting"] == 0
     assert sum_b is not None
-    assert sum_b["children_progress"] == {"done": 0, "total": 3, "waiting": 0}
+    cp_b = sum_b["children_progress"]
+    assert cp_b is not None
+    assert cp_b["done"] == 0 and cp_b["total"] == 3 and cp_b["waiting"] == 0
 
 
 async def test_root_level_tasks_dont_appear_as_anyones_children(async_client):
@@ -1809,4 +1819,6 @@ async def test_children_progress_present_on_all_space_query(
     )
 
     assert found is not None
-    assert found["children_progress"] == {"done": 0, "total": 1, "waiting": 0}
+    cp = found["children_progress"]
+    assert cp is not None
+    assert cp["done"] == 0 and cp["total"] == 1 and cp["waiting"] == 0

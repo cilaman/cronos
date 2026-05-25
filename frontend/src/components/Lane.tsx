@@ -16,9 +16,11 @@ interface Props {
   onOpenTask?: (id: string) => void;
   blocksCountMap?: Record<string, number>;
   isRunning?: (id: string) => boolean;
+  expandedGoals?: Set<string>;
+  onToggleGoal?: (id: string) => void;
 }
 
-export function Lane({ state, label, tasks, onOpen, onAdd, compact = false, onOpenTask, blocksCountMap, isRunning }: Props) {
+export function Lane({ state, label, tasks, onOpen, onAdd, compact = false, onOpenTask, blocksCountMap, isRunning, expandedGoals, onToggleGoal }: Props) {
   const { isOver, setNodeRef } = useDroppable({ id: state });
   const taskIds = tasks.map((t) => t.id);
   const anyRunning = isRunning !== undefined && tasks.some((t) => isRunning(t.id));
@@ -71,6 +73,8 @@ export function Lane({ state, label, tasks, onOpen, onAdd, compact = false, onOp
                 onOpenTask={onOpenTask}
                 blocksCount={blocksCountMap?.[task.id] ?? 0}
                 running={isRunning?.(task.id)}
+                expanded={expandedGoals?.has(task.id) ?? false}
+                onToggleExpand={onToggleGoal ? () => onToggleGoal(task.id) : undefined}
               />
             ))
           )}

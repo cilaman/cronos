@@ -39,6 +39,12 @@ interface Props {
   viewId?: string | null;
   /** Lane states to render; lanes absent here are hidden (column removed). */
   activeLaneStates?: TaskState[];
+  /** Set of goal IDs whose child list is expanded on the board. */
+  expandedGoals?: Set<string>;
+  /** Called when the user clicks the expand chevron on a goal card. */
+  onToggleGoal?: (id: string) => void;
+  /** When true, child tasks whose parent goal is expanded are filtered out of lanes. */
+  hideExpandedChildren?: boolean;
 }
 
 export function Board({
@@ -48,6 +54,9 @@ export function Board({
   sortMode = "manual",
   viewId = null,
   activeLaneStates,
+  expandedGoals,
+  onToggleGoal,
+  hideExpandedChildren = false,
 }: Props) {
   const effectiveViewId = spaceId ? (viewId ?? "default") : null;
   const { data, isLoading, error } = useBoard(spaceId, effectiveViewId);
@@ -170,10 +179,25 @@ export function Board({
   if (error && !error.message.startsWith("404 ")) {
     return <p className="p-6 text-danger">Error: {error.message}</p>;
   }
-  if (!sortedData) return null;
+  if (!sortedData || !displayData) return null;
 
   const laneSet = activeLaneStates ? new Set(activeLaneStates) : null;
   const visibleLanes = laneSet ? LANES.filter((l) => laneSet.has(l.state)) : LANES;
+
+  // When hideExpandedChildren is on, filter out children whose parent goal is expanded.
+  const displayData = useMemo(() => {
+    if (!hideExpandedChildren || !expandedGoals || expandedGoals.size === 0) return sortedData;
+    if (!sortedData) return sortedData;
+    const filterHidden = (tasks: TaskSummary[]) =>
+      tasks.filter((t) => !(t.parent_id && expandedGoals.has(t.parent_id)));
+    return {
+      ...sortedData,
+      backlog: filterHidden(sortedData.backlog),
+      active: filterHidden(sortedData.active),
+      waiting: filterHidden(sortedData.waiting),
+      done: filterHidden(sortedData.done),
+    };
+  }, [sortedData, hideExpandedChildren, expandedGoals]);
 
   // Dynamic column count so hidden lanes don't leave gaps.
   const colCount = visibleLanes.length;
@@ -198,13 +222,15 @@ export function Board({
               key={state}
               state={state}
               label={label}
-              tasks={sortedData[state]}
+              tasks={displayData ? displayData[state] : []}
               onOpen={setOpenId}
               onAdd={onAddTask}
               compact={compact}
               onOpenTask={setOpenId}
               blocksCountMap={blocksCountMap}
               isRunning={isRunning}
+              expandedGoals={expandedGoals}
+              onToggleGoal={onToggleGoal}
             />
           ))}
         </div>

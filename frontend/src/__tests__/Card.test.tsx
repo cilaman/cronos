@@ -230,3 +230,98 @@ describe("Card — proposed_pr_path FileText icon", () => {
     expect(screen.queryByTitle("PROPOSED PR (no GitHub remote)")).not.toBeInTheDocument();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Goal card — collapsible children
+// ---------------------------------------------------------------------------
+
+describe("Card — goal collapsible children", () => {
+  const childItems = [
+    { id: "child-1", title: "First child task", state: "active" as const, priority: 2, updated_at: "2024-01-15T10:00:00Z" },
+    { id: "child-2", title: "Second child task", state: "backlog" as const, priority: 3, updated_at: "2024-01-14T10:00:00Z" },
+    { id: "child-3", title: "Third child task", state: "done" as const, priority: 1, updated_at: "2024-01-13T10:00:00Z" },
+  ];
+
+  function makeGoalTask(overrides: Partial<TaskSummary> = {}): TaskSummary {
+    return makeTask({
+      type: "goal",
+      children_progress: {
+        done: 1,
+        total: 3,
+        waiting: 0,
+        items: childItems,
+      },
+      ...overrides,
+    });
+  }
+
+  it("shows the expand chevron with child count for a goal with children", () => {
+    const task = makeGoalTask();
+    renderCard({ task, onClick: () => {} });
+    expect(screen.getByRole("button", { name: /expand children/i })).toBeInTheDocument();
+    expect(screen.getByText(/3 children/)).toBeInTheDocument();
+  });
+
+  it("does not show children rows when collapsed (default)", () => {
+    const task = makeGoalTask();
+    renderCard({ task, onClick: () => {}, expanded: false });
+    expect(screen.queryByText("First child task")).not.toBeInTheDocument();
+    expect(screen.queryByText("Second child task")).not.toBeInTheDocument();
+  });
+
+  it("shows children rows when expanded prop is true", () => {
+    const task = makeGoalTask();
+    renderCard({ task, onClick: () => {}, expanded: true });
+    expect(screen.getByText("First child task")).toBeInTheDocument();
+    expect(screen.getByText("Second child task")).toBeInTheDocument();
+    expect(screen.getByText("Third child task")).toBeInTheDocument();
+  });
+
+  it("calls onToggleExpand when chevron is clicked (not onClick)", async () => {
+    const onClick = vi.fn();
+    const onToggleExpand = vi.fn();
+    const task = makeGoalTask();
+    renderCard({ task, onClick, onToggleExpand, expanded: false });
+
+    const user = userEvent.setup();
+    const chevron = screen.getByRole("button", { name: /expand children/i });
+    await user.click(chevron);
+
+    expect(onToggleExpand).toHaveBeenCalledTimes(1);
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it("calls onOpenTask with child id when a child row is clicked", async () => {
+    const onOpenTask = vi.fn();
+    const task = makeGoalTask();
+    renderCard({ task, onClick: () => {}, onOpenTask, expanded: true });
+
+    const user = userEvent.setup();
+    await user.click(screen.getByText("Second child task"));
+
+    expect(onOpenTask).toHaveBeenCalledWith("child-2");
+  });
+
+  it("shows state dot for each child row when expanded", () => {
+    const task = makeGoalTask();
+    renderCard({ task, onClick: () => {}, expanded: true });
+    // Each child row has a state dot with aria-label
+    const dots = screen.getAllByLabelText(/^(active|backlog|done|waiting|archived)$/);
+    // There is also the goal card's own state dot, so >= 3
+    expect(dots.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("does not show expand chevron for non-goal tasks", () => {
+    const task = makeTask({ type: "task" });
+    renderCard({ task, onClick: () => {} });
+    expect(screen.queryByRole("button", { name: /expand children/i })).not.toBeInTheDocument();
+  });
+
+  it("does not show expand chevron for a goal with zero children", () => {
+    const task = makeGoalTask({
+      children_progress: { done: 0, total: 0, waiting: 0, items: [] },
+    });
+    renderCard({ task, onClick: () => {} });
+    expect(screen.queryByRole("button", { name: /expand children/i })).not.toBeInTheDocument();
+  });
+});

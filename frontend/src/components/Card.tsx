@@ -124,9 +124,13 @@ interface Props {
   onOpenTask?: (id: string) => void;
   blocksCount?: number;
   running?: boolean;
+  /** Whether this goal card's child list is expanded. */
+  expanded?: boolean;
+  /** Called when the user clicks the expand chevron on a goal card. */
+  onToggleExpand?: () => void;
 }
 
-export function Card({ task, onClick, compact = false, density = "default", isDragOverlay = false, dragDisabled = false, onOpenTask, blocksCount = 0, running = false }: Props) {
+export function Card({ task, onClick, compact = false, density = "default", isDragOverlay = false, dragDisabled = false, onOpenTask, blocksCount = 0, running = false, expanded = false, onToggleExpand }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id, disabled: isDragOverlay || dragDisabled });
 
@@ -147,6 +151,14 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
   const isGoal = taskType === "goal";
   const typeBadgeStyle = TYPE_BADGE_STYLES[taskType];
   const blockedBy = task.unmet_dependencies ?? [];
+  const childrenProgress = task.children_progress;
+  const hasChildren = isGoal && (childrenProgress?.total ?? 0) > 0;
+
+  const cardBorderStyle = {
+    borderLeftColor: borderColor,
+    borderLeftWidth: 3,
+    ...(isGoal ? { borderTopWidth: 2 } : {}),
+  };
 
   if (density === "tight") {
     return (
@@ -162,11 +174,7 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
         <button
           type="button"
           onClick={onClick}
-          style={{
-            borderLeftColor: borderColor,
-            borderLeftWidth: 3,
-            ...(isGoal ? { borderTopWidth: 2 } : {}),
-          }}
+          style={cardBorderStyle}
           className={cn(
             "relative flex min-h-[44px] w-full flex-col justify-center rounded-md border border-hairline bg-surface-2 py-2 pl-2.5 pr-3 text-left shadow-inset-hairline transition hover:-translate-y-px hover:border-hairline-strong hover:bg-surface-3 hover:shadow-lift focus:outline-none focus-visible:ring-1 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface-1",
             isGoal && "border-t-ink",
@@ -191,9 +199,9 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
             <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-ink-faint">
               {formatCompactAge(task.updated_at)}
             </span>
-            {isGoal && task.children_progress && task.children_progress.total > 0 && (
+            {isGoal && childrenProgress && childrenProgress.total > 0 && (
               <span className="font-mono text-[9px] text-ink-faint">
-                {task.children_progress.done}/{task.children_progress.total}
+                {childrenProgress.done}/{childrenProgress.total}
               </span>
             )}
             {typeBadgeStyle && (
@@ -244,13 +252,10 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
             onClick();
           }
         }}
-        style={{
-          borderLeftColor: borderColor,
-          borderLeftWidth: 3,
-          ...(isGoal ? { borderTopWidth: 2 } : {}),
-        }}
+        style={cardBorderStyle}
         className={cn(
-          "relative block w-full cursor-pointer rounded-md border border-hairline bg-surface-2 py-3 pl-2.5 pr-3 text-left shadow-inset-hairline transition hover:-translate-y-px hover:border-hairline-strong hover:bg-surface-3 hover:shadow-lift focus:outline-none focus-visible:ring-1 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface-1",
+          "relative block w-full cursor-pointer border border-hairline bg-surface-2 py-3 pl-2.5 pr-3 text-left shadow-inset-hairline transition hover:-translate-y-px hover:border-hairline-strong hover:bg-surface-3 hover:shadow-lift focus:outline-none focus-visible:ring-1 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface-1",
+          expanded && hasChildren ? "rounded-t-md" : "rounded-md",
           isGoal && "border-t-ink",
         )}
       >
@@ -273,7 +278,7 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
           </svg>
         </span>
 
-        <div className="mb-1.5 flex items-center gap-1.5">
+        <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
           <span
             className={cn(
               "inline-flex items-center rounded border px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide",
@@ -340,6 +345,42 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
               <IconFileText />
             </button>
           )}
+          {/* Expand chevron for goals with children */}
+          {hasChildren && (
+            <span
+              role="button"
+              tabIndex={0}
+              aria-expanded={expanded}
+              aria-label={expanded ? "Collapse children" : "Expand children"}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleExpand?.();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.stopPropagation();
+                  onToggleExpand?.();
+                }
+              }}
+              className="ml-auto flex cursor-pointer select-none items-center gap-1 font-mono text-[10px] text-ink-faint hover:text-ink-muted"
+            >
+              <svg
+                width="6"
+                height="8"
+                viewBox="0 0 6 8"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+                className={cn("transition-transform duration-100", expanded && "rotate-90")}
+              >
+                <path d="M1.5 1l3 3-3 3" />
+              </svg>
+              {childrenProgress!.total} children
+            </span>
+          )}
         </div>
 
         {task.parent_id && task.parent_title && (
@@ -363,21 +404,21 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
         )}
 
         <h3 className="text-sm font-semibold leading-snug text-ink">{task.title}</h3>
-        {isGoal && task.children_progress && task.children_progress.total > 0 && (
+        {isGoal && childrenProgress && childrenProgress.total > 0 && (
           <div className="mt-1.5">
             <span className="font-mono text-[10px] text-ink-faint">
-              {task.children_progress.done} / {task.children_progress.total}
+              {childrenProgress.done} / {childrenProgress.total}
             </span>
             <div className="relative mt-1 h-0.5 w-full overflow-hidden rounded-full bg-surface-3">
               <div
                 className="absolute inset-y-0 left-0 bg-accent"
-                style={{ width: `${(task.children_progress.done / task.children_progress.total) * 100}%` }}
+                style={{ width: `${(childrenProgress.done / childrenProgress.total) * 100}%` }}
               />
               <div
                 className="absolute inset-y-0 bg-amber-500"
                 style={{
-                  left: `${(task.children_progress.done / task.children_progress.total) * 100}%`,
-                  width: `${(task.children_progress.waiting / task.children_progress.total) * 100}%`,
+                  left: `${(childrenProgress.done / childrenProgress.total) * 100}%`,
+                  width: `${(childrenProgress.waiting / childrenProgress.total) * 100}%`,
                 }}
               />
             </div>
@@ -417,6 +458,46 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
           {formatRelative(task.updated_at)}
         </p>
       </div>
+
+      {/* Expanded children list — rendered outside the card body div so the inline children look like a panel attached underneath */}
+      {expanded && hasChildren && (childrenProgress?.items?.length ?? 0) > 0 && (
+        <div
+          style={{ borderLeftColor: borderColor, borderLeftWidth: 3 }}
+          className="rounded-b-md border border-t-0 border-hairline bg-surface-2 px-2 pb-2 pt-1"
+        >
+          {childrenProgress!.items!.map((child) => {
+            const childPStyle = PRIORITY_STYLES[child.priority] ?? PRIORITY_STYLES[3];
+            return (
+              <button
+                key={child.id}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenTask?.(child.id);
+                }}
+                className="flex w-full items-center gap-1.5 rounded px-1 py-1 text-left transition hover:bg-surface-3 focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+              >
+                <span
+                  className={cn("h-1.5 w-1.5 shrink-0 rounded-full", STATE_DOT_STYLES[child.state])}
+                  aria-label={child.state}
+                />
+                <span className="flex-1 truncate text-xs text-ink-muted">{child.title}</span>
+                <span className="shrink-0 font-mono text-[9px] text-ink-faint">
+                  {formatCompactAge(child.updated_at)}
+                </span>
+                <span
+                  className={cn(
+                    "inline-flex shrink-0 items-center rounded border px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide",
+                    childPStyle.badge,
+                  )}
+                >
+                  P{child.priority}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

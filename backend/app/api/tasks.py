@@ -13,7 +13,7 @@ log = logging.getLogger(__name__)
 from .. import git_ops
 from ..agent import CRONOS_SUBDIR, space_dir_for
 from ..file_service import FileEntry, list_files, list_git_changed_files, resolve_safe, save_upload
-from ..models import Board, ChildrenProgress, Space, Task, TaskState, TaskSummary, View
+from ..models import Board, ChildItem, ChildrenProgress, Space, Task, TaskState, TaskSummary, View
 from ..space_storage import SpaceStore
 from ..storage import (
     USER_TRANSITIONS,
@@ -192,8 +192,23 @@ def _enrich_progress(board: Board) -> Board:
                 if children:
                     done = sum(1 for c in children if c.state == TaskState.DONE)
                     waiting = sum(1 for c in children if c.state == TaskState.WAITING)
+                    child_items = [
+                        ChildItem(
+                            id=c.id,
+                            title=c.title,
+                            state=c.state,
+                            priority=c.priority,
+                            updated_at=c.updated_at,
+                        )
+                        for c in children[:20]
+                    ]
                     t = t.model_copy(
-                        update={"children_progress": ChildrenProgress(done=done, total=len(children), waiting=waiting)}
+                        update={"children_progress": ChildrenProgress(
+                            done=done,
+                            total=len(children),
+                            waiting=waiting,
+                            items=child_items,
+                        )}
                     )
             result.append(t)
         return result
