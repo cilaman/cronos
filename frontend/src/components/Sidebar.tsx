@@ -69,7 +69,7 @@ export function Sidebar({ onClose }: Props) {
   const spaces = data?.spaces ?? [];
 
   return (
-    <aside className="flex h-full w-56 shrink-0 flex-col border-r border-hairline bg-surface-1">
+    <aside className="flex h-full w-56 shrink-0 flex-col border-r border-hairline bg-surface-1 glass-pane">
       <div className="flex h-14 items-center justify-between gap-2 border-b border-hairline px-4">
         <div className="flex items-center gap-2">
           <span
