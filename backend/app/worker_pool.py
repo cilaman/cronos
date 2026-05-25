@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
+from .autopilot import pickup_next, start_picked
 from .space_storage import SpaceStore
 from .stats_store import StatsStore
 from .storage import TaskStore
@@ -44,12 +45,24 @@ class WorkerPool:
             existing = self._workers.get(space_id)
             if existing is not None:
                 return existing
+
+            space_store = self._space_store
+            task_store = self._task_store
+
+            async def _on_idle(worker: Worker) -> None:
+                space = space_store.get(space_id)
+                task = await pickup_next(space, task_store)
+                if task is not None:
+                    await start_picked(task, task_store, worker)
+
             worker = Worker(
                 self._task_store,
                 space_store=self._space_store,
                 stats_store=self._stats_store,
                 trace_store=self._trace_store,
+                on_idle=_on_idle,
             )
+            worker._space_id = space_id
             worker.start()
             self._workers[space_id] = worker
             log.info("Started worker for space %s", space_id)
