@@ -11,7 +11,7 @@ import yaml
 from pydantic import ValidationError
 
 from . import git_ops
-from .models import Space
+from .models import Space, TaskState, View
 from .storage import _iso, atomic_write, slugify
 
 log = logging.getLogger(__name__)
@@ -91,15 +91,75 @@ def validate_color(color: str) -> None:
         raise SpaceError(f"Invalid color {color!r}: must be #RRGGBB hex")
 
 
+def _normalize_views(space: Space) -> tuple[Space, bool]:
+    """Seed default view if empty; ensure at most one view has default=True.
+
+    Returns (space, was_changed).  The caller is responsible for persisting
+    the result when was_changed is True.
+    """
+    views = list(space.views)
+    changed = False
+
+    if not views:
+        now = datetime.now(tz=UTC)
+        views = [
+            View(
+                id="all",
+                name="All lanes",
+                lanes=[
+                    TaskState.BACKLOG,
+                    TaskState.ACTIVE,
+                    TaskState.WAITING,
+                    TaskState.DONE,
+                ],
+                default=True,
+                created_at=now,
+                updated_at=now,
+            )
+        ]
+        changed = True
+
+    default_indices = [i for i, v in enumerate(views) if v.default]
+    if len(default_indices) > 1:
+        keep = default_indices[-1]
+        views = [
+            v if i == keep else v.model_copy(update={"default": False})
+            for i, v in enumerate(views)
+        ]
+        changed = True
+
+    if not changed:
+        return space, False
+    return space.model_copy(update={"views": views}), True
+
+
 def parse_space_yaml(path: Path) -> Space:
     raw = path.read_text(encoding="utf-8")
     data = yaml.safe_load(raw) or {}
     # Authoritative id comes from the space directory (parent of .cronos/), not the yaml.
     data["id"] = path.parent.parent.name
     try:
-        return Space.model_validate(data)
+        space = Space.model_validate(data)
     except ValidationError as e:
         raise SpaceError(f"Invalid space file {path}: {e}") from e
+    space, was_normalized = _normalize_views(space)
+    if was_normalized:
+        atomic_write(path, dump_space(space))
+    return space
+
+
+def _dump_view(view: View) -> dict:
+    d: dict = {
+        "id": view.id,
+        "name": view.name,
+        "lanes": [s.value for s in view.lanes],
+        "default": view.default,
+        "created_at": _iso(view.created_at),
+        "updated_at": _iso(view.updated_at),
+    }
+    if view.type_filter is not None:
+        d["type_filter"] = list(view.type_filter)
+    return d
 
 
 def dump_space(space: Space) -> str:
@@ -116,6 +176,7 @@ def dump_space(space: Space) -> str:
         "git_share_cronos": space.git_share_cronos,
         "agent_defaults": dict(space.agent_defaults),
         "autopilot": space.autopilot,
+        "views": [_dump_view(v) for v in space.views],
     }
     return yaml.safe_dump(data, sort_keys=False, allow_unicode=True)
 
