@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Tree, buildTree } from "../Tree";
 import type { TaskSummary } from "../../types";
 
@@ -34,10 +35,13 @@ function renderTree(
   options: { initialEntries?: string[]; onOpenTask?: (id: string) => void } = {},
 ) {
   const entries = options.initialEntries ?? ["/"];
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <MemoryRouter initialEntries={entries}>
-      <Tree tasks={tasks} onOpenTask={options.onOpenTask} />
-    </MemoryRouter>,
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={entries}>
+        <Tree tasks={tasks} onOpenTask={options.onOpenTask} />
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 

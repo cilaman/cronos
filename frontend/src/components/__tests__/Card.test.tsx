@@ -1,7 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { DndContext } from "@dnd-kit/core";
+import {
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
 import { SortableContext } from "@dnd-kit/sortable";
 import { Card } from "../Card";
 import type { TaskSummary } from "../../types";
@@ -30,13 +35,24 @@ function makeTask(overrides: Partial<TaskSummary> = {}): TaskSummary {
   };
 }
 
+// Wrapper that mirrors the real Tree's DndContext sensor config — a
+// PointerSensor with distance:8 activation. Without this, the default
+// sensor activates with zero movement and synthesized clicks in jsdom
+// are eaten by the drag listeners on tight-density cards.
+function CardHarness({ children }: { children: React.ReactNode }) {
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+  );
+  return <DndContext sensors={sensors}>{children}</DndContext>;
+}
+
 function renderCard(props: Parameters<typeof Card>[0]) {
   return render(
-    <DndContext>
+    <CardHarness>
       <SortableContext items={[props.task.id]}>
         <Card {...props} />
       </SortableContext>
-    </DndContext>,
+    </CardHarness>,
   );
 }
 
@@ -586,13 +602,13 @@ describe("Card — tight density stack layout", () => {
 
     render(
       <div style={{ height: 640, display: "flex", flexDirection: "column" }}>
-        <DndContext>
+        <CardHarness>
           <SortableContext items={tasks.map((t) => t.id)}>
             {tasks.map((t) => (
               <Card key={t.id} task={t} onClick={() => {}} density="tight" />
             ))}
           </SortableContext>
-        </DndContext>
+        </CardHarness>
       </div>,
     );
 
