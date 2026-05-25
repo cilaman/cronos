@@ -34,6 +34,7 @@ import {
 import { ChatInput } from "./ChatInput";
 import { ConversationStream } from "./ConversationStream";
 import { FilesPanel } from "./FilesPanel";
+import { GoalDependencyGraph } from "./GoalDependencyGraph";
 import { TaskActionBar } from "./TaskActionBar";
 import { TaskForm } from "./TaskForm";
 import { TracePanel } from "./TracePanel";
@@ -667,6 +668,11 @@ export function HierarchySection({ task }: { task: Task }) {
     [allTasks, task.id],
   );
 
+  const runningIds = useMemo(
+    () => new Set(children.filter((c) => c.state === "active").map((c) => c.id)),
+    [children],
+  );
+
   function openTask(id: string) {
     setSearchParams(
       (prev) => {
@@ -766,26 +772,13 @@ export function HierarchySection({ task }: { task: Task }) {
             <p className="font-display text-[10px] uppercase tracking-[0.18em] text-ink-faint">
               Children
             </p>
-            <div className="mt-1 space-y-1">
-              {children.map((child) => (
-                <button
-                  key={child.id}
-                  type="button"
-                  onClick={() => openTask(child.id)}
-                  className="flex w-full items-center gap-2 rounded border border-hairline px-2.5 py-1.5 text-left transition hover:border-hairline-strong hover:bg-surface-2"
-                >
-                  <span
-                    className={`rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] ${
-                      STATE_BADGE[child.state] ?? STATE_BADGE.backlog
-                    }`}
-                  >
-                    {child.state}
-                  </span>
-                  <span className="truncate text-xs text-ink">
-                    {child.title}
-                  </span>
-                </button>
-              ))}
+            <div className="mt-2">
+              <GoalDependencyGraph
+                goal={task}
+                children={children}
+                onOpenTask={openTask}
+                runningIds={runningIds}
+              />
             </div>
           </div>
         )}
