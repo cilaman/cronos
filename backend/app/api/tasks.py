@@ -13,7 +13,7 @@ log = logging.getLogger(__name__)
 from .. import git_ops
 from ..agent import CRONOS_SUBDIR, space_dir_for
 from ..file_service import FileEntry, list_files, list_git_changed_files, resolve_safe, save_upload
-from ..models import Board, Space, Task, TaskState, TaskSummary
+from ..models import Board, Space, Task, TaskState, TaskSummary, View
 from ..space_storage import SpaceStore
 from ..storage import (
     USER_TRANSITIONS,
@@ -133,6 +133,24 @@ def _enrich_summary(summary: TaskSummary, space: Space | None) -> TaskSummary:
     )
 
 
+def _apply_view_filter(board: Board, view: View) -> Board:
+    lane_set = {state.value for state in view.lanes}
+
+    def filter_lane(items: list[TaskSummary], lane_name: str) -> list[TaskSummary]:
+        if lane_name not in lane_set:
+            return []
+        if view.type_filter is None:
+            return items
+        return [t for t in items if t.type in view.type_filter]
+
+    return Board(
+        backlog=filter_lane(board.backlog, "backlog"),
+        active=filter_lane(board.active, "active"),
+        waiting=filter_lane(board.waiting, "waiting"),
+        done=filter_lane(board.done, "done"),
+    )
+
+
 def _enrich_board(board: Board, space_store: SpaceStore) -> Board:
     space_by_id = {s.id: s for s in space_store.list_all()}
 
@@ -162,13 +180,32 @@ def _build_task_read(task: Task, space: Space | None, store: TaskStore | None = 
 async def list_tasks(
     request: Request,
     space_id: str | None = Query(default=None, description="Space id, or 'all' for cross-space."),
+    view: str | None = Query(default=None, description="View id or 'default'. Requires space_id."),
 ) -> Board:
     store = get_store(request)
     space_store = get_space_store(request)
     scope = None if space_id in (None, "all", "") else space_id
     if scope is not None and not space_store.exists(scope):
         raise HTTPException(status_code=404, detail=f"Space {scope} not found")
-    return _enrich_board(store.board(scope), space_store)
+    board = _enrich_board(store.board(scope), space_store)
+    if view is not None:
+        if scope is None:
+            raise HTTPException(
+                status_code=400,
+                detail="?view requires a specific space_id",
+            )
+        space = space_store.get(scope)
+        assert space is not None  # already checked above
+        if view == "default":
+            resolved = next((v for v in space.views if v.default), None)
+            if resolved is None:
+                raise HTTPException(status_code=404, detail="No default view found")
+        else:
+            resolved = next((v for v in space.views if v.id == view), None)
+            if resolved is None:
+                raise HTTPException(status_code=404, detail=f"View {view!r} not found")
+        board = _apply_view_filter(board, resolved)
+    return board
 
 
 @router.get("/archived", response_model=list[TaskSummary])

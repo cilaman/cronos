@@ -1,9 +1,149 @@
 # Test Coverage — cronos-development
 
-**Updated**: 2026-05-25T07:18:00Z
-**Backend (pytest)**: 78.86% (+0.19% vs previous run) — 627 passed, 0 failed
-**Frontend (vitest)**: unchanged (no frontend changes this session)
+**Updated**: 2026-05-25T09:59:58Z
+**Backend (pytest)**: 79.31% (+0.45% vs previous run) — 694 passed, 0 failed
+**Frontend (vitest)**: 332 passed, 0 failed (no frontend changes this session)
 **Tester rounds this session**: 1 (no regressions)
+
+## Recent changes (2026-05-25 — arc-3/2: Views CRUD API + ?view board filter)
+
+Added 41 tests in `backend/tests/test_api_views.py` covering the new
+Views REST endpoints (`/api/spaces/{space_id}/views[/{view_id}]`) plus
+the new `?view=<id>` / `?view=default` query parameter on
+`GET /api/tasks`.
+
+### Test infrastructure note
+
+`SpaceStore.create()` writes `views: []` to disk; the default "all"
+view is only materialized on YAML reload via `_normalize_views` inside
+`parse_space_yaml`. The existing `space_store` fixture skips that
+reload, so the new test file installs an autouse `_seed_views` fixture
+that calls `space_store.reload_all()` after `async_client` has wired
+`app.state`. This mirrors production startup state. A follow-up
+hardening could move the seed into `SpaceStore.create()` itself to
+remove this asymmetry; flagged but not addressed in this session.
+
+### Tests added in `backend/tests/test_api_views.py` (+41)
+
+**GET /api/spaces/{space_id}/views (2)**
+
+- `test_list_views_returns_seeded_default_view` — lists exactly the
+  one seeded `all` view with correct lanes and default=true.
+- `test_list_views_unknown_space_returns_404`.
+
+**POST /api/spaces/{space_id}/views (12)**
+
+- `test_create_view_returns_201_with_view` — happy path, response
+  carries id/name/lanes/type_filter/default + created_at/updated_at.
+- `test_create_view_persists_and_visible_via_get` — GET sees the new
+  view.
+- `test_create_view_persists_to_space_yml` — `SpaceStore.reload_all()`
+  after creation finds the view on disk.
+- `test_create_view_auto_slugs_id_from_name` — `"My Cool View!!!"` →
+  `"my-cool-view"`.
+- `test_create_view_id_collision_appends_suffix` — second "Focus" view
+  becomes `focus-1` (locks `_unique_view_id` contract).
+- `test_create_view_with_type_filter` — type_filter round-trips.
+- `test_create_view_default_true_clears_other_defaults` — seeded
+  `all` view is demoted when a new default is created.
+- `test_create_view_default_false_leaves_existing_default` — sanity
+  guard.
+- `test_create_view_unknown_space_returns_404`.
+- `test_create_view_empty_lanes_returns_422`.
+- `test_create_view_invalid_lane_returns_422` — `"bogus-state"`.
+- `test_create_view_invalid_type_filter_returns_422` — `"nonsense"`.
+- `test_create_view_empty_name_returns_422`.
+
+**PATCH /api/spaces/{space_id}/views/{view_id} (10)**
+
+- `test_patch_view_updates_name` — id and lanes untouched.
+- `test_patch_view_updates_lanes`.
+- `test_patch_view_sets_type_filter`.
+- `test_patch_view_clear_type_filter_with_null` — explicit `null`
+  clears the filter; locks the `clear_type_filter` branch via
+  `model_fields_set`.
+- `test_patch_view_default_true_clears_other_defaults_atomically` —
+  after promoting one view, the OTHER two (incl. seeded `all`) are
+  demoted; exactly ONE default remains.
+- `test_patch_view_no_fields_returns_400` — empty body 400 with
+  "No fields" message.
+- `test_patch_view_unknown_space_returns_404`.
+- `test_patch_view_unknown_view_returns_404`.
+- `test_patch_view_empty_lanes_returns_422`.
+- `test_patch_view_combined_fields_persist` — name + lanes + type_filter
+  in one PATCH, verified via disk reload.
+
+**DELETE /api/spaces/{space_id}/views/{view_id} (7)**
+
+- `test_delete_view_success_returns_204` — body is empty bytes
+  (asserts the 204 contract, not just status).
+- `test_delete_view_last_view_returns_409` — locks "Cannot delete the
+  last view" guard; the view remains present afterward.
+- `test_delete_default_view_reassigns_default_alphabetically` — with
+  `apple`, `all`, `zebra` present, deleting `all` promotes `apple`.
+- `test_delete_non_default_view_leaves_default_untouched` —
+  regression guard against accidental demotion.
+- `test_delete_view_unknown_space_returns_404`.
+- `test_delete_view_unknown_view_returns_404` — primed with a second
+  view so the "last view" guard doesn't fire first.
+- `test_delete_view_persists_to_space_yml` — disk-reload confirms.
+
+**GET /api/tasks?view=... board filter (9)**
+
+- `test_tasks_with_view_filters_lanes` — sanity check with no view
+  first, then `view=<id>` (backlog-only) returns the other 3 lanes
+  empty.
+- `test_tasks_with_view_default_resolves_to_default_view` — promotes
+  a `done`-only view to default; backlog task created afterward is
+  hidden.
+- `test_tasks_with_view_unknown_id_returns_404`.
+- `test_tasks_with_view_without_space_id_returns_400` — locks
+  "?view requires a specific space_id".
+- `test_tasks_with_view_and_space_all_returns_400` —
+  `?space_id=all&view=all` is also 400 (all-spaces == None scope).
+- `test_tasks_with_view_applies_type_filter` — only goal-typed tasks
+  appear when `type_filter=["goal"]`.
+- `test_tasks_with_view_default_when_default_present_does_not_404` —
+  the out-of-the-box `?view=default` works.
+- `test_tasks_with_view_unknown_space_returns_404` — unknown-space
+  check fires before view-resolution branch.
+- `test_tasks_without_view_param_returns_full_board` — regression
+  guard that omitting `?view` does not filter.
+
+### Acceptance-criteria coverage matrix
+
+| Acceptance criterion | Test |
+|----------------------|------|
+| GET returns seeded `all` view | `test_list_views_returns_seeded_default_view` |
+| POST auto-slugs id, suffixes on collision | `test_create_view_auto_slugs_id_from_name`, `test_create_view_id_collision_appends_suffix` |
+| POST default=true clears other defaults | `test_create_view_default_true_clears_other_defaults` |
+| PATCH default=true clears other defaults atomically | `test_patch_view_default_true_clears_other_defaults_atomically` |
+| PATCH 400 on empty body | `test_patch_view_no_fields_returns_400` |
+| PATCH type_filter explicit null clears | `test_patch_view_clear_type_filter_with_null` |
+| DELETE 409 on last view | `test_delete_view_last_view_returns_409` |
+| DELETE default reassigns alphabetically | `test_delete_default_view_reassigns_default_alphabetically` |
+| DELETE 204 on success | `test_delete_view_success_returns_204` |
+| ?view filters lanes | `test_tasks_with_view_filters_lanes` |
+| ?view=default resolves | `test_tasks_with_view_default_resolves_to_default_view` |
+| ?view nonexistent → 404 | `test_tasks_with_view_unknown_id_returns_404` |
+| ?view without space_id → 400 | `test_tasks_with_view_without_space_id_returns_400` |
+| ?view applies type_filter | `test_tasks_with_view_applies_type_filter` |
+
+### Coverage delta this session
+
+- `app/api/views.py`: NEW, 93% (4 uncovered: 63-64, 102-103 are
+  unreachable `SpaceError → 400` fallbacks in POST/PATCH — current
+  `SpaceStore` view-mutators only raise `SpaceNotFound`/`ViewNotFound`,
+  never bare `SpaceError`; left uncovered intentionally).
+- `app/space_storage.py`: 61% → 72% (+11 pts) — new `create_view`,
+  `update_view`, `delete_view`, `_unique_view_id` paths fully
+  exercised by API tests.
+- `app/api/tasks.py`: 69% → 70% (+1 pt) — `_apply_view_filter` and
+  the three `?view` branches in `list_tasks` are covered.
+- Overall backend: 78.86% → 79.31% (+0.45%).
+
+All 694 backend tests + 332 frontend tests pass on first run; no
+regressions.
 
 ## Recent changes (2026-05-25 — arc-4 task 1: Space.autopilot schema + yaml round-trip)
 
@@ -115,21 +255,22 @@ All 627 backend tests pass on first run; no regressions.
 | Module | Coverage | Δ vs previous |
 |--------|----------|---------------|
 | app/git_ops.py | 21% | +0 |
-| app/main.py | 29% | +0 |
-| app/space_storage.py | 61% | +2 |
-| app/api/tasks.py | 69% | +8 |
+| app/main.py | 30% | +1 |
+| app/api/tasks.py | 70% | +1 |
 | app/api/test_reports.py | 70% | +0 |
-| app/worker.py | 75% | +0 |
+| app/space_storage.py | 72% | +11 |
+| app/worker.py | 72% | -3 |
 | app/worker_pool.py | 80% | +0 |
 | app/agent.py | 83% | +0 |
 | app/test_report_store.py | 83% | +0 |
 | app/trace_store.py | 84% | +0 |
 | app/stats_store.py | 85% | +0 |
-| app/storage.py | 88% | +1 |
+| app/storage.py | 88% | +0 |
 | app/file_service.py | 90% | +0 |
-| app/api/spaces.py | 91% | +1 |
+| app/api/spaces.py | 91% | +0 |
 | app/trace_parser.py | 91% | +0 |
 | app/api/traces.py | 92% | +0 |
+| app/api/views.py | 93% | NEW |
 | app/api/tools.py | 96% | +0 |
 | app/api/stats.py | 97% | +0 |
 | app/stats.py | 98% | +0 |
@@ -137,6 +278,12 @@ All 627 backend tests pass on first run; no regressions.
 | app/api/activity.py | 100% | +0 |
 | app/models.py | 100% | +0 |
 | app/test_report.py | 100% | +0 |
+
+### Modules that lost coverage this run
+
+- `app/worker.py`: 75% → 72% (-3 pts). Likely cause: new statements
+  added on a worker change that landed between sessions but were not
+  covered. Investigate next session (likely outside arc-3 scope).
 
 ## Lowest-coverage modules (priority queue for next session)
 

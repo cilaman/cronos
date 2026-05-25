@@ -1,15 +1,27 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { BoardToolbar } from "../components/BoardToolbar";
+import type { View } from "../types";
 
 // Mock the API module so useSpaces() resolves without real network calls.
+// `spaceViews` is consumed by useViews() inside <ViewPicker>; it must
+// resolve to an array (the picker assumes a list).
 vi.mock("../api", () => ({
   api: {
     spaces: vi.fn(async () => ({
-      spaces: [],
+      spaces: [
+        {
+          id: "space-1",
+          name: "Space One",
+          color: "#15803D",
+          icon: null,
+          task_counts: { backlog: 0, active: 0, waiting: 0, done: 0, archived: 0 },
+          last_activity_at: null,
+        },
+      ],
       totals: {
         backlog: 0,
         active: 0,
@@ -18,6 +30,7 @@ vi.mock("../api", () => ({
         archived: 0,
       },
     })),
+    spaceViews: vi.fn(async (): Promise<View[]> => []),
   },
 }));
 
@@ -134,5 +147,96 @@ describe("BoardToolbar — compact toggle", () => {
     expect(
       screen.getByRole("button", { name: /New task/i }),
     ).toBeInTheDocument();
+  });
+});
+
+describe("BoardToolbar — ViewPicker slot", () => {
+  // ViewPicker renders a button labelled "Views" while its useViews() query
+  // is still loading. Once views resolve, the label switches to the active
+  // view name. We assert against both states.
+  const propsWithSpace = {
+    ...defaultProps,
+    spaceId: "space-1",
+    compact: false,
+    onCompactToggle: () => {},
+  };
+
+  it("renders ViewPicker when spaceId and onViewChange are both provided", async () => {
+    renderToolbar({
+      ...propsWithSpace,
+      onViewChange: vi.fn(),
+    });
+
+    // Loading state: the picker shows the "Views" placeholder.
+    expect(
+      await screen.findByRole("button", { name: /Views/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("does NOT render ViewPicker when onViewChange is omitted (unscoped board)", async () => {
+    renderToolbar({
+      ...propsWithSpace,
+      // no onViewChange — typical of /board (all spaces) where the URL
+      // doesn't carry a view filter.
+    });
+
+    // Allow other effects to flush so we don't false-pass on a not-yet-mounted node.
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /New task/i })).toBeInTheDocument();
+    });
+    expect(screen.queryByRole("button", { name: /^Views$/i })).not.toBeInTheDocument();
+  });
+
+  it("does NOT render ViewPicker when spaceId is null even if onViewChange is provided", async () => {
+    renderToolbar({
+      ...defaultProps,
+      spaceId: null,
+      compact: false,
+      onCompactToggle: () => {},
+      onViewChange: vi.fn(),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /New task/i })).toBeInTheDocument();
+    });
+    expect(screen.queryByRole("button", { name: /^Views$/i })).not.toBeInTheDocument();
+  });
+
+  it("invokes onViewChange when a view is selected from the picker", async () => {
+    // Override the mock for this test so views resolve with sample data.
+    const { api } = await import("../api");
+    const sample: View[] = [
+      {
+        id: "all",
+        name: "All lanes",
+        lanes: ["backlog", "active", "waiting", "done"],
+        type_filter: null,
+        default: true,
+        created_at: "2026-05-25T00:00:00Z",
+        updated_at: "2026-05-25T00:00:00Z",
+      },
+      {
+        id: "focus",
+        name: "Focus",
+        lanes: ["active", "waiting"],
+        type_filter: null,
+        default: false,
+        created_at: "2026-05-25T00:00:00Z",
+        updated_at: "2026-05-25T00:00:00Z",
+      },
+    ];
+    (api.spaceViews as ReturnType<typeof vi.fn>).mockResolvedValueOnce(sample);
+
+    const onViewChange = vi.fn();
+    renderToolbar({ ...propsWithSpace, onViewChange });
+
+    // Wait for views to resolve — trigger label switches to "All lanes".
+    const trigger = await screen.findByRole("button", { name: /All lanes/i });
+    const user = userEvent.setup();
+    await user.click(trigger);
+    await user.click(screen.getByText("Focus"));
+
+    expect(onViewChange).toHaveBeenCalledTimes(1);
+    expect(onViewChange).toHaveBeenCalledWith("focus");
   });
 });

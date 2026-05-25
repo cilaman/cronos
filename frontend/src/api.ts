@@ -15,6 +15,7 @@ import type {
   TaskSummary,
   TestReport,
   TestReportSummary,
+  View,
 } from "./types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -41,6 +42,12 @@ function withSpaceQuery(path: string, spaceId: string | null): string {
   return `${path}${sep}space_id=${encodeURIComponent(spaceId)}`;
 }
 
+function withViewQuery(path: string, viewId: string | null): string {
+  if (!viewId) return path;
+  const sep = path.includes("?") ? "&" : "?";
+  return `${path}${sep}view=${encodeURIComponent(viewId)}`;
+}
+
 export function taskFileUrl(taskId: string, filePath: string, download = false): string {
   const encoded = filePath.split("/").map(encodeURIComponent).join("/");
   return `/api/tasks/${taskId}/files/${encoded}${download ? "?download=true" : ""}`;
@@ -50,8 +57,11 @@ export function taskFileUrl(taskId: string, filePath: string, download = false):
 // export function spaceFileUrl(spaceId: string, filePath: string, download = false): string { ... }
 
 export const api = {
-  board: (spaceId: string | null = null) =>
-    request<Board>(withSpaceQuery("/api/tasks", spaceId)),
+  board: (spaceId: string | null = null, viewId: string | null = null) =>
+    request<Board>(
+      // Only send ?view= when scoped to a specific space
+      spaceId ? withViewQuery(withSpaceQuery("/api/tasks", spaceId), viewId) : "/api/tasks",
+    ),
   archived: (spaceId: string | null = null) =>
     request<TaskSummary[]>(withSpaceQuery("/api/tasks/archived", spaceId)),
   task: (id: string) => request<Task>(`/api/tasks/${id}`),
@@ -157,6 +167,24 @@ export const api = {
       : "/api/spaces/import";
     return request<Space>(url, { method: "POST", body: fd });
   },
+
+  // --- views ---
+  spaceViews: (spaceId: string) => request<View[]>(`/api/spaces/${spaceId}/views`),
+  createView: (
+    spaceId: string,
+    body: { name: string; lanes: string[]; type_filter?: string[] | null; default?: boolean },
+  ) => request<View>(`/api/spaces/${spaceId}/views`, { method: "POST", body: JSON.stringify(body) }),
+  updateView: (
+    spaceId: string,
+    viewId: string,
+    body: { name?: string; lanes?: string[]; type_filter?: string[] | null; default?: boolean },
+  ) =>
+    request<View>(`/api/spaces/${spaceId}/views/${viewId}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  deleteView: (spaceId: string, viewId: string) =>
+    request<void>(`/api/spaces/${spaceId}/views/${viewId}`, { method: "DELETE" }),
 
   // --- task files ---
   taskFiles: (taskId: string) =>

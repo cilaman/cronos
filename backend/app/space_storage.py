@@ -11,7 +11,7 @@ import yaml
 from pydantic import ValidationError
 
 from . import git_ops
-from .models import Space
+from .models import Space, TaskState, TaskType, View
 from .storage import _iso, atomic_write, slugify
 
 log = logging.getLogger(__name__)
@@ -40,6 +40,10 @@ class SpaceExists(SpaceError):
     pass
 
 
+class ViewNotFound(SpaceError):
+    pass
+
+
 class SpaceRepoConflict(SpaceError):
     """Raised when a repo URL is already linked to another space.
 
@@ -54,6 +58,19 @@ class SpaceRepoConflict(SpaceError):
         )
         self.repo_url = repo_url
         self.existing_space_id = existing_space_id
+
+
+def _unique_view_id(base_slug: str, taken: set[str]) -> str:
+    """Generate a unique view id from a slug, suffixing on collision. Max 32 chars."""
+    base = base_slug[:32].rstrip("-") or "view"
+    if base not in taken:
+        return base
+    for i in range(1, 100):
+        suffix = f"-{i}"
+        candidate = base[:32 - len(suffix)].rstrip("-") + suffix
+        if candidate not in taken:
+            return candidate
+    raise SpaceError("Could not generate a unique view id")
 
 
 def _normalize_repo_url(url: str) -> str:
@@ -91,15 +108,75 @@ def validate_color(color: str) -> None:
         raise SpaceError(f"Invalid color {color!r}: must be #RRGGBB hex")
 
 
+def _normalize_views(space: Space) -> tuple[Space, bool]:
+    """Seed default view if empty; ensure at most one view has default=True.
+
+    Returns (space, was_changed).  The caller is responsible for persisting
+    the result when was_changed is True.
+    """
+    views = list(space.views)
+    changed = False
+
+    if not views:
+        now = datetime.now(tz=UTC)
+        views = [
+            View(
+                id="all",
+                name="All lanes",
+                lanes=[
+                    TaskState.BACKLOG,
+                    TaskState.ACTIVE,
+                    TaskState.WAITING,
+                    TaskState.DONE,
+                ],
+                default=True,
+                created_at=now,
+                updated_at=now,
+            )
+        ]
+        changed = True
+
+    default_indices = [i for i, v in enumerate(views) if v.default]
+    if len(default_indices) > 1:
+        keep = default_indices[-1]
+        views = [
+            v if i == keep else v.model_copy(update={"default": False})
+            for i, v in enumerate(views)
+        ]
+        changed = True
+
+    if not changed:
+        return space, False
+    return space.model_copy(update={"views": views}), True
+
+
 def parse_space_yaml(path: Path) -> Space:
     raw = path.read_text(encoding="utf-8")
     data = yaml.safe_load(raw) or {}
     # Authoritative id comes from the space directory (parent of .cronos/), not the yaml.
     data["id"] = path.parent.parent.name
     try:
-        return Space.model_validate(data)
+        space = Space.model_validate(data)
     except ValidationError as e:
         raise SpaceError(f"Invalid space file {path}: {e}") from e
+    space, was_normalized = _normalize_views(space)
+    if was_normalized:
+        atomic_write(path, dump_space(space))
+    return space
+
+
+def _dump_view(view: View) -> dict:
+    d: dict = {
+        "id": view.id,
+        "name": view.name,
+        "lanes": [s.value for s in view.lanes],
+        "default": view.default,
+        "created_at": _iso(view.created_at),
+        "updated_at": _iso(view.updated_at),
+    }
+    if view.type_filter is not None:
+        d["type_filter"] = list(view.type_filter)
+    return d
 
 
 def dump_space(space: Space) -> str:
@@ -116,6 +193,7 @@ def dump_space(space: Space) -> str:
         "git_share_cronos": space.git_share_cronos,
         "agent_defaults": dict(space.agent_defaults),
         "autopilot": space.autopilot,
+        "views": [_dump_view(v) for v in space.views],
     }
     return yaml.safe_dump(data, sort_keys=False, allow_unicode=True)
 
@@ -312,6 +390,7 @@ class SpaceStore:
                 git_branch=branch if repo_url else None,
                 git_share_cronos=bool(share_cronos and repo_url),
             )
+            space, _ = _normalize_views(space)
             atomic_write(cronos_dir / "space.yml", dump_space(space))
             self._by_id[sid] = space
             self._index_repo_locked(space)
@@ -462,6 +541,118 @@ class SpaceStore:
             self._unindex_repo_locked(space)
             self._by_id.pop(space_id, None)
             log.info("Trashed space %s -> %s", space_id, dest.name)
+
+    # ---- view mutations ----
+
+    async def create_view(
+        self,
+        space_id: str,
+        *,
+        name: str,
+        lanes: list[TaskState],
+        type_filter: list[TaskType] | None = None,
+        default: bool = False,
+    ) -> View:
+        async with self._lock:
+            space = self._by_id.get(space_id)
+            if space is None:
+                raise SpaceNotFound(space_id)
+            taken = {v.id for v in space.views}
+            view_id = _unique_view_id(slugify(name), taken)
+            now = datetime.now(tz=UTC)
+            new_view = View(
+                id=view_id,
+                name=name,
+                lanes=lanes,
+                type_filter=type_filter,
+                default=default,
+                created_at=now,
+                updated_at=now,
+            )
+            views = list(space.views)
+            if default:
+                views = [v.model_copy(update={"default": False}) for v in views]
+            views.append(new_view)
+            updated = space.model_copy(update={"views": views, "updated_at": now})
+            atomic_write(
+                self.spaces_dir / space_id / CRONOS_SUBDIR / "space.yml",
+                dump_space(updated),
+            )
+            self._by_id[space_id] = updated
+            return new_view
+
+    async def update_view(
+        self,
+        space_id: str,
+        view_id: str,
+        *,
+        name: str | None = None,
+        lanes: list[TaskState] | None = None,
+        type_filter: list[TaskType] | None = None,
+        clear_type_filter: bool = False,
+        default: bool | None = None,
+    ) -> View:
+        async with self._lock:
+            space = self._by_id.get(space_id)
+            if space is None:
+                raise SpaceNotFound(space_id)
+            idx = next((i for i, v in enumerate(space.views) if v.id == view_id), None)
+            if idx is None:
+                raise ViewNotFound(view_id)
+            old_view = space.views[idx]
+            now = datetime.now(tz=UTC)
+            updates: dict = {"updated_at": now}
+            if name is not None:
+                updates["name"] = name
+            if lanes is not None:
+                updates["lanes"] = lanes
+            if clear_type_filter:
+                updates["type_filter"] = None
+            elif type_filter is not None:
+                updates["type_filter"] = type_filter
+            if default is not None:
+                updates["default"] = default
+            new_view = old_view.model_copy(update=updates)
+            views = list(space.views)
+            if default:
+                views = [
+                    v.model_copy(update={"default": False}) if i != idx else v
+                    for i, v in enumerate(views)
+                ]
+            views[idx] = new_view
+            updated = space.model_copy(update={"views": views, "updated_at": now})
+            atomic_write(
+                self.spaces_dir / space_id / CRONOS_SUBDIR / "space.yml",
+                dump_space(updated),
+            )
+            self._by_id[space_id] = updated
+            return new_view
+
+    async def delete_view(self, space_id: str, view_id: str) -> None:
+        async with self._lock:
+            space = self._by_id.get(space_id)
+            if space is None:
+                raise SpaceNotFound(space_id)
+            if len(space.views) <= 1:
+                raise SpaceError("Cannot delete the last view")
+            idx = next((i for i, v in enumerate(space.views) if v.id == view_id), None)
+            if idx is None:
+                raise ViewNotFound(view_id)
+            was_default = space.views[idx].default
+            views = [v for i, v in enumerate(space.views) if i != idx]
+            if was_default:
+                first = min(views, key=lambda v: v.id)
+                views = [
+                    v.model_copy(update={"default": True}) if v.id == first.id else v
+                    for v in views
+                ]
+            now = datetime.now(tz=UTC)
+            updated = space.model_copy(update={"views": views, "updated_at": now})
+            atomic_write(
+                self.spaces_dir / space_id / CRONOS_SUBDIR / "space.yml",
+                dump_space(updated),
+            )
+            self._by_id[space_id] = updated
 
     # ---- helpers ----
 
