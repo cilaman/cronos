@@ -261,3 +261,211 @@ async def test_parse_dump_round_trip(tmp_spaces_dir):
     assert parsed.name == original.name
     assert parsed.color == original.color
     assert parsed.description == original.description
+
+
+# ---------------------------------------------------------------------------
+# autopilot — arc-4 task 1
+# ---------------------------------------------------------------------------
+
+
+async def test_dump_space_emits_autopilot_key(space_store):
+    """`dump_space` must always include the `autopilot:` key in the YAML."""
+    space = space_store.get(SPACE_ID)
+
+    yaml_text = dump_space(space)
+
+    # The key must appear on its own line, not just substring-match.
+    assert "\nautopilot: disabled\n" in yaml_text or yaml_text.startswith(
+        "autopilot: disabled\n"
+    ) or "\nautopilot: disabled" in yaml_text
+
+
+async def test_dump_space_emits_current_autopilot_value(space_store):
+    """`dump_space` must emit whatever value the Space carries (enabled/paused)."""
+    space = space_store.get(SPACE_ID)
+    enabled = space.model_copy(update={"autopilot": "enabled"})
+    paused = space.model_copy(update={"autopilot": "paused"})
+
+    assert "autopilot: enabled" in dump_space(enabled)
+    assert "autopilot: paused" in dump_space(paused)
+    assert "autopilot: disabled" not in dump_space(enabled)
+
+
+async def test_parse_space_yaml_missing_autopilot_defaults_disabled(
+    tmp_spaces_dir,
+):
+    """A legacy `space.yml` lacking `autopilot:` must load with `'disabled'`.
+
+    Critical for back-compat: every existing space.yml on disk pre-dates this
+    field, and a hard validation failure would brick every space on upgrade.
+    """
+    legacy_yaml = (
+        "id: legacy-space\n"
+        "name: Legacy\n"
+        "color: '#15803D'\n"
+        "icon: null\n"
+        "description: ''\n"
+        "created_at: '2024-01-01T00:00:00+00:00'\n"
+        "updated_at: '2024-01-01T00:00:00+00:00'\n"
+        "git_repo_url: null\n"
+        "git_branch: null\n"
+        "git_share_cronos: false\n"
+        "agent_defaults: {}\n"
+        # NO autopilot key.
+    )
+    space_dir = tmp_spaces_dir / "legacy-space" / ".cronos"
+    space_dir.mkdir(parents=True, exist_ok=True)
+    yml = space_dir / "space.yml"
+    yml.write_text(legacy_yaml, encoding="utf-8")
+
+    space = parse_space_yaml(yml)
+
+    assert space.autopilot == "disabled"
+
+
+async def test_parse_space_yaml_reads_explicit_autopilot(tmp_spaces_dir):
+    """A `space.yml` with an explicit `autopilot:` value must round-trip it."""
+    yml_text = (
+        "id: ap-space\n"
+        "name: AP\n"
+        "color: '#15803D'\n"
+        "icon: null\n"
+        "description: ''\n"
+        "created_at: '2024-01-01T00:00:00+00:00'\n"
+        "updated_at: '2024-01-01T00:00:00+00:00'\n"
+        "git_repo_url: null\n"
+        "git_branch: null\n"
+        "git_share_cronos: false\n"
+        "agent_defaults: {}\n"
+        "autopilot: enabled\n"
+    )
+    space_dir = tmp_spaces_dir / "ap-space" / ".cronos"
+    space_dir.mkdir(parents=True, exist_ok=True)
+    yml = space_dir / "space.yml"
+    yml.write_text(yml_text, encoding="utf-8")
+
+    space = parse_space_yaml(yml)
+
+    assert space.autopilot == "enabled"
+
+
+async def test_parse_space_yaml_invalid_autopilot_raises(tmp_spaces_dir):
+    """An invalid `autopilot:` literal in space.yml must raise SpaceError.
+
+    The Literal[...] type on `Space.autopilot` rejects unknown strings at
+    parse time, which is the contract that protects us from typos becoming
+    silent autopilot-off-forever bugs.
+    """
+    bad_yaml = (
+        "id: bad-space\n"
+        "name: Bad\n"
+        "color: '#15803D'\n"
+        "icon: null\n"
+        "description: ''\n"
+        "created_at: '2024-01-01T00:00:00+00:00'\n"
+        "updated_at: '2024-01-01T00:00:00+00:00'\n"
+        "git_repo_url: null\n"
+        "git_branch: null\n"
+        "git_share_cronos: false\n"
+        "agent_defaults: {}\n"
+        "autopilot: bogus-mode\n"
+    )
+    space_dir = tmp_spaces_dir / "bad-space" / ".cronos"
+    space_dir.mkdir(parents=True, exist_ok=True)
+    yml = space_dir / "space.yml"
+    yml.write_text(bad_yaml, encoding="utf-8")
+
+    with pytest.raises(SpaceError):
+        parse_space_yaml(yml)
+
+
+async def test_new_space_defaults_to_disabled_autopilot(tmp_spaces_dir):
+    """A freshly-created Space starts with autopilot='disabled'."""
+    store = SpaceStore(tmp_spaces_dir)
+
+    space = await store.create(
+        name="Fresh", color="#15803D", space_id="fresh"
+    )
+
+    assert space.autopilot == "disabled"
+    # And the on-disk yml emits the key.
+    yml_text = (
+        tmp_spaces_dir / "fresh" / ".cronos" / "space.yml"
+    ).read_text(encoding="utf-8")
+    assert "autopilot: disabled" in yml_text
+
+
+@pytest.mark.parametrize("mode", ["disabled", "enabled", "paused"])
+async def test_set_autopilot_persists_value(space_store, tmp_spaces_dir, mode):
+    """`set_autopilot` updates the in-memory Space and persists to disk."""
+    updated = await space_store.set_autopilot(SPACE_ID, mode)
+
+    assert updated.autopilot == mode
+    assert space_store.get(SPACE_ID).autopilot == mode
+
+    # Reload from a fresh store to prove the value was actually written.
+    store2 = SpaceStore(tmp_spaces_dir)
+    await store2.reload_all()
+    assert store2.get(SPACE_ID).autopilot == mode
+
+
+async def test_set_autopilot_paused_reloads_byte_equal(
+    space_store, tmp_spaces_dir
+):
+    """A space saved with autopilot='paused' reloads with the same value.
+
+    This is the acceptance-criteria byte-equal round-trip: write, reload from
+    disk via a fresh SpaceStore, and confirm the field survives unchanged.
+    """
+    await space_store.set_autopilot(SPACE_ID, "paused")
+    yml_path = tmp_spaces_dir / SPACE_ID / ".cronos" / "space.yml"
+    on_disk_text_before = yml_path.read_text(encoding="utf-8")
+
+    # Fresh store, fresh parse.
+    store2 = SpaceStore(tmp_spaces_dir)
+    await store2.reload_all()
+    reloaded = store2.get(SPACE_ID)
+    assert reloaded is not None
+    assert reloaded.autopilot == "paused"
+
+    # Re-dump from the reloaded model and verify the autopilot line survives.
+    # Full YAML byte-equality is too strict (datetime micro-formatting can
+    # differ); we lock the autopilot key specifically.
+    redumped = dump_space(reloaded)
+    assert "autopilot: paused" in redumped
+    assert "autopilot: paused" in on_disk_text_before
+
+
+async def test_set_autopilot_missing_space_raises(tmp_spaces_dir):
+    """`set_autopilot` on an unknown id must raise SpaceNotFound."""
+    store = SpaceStore(tmp_spaces_dir)
+
+    with pytest.raises(SpaceNotFound):
+        await store.set_autopilot("no-such-space", "enabled")
+
+
+async def test_set_autopilot_updates_updated_at(space_store):
+    """`set_autopilot` must bump `updated_at` so watchers/UIs see the change."""
+    before = space_store.get(SPACE_ID).updated_at
+
+    after = await space_store.set_autopilot(SPACE_ID, "enabled")
+
+    assert after.updated_at >= before
+    # Same Space identity, only the timestamp + autopilot changed.
+    assert after.id == SPACE_ID
+    assert after.autopilot == "enabled"
+
+
+async def test_set_autopilot_preserves_other_fields(space_store):
+    """`set_autopilot` must not clobber name/color/description/etc."""
+    before = space_store.get(SPACE_ID)
+    name_before = before.name
+    color_before = before.color
+    desc_before = before.description
+
+    after = await space_store.set_autopilot(SPACE_ID, "enabled")
+
+    assert after.name == name_before
+    assert after.color == color_before
+    assert after.description == desc_before
+    assert after.autopilot == "enabled"

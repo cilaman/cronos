@@ -100,6 +100,7 @@ class Space(BaseModel):
     # state are versioned together so teammates can share tasks via git.
     git_share_cronos: bool = False
     agent_defaults: dict[str, str] = Field(default_factory=dict)
+    autopilot: Literal["disabled", "enabled", "paused"] = "disabled"
 
 
 class SpaceSummary(BaseModel):

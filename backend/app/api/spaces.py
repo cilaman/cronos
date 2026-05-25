@@ -8,6 +8,7 @@ import shutil
 import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response, UploadFile, status
 from fastapi.responses import StreamingResponse
@@ -72,6 +73,7 @@ class UpdateSpaceBody(BaseModel):
     icon: str | None = Field(default=None, max_length=8)
     clear_icon: bool = False
     description: str | None = Field(default=None, max_length=2000)
+    autopilot: Literal["disabled", "enabled", "paused"] | None = None
 
 
 class LinkRepoBody(BaseModel):
@@ -188,17 +190,34 @@ async def update_space(space_id: str, body: UpdateSpaceBody, request: Request) -
         and body.icon is None
         and not body.clear_icon
         and body.description is None
+        and body.autopilot is None
     ):
         raise HTTPException(status_code=400, detail="No fields to update")
+    store = get_space_store(request)
+    has_base_update = (
+        body.name is not None
+        or body.color is not None
+        or body.icon is not None
+        or body.clear_icon
+        or body.description is not None
+    )
     try:
-        return await get_space_store(request).update(
-            space_id,
-            name=body.name,
-            color=body.color,
-            icon=body.icon,
-            description=body.description,
-            clear_icon=body.clear_icon,
-        )
+        if has_base_update:
+            space = await store.update(
+                space_id,
+                name=body.name,
+                color=body.color,
+                icon=body.icon,
+                description=body.description,
+                clear_icon=body.clear_icon,
+            )
+        else:
+            space = store.get(space_id)
+            if space is None:
+                raise SpaceNotFound(space_id)
+        if body.autopilot is not None:
+            space = await store.set_autopilot(space_id, body.autopilot)
+        return space
     except SpaceNotFound:
         raise HTTPException(status_code=404, detail=f"Space {space_id} not found") from None
     except SpaceError as e:
