@@ -55,6 +55,12 @@ class Task(BaseModel):
     proposed_pr_path: str | None = None
 
 
+class ChildrenProgress(BaseModel):
+    done: int
+    total: int
+    waiting: int
+
+
 class TaskSummary(BaseModel):
     """Lightweight task representation for board listings."""
 
@@ -78,6 +84,7 @@ class TaskSummary(BaseModel):
     unmet_dependencies: list[str] = []
     pr_url: str | None = None
     proposed_pr_path: str | None = None
+    children_progress: ChildrenProgress | None = None
     # Denormalized space fields so cards can render without a separate join.
     space_name: str | None = None
     space_color: str | None = None

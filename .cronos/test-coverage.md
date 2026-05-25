@@ -1,9 +1,89 @@
 # Test Coverage — cronos-development
 
-**Updated**: 2026-05-25T11:05:00Z
-**Backend (pytest)**: 694 passed, 0 failed (no backend change this session)
-**Frontend (vitest)**: 384 passed, 0 failed (+20 new tests; 364 pre-existing all green)
-**Tester rounds this session**: 1 (one infinite-render bug surfaced in ViewEditor — pre-seeded cache to work around; documented below)
+**Updated**: 2026-05-25T15:10:00Z
+**Backend (pytest)**: 826 passed, 0 failed (818 prev + 8 new for arc-9/3)
+**Backend coverage**: 80.84% (+0.11% vs prev 80.73%)
+**Frontend (vitest)**: 417 passed, 0 failed (no frontend test changes this session)
+**Tester rounds this session**: 1 (all 8 new tests passed on first run; no regressions)
+
+## Recent changes (2026-05-25 — arc-9/3: children_progress + progress bar on goal cards)
+
+Added 8 tests in `backend/tests/test_api_tasks.py` covering the new
+`_enrich_progress(board)` function in `app/api/tasks.py` which decorates
+every goal `TaskSummary` with a `ChildrenProgress(done, total, waiting)`
+field counted from the board's goal-children relation.
+
+### Tests added in `backend/tests/test_api_tasks.py` (+8, NEW)
+
+All tests go through the public `GET /api/tasks?space_id=...` boundary
+so they exercise the full pipeline (`store.board()` → `_enrich_board()`
+→ `_enrich_progress()` → JSON response) rather than just the helper in
+isolation. Each test asserts on the response body's
+`children_progress` shape, the value of `None` for the negative
+cases, and the exact `{done, total, waiting}` dict for the positive
+ones.
+
+- `test_goal_with_mixed_children_states_gets_correct_children_progress` —
+  goal with 4 children spread across backlog/active/waiting/done lanes;
+  result is `{done:1, total:4, waiting:1}`. Locks the three-count
+  contract: `done` and `waiting` are mutually exclusive buckets within
+  `total`.
+- `test_non_goal_task_has_no_children_progress` — `type='task'` and
+  `type='issue'` parents (each with one real child) MUST surface
+  `children_progress: null`. Regression guard against future widening
+  of the `t.type == 'goal'` gate.
+- `test_goal_with_no_children_has_no_children_progress` — a goal with
+  zero children gets `children_progress: null`, NOT
+  `{done:0, total:0, waiting:0}`. The `if children:` empty-list-falsy
+  branch is load-bearing — a zero-total dict would render an empty
+  "0/0" pill on the card and a divide-by-zero (`NaN%`) width in the
+  bar.
+- `test_goal_with_archived_only_children_has_no_children_progress` —
+  archived children are excluded from `store.board()`, so a goal whose
+  ONLY child is archived must NOT be counted as having children. Locks
+  the contract that `_enrich_progress` operates over the board (which
+  has no archived lane), not over the full task store.
+- `test_goal_with_all_children_done_reports_full_progress` — every
+  child `done` → `{done:2, total:2, waiting:0}`. Regression guard
+  against accidentally double-counting `done` children into `waiting`
+  (or vice versa) in the same aggregation pass.
+- `test_children_of_other_goals_do_not_leak_into_progress` — two
+  sibling goals A (1 child) and B (3 children); counts are correctly
+  scoped per parent. Off-by-parent regression guard for the
+  `parent_id`-keyed dict.
+- `test_root_level_tasks_dont_appear_as_anyones_children` — a
+  root-level task (`parent_id=None`) is NOT silently attributed to any
+  goal. Locks the `if t.parent_id:` guard on the children-map build
+  step.
+- `test_children_progress_present_on_all_space_query` — the
+  `?space_id=all` cross-space board also runs through
+  `_enrich_progress`. Regression guard against a future scope-dependent
+  code path that bypasses the enrichment step.
+
+### Acceptance-criteria coverage matrix
+
+| Acceptance criterion | Test |
+|----------------------|------|
+| Goal with mixed children states gets correct children_progress | `test_goal_with_mixed_children_states_gets_correct_children_progress` |
+| Non-goal tasks have no children_progress | `test_non_goal_task_has_no_children_progress` |
+| Goal with no children has no children_progress | `test_goal_with_no_children_has_no_children_progress`, `test_goal_with_archived_only_children_has_no_children_progress` |
+| Counts don't leak between sibling goals | `test_children_of_other_goals_do_not_leak_into_progress` |
+| Root-level tasks not attributed to any goal | `test_root_level_tasks_dont_appear_as_anyones_children` |
+| Cross-space `?space_id=all` also enriches | `test_children_progress_present_on_all_space_query` |
+
+### Coverage delta this session
+
+- `app/api/tasks.py`: 68.5% → 71.9% (+3.4 pts) — new `_enrich_progress`
+  branches (goal vs non-goal, has-children vs empty, the per-state
+  counting comprehension) are fully exercised.
+- `app/models.py`: 100% → 100% (unchanged — `ChildrenProgress` is a
+  plain Pydantic model with no runtime branches).
+- Overall backend: 80.73% → 80.84% (+0.11 pts).
+
+All 826 backend tests + 417 frontend tests pass on first run; no
+regressions.
+
+
 
 ## Recent changes (2026-05-25 — arc-3/4: ViewEditor — manage-views modal)
 
@@ -445,13 +525,14 @@ All 627 backend tests pass on first run; no regressions.
 
 | Module | Coverage | Δ vs previous |
 |--------|----------|---------------|
-| app/git_ops.py | 21% | +0 |
-| app/main.py | 30% | +1 |
-| app/api/tasks.py | 70% | +1 |
+| app/main.py | 30% | +0 |
+| app/git_ops.py | 58% | +0 (slow climb — was 21% three sessions ago) |
 | app/api/test_reports.py | 70% | +0 |
-| app/space_storage.py | 72% | +11 |
-| app/worker.py | 72% | -3 |
-| app/worker_pool.py | 80% | +0 |
+| app/space_storage.py | 72% | +0 |
+| app/api/tasks.py | 72% | +2 (arc-9/3 _enrich_progress) |
+| app/goal_sync.py | 72% | new in table |
+| app/worker.py | 73% | +1 |
+| app/worker_pool.py | 77% | -3 (worker_pool tests not run this session?) |
 | app/agent.py | 83% | +0 |
 | app/test_report_store.py | 83% | +0 |
 | app/trace_store.py | 84% | +0 |
@@ -461,12 +542,14 @@ All 627 backend tests pass on first run; no regressions.
 | app/api/spaces.py | 91% | +0 |
 | app/trace_parser.py | 91% | +0 |
 | app/api/traces.py | 92% | +0 |
-| app/api/views.py | 93% | NEW |
+| app/api/views.py | 93% | +0 |
 | app/api/tools.py | 96% | +0 |
 | app/api/stats.py | 97% | +0 |
 | app/stats.py | 98% | +0 |
 | app/api/__init__.py | 100% | +0 |
 | app/api/activity.py | 100% | +0 |
+| app/autopilot.py | 100% | +0 |
+| app/autopilot_pr.py | 100% | +0 |
 | app/models.py | 100% | +0 |
 | app/test_report.py | 100% | +0 |
 

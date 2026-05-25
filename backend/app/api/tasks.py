@@ -13,7 +13,7 @@ log = logging.getLogger(__name__)
 from .. import git_ops
 from ..agent import CRONOS_SUBDIR, space_dir_for
 from ..file_service import FileEntry, list_files, list_git_changed_files, resolve_safe, save_upload
-from ..models import Board, Space, Task, TaskState, TaskSummary, View
+from ..models import Board, ChildrenProgress, Space, Task, TaskState, TaskSummary, View
 from ..space_storage import SpaceStore
 from ..storage import (
     USER_TRANSITIONS,
@@ -167,6 +167,35 @@ def _enrich_board(board: Board, space_store: SpaceStore) -> Board:
     )
 
 
+def _enrich_progress(board: Board) -> Board:
+    all_tasks = [*board.backlog, *board.active, *board.waiting, *board.done]
+    children_by_parent: dict[str, list[TaskSummary]] = {}
+    for t in all_tasks:
+        if t.parent_id:
+            children_by_parent.setdefault(t.parent_id, []).append(t)
+
+    def fill(items: list[TaskSummary]) -> list[TaskSummary]:
+        result = []
+        for t in items:
+            if t.type == "goal":
+                children = children_by_parent.get(t.id, [])
+                if children:
+                    done = sum(1 for c in children if c.state == TaskState.DONE)
+                    waiting = sum(1 for c in children if c.state == TaskState.WAITING)
+                    t = t.model_copy(
+                        update={"children_progress": ChildrenProgress(done=done, total=len(children), waiting=waiting)}
+                    )
+            result.append(t)
+        return result
+
+    return Board(
+        backlog=fill(board.backlog),
+        active=fill(board.active),
+        waiting=fill(board.waiting),
+        done=fill(board.done),
+    )
+
+
 def _build_task_read(task: Task, space: Space | None, store: TaskStore | None = None) -> TaskRead:
     unmet: list[str] = unmet_deps(task, store._by_id) if store is not None else []
     return TaskRead(
@@ -189,7 +218,7 @@ async def list_tasks(
     scope = None if space_id in (None, "all", "") else space_id
     if scope is not None and not space_store.exists(scope):
         raise HTTPException(status_code=404, detail=f"Space {scope} not found")
-    board = _enrich_board(store.board(scope), space_store)
+    board = _enrich_progress(_enrich_board(store.board(scope), space_store))
     if view is not None:
         if scope is None:
             raise HTTPException(

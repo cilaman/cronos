@@ -748,6 +748,21 @@ export function HierarchySection({ task }: { task: Task }) {
         {task.type === "goal" && children.length > 0 && (
           <div>
             <p className="font-display text-[10px] uppercase tracking-[0.18em] text-ink-faint">
+              Progress
+            </p>
+            <p className="mt-1 font-mono text-sm text-ink">
+              {children.filter((c) => c.state === "done").length} / {children.length}
+              {children.filter((c) => c.state === "waiting").length > 0 && (
+                <span className="ml-2 text-ink-muted">
+                  — {children.filter((c) => c.state === "waiting").length} waiting
+                </span>
+              )}
+            </p>
+          </div>
+        )}
+        {task.type === "goal" && children.length > 0 && (
+          <div>
+            <p className="font-display text-[10px] uppercase tracking-[0.18em] text-ink-faint">
               Children
             </p>
             <div className="mt-1 space-y-1">
