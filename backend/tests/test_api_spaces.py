@@ -179,6 +179,174 @@ async def test_update_space_invalid_color_returns_400(async_client):
 
 
 # ---------------------------------------------------------------------------
+# PATCH /api/spaces/{space_id} — autopilot (arc-4 task 1)
+# ---------------------------------------------------------------------------
+
+
+async def test_get_space_response_includes_autopilot(async_client):
+    """GET /api/spaces/{id} response must include the autopilot field.
+
+    Default for a freshly-seeded space is 'disabled'.
+    """
+    resp = await async_client.get(f"/api/spaces/{SPACE_ID}")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["autopilot"] == "disabled"
+
+
+async def test_create_space_response_includes_autopilot(async_client):
+    """POST /api/spaces response must include the autopilot field."""
+    resp = await async_client.post(
+        "/api/spaces",
+        json={"name": "AutoNew", "color": "#15803D", "space_id": "auto-new"},
+    )
+
+    assert resp.status_code == 201
+    assert resp.json()["autopilot"] == "disabled"
+
+
+async def test_update_space_autopilot_enabled_round_trips(async_client):
+    """PATCH {autopilot: 'enabled'} returns the updated space with that value."""
+    resp = await async_client.patch(
+        f"/api/spaces/{SPACE_ID}", json={"autopilot": "enabled"}
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["autopilot"] == "enabled"
+    assert data["id"] == SPACE_ID
+
+    # Confirm via a fresh GET that the change persisted in the store.
+    follow = await async_client.get(f"/api/spaces/{SPACE_ID}")
+    assert follow.json()["autopilot"] == "enabled"
+
+
+async def test_update_space_autopilot_paused_round_trips(async_client):
+    """PATCH {autopilot: 'paused'} round-trips through the API + GET."""
+    resp = await async_client.patch(
+        f"/api/spaces/{SPACE_ID}", json={"autopilot": "paused"}
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["autopilot"] == "paused"
+
+    follow = await async_client.get(f"/api/spaces/{SPACE_ID}")
+    assert follow.json()["autopilot"] == "paused"
+
+
+async def test_update_space_autopilot_back_to_disabled(async_client):
+    """Toggle enabled -> disabled via two PATCHes."""
+    enable = await async_client.patch(
+        f"/api/spaces/{SPACE_ID}", json={"autopilot": "enabled"}
+    )
+    assert enable.json()["autopilot"] == "enabled"
+
+    disable = await async_client.patch(
+        f"/api/spaces/{SPACE_ID}", json={"autopilot": "disabled"}
+    )
+    assert disable.status_code == 200
+    assert disable.json()["autopilot"] == "disabled"
+
+
+async def test_update_space_autopilot_invalid_value_returns_422(async_client):
+    """An unknown autopilot literal must be rejected by Pydantic with 422.
+
+    Locks the Literal['disabled','enabled','paused'] contract — a typo at the
+    API boundary must not silently fall back to the default.
+    """
+    resp = await async_client.patch(
+        f"/api/spaces/{SPACE_ID}", json={"autopilot": "bogus"}
+    )
+
+    assert resp.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "bad_value",
+    [
+        "ENABLED",  # case-sensitive
+        "on",
+        "",
+        "  enabled  ",  # surrounding whitespace
+        "active",
+    ],
+    ids=["uppercase", "alias-on", "empty-string", "whitespace-padded", "wrong-word"],
+)
+async def test_update_space_autopilot_bad_values_return_422(async_client, bad_value):
+    """A handful of plausible-looking-but-wrong values must all hit 422."""
+    resp = await async_client.patch(
+        f"/api/spaces/{SPACE_ID}", json={"autopilot": bad_value}
+    )
+
+    assert resp.status_code == 422
+
+
+async def test_update_space_autopilot_only_no_other_fields_succeeds(async_client):
+    """PATCH with ONLY autopilot must NOT trigger the 'no fields to update' guard.
+
+    Regression guard for the api/spaces.py update_space() change: the empty-body
+    check now includes `and body.autopilot is None`. If a future refactor drops
+    that branch, this PATCH would erroneously 400.
+    """
+    resp = await async_client.patch(
+        f"/api/spaces/{SPACE_ID}", json={"autopilot": "enabled"}
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["autopilot"] == "enabled"
+
+
+async def test_update_space_autopilot_combined_with_name(async_client):
+    """PATCH with both autopilot and name must apply BOTH changes.
+
+    The handler takes two paths (base update + set_autopilot); this test locks
+    both branches firing in sequence on a single request.
+    """
+    resp = await async_client.patch(
+        f"/api/spaces/{SPACE_ID}",
+        json={"name": "Renamed With Autopilot", "autopilot": "enabled"},
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["name"] == "Renamed With Autopilot"
+    assert data["autopilot"] == "enabled"
+
+
+async def test_update_space_autopilot_missing_space_returns_404(async_client):
+    """PATCH autopilot on an unknown space id must return 404, not 500."""
+    resp = await async_client.patch(
+        "/api/spaces/no-such-space", json={"autopilot": "enabled"}
+    )
+
+    assert resp.status_code == 404
+
+
+async def test_update_space_autopilot_null_treated_as_omitted(async_client):
+    """PATCH with autopilot=null must NOT change autopilot (it's the 'omit' signal).
+
+    Locks the `body.autopilot is not None` guard in update_space(). A null body
+    field is how clients say 'I'm patching other things, leave autopilot alone'.
+    """
+    # First set it to enabled.
+    await async_client.patch(
+        f"/api/spaces/{SPACE_ID}", json={"autopilot": "enabled"}
+    )
+
+    # Then send a name-only patch with autopilot explicitly null.
+    resp = await async_client.patch(
+        f"/api/spaces/{SPACE_ID}",
+        json={"name": "Just A Rename", "autopilot": None},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["name"] == "Just A Rename"
+    # autopilot must STILL be enabled.
+    assert resp.json()["autopilot"] == "enabled"
+
+
+# ---------------------------------------------------------------------------
 # DELETE /api/spaces/{space_id}
 # ---------------------------------------------------------------------------
 

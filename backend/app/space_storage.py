@@ -115,6 +115,7 @@ def dump_space(space: Space) -> str:
         "git_branch": space.git_branch,
         "git_share_cronos": space.git_share_cronos,
         "agent_defaults": dict(space.agent_defaults),
+        "autopilot": space.autopilot,
     }
     return yaml.safe_dump(data, sort_keys=False, allow_unicode=True)
 
@@ -341,6 +342,28 @@ class SpaceStore:
                     "description": (
                         description.strip() if description is not None else space.description
                     ),
+                    "updated_at": datetime.now(tz=UTC),
+                }
+            )
+            atomic_write(
+                self.spaces_dir / space_id / CRONOS_SUBDIR / "space.yml",
+                dump_space(updated),
+            )
+            self._by_id[space_id] = updated
+            return updated
+
+    async def set_autopilot(
+        self,
+        space_id: str,
+        mode: str,
+    ) -> Space:
+        async with self._lock:
+            space = self._by_id.get(space_id)
+            if space is None:
+                raise SpaceNotFound(space_id)
+            updated = space.model_copy(
+                update={
+                    "autopilot": mode,
                     "updated_at": datetime.now(tz=UTC),
                 }
             )

@@ -1,9 +1,114 @@
 # Test Coverage — cronos-development
 
-**Updated**: 2026-05-24T20:25:00Z
-**Backend (pytest)**: 78.67% (+0.85% vs previous run) — 599 passed, 0 failed
-**Frontend (vitest)**: 183 passed, 0 failed (13 files, +4 files this session)
+**Updated**: 2026-05-25T07:18:00Z
+**Backend (pytest)**: 78.86% (+0.19% vs previous run) — 627 passed, 0 failed
+**Frontend (vitest)**: unchanged (no frontend changes this session)
 **Tester rounds this session**: 1 (no regressions)
+
+## Recent changes (2026-05-25 — arc-4 task 1: Space.autopilot schema + yaml round-trip)
+
+Added 28 tests covering the new `autopilot: Literal["disabled","enabled","paused"]`
+field on `Space`, the new `SpaceStore.set_autopilot()` mutator, and the
+`autopilot` branch of `PATCH /api/spaces/{id}`.
+
+### Tests added in `backend/tests/test_space_storage.py` (+13)
+
+**`dump_space` / `parse_space_yaml` (5 tests)**
+
+- `test_dump_space_emits_autopilot_key` — the YAML serialization always
+  carries the `autopilot:` key (default-disabled case).
+- `test_dump_space_emits_current_autopilot_value` — emits `enabled` and
+  `paused` literally when set on the model.
+- `test_parse_space_yaml_missing_autopilot_defaults_disabled` — back-compat
+  guard: a legacy `space.yml` without an `autopilot:` key loads with
+  `'disabled'` instead of raising. Critical for upgrade safety — every
+  existing space on disk pre-dates this field.
+- `test_parse_space_yaml_reads_explicit_autopilot` — `autopilot: enabled`
+  in the YAML round-trips into the Space model.
+- `test_parse_space_yaml_invalid_autopilot_raises` — an unknown literal
+  (`autopilot: bogus-mode`) raises `SpaceError` at parse time. Locks the
+  Literal[...] contract so typos can't silently become autopilot-off.
+
+**`SpaceStore.set_autopilot()` (8 tests)**
+
+- `test_new_space_defaults_to_disabled_autopilot` — a freshly created space
+  has `autopilot='disabled'` and the on-disk yml emits the key.
+- `test_set_autopilot_persists_value[disabled|enabled|paused]` — three
+  parametrized tests: mutation updates in-memory state AND persists to disk
+  (verified via a fresh `SpaceStore.reload_all()` round-trip).
+- `test_set_autopilot_paused_reloads_byte_equal` — the acceptance-criteria
+  round-trip: save with `paused`, reload via a fresh store, confirm the
+  field survives and the on-disk YAML contains the literal line.
+- `test_set_autopilot_missing_space_raises` — unknown space id raises
+  `SpaceNotFound`.
+- `test_set_autopilot_updates_updated_at` — mutator bumps `updated_at` so
+  watchers/UIs see the change.
+- `test_set_autopilot_preserves_other_fields` — name/color/description are
+  untouched by the autopilot mutation (regression guard against future
+  refactors that might rebuild the model from a subset of fields).
+
+### Tests added in `backend/tests/test_api_spaces.py` (+15)
+
+**API surface — DTO carries the field (2 tests)**
+
+- `test_get_space_response_includes_autopilot` — `GET /api/spaces/{id}`
+  returns the field with the default `'disabled'`.
+- `test_create_space_response_includes_autopilot` — `POST /api/spaces`
+  response carries the field on a freshly created space.
+
+**`PATCH /api/spaces/{id}` — autopilot round-trips (5 tests)**
+
+- `test_update_space_autopilot_enabled_round_trips` — PATCH `enabled`
+  returns 200, response carries the value, and a follow-up GET confirms
+  persistence.
+- `test_update_space_autopilot_paused_round_trips` — same for `paused`.
+- `test_update_space_autopilot_back_to_disabled` — toggle enabled →
+  disabled via two PATCHes.
+- `test_update_space_autopilot_only_no_other_fields_succeeds` — locks the
+  empty-body guard's new `and body.autopilot is None` branch: PATCH with
+  ONLY `autopilot` must not 400 with "No fields to update".
+- `test_update_space_autopilot_combined_with_name` — PATCH with `name` +
+  `autopilot` together must apply BOTH (exercises both branches of the
+  handler: base `store.update()` followed by `store.set_autopilot()`).
+
+**`PATCH /api/spaces/{id}` — validation + error paths (7 tests)**
+
+- `test_update_space_autopilot_invalid_value_returns_422` — bogus literal
+  is rejected by Pydantic with 422 (not 200, not 400, not 500).
+- `test_update_space_autopilot_bad_values_return_422[uppercase|alias-on|empty-string|whitespace-padded|wrong-word]` —
+  five parametrized cases asserting that case-sensitive Literal matching
+  catches plausibly-looking-but-wrong inputs (`ENABLED`, `on`, `""`,
+  `"  enabled  "`, `active`). This is a security-relevant property: typos
+  must NOT silently fall back to the default.
+- `test_update_space_autopilot_missing_space_returns_404` — autopilot
+  PATCH on an unknown space id returns 404, not 500.
+- `test_update_space_autopilot_null_treated_as_omitted` — `{"name":"X",
+  "autopilot":null}` updates the name but leaves an already-`enabled`
+  autopilot untouched. Locks the `body.autopilot is not None` semantic
+  in `update_space()` — `null` is the "omit" signal, not "reset to
+  disabled".
+
+### Acceptance-criteria coverage matrix
+
+| Acceptance criterion | Test |
+|----------------------|------|
+| Existing `space.yml` without `autopilot:` loads with `"disabled"` | `test_parse_space_yaml_missing_autopilot_defaults_disabled` |
+| After save, `autopilot` key is present in the YAML | `test_dump_space_emits_autopilot_key`, `test_new_space_defaults_to_disabled_autopilot` |
+| `PATCH {"autopilot":"enabled"}` round-trips correctly | `test_update_space_autopilot_enabled_round_trips` |
+| Invalid `autopilot` value → 422 | `test_update_space_autopilot_invalid_value_returns_422` + 5 parametrized cases |
+| `autopilot: paused` reloads byte-equal | `test_set_autopilot_paused_reloads_byte_equal`, `test_set_autopilot_persists_value[paused]`, `test_update_space_autopilot_paused_round_trips` |
+
+### Coverage delta this session
+
+- `app/space_storage.py`: 59% → 61% (+2 pts) — the new `set_autopilot()`
+  branch is fully exercised; remaining gap is in link_repo/unlink_repo
+  paths that require real git fixtures.
+- `app/api/spaces.py`: 90% → 91% (+1 pt) — the new autopilot branches in
+  `update_space()` are covered.
+- `app/models.py`: 100% → 100% — unchanged (the new Literal field has no
+  runtime branches).
+
+All 627 backend tests pass on first run; no regressions.
 
 ## Per-module coverage (backend, sorted ascending)
 
@@ -11,8 +116,8 @@
 |--------|----------|---------------|
 | app/git_ops.py | 21% | +0 |
 | app/main.py | 29% | +0 |
-| app/space_storage.py | 59% | +0 |
-| app/api/tasks.py | 61% | +2 |
+| app/space_storage.py | 61% | +2 |
+| app/api/tasks.py | 69% | +8 |
 | app/api/test_reports.py | 70% | +0 |
 | app/worker.py | 75% | +0 |
 | app/worker_pool.py | 80% | +0 |
@@ -20,9 +125,9 @@
 | app/test_report_store.py | 83% | +0 |
 | app/trace_store.py | 84% | +0 |
 | app/stats_store.py | 85% | +0 |
-| app/storage.py | 87% | +0 |
+| app/storage.py | 88% | +1 |
 | app/file_service.py | 90% | +0 |
-| app/api/spaces.py | 90% | +0 |
+| app/api/spaces.py | 91% | +1 |
 | app/trace_parser.py | 91% | +0 |
 | app/api/traces.py | 92% | +0 |
 | app/api/tools.py | 96% | +0 |
