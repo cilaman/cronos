@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections import defaultdict
+from collections import defaultdict, deque
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
@@ -11,7 +11,7 @@ from .models import TaskState
 from .space_storage import SpaceStore
 from .stats import RunStats, _tier_from_real_model, compute_cost, extract_tokens_and_tools
 from .stats_store import StatsStore
-from .storage import TaskStore
+from .storage import InvalidTransition, TaskStore, USER_TRANSITIONS
 from .trace_parser import extract_run_trace
 from .trace_store import TraceStore
 
@@ -23,6 +23,47 @@ _DONE_SENTINEL: dict = {"type": "stream_end"}
 # Per-task replay buffer cap. Covers a typical Claude turn; older events
 # are dropped FIFO when exceeded.
 _RUN_BUFFER_CAP = 2000
+
+
+def _topo_children(goal_id: str, store: TaskStore) -> list[str]:
+    """Return direct child IDs of goal_id in dependency order (sibling deps only).
+
+    Only depends_on links between siblings are considered for ordering; deps on
+    external tasks are enforced by store.transition() when the child is activated.
+    Falls back to manual_order sort if a cycle is detected among siblings.
+    """
+    children = {t.id: t for t in store.all() if t.parent_id == goal_id}
+    if not children:
+        return []
+
+    dependents: dict[str, list[str]] = {cid: [] for cid in children}
+    in_degree: dict[str, int] = {cid: 0 for cid in children}
+    for cid, child in children.items():
+        for dep_id in child.depends_on:
+            if dep_id in children:
+                dependents[dep_id].append(cid)
+                in_degree[cid] += 1
+
+    queue: deque[str] = deque(
+        sorted(
+            (cid for cid, deg in in_degree.items() if deg == 0),
+            key=lambda cid: (children[cid].manual_order, cid),
+        )
+    )
+    result: list[str] = []
+    while queue:
+        cid = queue.popleft()
+        result.append(cid)
+        for dep_cid in sorted(dependents[cid], key=lambda c: (children[c].manual_order, c)):
+            in_degree[dep_cid] -= 1
+            if in_degree[dep_cid] == 0:
+                queue.append(dep_cid)
+
+    if len(result) != len(children):
+        log.warning("Cycle in goal %s children deps; falling back to manual order", goal_id)
+        return sorted(children.keys(), key=lambda cid: (children[cid].manual_order, cid))
+
+    return result
 
 
 class Worker:
@@ -134,6 +175,16 @@ class Worker:
         log.info("Worker loop stopped")
 
     async def _run_one(self, task_id: str, user_message: str | None) -> None:
+        task = self.store.get(task_id)
+        if task is None:
+            log.warning("Skipping unknown task %s", task_id)
+            return
+        if task.type == "goal":
+            await self._run_goal(task_id, user_message)
+        else:
+            await self._run_task(task_id, user_message)
+
+    async def _run_task(self, task_id: str, user_message: str | None) -> None:
         task = self.store.get(task_id)
         if task is None:
             log.warning("Skipping unknown task %s", task_id)
@@ -416,6 +467,240 @@ class Worker:
                 log.exception("Failed to resume %s for pending messages", task_id)
                 return
             await self.enqueue(task_id, user_message=combined)
+
+    async def _finalize_child(
+        self,
+        child_id: str,
+        result: AgentResult | None,
+        run_exception: str | None,
+        *,
+        started_at: datetime,
+    ) -> TaskState:
+        """Finalize a child task run inside goal orchestration. Returns the new state."""
+        ended_at = datetime.now(tz=UTC)
+        timestamp = ended_at.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        if run_exception is not None:
+            new_state = TaskState.WAITING
+            waiting_question: str | None = f"Agent failed: {run_exception}"
+            history_entry = f"```\n{timestamp} [agent]\n(agent error: {run_exception})\n```"
+        elif result is None:
+            new_state = TaskState.WAITING
+            waiting_question = "Agent did not produce a result."
+            history_entry = f"```\n{timestamp} [agent]\n(no result)\n```"
+        else:
+            body = result.final_text.strip() or "(no assistant text)"
+            if result.stopped:
+                body += "\n\n(stopped by user)"
+            elif result.exit_code != 0:
+                body += f"\n\n(exit code {result.exit_code}; stderr: {result.stderr_tail.strip()})"
+            history_entry = f"```\n{timestamp} [agent]\n{body}\n```"
+
+            if result.stopped:
+                new_state = TaskState.WAITING
+                waiting_question = "Stopped by user."
+            elif result.status == Status.DONE:
+                new_state = TaskState.DONE
+                waiting_question = None
+            elif result.exit_code != 0:
+                new_state = TaskState.WAITING
+                waiting_question = f"Agent crashed (exit code {result.exit_code})."
+            elif result.status == Status.WAIT:
+                new_state = TaskState.WAITING
+                waiting_question = result.context or "(agent waiting)"
+            elif result.status == Status.BLOCKED:
+                new_state = TaskState.WAITING
+                waiting_question = f"Blocked: {result.context or '(no reason)'}"
+            else:
+                new_state = TaskState.WAITING
+                waiting_question = "Run ended without STATUS marker."
+
+        session_id = (
+            result.session_id
+            if result and result.exit_code == 0 and not result.stopped
+            else None
+        )
+        try:
+            await self.store.finalize_run(
+                child_id,
+                new_state=new_state,
+                session_id=session_id,
+                waiting_question=waiting_question if new_state == TaskState.WAITING else None,
+                history_entry=history_entry,
+            )
+        except Exception:
+            log.exception("Failed to finalize child %s", child_id)
+        return new_state
+
+    async def _run_goal(self, goal_id: str, user_message: str | None) -> None:
+        """Orchestrate a goal by running its child tasks sequentially in dep order."""
+        goal = self.store.get(goal_id)
+        if goal is None:
+            log.warning("Skipping unknown goal %s", goal_id)
+            return
+
+        self._current_id = goal_id
+        cancel_event = asyncio.Event()
+        self._current_cancel = cancel_event
+        self._run_buffer[goal_id] = []
+        started_at = datetime.now(tz=UTC)
+
+        await self._publish(goal_id, {"type": "run_start", "task_id": goal_id})
+
+        ordered_child_ids = _topo_children(goal_id, self.store)
+        goal_context = f"# Goal: {goal.title}\n\n{goal.brief}"
+
+        completed: list[str] = []
+        skipped: list[str] = []
+        stopped = False
+        failed_child_id: str | None = None
+        fail_reason: str | None = None
+
+        for child_id in ordered_child_ids:
+            child = self.store.get(child_id)
+            if child is None:
+                continue
+
+            if child.state.value in ("done", "archived"):
+                skipped.append(child_id)
+                await self._publish(goal_id, {
+                    "type": "goal_child_skipped",
+                    "child_id": child_id,
+                    "title": child.title,
+                })
+                continue
+
+            if child.state != TaskState.BACKLOG:
+                failed_child_id = child_id
+                fail_reason = (
+                    f"Child '{child.title}' is in {child.state.value} state and needs attention."
+                )
+                break
+
+            try:
+                await self.store.transition(child_id, TaskState.ACTIVE, allowed=USER_TRANSITIONS)
+            except InvalidTransition as e:
+                failed_child_id = child_id
+                fail_reason = str(e)
+                break
+
+            child = self.store.get(child_id)
+            if child is None:
+                continue
+
+            await self._publish(goal_id, {
+                "type": "goal_child_start",
+                "child_id": child_id,
+                "title": child.title,
+            })
+
+            self._run_buffer[child_id] = []
+            await self._publish(child_id, {"type": "run_start", "task_id": child_id})
+
+            # Capture child_id per-iteration to avoid closure/loop-variable capture.
+            async def on_child_event(event: dict, _cid: str = child_id) -> None:
+                await self._publish(_cid, event)
+                await self._publish(goal_id, event)
+
+            space = self.space_store.get(child.space_id) if self.space_store else None
+            child_result: AgentResult | None = None
+            run_exception: str | None = None
+            child_started_at = datetime.now(tz=UTC)
+
+            try:
+                child_result = await run_agent(
+                    child,
+                    user_message=None,
+                    on_event=on_child_event,
+                    cancel_event=cancel_event,
+                    space=space,
+                    goal_context=goal_context,
+                )
+            except Exception as e:
+                run_exception = str(e)
+                log.exception("Agent error on child %s", child_id)
+
+            child_new_state = await self._finalize_child(
+                child_id, child_result, run_exception, started_at=child_started_at
+            )
+
+            await self._publish(child_id, {
+                "type": "run_end",
+                "task_id": child_id,
+                "status": child_result.status.value if child_result and child_result.status else None,
+                "new_state": child_new_state.value,
+            })
+            for q in list(self._subscribers.get(child_id, [])):
+                try:
+                    q.put_nowait(_DONE_SENTINEL)
+                except asyncio.QueueFull:
+                    pass
+
+            await self._publish(goal_id, {
+                "type": "goal_child_end",
+                "child_id": child_id,
+                "title": child.title,
+                "new_state": child_new_state.value,
+            })
+
+            if cancel_event.is_set():
+                stopped = True
+                break
+
+            if child_new_state != TaskState.DONE:
+                failed_child_id = child_id
+                fail_reason = f"Child '{child.title}' ended in {child_new_state.value} state."
+                break
+
+            completed.append(child_id)
+
+        # Finalize the goal
+        if stopped:
+            goal_new_state = TaskState.WAITING
+            goal_waiting_question: str | None = "Stopped by user."
+            summary = f"Stopped. Completed {len(completed)}, skipped {len(skipped)} already-done."
+        elif failed_child_id is not None:
+            goal_new_state = TaskState.WAITING
+            goal_waiting_question = fail_reason
+            summary = (
+                f"Paused: {fail_reason} "
+                f"Completed {len(completed)}, skipped {len(skipped)} already-done."
+            )
+        else:
+            goal_new_state = TaskState.DONE
+            goal_waiting_question = None
+            summary = (
+                f"All tasks complete. "
+                f"Completed {len(completed)}, skipped {len(skipped)} already-done."
+            )
+
+        timestamp = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        history_entry = f"```\n{timestamp} [agent]\n{summary}\n```"
+
+        try:
+            await self.store.finalize_run(
+                goal_id,
+                new_state=goal_new_state,
+                session_id=None,
+                waiting_question=goal_waiting_question,
+                history_entry=history_entry,
+            )
+        except Exception:
+            log.exception("Failed to finalize goal %s", goal_id)
+
+        self._current_cancel = None
+
+        await self._publish(goal_id, {
+            "type": "run_end",
+            "task_id": goal_id,
+            "status": "DONE" if goal_new_state == TaskState.DONE else None,
+            "new_state": goal_new_state.value,
+        })
+        for q in list(self._subscribers.get(goal_id, [])):
+            try:
+                q.put_nowait(_DONE_SENTINEL)
+            except asyncio.QueueFull:
+                pass
 
     async def _publish(self, task_id: str, event: dict) -> None:
         buf = self._run_buffer.setdefault(task_id, [])
