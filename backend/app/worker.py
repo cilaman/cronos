@@ -597,6 +597,15 @@ class Worker:
         ordered_child_ids = _topo_children(goal_id, self.store)
         goal_context = f"# Goal: {goal.title}\n\n{goal.brief}"
 
+        # Drain any messages queued via goal-level reply while goal was idle.
+        try:
+            pending = await self.store.drain_pending(goal_id)
+        except Exception:
+            log.exception("Failed to drain pending messages for goal %s", goal_id)
+            pending = []
+        if pending:
+            goal_context += "\n\n## User notes\n" + "\n".join(f"- {m}" for m in pending)
+
         completed: list[str] = []
         skipped: list[str] = []
         stopped = False

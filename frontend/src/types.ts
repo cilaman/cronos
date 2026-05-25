@@ -97,6 +97,16 @@ export interface Task {
   proposed_pr_path?: string | null;
 }
 
+export interface RoutedTo {
+  id: string;
+  title: string;
+}
+
+export interface ReplyResponse {
+  task: Task;
+  routed_to: RoutedTo | null;
+}
+
 export interface Board {
   backlog: TaskSummary[];
   active: TaskSummary[];

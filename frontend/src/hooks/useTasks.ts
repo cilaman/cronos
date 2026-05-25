@@ -60,11 +60,20 @@ export function useReplyToTask(id: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (message: string) => api.reply(id, message),
-    onSuccess: (updatedTask) => {
-      qc.setQueryData(["task", id], updatedTask);
+    onSuccess: (result) => {
+      qc.setQueryData(["task", id], result.task);
       invalidateBoards(qc);
       qc.invalidateQueries({ queryKey: ["task", id] });
     },
+  });
+}
+
+export function useRoutePreview(id: string | null) {
+  return useQuery({
+    queryKey: ["route-preview", id],
+    queryFn: () => api.routePreview(id!),
+    enabled: id !== null,
+    refetchInterval: 5_000,
   });
 }
 

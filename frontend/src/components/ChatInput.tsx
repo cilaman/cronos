@@ -8,6 +8,8 @@ interface Props {
   isSending: boolean;
   error: string | null;
   onSend: (message: string) => Promise<void>;
+  routeHint?: string;
+  routeToast?: string | null;
 }
 
 function placeholderFor(state: TaskState): string {
@@ -32,6 +34,8 @@ export function ChatInput({
   isSending,
   error,
   onSend,
+  routeHint,
+  routeToast,
 }: Props) {
   const [draft, setDraft] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -101,8 +105,16 @@ export function ChatInput({
               queued {pendingCount}
             </span>
           )}
+          {routeHint && (
+            <span className="rounded bg-surface-2 px-2 py-0.5 text-ink-muted ring-1 ring-hairline">
+              {routeHint}
+            </span>
+          )}
         </div>
 
+        {routeToast && (
+          <p className="text-xs text-accent">{routeToast}</p>
+        )}
         {error && <p className="text-xs text-danger">{error}</p>}
       </div>
     </div>

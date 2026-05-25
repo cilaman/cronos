@@ -110,6 +110,16 @@ class ReplyBody(BaseModel):
     message: str = Field(min_length=1, max_length=20_000)
 
 
+class RoutedTo(BaseModel):
+    id: str
+    title: str
+
+
+class GoalReplyResponse(BaseModel):
+    task: TaskRead
+    routed_to: RoutedTo | None = None
+
+
 class UpdateFileBody(BaseModel):
     content: str = Field(max_length=10_000_000)
 
@@ -381,9 +391,77 @@ async def start_task(task_id: str, request: Request) -> TaskRead:
     return _build_task_read(updated, get_space_store(request).get(updated.space_id), store)
 
 
-@router.post("/{task_id}/reply", response_model=TaskRead)
-async def reply_to_task(task_id: str, body: ReplyBody, request: Request) -> TaskRead:
+def _goal_route(goal_id: str, store: TaskStore, pool: WorkerPool) -> tuple[str, str] | None:
+    """Return (child_id, child_title) for goal message routing, or None.
+
+    Priority 1: currently-running child (worker is processing this goal and a
+    child is in ACTIVE state).
+    Priority 2: first BACKLOG child in manual_order (message queued in goal's
+    pending_messages for the next _run_goal invocation).
+    """
+    goal = store.get(goal_id)
+    if goal is None:
+        return None
+    children = [t for t in store.all() if t.parent_id == goal_id]
+    if not children:
+        return None
+    # Priority 1: worker is currently orchestrating this goal (current == goal_id)
+    # and a child is ACTIVE (being run by run_agent inside _run_goal).
+    worker = pool.get(goal.space_id)
+    if worker is not None and worker.current() == goal_id:
+        active = [c for c in children if c.state == TaskState.ACTIVE]
+        if active:
+            child = active[0]
+            return (child.id, child.title)
+    # Priority 2: first BACKLOG child in topological / manual order.
+    backlog = sorted(
+        [c for c in children if c.state == TaskState.BACKLOG],
+        key=lambda c: (c.manual_order, c.id),
+    )
+    if backlog:
+        return (backlog[0].id, backlog[0].title)
+    return None
+
+
+@router.post("/{task_id}/reply", response_model=GoalReplyResponse)
+async def reply_to_task(task_id: str, body: ReplyBody, request: Request) -> GoalReplyResponse:
     store = get_store(request)
+    pool = get_pool(request)
+    space_store = get_space_store(request)
+
+    task = store.get(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+
+    if task.type == "goal":
+        route = _goal_route(task_id, store, pool)
+        if route is not None:
+            child_id, child_title = route
+            worker = pool.get(task.space_id)
+            # Running child: worker is on this goal and the child is ACTIVE.
+            if worker is not None and worker.current() == task_id:
+                child = store.get(child_id)
+                if child is not None and child.state == TaskState.ACTIVE:
+                    try:
+                        await store.apply_reply(child_id, body.message)
+                    except (TaskNotFound, InvalidTransition, StorageError) as e:
+                        raise HTTPException(status_code=400, detail=str(e)) from None
+                    await goal_sync.propagate_to_parent(child_id, store, pool)
+                    updated_goal = store.get(task_id)
+                    task_read = _build_task_read(updated_goal, space_store.get(task.space_id), store)
+                    return GoalReplyResponse(task=task_read, routed_to=RoutedTo(id=child_id, title=child_title))
+            # BACKLOG child: queue message in goal's pending_messages.
+            await store.append_pending(task_id, body.message)
+            updated_goal = store.get(task_id)
+            task_read = _build_task_read(updated_goal, space_store.get(task.space_id), store)
+            return GoalReplyResponse(task=task_read, routed_to=RoutedTo(id=child_id, title=child_title))
+        # No runnable children: history-only append, no enqueue.
+        await store.record_user_message(task_id, body.message)
+        updated_goal = store.get(task_id)
+        task_read = _build_task_read(updated_goal, space_store.get(task.space_id), store)
+        return GoalReplyResponse(task=task_read, routed_to=None)
+
+    # Non-goal: standard reply path.
     try:
         outcome = await store.apply_reply(task_id, body.message)
     except TaskNotFound:
@@ -396,8 +474,27 @@ async def reply_to_task(task_id: str, body: ReplyBody, request: Request) -> Task
         await get_worker_for_task(request, task_id).enqueue(
             task_id, user_message=body.message
         )
-    await goal_sync.propagate_to_parent(task_id, store, get_pool(request))
-    return _build_task_read(outcome.task, get_space_store(request).get(outcome.task.space_id), store)
+    await goal_sync.propagate_to_parent(task_id, store, pool)
+    task_read = _build_task_read(outcome.task, space_store.get(outcome.task.space_id), store)
+    return GoalReplyResponse(task=task_read, routed_to=None)
+
+
+@router.get("/{task_id}/route-preview", response_model=GoalReplyResponse)
+async def route_preview(task_id: str, request: Request) -> GoalReplyResponse:
+    """Return routing destination for a goal's next message without mutation."""
+    store = get_store(request)
+    pool = get_pool(request)
+    task = store.get(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+    task_read = _build_task_read(task, get_space_store(request).get(task.space_id), store)
+    if task.type != "goal":
+        return GoalReplyResponse(task=task_read, routed_to=None)
+    route = _goal_route(task_id, store, pool)
+    if route is None:
+        return GoalReplyResponse(task=task_read, routed_to=None)
+    child_id, child_title = route
+    return GoalReplyResponse(task=task_read, routed_to=RoutedTo(id=child_id, title=child_title))
 
 
 @router.post("/{task_id}/stop", response_model=TaskRead)

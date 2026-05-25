@@ -854,15 +854,13 @@ async def test_patch_task_response_includes_unmet_dependencies(async_client):
 
 
 async def test_reply_response_includes_unmet_dependencies(async_client, task_store):
-    """POST /api/tasks/{id}/reply response carries unmet_dependencies.
+    """POST /api/tasks/{id}/reply response carries task.unmet_dependencies.
 
-    The reply succeeds (active task), and the resulting TaskRead must include
-    an `unmet_dependencies` list. With no deps on the reply target, the list
-    is empty — but its presence is the assertion.
+    The reply succeeds (active task), and the resulting GoalReplyResponse.task
+    must include an `unmet_dependencies` list.
     """
     task = await _create(async_client, title="ActiveReplyTarget")
-    # Drive it active so the reply path takes the ACTIVE branch (append to
-    # pending_messages, no transition involved — so the dep gate doesn't fire).
+    # Drive it active so the reply path takes the ACTIVE branch.
     await async_client.post(f"/api/tasks/{task['id']}/start")
 
     resp = await async_client.post(
@@ -871,8 +869,140 @@ async def test_reply_response_includes_unmet_dependencies(async_client, task_sto
 
     assert resp.status_code == 200
     body = resp.json()
-    assert "unmet_dependencies" in body
-    assert body["unmet_dependencies"] == []
+    assert "task" in body
+    assert "routed_to" in body
+    assert body["routed_to"] is None
+    assert "unmet_dependencies" in body["task"]
+    assert body["task"]["unmet_dependencies"] == []
+
+
+# ---------------------------------------------------------------------------
+# POST /api/tasks/{id}/reply — goal routing
+# ---------------------------------------------------------------------------
+
+
+async def test_goal_reply_no_children_history_only(async_client, task_store):
+    """Goal with no children: reply records in history, no enqueue, routed_to=null."""
+    goal = await _create(async_client, title="Solo Goal", type="goal")
+
+    resp = await async_client.post(
+        f"/api/tasks/{goal['id']}/reply", json={"message": "hello goal"}
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["routed_to"] is None
+    # Message must appear in goal history.
+    stored = task_store.get(goal["id"])
+    assert "hello goal" in stored.history
+    # Goal stays in original state (no transition).
+    assert stored.state.value == goal["state"]
+
+
+async def test_goal_reply_backlog_child_queues_pending(async_client, task_store):
+    """Goal with BACKLOG children: reply goes to goal.pending_messages, routed_to=child."""
+    goal = await _create(async_client, title="Idle Goal", type="goal")
+    child = await _create(async_client, title="First Child", parent_id=goal["id"])
+
+    resp = await async_client.post(
+        f"/api/tasks/{goal['id']}/reply", json={"message": "queue me"}
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["routed_to"] is not None
+    assert body["routed_to"]["id"] == child["id"]
+    assert body["routed_to"]["title"] == child["title"]
+    # Message stored in goal's pending_messages (not child's).
+    stored_goal = task_store.get(goal["id"])
+    assert "queue me" in stored_goal.pending_messages
+    # Child not modified.
+    stored_child = task_store.get(child["id"])
+    assert stored_child.pending_messages == []
+
+
+async def test_goal_reply_running_child_forwards_message(async_client, task_store):
+    """Goal with currently-running ACTIVE child: reply forwarded to child."""
+    from app.models import TaskState
+
+    goal = await _create(async_client, title="Running Goal", type="goal")
+    child = await _create(async_client, title="Active Child", parent_id=goal["id"])
+
+    # Simulate goal running: set goal state to active, child state to active,
+    # and configure the mock worker to report current() == goal_id.
+    from app.main import app
+
+    class _RunningWorker:
+        def enqueue(self, *a, **kw): pass
+        def stop_current(self, *a): return False
+        def is_alive(self): return True
+        def current(self): return goal["id"]
+
+    class _RunningPool:
+        def get(self, space_id): return _RunningWorker()
+        async def start_for_space(self, space_id): return _RunningWorker()
+        async def stop_for_space(self, space_id): pass
+        async def enqueue(self, space_id, task_id): pass
+        def items(self): return []
+
+    stored_goal = task_store.get(goal["id"])
+    task_store._by_id[goal["id"]] = stored_goal.model_copy(
+        update={"state": TaskState.ACTIVE}
+    )
+    stored_child = task_store.get(child["id"])
+    task_store._by_id[child["id"]] = stored_child.model_copy(
+        update={"state": TaskState.ACTIVE}
+    )
+
+    original_pool = app.state.worker_pool
+    app.state.worker_pool = _RunningPool()
+    try:
+        resp = await async_client.post(
+            f"/api/tasks/{goal['id']}/reply", json={"message": "steer me"}
+        )
+    finally:
+        app.state.worker_pool = original_pool
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["routed_to"] is not None
+    assert body["routed_to"]["id"] == child["id"]
+    # Message forwarded to child's pending_messages.
+    updated_child = task_store.get(child["id"])
+    assert "steer me" in updated_child.pending_messages
+
+
+# ---------------------------------------------------------------------------
+# GET /api/tasks/{id}/route-preview
+# ---------------------------------------------------------------------------
+
+
+async def test_route_preview_non_goal_returns_null(async_client):
+    """route-preview on a regular task always returns routed_to=null."""
+    task = await _create(async_client, title="Plain Task")
+    resp = await async_client.get(f"/api/tasks/{task['id']}/route-preview")
+    assert resp.status_code == 200
+    assert resp.json()["routed_to"] is None
+
+
+async def test_route_preview_goal_with_backlog_child(async_client, task_store):
+    """route-preview on a goal with a BACKLOG child returns that child."""
+    goal = await _create(async_client, title="Preview Goal", type="goal")
+    child = await _create(async_client, title="Preview Child", parent_id=goal["id"])
+
+    resp = await async_client.get(f"/api/tasks/{goal['id']}/route-preview")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["routed_to"]["id"] == child["id"]
+    assert body["routed_to"]["title"] == child["title"]
+
+
+async def test_route_preview_goal_no_children_null(async_client):
+    """route-preview on a childless goal returns routed_to=null."""
+    goal = await _create(async_client, title="Empty Goal", type="goal")
+    resp = await async_client.get(f"/api/tasks/{goal['id']}/route-preview")
+    assert resp.status_code == 200
+    assert resp.json()["routed_to"] is None
 
 
 # ---------------------------------------------------------------------------
