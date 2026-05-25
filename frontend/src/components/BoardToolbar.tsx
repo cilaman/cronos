@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { useSpaces } from "../hooks/useSpaces";
 import type { BoardSortMode } from "../lib/storage";
 import { SpaceFilterDropdown } from "./SpaceFilterDropdown";
+import { ViewPicker } from "./ViewPicker";
 import { SpaceTag } from "./ui/SpaceTag";
 import { StickyToolbar } from "./ui/StickyToolbar";
 
@@ -14,6 +15,10 @@ interface Props {
   onCompactToggle: () => void;
   sortMode: BoardSortMode;
   onSortModeToggle: () => void;
+  /** Current view ID (null = default view). Only shown when spaceId is set. */
+  viewId?: string | null;
+  onViewChange?: (viewId: string | null) => void;
+  onManageViews?: () => void;
 }
 
 export function BoardToolbar({
@@ -25,6 +30,9 @@ export function BoardToolbar({
   onCompactToggle,
   sortMode,
   onSortModeToggle,
+  viewId = null,
+  onViewChange,
+  onManageViews,
 }: Props) {
   const { data } = useSpaces();
   const active = spaceId ? data?.spaces.find((s) => s.id === spaceId) ?? null : null;
@@ -52,6 +60,14 @@ export function BoardToolbar({
         )}
       </div>
       <div className="flex shrink-0 items-center gap-2">
+        {spaceId && onViewChange && (
+          <ViewPicker
+            spaceId={spaceId}
+            viewId={viewId}
+            onChange={onViewChange}
+            onManageViews={onManageViews ?? (() => {})}
+          />
+        )}
         <SpaceFilterDropdown
           value={spaceId}
           onChange={onSpaceChange}

@@ -17,6 +17,7 @@ from .api.tasks import router as tasks_router
 from .api.test_reports import router as test_reports_router
 from .api.tools import router as tools_router
 from .api.traces import router as traces_router
+from .api.views import router as views_router
 from .space_storage import CRONOS_SUBDIR, RESERVED_SPACE_DIRS, SpaceStore
 from .stats_store import StatsStore
 from .storage import TaskStore
@@ -204,6 +205,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Cronos", version="0.0.1", lifespan=lifespan)
 app.include_router(tasks_router)
 app.include_router(spaces_router)
+app.include_router(views_router)
 app.include_router(activity_router)
 app.include_router(tools_router)
 app.include_router(stats_router)

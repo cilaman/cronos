@@ -34,10 +34,22 @@ interface Props {
   onAddTask: () => void;
   compact?: boolean;
   sortMode?: BoardSortMode;
+  /** View ID to send to the API (null = use space's default view). */
+  viewId?: string | null;
+  /** Lane states to render; lanes absent here are hidden (column removed). */
+  activeLaneStates?: TaskState[];
 }
 
-export function Board({ spaceId, onAddTask, compact = false, sortMode = "manual" }: Props) {
-  const { data, isLoading, error } = useBoard(spaceId);
+export function Board({
+  spaceId,
+  onAddTask,
+  compact = false,
+  sortMode = "manual",
+  viewId = null,
+  activeLaneStates,
+}: Props) {
+  const effectiveViewId = spaceId ? (viewId ?? "default") : null;
+  const { data, isLoading, error } = useBoard(spaceId, effectiveViewId);
   const transition = useTransitionTask();
   const reorder = useReorderTasks();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -143,8 +155,22 @@ export function Board({ spaceId, onAddTask, compact = false, sortMode = "manual"
   }
 
   if (isLoading) return <p className="p-6 text-ink-muted">Loading board…</p>;
-  if (error) return <p className="p-6 text-danger">Error: {error.message}</p>;
+  // Silently ignore 404 for deleted/invalid views — BoardPage resets the URL param.
+  if (error && !error.message.startsWith("404 ")) {
+    return <p className="p-6 text-danger">Error: {error.message}</p>;
+  }
   if (!sortedData) return null;
+
+  const laneSet = activeLaneStates ? new Set(activeLaneStates) : null;
+  const visibleLanes = laneSet ? LANES.filter((l) => laneSet.has(l.state)) : LANES;
+
+  // Dynamic column count so hidden lanes don't leave gaps.
+  const colCount = visibleLanes.length;
+  const lgCols =
+    colCount === 1 ? "lg:grid-cols-1"
+    : colCount === 2 ? "lg:grid-cols-2"
+    : colCount === 3 ? "lg:grid-cols-3"
+    : "lg:grid-cols-4";
 
   return (
     <>
@@ -155,8 +181,8 @@ export function Board({ spaceId, onAddTask, compact = false, sortMode = "manual"
         onDragEnd={onDragEnd}
         onDragCancel={onDragCancel}
       >
-        <div className="grid h-full grid-cols-1 gap-2 p-2 md:grid-cols-2 lg:grid-cols-4 lg:gap-3 lg:p-4">
-          {LANES.map(({ state, label }) => (
+        <div className={`grid h-full grid-cols-1 gap-2 p-2 md:grid-cols-2 ${lgCols} lg:gap-3 lg:p-4`}>
+          {visibleLanes.map(({ state, label }) => (
             <Lane
               key={state}
               state={state}

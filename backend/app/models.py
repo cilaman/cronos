@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class TaskState(str, Enum):
@@ -17,6 +17,17 @@ class TaskState(str, Enum):
 
 AgentMode = Literal["plan", "auto", "ask"]
 AgentModel = Literal["default", "sonnet", "opus", "haiku"]
+TaskType = Literal["task", "goal", "issue"]
+
+
+class View(BaseModel):
+    id: str = Field(pattern=r"^[a-z0-9][a-z0-9-]*$", max_length=32)
+    name: str
+    lanes: list[TaskState] = Field(min_length=1)
+    type_filter: list[TaskType] | None = None
+    default: bool = False
+    created_at: datetime
+    updated_at: datetime
 
 
 class Task(BaseModel):
@@ -101,6 +112,16 @@ class Space(BaseModel):
     git_share_cronos: bool = False
     agent_defaults: dict[str, str] = Field(default_factory=dict)
     autopilot: Literal["disabled", "enabled", "paused"] = "disabled"
+    views: list[View] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _view_ids_unique(self) -> "Space":
+        seen: set[str] = set()
+        for v in self.views:
+            if v.id in seen:
+                raise ValueError(f"Duplicate view id {v.id!r}")
+            seen.add(v.id)
+        return self
 
 
 class SpaceSummary(BaseModel):
