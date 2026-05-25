@@ -3,6 +3,7 @@ import { useParams, useSearchParams } from "react-router-dom";
 import { Board } from "../components/Board";
 import { BoardToolbar } from "../components/BoardToolbar";
 import { TaskForm } from "../components/TaskForm";
+import { ViewEditor } from "../components/ViewEditor";
 import { useSpaces } from "../hooks/useSpaces";
 import { useCreateTask } from "../hooks/useTasks";
 import { useViews } from "../hooks/useViews";
@@ -29,6 +30,7 @@ export function BoardPage() {
   const [compact, setCompact] = useState(() => readCardViewMode() === "minimal");
   const [sortMode, setSortMode] = useState<BoardSortMode>(() => readBoardSortMode());
   const [creating, setCreating] = useState(false);
+  const [managingViews, setManagingViews] = useState(false);
   const [isWorking, setIsWorking] = useState(false);
   const [workError, setWorkError] = useState<string | null>(null);
   const { data: spacesData } = useSpaces();
@@ -128,9 +130,7 @@ export function BoardPage() {
         }}
         viewId={urlViewId}
         onViewChange={scoped ? handleViewChange : undefined}
-        onManageViews={() => {
-          // Stub — wired in arc-3/4 (ViewEditor modal)
-        }}
+        onManageViews={boardSpaceId ? () => setManagingViews(true) : undefined}
       />
       <div className="min-h-0 flex-1">
         <Board
@@ -142,6 +142,18 @@ export function BoardPage() {
           activeLaneStates={activeLaneStates}
         />
       </div>
+
+      {managingViews && boardSpaceId && (
+        <ViewEditor
+          spaceId={boardSpaceId}
+          currentViewId={urlViewId}
+          onClose={() => setManagingViews(false)}
+          onViewChange={(viewId) => {
+            setManagingViews(false);
+            handleViewChange(viewId);
+          }}
+        />
+      )}
 
       {creating && (
         <TaskForm

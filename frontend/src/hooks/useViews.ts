@@ -10,14 +10,17 @@ export function useViews(spaceId: string | null) {
   });
 }
 
+function invalidateViewsAndBoard(qc: ReturnType<typeof useQueryClient>, spaceId: string) {
+  qc.invalidateQueries({ queryKey: ["views", spaceId] });
+  qc.invalidateQueries({ queryKey: ["board"] });
+}
+
 export function useCreateView(spaceId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: { name: string; lanes: string[]; type_filter?: string[] | null; default?: boolean }) =>
       api.createView(spaceId, body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["views", spaceId] });
-    },
+    onSuccess: () => invalidateViewsAndBoard(qc, spaceId),
   });
 }
 
@@ -29,9 +32,7 @@ export function useUpdateView(spaceId: string) {
       ...body
     }: { viewId: string; name?: string; lanes?: string[]; type_filter?: string[] | null; default?: boolean }) =>
       api.updateView(spaceId, viewId, body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["views", spaceId] });
-    },
+    onSuccess: () => invalidateViewsAndBoard(qc, spaceId),
   });
 }
 
@@ -39,8 +40,6 @@ export function useDeleteView(spaceId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (viewId: string) => api.deleteView(spaceId, viewId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["views", spaceId] });
-    },
+    onSuccess: () => invalidateViewsAndBoard(qc, spaceId),
   });
 }
