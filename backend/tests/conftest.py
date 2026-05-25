@@ -62,6 +62,9 @@ class _MockWorkerPool:
     async def stop_for_space(self, space_id: str) -> None:
         pass
 
+    async def enqueue(self, space_id: str, task_id: str) -> None:
+        pass
+
     def items(self) -> list:
         return []
 

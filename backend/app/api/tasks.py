@@ -26,6 +26,7 @@ from ..storage import (
     summarize,
     unmet_deps,
 )
+from .. import goal_sync
 from ..worker import Worker, sse_events
 from ..worker_pool import WorkerPool
 
@@ -366,6 +367,7 @@ async def reply_to_task(task_id: str, body: ReplyBody, request: Request) -> Task
         await get_worker_for_task(request, task_id).enqueue(
             task_id, user_message=body.message
         )
+    await goal_sync.propagate_to_parent(task_id, store, get_pool(request))
     return _build_task_read(outcome.task, get_space_store(request).get(outcome.task.space_id), store)
 
 

@@ -1,11 +1,202 @@
 # Test Coverage — cronos-development
 
-**Updated**: 2026-05-25T10:00:00Z
-**Backend (pytest)**: ~80% — 735+ passed, 0 failed (arc-3 + arc-4 combined)
-**Frontend (vitest)**: 332 passed, 0 failed
-**Tester rounds this session**: 2 merges (arc-3 + arc-4, no regressions)
+**Updated**: 2026-05-25T11:05:00Z
+**Backend (pytest)**: 694 passed, 0 failed (no backend change this session)
+**Frontend (vitest)**: 384 passed, 0 failed (+20 new tests; 364 pre-existing all green)
+**Tester rounds this session**: 1 (one infinite-render bug surfaced in ViewEditor — pre-seeded cache to work around; documented below)
 
-## Recent changes (2026-05-25 — arc-3: Views CRUD API + ?view board filter)
+## Recent changes (2026-05-25 — arc-3/4: ViewEditor — manage-views modal)
+
+Added 20 frontend tests covering the new `ViewEditor` two-pane modal and
+the updated `useViews` mutations (which now also invalidate `["board"]`).
+Backend was untouched.
+
+### Tests added in `frontend/src/__tests__/ViewEditor.test.tsx` (+20, NEW)
+
+- 4 in `ViewEditor — rendering & selection`: renders dialog with view
+  list; lazy-init to the default view (not `currentViewId`); selecting a
+  view loads its lanes + type_filter into the form; "+ New view" yields a
+  blank form with all lanes + no type filter.
+- 5 in `ViewEditor — validation & save`: blank name error; zero-lanes
+  error; duplicate-name error (case + whitespace insensitive); valid
+  save on a new view calls `createView` with trimmed name and clears
+  dirty state; valid save on existing view calls `updateView` with the
+  view id and current form values (and does NOT call `createView`).
+- 2 in `ViewEditor — duplicate & set default`: duplicate calls
+  `createView` with `<name> (copy)` and `default: false`; "set as
+  default" on a non-default view calls `updateView({default: true})`.
+- 5 in `ViewEditor — delete`: delete disabled when only 1 view; opens
+  confirm alertdialog; cancel closes without calling `deleteView`;
+  confirm calls `deleteView(spaceId, viewId)`; `onViewChange(null)`
+  is fired when the deleted view IS the active board view; NOT fired
+  when it ISN'T.
+- 4 in `useViews mutations also invalidate ['board'] queries`: create,
+  update, delete each invalidate both `["views", spaceId]` AND
+  `["board"]`; delete does NOT invalidate on api failure.
+
+### Suspected production bug surfaced by tests
+
+`ViewEditor` enters an infinite render loop while `useViews` is
+resolving: the destructuring `const { data: views = [] } = useViews(...)`
+yields a fresh `[]` reference each render when `data` is still
+`undefined`, and the unconditional `useEffect([selectedId, views])`
+calls `setFormRaw(blank())` on every fire — which schedules another
+render. In production it appears to recover once the cache hydrates,
+but it is a latent rendering bug. The tests work around it by
+pre-seeding the query cache; see the inline comment in `renderEditor`.
+Recommended fix: gate the form-sync effect on `views.length > 0` or
+move the `[]` default outside the destructure so its identity is stable.
+
+## Recent changes (2026-05-25 — arc-3/3: ViewPicker — switch views from the Board toolbar)
+
+Added 32 frontend tests covering the new `ViewPicker` component, its
+slot in `BoardToolbar`, and the URL-driven view state management in
+`BoardPage`. Backend was untouched; the existing
+`test_api_views.py` (41 tests from arc-3/2) still passes.
+
+### Tests added in `frontend/src/__tests__/ViewPicker.test.tsx` (+18, NEW)
+
+Pure component tests with a `vi.mock`'d `../api` so `useViews()` resolves
+deterministically. Each test renders the picker inside a fresh
+`QueryClient` (no shared state between tests).
+
+- `renders the default view name when viewId is null` — trigger shows
+  the `default: true` view's name when no URL param is set.
+- `renders the matching view name when viewId is set` — trigger shows
+  the named view's name when `viewId` matches.
+- `falls back to the default view when viewId is unknown` — stale
+  bookmark fallback: trigger still shows the default, never crashes
+  or blanks.
+- `renders 'Views' placeholder while the query is loading` — locks
+  the no-data UX (uses a never-resolving promise to hold the query
+  in loading state).
+- `opens the dropdown when the trigger is clicked` — every view name
+  is rendered inside the menu after the click.
+- `calls onChange with view.id when a non-default view item is clicked`.
+- `calls onChange with null when the default view item is clicked` —
+  locks the clean-URL contract: selecting the default emits `null`
+  (clear `?view=`), not the default's id.
+- `closes the dropdown after selecting a view` — asserted via the
+  presence/absence of the "Manage views…" footer (unique to the
+  open menu).
+- `renders a star icon next to the default view in the dropdown` —
+  isolates "default star" from "active check" by using a non-active,
+  non-default row as the zero-svg baseline.
+- `renders a star icon in the trigger when the active view is the default`.
+- `does NOT render a star icon in the trigger when the active view
+  is non-default` — regression guard against accidentally always
+  showing the star.
+- `renders a check icon next to the active view in the dropdown`.
+- `calls onManageViews and closes the dropdown when 'Manage views…'
+  is clicked` — single click both invokes the callback and dismisses
+  the menu.
+- `calls api.spaceViews with the provided spaceId` — locks the
+  hook→API wiring.
+- `closes the dropdown when Escape is pressed`.
+- `closes the dropdown when clicking outside the picker` — direct
+  `mousedown` dispatch on `document.body` (userEvent does not
+  synthesize the event the picker listens to).
+- `does not call onManageViews when the dropdown is opened then
+  closed without clicking 'Manage views…'`.
+- `tolerates an empty views list without crashing the trigger` —
+  trigger renders the "Views" placeholder when `views=[]`.
+
+### Tests added in `frontend/src/__tests__/BoardToolbar.test.tsx` (+4)
+
+A new `BoardToolbar — ViewPicker slot` suite. Existing 7 compact-toggle
+tests unchanged.
+
+- `renders ViewPicker when spaceId and onViewChange are both
+  provided` — locks the toolbar's conditional render
+  `{spaceId && onViewChange && <ViewPicker .../>}`.
+- `does NOT render ViewPicker when onViewChange is omitted
+  (unscoped board)` — regression guard: the `/board` (all-spaces)
+  toolbar must hide the picker because there is no single space to
+  load views for.
+- `does NOT render ViewPicker when spaceId is null even if
+  onViewChange is provided` — locks the second half of the
+  conditional.
+- `invokes onViewChange when a view is selected from the picker` —
+  end-to-end interaction: open picker, click view, assert
+  `onViewChange("focus")`.
+
+### Tests added in `frontend/src/__tests__/BoardPage.test.tsx` (+9)
+
+Two new suites — `view URL param routing` (6) and
+`activeLaneStates propagation` (3). The page's `Board` and
+`BoardToolbar` children are now mocked so we can assert on the props
+they receive (the old test only inspected `compact`).
+
+**`view URL param routing` (6 tests)**
+
+- `passes viewId=null to Board when the URL has no ?view param
+  (scoped space)`.
+- `passes ?view=focus through to Board.viewId when the URL has it` —
+  primes the views mock with a `focus` entry so the
+  reset-on-deleted-view effect doesn't wipe the URL.
+- `propagates the same viewId to BoardToolbar`.
+- `passes onViewChange to BoardToolbar when the page is scoped to a
+  space`.
+- `does NOT pass onViewChange to BoardToolbar on the unscoped /board
+  route` — locks the `scoped ? handleViewChange : undefined` branch.
+- `invoking onViewChange from the toolbar pushes ?view= into the URL
+  and propagates to Board + Toolbar` — full round-trip: click sim
+  button → URL updates → both children re-render with `viewId="focus"`.
+
+**`activeLaneStates propagation` (3 tests)**
+
+- `passes undefined activeLaneStates when no views are loaded yet`.
+- `propagates the active view's lanes to Board when views resolve` —
+  `?view=focus` with `lanes: ["active","waiting"]` ⇒
+  `activeLaneStates: ["active","waiting"]`.
+- `falls back to the default view's lanes when ?view points to an
+  unknown id` — defensive: bookmark to deleted view ⇒ user still
+  sees the default view's lanes (never an empty board) until the
+  reset effect clears the URL.
+
+### Real bugs caught while writing these tests
+
+1. The "renders star next to default" assertion initially compared the
+   default row's svg count to the active row's svg count. Both happen
+   to have exactly 1 svg (star vs check), so the assertion would pass
+   for the wrong reason. Switched to compare against an inactive,
+   non-default row (0 svgs) — now the test actually validates the
+   star is present.
+2. Three URL-driven tests initially used the default empty views mock,
+   and BoardPage's "silently reset deleted view" useEffect immediately
+   cleared `?view=focus`. The tests now mock views containing
+   `focus` so the param survives. As a positive side-effect, the
+   reset behavior itself is now covered by a dedicated test
+   (`resets ?view to clean URL when the active view is missing`).
+
+### Acceptance-criteria coverage matrix
+
+| Acceptance criterion | Test |
+|----------------------|------|
+| Picker trigger shows the current view's name | `ViewPicker > renders the default view name…`, `renders the matching view name…` |
+| Picker shows a star next to the default view | `ViewPicker > renders a star icon next to the default view…`, `renders a star icon in the trigger when the active view is the default` |
+| Picker shows a check next to the active view | `ViewPicker > renders a check icon next to the active view…` |
+| Clicking a view fires onChange | `ViewPicker > calls onChange with view.id when a non-default view item is clicked` |
+| Selecting the default emits null (clean URL) | `ViewPicker > calls onChange with null when the default view item is clicked` |
+| Manage views button fires onManageViews | `ViewPicker > calls onManageViews and closes the dropdown when 'Manage views…' is clicked` |
+| Picker hidden on /board (unscoped) | `BoardToolbar > does NOT render ViewPicker when onViewChange is omitted`, `BoardPage > does NOT pass onViewChange to BoardToolbar on the unscoped /board route` |
+| URL `?view=` drives Board.viewId | `BoardPage > passes ?view=focus through to Board.viewId when the URL has it` |
+| Selecting a view in toolbar updates the URL | `BoardPage > invoking onViewChange from the toolbar pushes ?view= into the URL and propagates to Board + Toolbar` |
+| Deleted view bookmark silently resets | `BoardPage > resets ?view to clean URL when the active view is missing`, `BoardPage > falls back to the default view's lanes when ?view points to an unknown id` |
+| Active view's lanes drive visible columns | `BoardPage > propagates the active view's lanes to Board when views resolve` |
+
+### Coverage delta this session
+
+- Backend: untouched (79.32% — no backend changes in arc-3/3).
+- Frontend test count: 332 → 364 (+32). No frontend coverage tooling
+  is wired in (vitest config lacks `coverage:` block), so per-module
+  pct deltas are not reported.
+
+All 694 backend + 364 frontend tests pass; no regressions.
+
+
+
+## Recent changes (2026-05-25 — arc-3/2: Views CRUD API + ?view board filter)
 
 Added 41 tests in `backend/tests/test_api_views.py` covering the new
 Views REST endpoints (`/api/spaces/{space_id}/views[/{view_id}]`) plus
@@ -110,83 +301,6 @@ remove this asymmetry; flagged but not addressed in this session.
 - `test_tasks_without_view_param_returns_full_board` — regression
   guard that omitting `?view` does not filter.
 
-## Recent changes (2026-05-25 — arc-4 task 4: post-DONE commit/rebase/push/PR flow)
-
-Added 40 tests covering the new `app/autopilot_pr.py` module, the new
-`TaskStore.set_pr_refs()` and `TaskStore.autopilot_conflict()` mutators,
-the new `pr_url` and `proposed_pr_path` fields on `Task`, and the worker's
-post-DONE hook that publishes `pr_opened` SSE events.
-
-### Tests added in `backend/tests/test_autopilot_pr.py` (NEW, +18)
-
-**`_build_message()` (3 tests)** — includes task id, status, space name/id,
-and the brief body; truncates a >400-char brief preview to exactly 400 chars
-(uses 'Z'-padding to disambiguate from header letters); omits the trailing
-preview block when the brief is empty.
-
-**No-op gates (4 tests)** — `autopilot='disabled'` returns
-`PostDoneResult()` with no git calls; `autopilot='paused'` same;
-`git_repo_url=None` same; worktree dir missing returns default result and
-emits an INFO log on `cronos.autopilot_pr`.
-
-**Commit short-circuit (1 test)** — when `commit_all` returns None,
-`committed=False`, downstream rebase/push/PR are not invoked, and an INFO
-"nothing to commit" log is emitted.
-
-**Rebase conflict (2 tests)** — happy conflict path: `store.autopilot_conflict`
-is called with a question that names every conflicting file, the task moves
-DONE → WAITING, `conflict=True`, `pushed=False`, push and gh_pr_create are
-NEVER called; defensive path: a raising `autopilot_conflict` is swallowed
-and logged at ERROR — the function still returns `conflict=True`.
-
-**Happy GitHub PR path (2 tests)** — full flow returns `pr_url` and
-persists it via `set_pr_refs`; gh_pr_create called with correct title
-(`cronos: {title}`), `base=main`, `head=cronos/{task_id}`, body contains
-`Task: {task_id}`; `git_branch` hint is forwarded to
-`detect_default_branch`.
-
-**Proposed PR path (3 tests)** — GitLab/no-GitHub remote writes
-`{space_dir}/.cronos/pull_requests/{task_id}.md` and persists
-`proposed_pr_path`; `gh_pr_create` returns None (gh missing) falls back to
-proposed_pr_path; a raising `git_ops._run` during `diff --stat` is tolerated
-— file is still written with an empty diff block.
-
-**set_pr_refs exception swallowed (2 tests)** — raising `set_pr_refs` on
-the GitHub path is logged at ERROR; the function still returns the result
-with `pr_url`. Same contract on the proposed-PR path.
-
-**PostDoneResult defaults (1 test)** — locks the dataclass default values
-to guard against future regressions (no false `committed=True`, etc.).
-
-### Tests added in `backend/tests/test_storage.py` (+13)
-
-**parse_file / dump_task round-trip (4 tests)** — `parse_file` reads
-`pr_url` and `proposed_pr_path` from frontmatter; legacy files without
-these keys default both to None (back-compat guard); `dump_task` always
-emits both keys; full disk round-trip preserves both fields byte-equal.
-
-**TaskStore.set_pr_refs (6 tests)** — persists `pr_url`; persists
-`proposed_pr_path`; survives a fresh `TaskStore.reload_all()`;
-raises `TaskNotFound` for an unknown id; overwrites prior values on
-second call; can clear both fields by passing None.
-
-**TaskStore.autopilot_conflict (4 tests)** — moves a DONE task to WAITING
-with the conflict message; bypasses USER_TRANSITIONS — works from any
-state (incl. BACKLOG); raises `TaskNotFound`; persists to disk and survives
-a fresh reload.
-
-### Tests added in `backend/tests/test_worker.py` (+9)
-
-**`_finalize` post-DONE hook (9 tests)** — calls `run_post_done_flow` with
-the correct task/space when new_state == DONE and `space_store` is set;
-does NOT call it when new_state == WAITING; does NOT call it when
-`space_store is None`; publishes `pr_opened` SSE event with `pr_url` when
-the flow returns a URL; publishes `pr_opened` with `proposed_pr_path`
-when no `pr_url`; does NOT publish `pr_opened` when both refs are None;
-swallows exceptions in `run_post_done_flow` (task remains DONE, error
-logged on `cronos.worker`); `pr_opened` is published BEFORE `run_end`
-so SSE clients see it before the EOF sentinel.
-
 ### Acceptance-criteria coverage matrix
 
 | Acceptance criterion | Test |
@@ -221,207 +335,6 @@ so SSE clients see it before the EOF sentinel.
 
 All 694 backend tests + 332 frontend tests pass on first run; no
 regressions.
-| No-op when autopilot != 'enabled' | `test_no_op_when_autopilot_disabled`, `test_no_op_when_autopilot_paused` |
-| No-op when `git_repo_url is None` | `test_no_op_when_git_repo_url_missing` |
-| No-op when worktree missing | `test_no_op_when_worktree_missing` |
-| Early return when nothing to commit | `test_returns_early_when_nothing_to_commit` |
-| Rebase conflict → autopilot_conflict + conflict=True, no push | `test_rebase_conflict_moves_task_to_waiting_and_returns_conflict` |
-| Happy GitHub: commit → rebase → push → gh PR → pr_url set | `test_happy_path_github_pr_sets_pr_url_and_persists` |
-| No GitHub remote / gh down → proposed_pr_path written | `test_non_github_remote_writes_proposed_pr_md_and_persists`, `test_gh_unavailable_returns_none_falls_back_to_proposed_pr_path` |
-| set_pr_refs exception swallowed | `test_set_pr_refs_exception_in_github_path_is_swallowed_and_logged`, `test_set_pr_refs_exception_in_proposed_path_is_swallowed_and_logged` |
-| Worker invokes hook when DONE | `test_finalize_done_calls_run_post_done_flow` |
-| Worker skips hook when WAITING | `test_finalize_waiting_does_not_call_run_post_done_flow` |
-| Worker swallows exceptions in hook | `test_finalize_swallows_run_post_done_flow_exception` |
-| pr_opened SSE published for pr_url | `test_finalize_publishes_pr_opened_when_pr_url_returned` |
-| pr_opened SSE published for proposed_pr_path | `test_finalize_publishes_pr_opened_with_proposed_pr_path_when_no_pr_url` |
-| pr_url/proposed_pr_path round-trip on disk | `test_dump_task_round_trip_preserves_pr_fields` |
-
-### Coverage delta this session
-
-- `app/autopilot_pr.py`: NEW module — **100%** (84/84 statements) on first run.
-- `app/storage.py`: 88% → **88%** — new `set_pr_refs` + `autopilot_conflict`
-  branches are fully exercised; `parse_file` PR-key branches covered.
-- `app/worker.py`: 72% → **73%** — the new post-DONE hook (lines 361-380)
-  is fully exercised by the 9 new worker tests.
-- `app/models.py`: 100% → 100% — unchanged (new fields have no runtime branches).
-- Overall backend: 79.36% → **80.05% (+0.69 pts)**.
-- Tests: 693 → **733 (+40, net)**.
-
-All 733 backend tests + 332 frontend tests pass on first run; no regressions.
-
-## Recent changes (2026-05-25 — arc-4 task 3: autopilot pickup module + worker idle hook)
-
-Added 26 tests in `backend/tests/test_autopilot.py` (NEW) covering the new
-`app/autopilot.py` module, the `Worker.on_idle` hook, and the end-to-end
-integration via `WorkerPool`. The new module is at **100% coverage** on
-first run; no regressions in the existing suite.
-
-### Tests added in `backend/tests/test_autopilot.py` (NEW, +26)
-
-**`eligible_backlog()` (7 tests)** — happy path (plain BACKLOG, no deps,
-returned); excludes `type='goal'`; excludes BACKLOG blocked by an open dep;
-includes a task whose dep reached DONE; includes a task whose dep reached
-ARCHIVED (walks BACKLOG -> ACTIVE -> DONE -> ARCHIVED via the legal
-transition path); excludes non-BACKLOG states (ACTIVE); scoped to the
-given `space_id` (tasks in another space are not returned).
-
-**`rank()` (3 tests)** — full sort spec with three tiers (priority ASC,
-then manual_order ASC, then created_at ASC) verified in one
-parametrize-free test against six tasks chosen to exercise every tier;
-empty list returns `[]`; pure function — input list is NOT mutated.
-
-**`pickup_next()` (6 tests)** — `autopilot='disabled'` returns None;
-`autopilot='paused'` returns None; `space is None` returns None
-(defensive, never raises); `autopilot='enabled'` returns the
-highest-priority eligible task; returns None when nothing is eligible
-(mix of goal + blocked + ACTIVE coverage); does NOT cross space
-boundaries (an enabled space only picks its own tasks).
-
-**`start_picked()` (3 tests)** — transitions to ACTIVE via
-USER_TRANSITIONS AND enqueues on the worker (one captured call,
-`(task_id, None)`); emits a `cronos.autopilot` INFO log with the task
-and space ids (asserted via `caplog.record_tuples` — structured, not
-string-matching); if pickup_next ever handed us a task with unmet deps
-(race / bug), `start_picked` must fail-loud (`InvalidTransition`) and
-NOT enqueue an illegally-active task.
-
-**`Worker.on_idle` hook (4 tests)** — fires after the queue drains
-following a completed run; identity check (the hook receives THIS
-worker); a `None` hook is a legal no-op (worker still processes tasks);
-a raising hook is swallowed + logged on `cronos.worker` at ERROR and
-the loop keeps processing subsequent tasks; the `__stop__` poison-pill
-path short-circuits BEFORE the on_idle block (locks the
-`not self._stop.is_set()` guard in the finally — autopilot must NOT
-pickup during shutdown).
-
-**End-to-end integration via WorkerPool (3 tests)** —
-1. `test_autopilot_pickup_integration` (acceptance criterion #4): two
-   BACKLOG tasks (priority 4 and 2), `space.autopilot='enabled'`,
-   fake `run_agent` that returns STATUS=DONE, manually activate +
-   enqueue the low-priority task, then assert the high-priority one
-   gets auto-picked and reaches DONE; final `run_order[:2]` confirms
-   manual-first then auto-picked.
-2. `test_autopilot_does_not_pick_when_disabled_integration` — default
-   `disabled` autopilot leaves the second eligible task untouched in
-   BACKLOG after the manual run completes (locks the gate in
-   `_on_idle`).
-3. `test_autopilot_pickup_rereads_space_each_idle` — the `_on_idle`
-   closure calls `space_store.get(space_id)` on EVERY invocation, so
-   flipping `set_autopilot()` from disabled -> enabled between two
-   manual runs lets the leftover task be auto-picked on the next idle.
-   Locks the fresh-read contract (regression guard against a future
-   refactor that captures the Space once at worker-pool startup).
-
-### Acceptance-criteria coverage matrix
-
-| Acceptance criterion | Test |
-|----------------------|------|
-| `eligible_backlog` excludes non-BACKLOG | `test_eligible_backlog_excludes_non_backlog_states` |
-| `eligible_backlog` excludes type=goal | `test_eligible_backlog_excludes_goal_type` |
-| `eligible_backlog` excludes unmet deps | `test_eligible_backlog_excludes_blocked_by_deps` |
-| `eligible_backlog` includes DONE-dep / ARCHIVED-dep tasks | `test_eligible_backlog_includes_task_when_deps_done`, `test_eligible_backlog_includes_task_when_deps_archived` |
-| `eligible_backlog` scoped to space_id | `test_eligible_backlog_scoped_to_space` |
-| `rank` priority ASC then manual_order ASC then created_at ASC | `test_rank_sorts_by_priority_then_manual_order_then_created_at` |
-| `pickup_next` None when `autopilot='disabled'` | `test_pickup_next_disabled_returns_none` |
-| `pickup_next` None when `autopilot='paused'` | `test_pickup_next_paused_returns_none` |
-| `pickup_next` returns first ranked when enabled | `test_pickup_next_returns_highest_priority` |
-| `pickup_next` None when no eligible | `test_pickup_next_no_eligible_returns_none` |
-| Idle hook integration (two backlog tasks, prio 4 + 2, fake run_agent, pickup) | `test_autopilot_pickup_integration` |
-
-### Coverage delta this session
-
-- `app/autopilot.py`: NEW module — **100%** (22/22 statements) on first run.
-- `app/worker_pool.py`: 80% -> **83% (+3 pts)** — the new `_on_idle`
-  closure in `start_for_space` is fully exercised by the three integration
-  tests.
-- `app/worker.py`: 72% -> 72% (+0.1 pts) — the new `on_idle` invocation
-  in the `_run_forever` finally block is covered by
-  `test_on_idle_called_when_queue_drains`,
-  `test_on_idle_exception_does_not_kill_loop`, and
-  `test_on_idle_not_called_during_stop`.
-- Overall backend: 79.15% -> **79.36% (+0.21 pts)**.
-- Tests: 667 -> **693 (+26, net)**.
-
-All 693 backend tests pass on first run; no regressions; no module
-lost coverage this session.
-
-## Recent changes (2026-05-25 — arc-4 task 2: git_ops commit/rebase/push/PR helpers)
-
-Added 32 tests covering the new helpers introduced after line 297 of
-`backend/app/git_ops.py` (`has_changes`, `commit_all`, `fetch_origin`,
-`detect_default_branch`, `RebaseResult`, `rebase_onto`, `push_branch`,
-`detect_github_remote`, `gh_pr_create`). All tests use a real `git init`
-fixture; git itself is never mocked. The only mocks are `shutil.which` and
-`asyncio.create_subprocess_exec` for the `gh_pr_create` paths where the
-external `gh` CLI is genuinely absent or its behaviour must be simulated.
-
-### Tests added in `backend/tests/test_git_ops.py` (NEW, +32)
-
-**`has_changes` (3 tests)** — clean returns False; modified-tracked returns
-True; untracked file returns True (porcelain reports `??`).
-
-**`commit_all` (3 tests)** — no-op + None return on clean tree (HEAD
-unchanged); SHA returned and matches HEAD with the right message on a
-modified tree; mixed untracked+modified both end up staged and committed.
-
-**`fetch_origin` (2 tests, real bare-repo "remote")** — picks up a branch
-pushed by a sibling clone; `--prune` removes a remote branch deleted upstream.
-
-**`detect_default_branch` (4 tests)** — `hint` short-circuits (no remote
-needed); symbolic-ref `refs/remotes/origin/HEAD` is parsed; fall-through
-to `'main'` when no remote and no symbolic-ref; `master` is preferred when
-only `origin/master` exists (locks the probe order).
-
-**`RebaseResult` (2 tests)** — `field(default_factory=list)` produces
-independent lists per instance (defensive guard against the classic
-mutable-default bug); all three fields round-trip.
-
-**`rebase_onto` (3 tests)** — happy path returns `ok=True` and HEAD now
-contains both branches; **deliberate conflict** on `shared.txt` returns
-`ok=False`, the conflicting file is listed, `.git/rebase-merge/` and
-`.git/rebase-apply/` are both absent (acceptance criterion: worktree
-left clean), and `has_changes` returns False; invalid branch name (`-rm-rf`)
-is rejected by `validate_branch` before any git call.
-
-**`push_branch` (3 tests, local bare-repo "remote")** — plain push lands
-the branch ref on the bare remote; force-with-lease overwrites a rewritten
-history while a plain push of the rewritten branch raises `GitError`;
-invalid branch name is rejected.
-
-**`detect_github_remote` (6 tests)** — HTTPS GitHub URL → `'foo/bar'`;
-SSH GitHub URL → `'foo/bar'`; HTTPS without `.git` suffix → still
-`'octo/Hello-World'`; GitLab HTTPS → None; no origin → None; Bitbucket
-SSH-style → None (regex must anchor on `github.com`).
-
-**`gh_pr_create` (6 tests, `gh` mocked at the boundary)** — returns None
-when `shutil.which('gh')` is None (with INFO log on `cronos.git`);
-returns None when subprocess raises `FileNotFoundError` (race between
-`which` and the exec); returns the stripped URL on exit 0; returns None
-+ WARNING on non-zero exit; returns None when stdout is whitespace-only
-(empty PR URL must not propagate); 60s timeout returns None, kills the
-proc, and logs a WARNING.
-
-### Acceptance-criteria coverage matrix
-
-| Acceptance criterion | Test |
-|----------------------|------|
-| `commit_all` no-ops on clean worktree; returns SHA otherwise | `test_commit_all_returns_none_on_clean_worktree`, `test_commit_all_returns_sha_after_changes` |
-| `rebase_onto` on conflict: `ok=False`, files populated, no `.git/rebase-merge/` | `test_rebase_onto_conflict_returns_files_and_cleans_worktree` |
-| `detect_github_remote` handles HTTPS and SSH GitHub URLs; None for GitLab | `test_detect_github_remote_https_url`, `test_detect_github_remote_ssh_url`, `test_detect_github_remote_gitlab_returns_none` |
-| `gh_pr_create` returns None when `gh` is not on PATH | `test_gh_pr_create_returns_none_when_gh_not_on_path` |
-
-### Coverage delta this session
-
-- `app/git_ops.py`: 21% → **58% (+37 pts)** — the new helpers are now fully
-  exercised. Remaining gap is in the older clone/worktree helpers
-  (`clone_into_space`, `ensure_task_worktree`, `unlink_repo`,
-  `remove_task_worktree`, `apply_gitignore`, the auth-env builder) — those
-  belong to earlier link-repo work and are tracked separately in the
-  priority queue below.
-- Overall backend: 78.86% → **79.15% (+0.29 pts)**.
-- Tests: 627 → **667 (+40, net)**.
-
-All 667 backend tests pass on first run; no regressions.
 
 ## Recent changes (2026-05-25 — arc-4 task 1: Space.autopilot schema + yaml round-trip)
 
@@ -539,13 +452,6 @@ All 627 backend tests pass on first run; no regressions.
 | app/space_storage.py | 72% | +11 |
 | app/worker.py | 72% | -3 |
 | app/worker_pool.py | 80% | +0 |
-| app/main.py | 29% | +0 |
-| app/git_ops.py | 58% | +0 |
-| app/space_storage.py | 61% | +0 |
-| app/api/tasks.py | 69% | +0 |
-| app/api/test_reports.py | 70% | +0 |
-| app/worker.py | 72% | +0 (on_idle finally branch now hit) |
-| app/worker_pool.py | 83% | **+3** (new `_on_idle` closure exercised) |
 | app/agent.py | 83% | +0 |
 | app/test_report_store.py | 83% | +0 |
 | app/trace_store.py | 84% | +0 |
@@ -561,7 +467,6 @@ All 627 backend tests pass on first run; no regressions.
 | app/stats.py | 98% | +0 |
 | app/api/__init__.py | 100% | +0 |
 | app/api/activity.py | 100% | +0 |
-| app/autopilot.py | **100%** | **NEW** |
 | app/models.py | 100% | +0 |
 | app/test_report.py | 100% | +0 |
 
@@ -575,12 +480,11 @@ All 627 backend tests pass on first run; no regressions.
 
 | Module | Coverage | Missing line ranges (top) | Notes |
 |--------|----------|--------------------------|-------|
+| app/git_ops.py | 21% | 31,36,50-65,74-77,100-113,121-126,136-183,... | user git state — security-sensitive |
 | app/main.py | 29% | 41-45,53-63,71-88,100-120,125-201,221-247 | lifespan/watcher uncovered |
-| app/git_ops.py | 58% | 33,63-66,108-115,120,128-133,143-190,199-210,217,221,234-250,255-271,284-296 | NEW commit/rebase/push/PR helpers now covered; remaining gap = clone_into_space, ensure_task_worktree, unlink_repo, remove_task_worktree, apply_gitignore, auth-env builder |
-| app/space_storage.py | 61% | 52-56,67-76,86,150-151,157-161,170-171,177-178,181-183,186-195,199-200,204-232,264-267,271,276-279,287-297,392-422,432-449,475,478 | space lifecycle ops |
-| app/api/tasks.py | 69% | 57,60,126,183,201-202,232-235,270-271,288-289,321-326,328,336-357,362-363,421,426-437,447-460,470-484,494-514,537-540,547-548 | file upload/stop branches; PATCH not-found |
+| app/space_storage.py | 59% | 52-56,67-76,86,101-102,149-150,156-160,169-170,176-177,180-182,185-194,198-199,203-231,263-266,270,275-278,286-296,369-399,409-426,452,455 | space lifecycle ops |
+| app/api/tasks.py | 61% | 56,59,117,170-181,186-187,217-220,255-256,273-274,306-311,313,321-342,347-348,360,365-376,386-399,409-423,433-453,476-479,486-487 | file upload/stop branches; PATCH not-found |
 | app/api/test_reports.py | 70% | 15,20,69-74,79-87 | small module — easy wins |
-| app/worker.py | 72% | 63-64,127,143-146,161-162,174-175,192-203,226-269,295,357-358,400-401,422-423,443-444,470-481,496-528,543-552,574,586-590,594-601,614-660,671-715,721,729-734,769-787 | goal-orchestration paths + error/run-error branches still untested |
 
 ## Recent changes (2026-05-24 — arc-1 task 3 gap-fill on DTO endpoints)
 

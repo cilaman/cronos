@@ -61,6 +61,7 @@ class WorkerPool:
                 stats_store=self._stats_store,
                 trace_store=self._trace_store,
                 on_idle=_on_idle,
+                pool=self,
             )
             worker._space_id = space_id
             worker.start()
@@ -84,6 +85,14 @@ class WorkerPool:
             worker.stop_current(current)
         await worker.stop()
         log.info("Stopped worker for space %s", space_id)
+
+    async def enqueue(self, space_id: str, task_id: str) -> None:
+        """Enqueue task_id on the worker for space_id. No-op if no worker exists."""
+        worker = self._workers.get(space_id)
+        if worker is None:
+            log.warning("No worker for space %s, skipping enqueue of %s", space_id, task_id)
+            return
+        await worker.enqueue(task_id)
 
     def get(self, space_id: str) -> Worker | None:
         return self._workers.get(space_id)
