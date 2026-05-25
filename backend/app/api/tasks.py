@@ -129,6 +129,7 @@ def _enrich_summary(summary: TaskSummary, space: Space | None) -> TaskSummary:
             "space_name": space.name,
             "space_color": space.color,
             "space_icon": space.icon,
+            "space_autopilot": space.autopilot,
         }
     )
 

@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { SpaceForm } from "../components/spaces/SpaceForm";
 import { api } from "../api";
-import type { Space } from "../types";
+import type { AutopilotMode, Space } from "../types";
 import {
   useDeleteSpace,
   useImportSpace,
@@ -167,6 +167,55 @@ function RepoPanel({ space }: { space: Space }) {
             </p>
           )}
         </div>
+      )}
+    </div>
+  );
+}
+
+const AUTOPILOT_OPTIONS: { value: AutopilotMode; label: string }[] = [
+  { value: "disabled", label: "Disabled" },
+  { value: "enabled", label: "Enabled" },
+  { value: "paused", label: "Paused" },
+];
+
+function AutopilotPanel({ space }: { space: Space }) {
+  const updateSpace = useUpdateSpace(space.id);
+  const current = space.autopilot ?? "disabled";
+
+  async function handleChange(value: AutopilotMode) {
+    if (value === current) return;
+    await updateSpace.mutateAsync({ autopilot: value });
+  }
+
+  return (
+    <div className="rounded-md border border-hairline bg-surface-1 p-4 shadow-inset-hairline">
+      <h3 className="font-display text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
+        Autopilot
+      </h3>
+      <p className="mt-1 text-[12px] text-ink-faint">
+        When enabled, Cronos auto-picks the next eligible backlog task and opens a PR per task on DONE.
+      </p>
+      <div className="mt-3 flex overflow-hidden rounded border border-hairline">
+        {AUTOPILOT_OPTIONS.map((opt) => (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => void handleChange(opt.value)}
+            disabled={updateSpace.isPending}
+            className={[
+              "flex-1 py-1.5 text-[12px] font-medium transition focus:outline-none focus-visible:ring-1 focus-visible:ring-accent",
+              current === opt.value
+                ? "bg-accent text-canvas"
+                : "bg-surface-2 text-ink-muted hover:bg-surface-3 hover:text-ink",
+              "first:rounded-l last:rounded-r",
+            ].join(" ")}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+      {updateSpace.error && (
+        <p className="mt-2 text-[12px] text-danger">{updateSpace.error.message}</p>
       )}
     </div>
   );
@@ -364,6 +413,7 @@ export function SpaceSettingsPage() {
         rightSlot={
           <>
             <RepoPanel space={space} />
+            <AutopilotPanel space={space} />
             <DataPanel spaceId={space.id} />
             <DangerZone spaceId={space.id} spaceName={space.name} />
           </>
