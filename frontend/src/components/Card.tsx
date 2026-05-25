@@ -73,13 +73,14 @@ interface Props {
   compact?: boolean;
   density?: "default" | "compact" | "tight";
   isDragOverlay?: boolean;
+  dragDisabled?: boolean;
   onOpenTask?: (id: string) => void;
   blocksCount?: number;
 }
 
-export function Card({ task, onClick, compact = false, density = "default", isDragOverlay = false, onOpenTask, blocksCount = 0 }: Props) {
+export function Card({ task, onClick, compact = false, density = "default", isDragOverlay = false, dragDisabled = false, onOpenTask, blocksCount = 0 }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: task.id, disabled: isDragOverlay });
+    useSortable({ id: task.id, disabled: isDragOverlay || dragDisabled });
 
   const style =
     !isDragOverlay
@@ -105,6 +106,7 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
         ref={setNodeRef}
         style={style}
         {...(!isDragOverlay ? attributes : {})}
+        {...(!isDragOverlay && !dragDisabled ? listeners : {})}
         data-task-type={taskType}
         data-density="tight"
         className={cn("group", isDragging && !isDragOverlay && "opacity-40")}
