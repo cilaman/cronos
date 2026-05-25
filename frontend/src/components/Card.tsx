@@ -123,9 +123,10 @@ interface Props {
   dragDisabled?: boolean;
   onOpenTask?: (id: string) => void;
   blocksCount?: number;
+  running?: boolean;
 }
 
-export function Card({ task, onClick, compact = false, density = "default", isDragOverlay = false, dragDisabled = false, onOpenTask, blocksCount = 0 }: Props) {
+export function Card({ task, onClick, compact = false, density = "default", isDragOverlay = false, dragDisabled = false, onOpenTask, blocksCount = 0, running = false }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id, disabled: isDragOverlay || dragDisabled });
 
@@ -171,6 +172,12 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
             isGoal && "border-t-ink",
           )}
         >
+          {running && (
+            <span
+              className="absolute right-2 top-2 h-2 w-2 rounded-full bg-accent-bright anim-pulse-dot"
+              aria-label="Running"
+            />
+          )}
           <h3 className="truncate text-sm font-semibold leading-snug text-ink">{task.title}</h3>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
             <span
@@ -247,6 +254,12 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
           isGoal && "border-t-ink",
         )}
       >
+        {running && (
+          <span
+            className="absolute right-2 top-2 h-2 w-2 rounded-full bg-accent-bright anim-pulse-dot"
+            aria-label="Running"
+          />
+        )}
         <span
           {...(!isDragOverlay ? listeners : {})}
           className="absolute right-1.5 top-1.5 touch-none cursor-grab rounded p-0.5 text-ink-faint opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"

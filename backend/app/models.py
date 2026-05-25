@@ -85,6 +85,8 @@ class TaskSummary(BaseModel):
     pr_url: str | None = None
     proposed_pr_path: str | None = None
     children_progress: ChildrenProgress | None = None
+    # True when a worker is actively executing this task right now.
+    is_running: bool = False
     # Denormalized space fields so cards can render without a separate join.
     space_name: str | None = None
     space_color: str | None = None

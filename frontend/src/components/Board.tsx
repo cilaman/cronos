@@ -10,9 +10,10 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { arrayMove } from "@dnd-kit/sortable";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useBoard, useReorderTasks, useTransitionTask } from "../hooks/useTasks";
+import { useRunning } from "../hooks/useRunning";
 import { LANES, type TaskState, type TaskSummary, canUserTransition } from "../types";
 import type { BoardSortMode } from "../lib/storage";
 import { Detail } from "./Detail";
@@ -55,6 +56,7 @@ export function Board({
   const [searchParams, setSearchParams] = useSearchParams();
   const openId = searchParams.get("task");
   const [activeTask, setActiveTask] = useState<TaskSummary | null>(null);
+  const { isRunning, seed } = useRunning(spaceId);
 
   const setOpenId = (id: string | null) => {
     setSearchParams(
@@ -88,6 +90,15 @@ export function Board({
       done: byPriority(data.done),
     };
   }, [data, sortMode]);
+
+  // Seed running set from board data so the pulse appears on first render.
+  useEffect(() => {
+    if (!sortedData) return;
+    const running = LANES.flatMap(({ state }) => sortedData[state])
+      .filter((t) => t.is_running)
+      .map((t) => t.id);
+    seed(running);
+  }, [sortedData, seed]);
 
   const blocksCountMap = useMemo<Record<string, number>>(() => {
     if (!sortedData) return {};
@@ -193,6 +204,7 @@ export function Board({
               compact={compact}
               onOpenTask={setOpenId}
               blocksCountMap={blocksCountMap}
+              isRunning={isRunning}
             />
           ))}
         </div>

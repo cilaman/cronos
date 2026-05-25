@@ -97,6 +97,18 @@ class WorkerPool:
     def get(self, space_id: str) -> Worker | None:
         return self._workers.get(space_id)
 
+    def running_ids(self, space_id: str) -> set[str]:
+        """Return the set of task IDs actively executing on this space's worker."""
+        worker = self._workers.get(space_id)
+        if worker is None:
+            return set()
+        result: set[str] = set()
+        if worker._current_id is not None:
+            result.add(worker._current_id)
+        if worker._current_child_id is not None:
+            result.add(worker._current_child_id)
+        return result
+
     def get_for_task(self, task_id: str) -> Worker | None:
         """Resolve a task id to the worker for its space.
 

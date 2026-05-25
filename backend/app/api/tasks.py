@@ -206,6 +206,24 @@ def _enrich_progress(board: Board) -> Board:
     )
 
 
+def _annotate_running(board: Board, running: set[str]) -> Board:
+    if not running:
+        return board
+
+    def mark(items: list[TaskSummary]) -> list[TaskSummary]:
+        return [
+            t.model_copy(update={"is_running": True}) if t.id in running else t
+            for t in items
+        ]
+
+    return Board(
+        backlog=mark(board.backlog),
+        active=mark(board.active),
+        waiting=mark(board.waiting),
+        done=mark(board.done),
+    )
+
+
 def _build_task_read(task: Task, space: Space | None, store: TaskStore | None = None) -> TaskRead:
     unmet: list[str] = unmet_deps(task, store._by_id) if store is not None else []
     return TaskRead(
@@ -225,10 +243,19 @@ async def list_tasks(
 ) -> Board:
     store = get_store(request)
     space_store = get_space_store(request)
+    pool = get_pool(request)
     scope = None if space_id in (None, "all", "") else space_id
     if scope is not None and not space_store.exists(scope):
         raise HTTPException(status_code=404, detail=f"Space {scope} not found")
     board = _enrich_progress(_enrich_board(store.board(scope), space_store))
+    # Annotate tasks that a worker is actively executing right now.
+    if scope is not None:
+        running = pool.running_ids(scope)
+    else:
+        running = set()
+        for space in space_store.list_all():
+            running |= pool.running_ids(space.id)
+    board = _annotate_running(board, running)
     if view is not None:
         if scope is None:
             raise HTTPException(

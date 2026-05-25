@@ -15,11 +15,13 @@ interface Props {
   compact?: boolean;
   onOpenTask?: (id: string) => void;
   blocksCountMap?: Record<string, number>;
+  isRunning?: (id: string) => boolean;
 }
 
-export function Lane({ state, label, tasks, onOpen, onAdd, compact = false, onOpenTask, blocksCountMap }: Props) {
+export function Lane({ state, label, tasks, onOpen, onAdd, compact = false, onOpenTask, blocksCountMap, isRunning }: Props) {
   const { isOver, setNodeRef } = useDroppable({ id: state });
   const taskIds = tasks.map((t) => t.id);
+  const anyRunning = isRunning !== undefined && tasks.some((t) => isRunning(t.id));
 
   return (
     <section
@@ -30,13 +32,19 @@ export function Lane({ state, label, tasks, onOpen, onAdd, compact = false, onOp
       )}
     >
       <StickyToolbar className="z-10 h-10 rounded-t-lg px-3">
-        <div className="flex items-baseline gap-2">
+        <div className="flex items-center gap-2">
           <h2 className="font-display text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-muted">
             {label}
           </h2>
           <span className="font-mono text-xs tabular-nums text-ink-faint">
             {String(tasks.length).padStart(2, "0")}
           </span>
+          {anyRunning && (
+            <span
+              className="h-2 w-2 rounded-full bg-accent-bright anim-pulse-dot"
+              aria-label="Task running"
+            />
+          )}
         </div>
         {state === "backlog" && (
           <button
@@ -62,6 +70,7 @@ export function Lane({ state, label, tasks, onOpen, onAdd, compact = false, onOp
                 compact={compact}
                 onOpenTask={onOpenTask}
                 blocksCount={blocksCountMap?.[task.id] ?? 0}
+                running={isRunning?.(task.id)}
               />
             ))
           )}

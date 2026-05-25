@@ -48,6 +48,7 @@ export interface TaskSummary {
   pr_url?: string | null;
   proposed_pr_path?: string | null;
   children_progress?: { done: number; total: number; waiting: number } | null;
+  is_running?: boolean;
 }
 
 export type AgentMode = "plan" | "auto" | "ask";
