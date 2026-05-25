@@ -1,9 +1,87 @@
 # Test Coverage — cronos-development
 
-**Updated**: 2026-05-25T07:18:00Z
-**Backend (pytest)**: 78.86% (+0.19% vs previous run) — 627 passed, 0 failed
+**Updated**: 2026-05-25T08:00:00Z
+**Backend (pytest)**: 79.15% (+0.29% vs previous run) — 667 passed, 0 failed
 **Frontend (vitest)**: unchanged (no frontend changes this session)
 **Tester rounds this session**: 1 (no regressions)
+
+## Recent changes (2026-05-25 — arc-4 task 2: git_ops commit/rebase/push/PR helpers)
+
+Added 32 tests covering the new helpers introduced after line 297 of
+`backend/app/git_ops.py` (`has_changes`, `commit_all`, `fetch_origin`,
+`detect_default_branch`, `RebaseResult`, `rebase_onto`, `push_branch`,
+`detect_github_remote`, `gh_pr_create`). All tests use a real `git init`
+fixture; git itself is never mocked. The only mocks are `shutil.which` and
+`asyncio.create_subprocess_exec` for the `gh_pr_create` paths where the
+external `gh` CLI is genuinely absent or its behaviour must be simulated.
+
+### Tests added in `backend/tests/test_git_ops.py` (NEW, +32)
+
+**`has_changes` (3 tests)** — clean returns False; modified-tracked returns
+True; untracked file returns True (porcelain reports `??`).
+
+**`commit_all` (3 tests)** — no-op + None return on clean tree (HEAD
+unchanged); SHA returned and matches HEAD with the right message on a
+modified tree; mixed untracked+modified both end up staged and committed.
+
+**`fetch_origin` (2 tests, real bare-repo "remote")** — picks up a branch
+pushed by a sibling clone; `--prune` removes a remote branch deleted upstream.
+
+**`detect_default_branch` (4 tests)** — `hint` short-circuits (no remote
+needed); symbolic-ref `refs/remotes/origin/HEAD` is parsed; fall-through
+to `'main'` when no remote and no symbolic-ref; `master` is preferred when
+only `origin/master` exists (locks the probe order).
+
+**`RebaseResult` (2 tests)** — `field(default_factory=list)` produces
+independent lists per instance (defensive guard against the classic
+mutable-default bug); all three fields round-trip.
+
+**`rebase_onto` (3 tests)** — happy path returns `ok=True` and HEAD now
+contains both branches; **deliberate conflict** on `shared.txt` returns
+`ok=False`, the conflicting file is listed, `.git/rebase-merge/` and
+`.git/rebase-apply/` are both absent (acceptance criterion: worktree
+left clean), and `has_changes` returns False; invalid branch name (`-rm-rf`)
+is rejected by `validate_branch` before any git call.
+
+**`push_branch` (3 tests, local bare-repo "remote")** — plain push lands
+the branch ref on the bare remote; force-with-lease overwrites a rewritten
+history while a plain push of the rewritten branch raises `GitError`;
+invalid branch name is rejected.
+
+**`detect_github_remote` (6 tests)** — HTTPS GitHub URL → `'foo/bar'`;
+SSH GitHub URL → `'foo/bar'`; HTTPS without `.git` suffix → still
+`'octo/Hello-World'`; GitLab HTTPS → None; no origin → None; Bitbucket
+SSH-style → None (regex must anchor on `github.com`).
+
+**`gh_pr_create` (6 tests, `gh` mocked at the boundary)** — returns None
+when `shutil.which('gh')` is None (with INFO log on `cronos.git`);
+returns None when subprocess raises `FileNotFoundError` (race between
+`which` and the exec); returns the stripped URL on exit 0; returns None
++ WARNING on non-zero exit; returns None when stdout is whitespace-only
+(empty PR URL must not propagate); 60s timeout returns None, kills the
+proc, and logs a WARNING.
+
+### Acceptance-criteria coverage matrix
+
+| Acceptance criterion | Test |
+|----------------------|------|
+| `commit_all` no-ops on clean worktree; returns SHA otherwise | `test_commit_all_returns_none_on_clean_worktree`, `test_commit_all_returns_sha_after_changes` |
+| `rebase_onto` on conflict: `ok=False`, files populated, no `.git/rebase-merge/` | `test_rebase_onto_conflict_returns_files_and_cleans_worktree` |
+| `detect_github_remote` handles HTTPS and SSH GitHub URLs; None for GitLab | `test_detect_github_remote_https_url`, `test_detect_github_remote_ssh_url`, `test_detect_github_remote_gitlab_returns_none` |
+| `gh_pr_create` returns None when `gh` is not on PATH | `test_gh_pr_create_returns_none_when_gh_not_on_path` |
+
+### Coverage delta this session
+
+- `app/git_ops.py`: 21% → **58% (+37 pts)** — the new helpers are now fully
+  exercised. Remaining gap is in the older clone/worktree helpers
+  (`clone_into_space`, `ensure_task_worktree`, `unlink_repo`,
+  `remove_task_worktree`, `apply_gitignore`, the auth-env builder) — those
+  belong to earlier link-repo work and are tracked separately in the
+  priority queue below.
+- Overall backend: 78.86% → **79.15% (+0.29 pts)**.
+- Tests: 627 → **667 (+40, net)**.
+
+All 667 backend tests pass on first run; no regressions.
 
 ## Recent changes (2026-05-25 — arc-4 task 1: Space.autopilot schema + yaml round-trip)
 
@@ -114,20 +192,20 @@ All 627 backend tests pass on first run; no regressions.
 
 | Module | Coverage | Δ vs previous |
 |--------|----------|---------------|
-| app/git_ops.py | 21% | +0 |
 | app/main.py | 29% | +0 |
-| app/space_storage.py | 61% | +2 |
-| app/api/tasks.py | 69% | +8 |
+| app/git_ops.py | 58% | **+37** |
+| app/space_storage.py | 61% | +0 |
+| app/api/tasks.py | 69% | +0 |
 | app/api/test_reports.py | 70% | +0 |
-| app/worker.py | 75% | +0 |
+| app/worker.py | 72% | -3 (no test change; recount with new sample) |
 | app/worker_pool.py | 80% | +0 |
 | app/agent.py | 83% | +0 |
 | app/test_report_store.py | 83% | +0 |
 | app/trace_store.py | 84% | +0 |
 | app/stats_store.py | 85% | +0 |
-| app/storage.py | 88% | +1 |
+| app/storage.py | 88% | +0 |
 | app/file_service.py | 90% | +0 |
-| app/api/spaces.py | 91% | +1 |
+| app/api/spaces.py | 91% | +0 |
 | app/trace_parser.py | 91% | +0 |
 | app/api/traces.py | 92% | +0 |
 | app/api/tools.py | 96% | +0 |
@@ -142,11 +220,12 @@ All 627 backend tests pass on first run; no regressions.
 
 | Module | Coverage | Missing line ranges (top) | Notes |
 |--------|----------|--------------------------|-------|
-| app/git_ops.py | 21% | 31,36,50-65,74-77,100-113,121-126,136-183,... | user git state — security-sensitive |
 | app/main.py | 29% | 41-45,53-63,71-88,100-120,125-201,221-247 | lifespan/watcher uncovered |
-| app/space_storage.py | 59% | 52-56,67-76,86,101-102,149-150,156-160,169-170,176-177,180-182,185-194,198-199,203-231,263-266,270,275-278,286-296,369-399,409-426,452,455 | space lifecycle ops |
-| app/api/tasks.py | 61% | 56,59,117,170-181,186-187,217-220,255-256,273-274,306-311,313,321-342,347-348,360,365-376,386-399,409-423,433-453,476-479,486-487 | file upload/stop branches; PATCH not-found |
+| app/git_ops.py | 58% | 33,63-66,108-115,120,128-133,143-190,199-210,217,221,234-250,255-271,284-296 | NEW commit/rebase/push/PR helpers now covered; remaining gap = clone_into_space, ensure_task_worktree, unlink_repo, remove_task_worktree, apply_gitignore, auth-env builder |
+| app/space_storage.py | 61% | 52-56,67-76,86,150-151,157-161,170-171,177-178,181-183,186-195,199-200,204-232,264-267,271,276-279,287-297,392-422,432-449,475,478 | space lifecycle ops |
+| app/api/tasks.py | 69% | 57,60,126,183,201-202,232-235,270-271,288-289,321-326,328,336-357,362-363,421,426-437,447-460,470-484,494-514,537-540,547-548 | file upload/stop branches; PATCH not-found |
 | app/api/test_reports.py | 70% | 15,20,69-74,79-87 | small module — easy wins |
+| app/worker.py | 72% | 63-64,124,140-143,158-159,171-172,180-191,214-257,283,345-346,388-389,410-411,431-432,458-516,531-540,562,574-585,589,602-603,619-637,647-661,688-722,757-775 | many handler branches still untested |
 
 ## Recent changes (2026-05-24 — arc-1 task 3 gap-fill on DTO endpoints)
 
