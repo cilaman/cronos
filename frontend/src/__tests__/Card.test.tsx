@@ -135,14 +135,11 @@ describe("Card — compact prop", () => {
   it("invokes onClick when the card is clicked", async () => {
     const onClick = vi.fn();
     const task = makeTask({ title: "Clickable card title" });
-    renderCard({ task, onClick, compact: true });
+    const { container } = renderCard({ task, onClick, compact: true });
     const user = userEvent.setup();
-    // The inner <button type="button"> wraps the title; the outer div from
-    // useDraggable also exposes role="button", so query by accessible name on
-    // the actual <button> element.
-    const buttons = screen.getAllByRole("button");
-    const cardButton = buttons.find((b) => b.tagName === "BUTTON");
-    expect(cardButton).toBeDefined();
+    // The card renders as div[role="button"] inside the DnD wrapper.
+    const cardButton = container.querySelector("[data-task-type] > div[role='button']");
+    expect(cardButton).not.toBeNull();
     await user.click(cardButton!);
     expect(onClick).toHaveBeenCalledTimes(1);
   });
