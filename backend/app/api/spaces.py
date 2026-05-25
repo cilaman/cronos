@@ -98,6 +98,7 @@ def _summarize_space(
         icon=space.icon,
         task_counts=bucket,
         last_activity_at=last_activity,
+        autopilot=space.autopilot,
     )
 
 

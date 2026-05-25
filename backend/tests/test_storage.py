@@ -2259,3 +2259,342 @@ async def test_board_summary_unmet_dependencies_drops_done_deps(task_store):
     assert summary.unmet_dependencies == []
     # depends_on stays — it's the declared dep list, not the open-blocker list.
     assert summary.depends_on == [dep.id]
+
+
+# ---------------------------------------------------------------------------
+# PR refs: parse_file / dump_task round-trip
+# ---------------------------------------------------------------------------
+
+
+def test_parse_file_reads_pr_url_and_proposed_pr_path(tmp_path):
+    """parse_file reads pr_url and proposed_pr_path from frontmatter."""
+    from app.models import Task
+
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    task = Task(
+        id="2026-05-25-1200-pr",
+        space_id=SPACE_ID,
+        title="With PR",
+        state=TaskState.DONE,
+        created_at=now,
+        updated_at=now,
+        brief="b",
+        history="",
+        pr_url="https://github.com/foo/bar/pull/7",
+        proposed_pr_path="/tmp/proposed.md",
+    )
+    path = tmp_path / f"{task.id}.md"
+    path.write_text(dump_task(task), encoding="utf-8")
+
+    parsed = parse_file(path, SPACE_ID)
+
+    assert parsed.pr_url == "https://github.com/foo/bar/pull/7"
+    assert parsed.proposed_pr_path == "/tmp/proposed.md"
+
+
+def test_parse_file_pr_url_defaults_to_none_when_missing(tmp_path):
+    """Legacy task file without pr_url keys parses with both fields = None."""
+    from app.models import Task
+
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    task = Task(
+        id="2026-05-25-1200-legacy",
+        space_id=SPACE_ID,
+        title="Legacy",
+        state=TaskState.BACKLOG,
+        created_at=now,
+        updated_at=now,
+        brief="b",
+        history="",
+    )
+    # dump_task always emits the keys, so write a manual legacy-style file.
+    legacy_md = f"""---
+id: {task.id}
+space_id: {SPACE_ID}
+title: Legacy
+state: backlog
+created_at: 2026-05-25T12:00:00Z
+updated_at: 2026-05-25T12:00:00Z
+---
+
+# Brief
+
+b
+
+# History
+"""
+    path = tmp_path / f"{task.id}.md"
+    path.write_text(legacy_md, encoding="utf-8")
+
+    parsed = parse_file(path, SPACE_ID)
+
+    assert parsed.pr_url is None
+    assert parsed.proposed_pr_path is None
+
+
+def test_dump_task_emits_pr_url_and_proposed_pr_path_keys(tmp_path):
+    """dump_task always emits the two PR keys (even when both are None)."""
+    from app.models import Task
+
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    task = Task(
+        id="2026-05-25-1200-x",
+        space_id=SPACE_ID,
+        title="x",
+        state=TaskState.BACKLOG,
+        created_at=now,
+        updated_at=now,
+        brief="b",
+        history="",
+    )
+
+    text = dump_task(task)
+
+    assert "pr_url:" in text
+    assert "proposed_pr_path:" in text
+
+
+def test_dump_task_round_trip_preserves_pr_fields(tmp_path):
+    """dump_task -> file -> parse_file round-trips both PR fields exactly."""
+    from app.models import Task
+
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    task = Task(
+        id="2026-05-25-1200-rt",
+        space_id=SPACE_ID,
+        title="Round-trip",
+        state=TaskState.DONE,
+        created_at=now,
+        updated_at=now,
+        brief="brief body",
+        history="history body",
+        pr_url="https://github.com/owner/repo/pull/123",
+        proposed_pr_path="/data/spaces/x/.cronos/pull_requests/x.md",
+    )
+    path = tmp_path / f"{task.id}.md"
+    path.write_text(dump_task(task), encoding="utf-8")
+
+    parsed = parse_file(path, SPACE_ID)
+
+    assert parsed.pr_url == "https://github.com/owner/repo/pull/123"
+    assert parsed.proposed_pr_path == "/data/spaces/x/.cronos/pull_requests/x.md"
+    # And re-dumping the round-tripped task produces byte-equal content.
+    assert dump_task(parsed) == dump_task(task)
+
+
+# ---------------------------------------------------------------------------
+# TaskStore.set_pr_refs
+# ---------------------------------------------------------------------------
+
+
+async def test_set_pr_refs_persists_pr_url(task_store):
+    """set_pr_refs writes pr_url to in-memory state AND disk."""
+    task = await task_store.create(space_id=SPACE_ID, title="t", brief="b")
+
+    updated = await task_store.set_pr_refs(
+        task.id,
+        pr_url="https://github.com/foo/bar/pull/9",
+        proposed_pr_path=None,
+    )
+
+    assert updated.pr_url == "https://github.com/foo/bar/pull/9"
+    assert updated.proposed_pr_path is None
+    # And the index reflects the same.
+    assert task_store.get(task.id).pr_url == "https://github.com/foo/bar/pull/9"
+
+
+async def test_set_pr_refs_persists_proposed_pr_path(task_store):
+    task = await task_store.create(space_id=SPACE_ID, title="t", brief="b")
+
+    updated = await task_store.set_pr_refs(
+        task.id,
+        pr_url=None,
+        proposed_pr_path="/tmp/p.md",
+    )
+
+    assert updated.pr_url is None
+    assert updated.proposed_pr_path == "/tmp/p.md"
+
+
+async def test_set_pr_refs_survives_disk_round_trip(task_store, tmp_spaces_dir):
+    """After set_pr_refs, a fresh TaskStore.reload_all() sees the new values."""
+    task = await task_store.create(space_id=SPACE_ID, title="t", brief="b")
+    await task_store.set_pr_refs(
+        task.id,
+        pr_url="https://github.com/x/y/pull/1",
+        proposed_pr_path=None,
+    )
+
+    fresh = TaskStore(tmp_spaces_dir)
+    await fresh.reload_all()
+
+    reloaded = fresh.get(task.id)
+    assert reloaded is not None
+    assert reloaded.pr_url == "https://github.com/x/y/pull/1"
+
+
+async def test_set_pr_refs_raises_task_not_found(task_store):
+    with pytest.raises(TaskNotFound):
+        await task_store.set_pr_refs(
+            "unknown-id", pr_url=None, proposed_pr_path=None
+        )
+
+
+async def test_set_pr_refs_overwrites_existing_values(task_store):
+    """A second set_pr_refs call replaces (not merges) the previous values."""
+    task = await task_store.create(space_id=SPACE_ID, title="t", brief="b")
+    await task_store.set_pr_refs(
+        task.id, pr_url="https://x/y/1", proposed_pr_path="/old.md"
+    )
+
+    # Second call with different values must overwrite both fields.
+    overwritten = await task_store.set_pr_refs(
+        task.id, pr_url="https://x/y/2", proposed_pr_path=None
+    )
+
+    assert overwritten.pr_url == "https://x/y/2"
+    assert overwritten.proposed_pr_path is None
+
+
+async def test_set_pr_refs_can_clear_both_fields(task_store):
+    """Passing None for both clears any prior pr_url/proposed_pr_path."""
+    task = await task_store.create(space_id=SPACE_ID, title="t", brief="b")
+    await task_store.set_pr_refs(
+        task.id, pr_url="https://x/y/1", proposed_pr_path="/tmp/p.md"
+    )
+
+    cleared = await task_store.set_pr_refs(
+        task.id, pr_url=None, proposed_pr_path=None
+    )
+
+    assert cleared.pr_url is None
+    assert cleared.proposed_pr_path is None
+
+
+# ---------------------------------------------------------------------------
+# TaskStore.autopilot_conflict
+# ---------------------------------------------------------------------------
+
+
+async def test_autopilot_conflict_moves_done_task_to_waiting(task_store):
+    """A DONE task with conflict becomes WAITING with the conflict message."""
+    task = await task_store.create(space_id=SPACE_ID, title="conflict", brief="b")
+    await task_store.transition(
+        task.id, TaskState.ACTIVE, allowed={(TaskState.BACKLOG, TaskState.ACTIVE)}
+    )
+    await task_store.finalize_run(
+        task.id,
+        new_state=TaskState.DONE,
+        session_id=None,
+        waiting_question=None,
+        history_entry="```\ndone\n```",
+    )
+
+    updated = await task_store.autopilot_conflict(task.id, "Rebase conflict on src/foo.py")
+
+    assert updated.state == TaskState.WAITING
+    assert updated.waiting_question == "Rebase conflict on src/foo.py"
+
+
+async def test_autopilot_conflict_works_from_any_state(task_store):
+    """autopilot_conflict bypasses USER_TRANSITIONS — works even from BACKLOG."""
+    task = await task_store.create(space_id=SPACE_ID, title="bl", brief="b")
+
+    updated = await task_store.autopilot_conflict(task.id, "msg")
+
+    assert updated.state == TaskState.WAITING
+
+
+async def test_autopilot_conflict_raises_task_not_found(task_store):
+    with pytest.raises(TaskNotFound):
+        await task_store.autopilot_conflict("unknown-id", "msg")
+
+
+async def test_autopilot_conflict_persists_to_disk(task_store, tmp_spaces_dir):
+    """A fresh TaskStore reload sees the new WAITING state + question."""
+    task = await task_store.create(space_id=SPACE_ID, title="t", brief="b")
+    await task_store.autopilot_conflict(task.id, "Conflict on x.py")
+
+    fresh = TaskStore(tmp_spaces_dir)
+    await fresh.reload_all()
+
+    reloaded = fresh.get(task.id)
+    assert reloaded.state == TaskState.WAITING
+    assert reloaded.waiting_question == "Conflict on x.py"
+
+
+# ---------------------------------------------------------------------------
+# summarize() — PR ref propagation (arc-4/5 UI: Card + Detail rely on these
+# being denormalized onto TaskSummary so cards/lists render without an extra
+# fetch).
+# ---------------------------------------------------------------------------
+
+
+def test_summarize_propagates_pr_url():
+    """A task with pr_url surfaces it on the summary verbatim."""
+    task = _make_task(pr_url="https://github.com/owner/repo/pull/12")
+
+    summary = summarize(task)
+
+    assert summary.pr_url == "https://github.com/owner/repo/pull/12"
+
+
+def test_summarize_propagates_proposed_pr_path():
+    """A task with proposed_pr_path (no remote) surfaces it on the summary."""
+    task = _make_task(proposed_pr_path="/repo/.cronos/pull_requests/t.md")
+
+    summary = summarize(task)
+
+    assert summary.proposed_pr_path == "/repo/.cronos/pull_requests/t.md"
+
+
+def test_summarize_pr_fields_default_to_none():
+    """A bare Task summarizes with both PR fields set to None.
+
+    The frontend Card relies on `pr_url == null` being falsy to decide whether
+    to render the GitPullRequest link icon. If summarize() ever emitted an
+    empty string here the icon would still render with href='' — a regression
+    we want to catch.
+    """
+    task = _make_task()
+
+    summary = summarize(task)
+
+    assert summary.pr_url is None
+    assert summary.proposed_pr_path is None
+
+
+def test_summarize_propagates_both_pr_fields_independently():
+    """pr_url and proposed_pr_path are independent — both can be set at once.
+
+    The Card UI gives pr_url precedence, but the summary itself must carry
+    both so the Detail panel (which renders them differently) can decide.
+    """
+    task = _make_task(
+        pr_url="https://github.com/o/r/pull/1",
+        proposed_pr_path="/p.md",
+    )
+
+    summary = summarize(task)
+
+    assert summary.pr_url == "https://github.com/o/r/pull/1"
+    assert summary.proposed_pr_path == "/p.md"
+
+
+async def test_task_store_board_summary_includes_pr_refs(task_store):
+    """End-to-end: a task with pr_url surfaces it on board() summaries.
+
+    This is what the Card on the kanban actually reads from the API.
+    """
+    task = await task_store.create(space_id=SPACE_ID, title="PR task", brief="")
+    await task_store.set_pr_refs(
+        task.id,
+        pr_url="https://github.com/o/r/pull/55",
+        proposed_pr_path=None,
+    )
+
+    board = task_store.board(SPACE_ID)
+    matches = [s for s in board.backlog if s.id == task.id]
+    assert len(matches) == 1
+    assert matches[0].pr_url == "https://github.com/o/r/pull/55"
+    assert matches[0].proposed_pr_path is None

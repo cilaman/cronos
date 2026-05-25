@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import asyncio.subprocess
 import base64
+import dataclasses
 import logging
 import os
 import re
@@ -91,8 +93,8 @@ async def _run_or_raise(
 _GIT_TOKEN_ENV = "CRONOS_GIT_TOKEN"
 
 
-def _clone_env(repo_url: str) -> dict[str, str] | None:
-    """Build the subprocess env for a clone, injecting a PAT if available.
+def _auth_env(repo_url: str) -> dict[str, str] | None:
+    """Build a subprocess env that injects a PAT for HTTPS git operations.
 
     Returns None when no token is configured or the URL isn't HTTPS (SSH
     URLs are authenticated via ssh-agent / mounted keys, not PATs).
@@ -111,6 +113,11 @@ def _clone_env(repo_url: str) -> dict[str, str] | None:
     # Stop git from prompting if the token is wrong — fail fast instead.
     env.setdefault("GIT_TERMINAL_PROMPT", "0")
     return env
+
+
+def _clone_env(repo_url: str) -> dict[str, str] | None:
+    """Alias kept for backward-compat callers; delegates to _auth_env."""
+    return _auth_env(repo_url)
 
 
 # ---------- repo linking ----------
@@ -161,7 +168,7 @@ async def clone_into_space(space_dir: Path, repo_url: str, branch: str) -> None:
         try:
             await _run_or_raise(
                 "clone", "--branch", branch, "--single-branch", repo_url, str(scratch),
-                env=_clone_env(repo_url),
+                env=_auth_env(repo_url),
             )
             # Move every entry (including dotfiles) out of scratch into space_dir.
             for entry in scratch.iterdir():
@@ -287,3 +294,171 @@ def apply_gitignore(space_dir: Path, share_cronos: bool) -> None:
     sep = "" if existing.endswith("\n") or not existing else "\n"
     addition = f"{sep}# Cronos task data — see https://github.com/anthropics/cronos\n{needle}\n"
     gitignore.write_text(existing + addition, encoding="utf-8")
+
+
+# ---------- commit / fetch / rebase / push / PR ----------
+
+
+async def has_changes(worktree: Path) -> bool:
+    """Return True when the worktree has uncommitted changes."""
+    code, out, _ = await _run("status", "--porcelain", cwd=worktree)
+    return code == 0 and bool(out.strip())
+
+
+async def commit_all(worktree: Path, message: str) -> str | None:
+    """Stage everything and commit. Returns the new SHA, or None when clean."""
+    if not await has_changes(worktree):
+        return None
+    await _run_or_raise("add", "-A", cwd=worktree)
+    await _run_or_raise("commit", "-m", message, cwd=worktree)
+    sha = await _run_or_raise("rev-parse", "HEAD", cwd=worktree)
+    return sha.strip()
+
+
+async def _space_remote_url(space_dir: Path) -> str:
+    """Return the origin remote URL, or empty string on error."""
+    code, out, _ = await _run("remote", "get-url", "origin", cwd=space_dir)
+    return out.strip() if code == 0 else ""
+
+
+async def fetch_origin(space_dir: Path) -> None:
+    """Fetch and prune from origin, injecting credentials when available."""
+    url = await _space_remote_url(space_dir)
+    env = _auth_env(url) if url else None
+    await _run_or_raise("fetch", "origin", "--prune", cwd=space_dir, env=env)
+
+
+async def detect_default_branch(space_dir: Path, hint: str | None = None) -> str:
+    """Return the default remote branch name.
+
+    Resolution order: explicit hint → symbolic-ref HEAD → 'main' → 'master'.
+    """
+    if hint:
+        return hint
+    code, out, _ = await _run(
+        "symbolic-ref", "refs/remotes/origin/HEAD", cwd=space_dir
+    )
+    if code == 0 and out.strip():
+        # refs/remotes/origin/HEAD → refs/remotes/origin/<branch>
+        return out.strip().split("/")[-1]
+    # Check whether common defaults exist on the remote.
+    for candidate in ("main", "master"):
+        code, _, _ = await _run(
+            "rev-parse", "--verify", f"origin/{candidate}", cwd=space_dir
+        )
+        if code == 0:
+            return candidate
+    return "main"
+
+
+@dataclasses.dataclass
+class RebaseResult:
+    ok: bool
+    conflicting_files: list[str] = dataclasses.field(default_factory=list)
+    error: str = ""
+
+
+async def rebase_onto(worktree: Path, onto: str) -> RebaseResult:
+    """Rebase the worktree branch onto origin/<onto>.
+
+    On conflict, parses conflicting files, aborts the rebase so the worktree
+    is left clean, and returns ok=False with the file list.
+    """
+    validate_branch(onto)
+    code, out, err = await _run("rebase", f"origin/{onto}", cwd=worktree)
+    if code == 0:
+        return RebaseResult(ok=True)
+
+    # Collect conflicting files from porcelain status.
+    _code, status_out, _ = await _run("status", "--porcelain", cwd=worktree)
+    conflicting: list[str] = []
+    for line in status_out.splitlines():
+        xy = line[:2]
+        if any(c in xy for c in ("U", "A", "D")):
+            conflicting.append(line[3:].strip())
+
+    # Always abort to leave the worktree clean.
+    await _run("rebase", "--abort", cwd=worktree)
+
+    combined = err.strip() or out.strip()
+    return RebaseResult(ok=False, conflicting_files=conflicting, error=combined)
+
+
+async def push_branch(
+    worktree: Path,
+    branch: str,
+    *,
+    force_with_lease: bool = False,
+) -> None:
+    """Push `branch` to origin from `worktree`."""
+    validate_branch(branch)
+    url = await _space_remote_url(worktree)
+    env = _auth_env(url) if url else None
+    extra = ["--force-with-lease"] if force_with_lease else []
+    await _run_or_raise("push", "origin", branch, *extra, cwd=worktree, env=env)
+
+
+_GITHUB_RE = re.compile(
+    r"github\.com[/:](?P<owner>[^/]+)/(?P<repo>[^/\s]+?)(?:\.git)?$"
+)
+
+
+async def detect_github_remote(space_dir: Path) -> str | None:
+    """Return 'owner/repo' if origin points to GitHub, else None."""
+    url = await _space_remote_url(space_dir)
+    if not url:
+        return None
+    m = _GITHUB_RE.search(url)
+    if m:
+        return f"{m.group('owner')}/{m.group('repo')}"
+    return None
+
+
+async def gh_pr_create(
+    worktree: Path,
+    *,
+    title: str,
+    body: str,
+    base: str,
+    head: str,
+) -> str | None:
+    """Create a GitHub PR via the `gh` CLI. Returns the PR URL or None.
+
+    Returns None (with a log message) when `gh` is absent or not authenticated.
+    """
+    if not shutil.which("gh"):
+        log.info("gh_pr_create: 'gh' not found on PATH — skipping PR creation")
+        return None
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "gh", "pr", "create",
+            "--base", base,
+            "--head", head,
+            "--title", title,
+            "--body-file", "-",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=str(worktree),
+        )
+        try:
+            stdout_b, stderr_b = await asyncio.wait_for(
+                proc.communicate(input=body.encode()), timeout=60.0
+            )
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+            log.warning("gh_pr_create: timed out after 60s")
+            return None
+
+        if proc.returncode != 0:
+            err = stderr_b.decode(errors="replace").strip()
+            log.warning("gh_pr_create: gh exited %d — %s", proc.returncode, err)
+            return None
+
+        url = stdout_b.decode(errors="replace").strip()
+        return url or None
+    except FileNotFoundError:
+        log.info("gh_pr_create: 'gh' not found — skipping PR creation")
+        return None

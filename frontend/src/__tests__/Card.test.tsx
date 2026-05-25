@@ -147,3 +147,89 @@ describe("Card — compact prop", () => {
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Autopilot pill
+// ---------------------------------------------------------------------------
+
+describe("Card — autopilot AUTO pill", () => {
+  it("shows the AUTO pill when space_autopilot is 'enabled'", () => {
+    const task = makeTask({ space_autopilot: "enabled" });
+    renderCard({ task, onClick: () => {} });
+    expect(screen.getByText("AUTO")).toBeInTheDocument();
+  });
+
+  it("does NOT show the AUTO pill when space_autopilot is 'disabled'", () => {
+    const task = makeTask({ space_autopilot: "disabled" });
+    renderCard({ task, onClick: () => {} });
+    expect(screen.queryByText("AUTO")).not.toBeInTheDocument();
+  });
+
+  it("does NOT show the AUTO pill when space_autopilot is 'paused'", () => {
+    const task = makeTask({ space_autopilot: "paused" });
+    renderCard({ task, onClick: () => {} });
+    expect(screen.queryByText("AUTO")).not.toBeInTheDocument();
+  });
+
+  it("does NOT show the AUTO pill when space_autopilot is undefined", () => {
+    const task = makeTask({ space_autopilot: undefined });
+    renderCard({ task, onClick: () => {} });
+    expect(screen.queryByText("AUTO")).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PR link icons
+// ---------------------------------------------------------------------------
+
+describe("Card — pr_url GitPullRequest icon", () => {
+  it("shows a link with title 'Open pull request' when pr_url is set", () => {
+    const task = makeTask({ pr_url: "https://github.com/org/repo/pull/42" });
+    renderCard({ task, onClick: () => {} });
+    const link = screen.getByTitle("Open pull request");
+    expect(link).toBeInTheDocument();
+    expect(link.tagName).toBe("A");
+    expect(link).toHaveAttribute("href", "https://github.com/org/repo/pull/42");
+    expect(link).toHaveAttribute("target", "_blank");
+  });
+
+  it("does NOT show the PR link when pr_url is null", () => {
+    const task = makeTask({ pr_url: null });
+    renderCard({ task, onClick: () => {} });
+    expect(screen.queryByTitle("Open pull request")).not.toBeInTheDocument();
+  });
+
+  it("does NOT show the PR link when pr_url is undefined", () => {
+    const task = makeTask({ pr_url: undefined });
+    renderCard({ task, onClick: () => {} });
+    expect(screen.queryByTitle("Open pull request")).not.toBeInTheDocument();
+  });
+});
+
+describe("Card — proposed_pr_path FileText icon", () => {
+  it("shows a button with proposed PR tooltip when proposed_pr_path is set and pr_url is absent", () => {
+    const task = makeTask({
+      pr_url: null,
+      proposed_pr_path: "/workspace/PROPOSED_PR.md",
+    });
+    renderCard({ task, onClick: () => {} });
+    const btn = screen.getByTitle("PROPOSED PR (no GitHub remote)");
+    expect(btn).toBeInTheDocument();
+    expect(btn.tagName).toBe("BUTTON");
+  });
+
+  it("does NOT show the proposed-PR button when pr_url is set (pr_url takes precedence)", () => {
+    const task = makeTask({
+      pr_url: "https://github.com/org/repo/pull/1",
+      proposed_pr_path: "/workspace/PROPOSED_PR.md",
+    });
+    renderCard({ task, onClick: () => {} });
+    expect(screen.queryByTitle("PROPOSED PR (no GitHub remote)")).not.toBeInTheDocument();
+  });
+
+  it("does NOT show the proposed-PR button when proposed_pr_path is null", () => {
+    const task = makeTask({ proposed_pr_path: null });
+    renderCard({ task, onClick: () => {} });
+    expect(screen.queryByTitle("PROPOSED PR (no GitHub remote)")).not.toBeInTheDocument();
+  });
+});

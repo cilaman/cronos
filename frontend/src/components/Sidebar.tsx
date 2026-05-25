@@ -50,6 +50,13 @@ function SpaceRow({ space, onClose }: { space: SpaceSummary; onClose?: () => voi
               {space.icon ?? "·"}
             </span>
             <span className="min-w-0 flex-1 truncate">{space.name}</span>
+            {space.autopilot === "enabled" && (
+              <span
+                aria-label="Autopilot enabled"
+                title="Autopilot enabled"
+                className="h-1.5 w-1.5 shrink-0 rounded-full bg-ink-faint"
+              />
+            )}
             {open > 0 && (
               <span className="font-mono text-[10px] tabular-nums text-ink-faint">
                 {String(open).padStart(2, "0")}

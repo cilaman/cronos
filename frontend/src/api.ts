@@ -138,6 +138,7 @@ export const api = {
       icon?: string | null;
       clear_icon?: boolean;
       description?: string;
+      autopilot?: "disabled" | "enabled" | "paused";
     },
   ) =>
     request<Space>(`/api/spaces/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
