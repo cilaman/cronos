@@ -234,6 +234,7 @@ async def run_agent(
         cwd=workspace,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        limit=10 * 1024 * 1024,  # 10 MB — large file reads produce >64 KB JSON lines
     )
 
     session_id: str | None = None
@@ -279,6 +280,7 @@ async def run_agent(
     cancel_task = asyncio.create_task(kill_on_cancel())
 
     assert proc.stdout is not None
+    read_error: Exception | None = None
     try:
         async for raw_line in proc.stdout:
             line = raw_line.decode("utf-8", errors="replace").strip()
@@ -306,6 +308,13 @@ async def run_agent(
                 final_text_parts.append(text)
 
             await on_event(event)
+    except Exception as exc:
+        read_error = exc
+        log.error("Error reading claude stdout for task %s: %s", task.id, exc)
+        try:
+            proc.kill()
+        except ProcessLookupError:
+            pass
     finally:
         exit_code = await proc.wait()
         cancel_task.cancel()
@@ -314,6 +323,9 @@ async def run_agent(
         except (asyncio.CancelledError, Exception):
             pass
         await stderr_task
+
+    if read_error is not None:
+        raise read_error
 
     stderr = b"".join(stderr_chunks).decode("utf-8", errors="replace")[-2000:]
 
