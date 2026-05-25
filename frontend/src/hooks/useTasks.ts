@@ -4,10 +4,10 @@ import type { AgentMode, AgentModel, TaskState } from "../types";
 
 export type { AgentMode, AgentModel, TaskState };
 
-export function useBoard(spaceId: string | null = null) {
+export function useBoard(spaceId: string | null = null, viewId: string | null = null) {
   return useQuery({
-    queryKey: ["board", spaceId ?? "all"],
-    queryFn: () => api.board(spaceId),
+    queryKey: ["board", spaceId ?? "all", viewId],
+    queryFn: () => api.board(spaceId, viewId),
     refetchInterval: 5_000,
   });
 }
