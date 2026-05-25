@@ -817,3 +817,168 @@ async def test_finalize_history_entry_agents_dedupes_and_lowercases(
     task = task_store.get(task_id)
     first_line = task.history.splitlines()[1]
     assert "agents=explore,plan,test-architect" in first_line
+
+
+# ---------------------------------------------------------------------------
+# _topo_children: topological sort helper
+# ---------------------------------------------------------------------------
+
+
+from app.worker import _topo_children  # noqa: E402
+
+
+async def test_topo_children_empty_goal(task_store):
+    """Goal with no children returns an empty list."""
+    goal = await task_store.create(space_id=SPACE_ID, title="Goal", brief="g", type="goal")
+    assert _topo_children(goal.id, task_store) == []
+
+
+async def test_topo_children_no_deps_returns_all_children(task_store):
+    """Children without deps are all returned (order determined by manual_order/id)."""
+    goal = await task_store.create(space_id=SPACE_ID, title="Goal", brief="g", type="goal")
+    c1 = await task_store.create(space_id=SPACE_ID, title="C1", brief="b", parent_id=goal.id)
+    c2 = await task_store.create(space_id=SPACE_ID, title="C2", brief="b", parent_id=goal.id)
+    result = _topo_children(goal.id, task_store)
+    assert set(result) == {c1.id, c2.id}
+    assert len(result) == 2
+
+
+async def test_topo_children_respects_sibling_deps(task_store):
+    """A child that depends on a sibling runs after it."""
+    goal = await task_store.create(space_id=SPACE_ID, title="Goal", brief="g", type="goal")
+    c1 = await task_store.create(
+        space_id=SPACE_ID, title="C1", brief="b", parent_id=goal.id
+    )
+    c2 = await task_store.create(
+        space_id=SPACE_ID, title="C2", brief="b", parent_id=goal.id, depends_on=[c1.id]
+    )
+    result = _topo_children(goal.id, task_store)
+    assert result.index(c1.id) < result.index(c2.id)
+
+
+# ---------------------------------------------------------------------------
+# _run_goal: orchestration logic (mocked run_agent)
+# ---------------------------------------------------------------------------
+
+
+async def test_run_goal_no_children_marks_done(worker, task_store):
+    """A goal with no children completes immediately as DONE."""
+    goal = await task_store.create(space_id=SPACE_ID, title="Empty goal", brief="g", type="goal")
+    await task_store.transition(
+        goal.id, TaskState.ACTIVE, allowed={(TaskState.BACKLOG, TaskState.ACTIVE)}
+    )
+
+    await worker._run_goal(goal.id, None)
+
+    assert task_store.get(goal.id).state == TaskState.DONE
+
+
+async def test_run_goal_runs_children_in_order_and_marks_done(worker, task_store, monkeypatch):
+    """Goal with two BACKLOG children runs them sequentially and marks itself DONE."""
+    import app.worker as worker_module
+
+    run_order: list[str] = []
+
+    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None, goal_context=None):
+        run_order.append(task.id)
+        return _make_result(exit_code=0, status=Status.DONE)
+
+    monkeypatch.setattr(worker_module, "run_agent", fake_run_agent)
+
+    goal = await task_store.create(space_id=SPACE_ID, title="Goal", brief="g", type="goal")
+    c1 = await task_store.create(space_id=SPACE_ID, title="C1", brief="b", parent_id=goal.id)
+    c2 = await task_store.create(
+        space_id=SPACE_ID, title="C2", brief="b", parent_id=goal.id, depends_on=[c1.id]
+    )
+    await task_store.transition(
+        goal.id, TaskState.ACTIVE, allowed={(TaskState.BACKLOG, TaskState.ACTIVE)}
+    )
+
+    await worker._run_goal(goal.id, None)
+
+    assert run_order == [c1.id, c2.id]
+    assert task_store.get(c1.id).state == TaskState.DONE
+    assert task_store.get(c2.id).state == TaskState.DONE
+    assert task_store.get(goal.id).state == TaskState.DONE
+
+
+async def test_run_goal_skips_done_children(worker, task_store, monkeypatch):
+    """Children already DONE are skipped; goal still completes."""
+    import app.worker as worker_module
+
+    ran: list[str] = []
+
+    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None, goal_context=None):
+        ran.append(task.id)
+        return _make_result(exit_code=0, status=Status.DONE)
+
+    monkeypatch.setattr(worker_module, "run_agent", fake_run_agent)
+
+    goal = await task_store.create(space_id=SPACE_ID, title="Goal", brief="g", type="goal")
+    c1 = await task_store.create(space_id=SPACE_ID, title="C1", brief="b", parent_id=goal.id)
+    c2 = await task_store.create(space_id=SPACE_ID, title="C2", brief="b", parent_id=goal.id)
+
+    # Pre-complete c1
+    await task_store.transition(c1.id, TaskState.ACTIVE, allowed={(TaskState.BACKLOG, TaskState.ACTIVE)})
+    await task_store.finalize_run(c1.id, new_state=TaskState.DONE, session_id=None, waiting_question=None, history_entry="```\ndone\n```")
+
+    await task_store.transition(
+        goal.id, TaskState.ACTIVE, allowed={(TaskState.BACKLOG, TaskState.ACTIVE)}
+    )
+
+    await worker._run_goal(goal.id, None)
+
+    assert c1.id not in ran
+    assert c2.id in ran
+    assert task_store.get(goal.id).state == TaskState.DONE
+
+
+async def test_run_goal_pauses_when_child_fails(worker, task_store, monkeypatch):
+    """If a child ends in WAIT, the goal transitions to WAITING."""
+    import app.worker as worker_module
+
+    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None, goal_context=None):
+        return _make_result(exit_code=0, status=Status.WAIT, context="Need input")
+
+    monkeypatch.setattr(worker_module, "run_agent", fake_run_agent)
+
+    goal = await task_store.create(space_id=SPACE_ID, title="Goal", brief="g", type="goal")
+    await task_store.create(space_id=SPACE_ID, title="C1", brief="b", parent_id=goal.id)
+    await task_store.transition(
+        goal.id, TaskState.ACTIVE, allowed={(TaskState.BACKLOG, TaskState.ACTIVE)}
+    )
+
+    await worker._run_goal(goal.id, None)
+
+    goal_task = task_store.get(goal.id)
+    assert goal_task.state == TaskState.WAITING
+    assert goal_task.waiting_question is not None
+
+
+async def test_run_goal_injects_goal_context(worker, task_store, monkeypatch):
+    """goal_context passed to run_agent contains the goal title and brief."""
+    import app.worker as worker_module
+
+    captured_contexts: list[str | None] = []
+
+    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None, goal_context=None):
+        captured_contexts.append(goal_context)
+        return _make_result(exit_code=0, status=Status.DONE)
+
+    monkeypatch.setattr(worker_module, "run_agent", fake_run_agent)
+
+    goal = await task_store.create(
+        space_id=SPACE_ID, title="My Goal", brief="The full goal brief.", type="goal"
+    )
+    await task_store.create(space_id=SPACE_ID, title="C1", brief="b", parent_id=goal.id)
+    await task_store.transition(
+        goal.id, TaskState.ACTIVE, allowed={(TaskState.BACKLOG, TaskState.ACTIVE)}
+    )
+
+    await worker._run_goal(goal.id, None)
+
+    assert len(captured_contexts) == 1
+    ctx = captured_contexts[0]
+    assert ctx is not None
+    assert "My Goal" in ctx
+    assert "The full goal brief." in ctx
