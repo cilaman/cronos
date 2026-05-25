@@ -184,6 +184,11 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
             <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-ink-faint">
               {formatCompactAge(task.updated_at)}
             </span>
+            {isGoal && task.children_progress && task.children_progress.total > 0 && (
+              <span className="font-mono text-[9px] text-ink-faint">
+                {task.children_progress.done}/{task.children_progress.total}
+              </span>
+            )}
             {typeBadgeStyle && (
               <span
                 className={cn(
@@ -338,6 +343,26 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
         )}
 
         <h3 className="text-sm font-semibold leading-snug text-ink">{task.title}</h3>
+        {isGoal && task.children_progress && task.children_progress.total > 0 && (
+          <div className="mt-1.5">
+            <span className="font-mono text-[10px] text-ink-faint">
+              {task.children_progress.done} / {task.children_progress.total}
+            </span>
+            <div className="relative mt-1 h-0.5 w-full overflow-hidden rounded-full bg-surface-3">
+              <div
+                className="absolute inset-y-0 left-0 bg-accent"
+                style={{ width: `${(task.children_progress.done / task.children_progress.total) * 100}%` }}
+              />
+              <div
+                className="absolute inset-y-0 bg-amber-500"
+                style={{
+                  left: `${(task.children_progress.done / task.children_progress.total) * 100}%`,
+                  width: `${(task.children_progress.waiting / task.children_progress.total) * 100}%`,
+                }}
+              />
+            </div>
+          </div>
+        )}
         {task.brief_preview && !compact && (
           <p className="mt-1.5 hidden text-xs leading-relaxed text-ink-muted line-clamp-3 sm:block">
             {task.brief_preview}

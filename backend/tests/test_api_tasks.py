@@ -1465,3 +1465,218 @@ async def test_board_summary_pr_fields_default_to_none(async_client):
     target = next(t for t in board["backlog"] if t["id"] == task_id)
     assert target["pr_url"] is None
     assert target["proposed_pr_path"] is None
+
+
+# ---------------------------------------------------------------------------
+# children_progress on goal summaries (arc-9/3)
+# ---------------------------------------------------------------------------
+#
+# `_enrich_progress(board)` in `app/api/tasks.py` augments every goal task in
+# the board with a `children_progress` field counting its children's lane
+# distribution. Non-goals and goals without children must surface as `None`.
+
+
+async def _find_in_board(async_client, task_id: str) -> dict | None:
+    """Return the summary dict for `task_id` from `/api/tasks`, or None."""
+    resp = await async_client.get(f"/api/tasks?space_id={SPACE_ID}")
+    assert resp.status_code == 200
+    board = resp.json()
+    for lane in ("backlog", "active", "waiting", "done"):
+        for t in board[lane]:
+            if t["id"] == task_id:
+                return t
+    return None
+
+
+async def test_goal_with_mixed_children_states_gets_correct_children_progress(
+    async_client, task_store
+):
+    """Goal with 4 children spread across backlog/active/waiting/done lanes.
+
+    Locks the three-count contract: `done` only counts state==done,
+    `waiting` only counts state==waiting, and `total` counts every child
+    (incl. backlog & active children that contribute to neither bucket).
+    """
+    from app.storage import USER_TRANSITIONS as _UT, WORKER_TRANSITIONS as _WT
+
+    goal = await _create(async_client, title="Goal", type="goal")
+    c_backlog = await _create(async_client, title="C-backlog", parent_id=goal["id"])
+    c_active = await _create(async_client, title="C-active", parent_id=goal["id"])
+    c_waiting = await _create(async_client, title="C-waiting", parent_id=goal["id"])
+    c_done = await _create(async_client, title="C-done", parent_id=goal["id"])
+
+    # Drive each child to its target state via the storage layer (lets us
+    # hit waiting & done directly without going through worker transitions).
+    await task_store.transition(c_active["id"], TaskState.ACTIVE, allowed=_UT)
+    await task_store.transition(c_waiting["id"], TaskState.ACTIVE, allowed=_UT)
+    await task_store.transition(c_waiting["id"], TaskState.WAITING, allowed=_WT)
+    await task_store.transition(c_done["id"], TaskState.ACTIVE, allowed=_UT)
+    await task_store.transition(c_done["id"], TaskState.DONE, allowed=_WT)
+
+    # Act
+    summary = await _find_in_board(async_client, goal["id"])
+
+    # Assert
+    assert summary is not None
+    progress = summary["children_progress"]
+    assert progress is not None, "goal with children must have children_progress"
+    assert progress == {"done": 1, "total": 4, "waiting": 1}
+    # Defensive: the un-counted children (backlog, active) are in `total`
+    # but neither in `done` nor `waiting`.
+    assert progress["total"] - progress["done"] - progress["waiting"] == 2
+    # The unused children should not appear by chance — sanity check.
+    _ = (c_backlog, c_active)
+
+
+async def test_non_goal_task_has_no_children_progress(async_client):
+    """A `type='task'` (or 'issue') with children must NOT get children_progress.
+
+    Only goals render a progress bar; widening the gate to all parents would
+    introduce visual noise on regular tasks and an extra null check
+    everywhere the field is consumed.
+    """
+    parent_task = await _create(async_client, title="Parent Task", type="task")
+    parent_issue = await _create(async_client, title="Parent Issue", type="issue")
+    await _create(async_client, title="C1", parent_id=parent_task["id"])
+    await _create(async_client, title="C2", parent_id=parent_issue["id"])
+
+    # Act
+    task_summary = await _find_in_board(async_client, parent_task["id"])
+    issue_summary = await _find_in_board(async_client, parent_issue["id"])
+
+    # Assert
+    assert task_summary is not None
+    assert task_summary["children_progress"] is None
+    assert issue_summary is not None
+    assert issue_summary["children_progress"] is None
+
+
+async def test_goal_with_no_children_has_no_children_progress(async_client):
+    """A goal that has zero children must surface `children_progress=None`,
+    not `{done:0,total:0,waiting:0}`.
+
+    The frontend hides the progress UI on the falsy branch — emitting a
+    zero-valued object would render an empty "0/0" pill and a divide-by-zero
+    width calculation (NaN%) in the bar.
+    """
+    goal = await _create(async_client, title="Empty Goal", type="goal")
+
+    # Act
+    summary = await _find_in_board(async_client, goal["id"])
+
+    # Assert
+    assert summary is not None
+    assert summary["type"] == "goal"
+    assert summary["children_progress"] is None
+
+
+async def test_goal_with_archived_only_children_has_no_children_progress(
+    async_client, task_store
+):
+    """Archived children are excluded from the board, so they must NOT count
+    toward `total`. A goal whose ONLY child is archived therefore looks like
+    a childless goal in the board view — `children_progress` must be `None`,
+    not `{done:0,total:0,waiting:0}`.
+
+    Locks the contract that `_enrich_progress` operates over the board (which
+    has no archived lane), not over the full task store.
+    """
+    from app.storage import USER_TRANSITIONS as _UT, WORKER_TRANSITIONS as _WT
+
+    goal = await _create(async_client, title="Goal", type="goal")
+    child = await _create(async_client, title="Archived Child", parent_id=goal["id"])
+
+    # Walk the child to archived (backlog -> active -> done -> archived).
+    await task_store.transition(child["id"], TaskState.ACTIVE, allowed=_UT)
+    await task_store.transition(child["id"], TaskState.DONE, allowed=_WT)
+    await task_store.transition(child["id"], TaskState.ARCHIVED, allowed=_UT)
+
+    summary = await _find_in_board(async_client, goal["id"])
+
+    assert summary is not None
+    assert summary["children_progress"] is None
+
+
+async def test_goal_with_all_children_done_reports_full_progress(
+    async_client, task_store
+):
+    """When every child is `done`, progress is `done==total` and `waiting==0`.
+
+    Regression guard against accidentally counting `done` children into
+    `waiting` (or vice versa) when both fields are aggregated in the same
+    loop.
+    """
+    from app.storage import USER_TRANSITIONS as _UT, WORKER_TRANSITIONS as _WT
+
+    goal = await _create(async_client, title="Goal", type="goal")
+    c1 = await _create(async_client, title="C1", parent_id=goal["id"])
+    c2 = await _create(async_client, title="C2", parent_id=goal["id"])
+
+    for child in (c1, c2):
+        await task_store.transition(child["id"], TaskState.ACTIVE, allowed=_UT)
+        await task_store.transition(child["id"], TaskState.DONE, allowed=_WT)
+
+    summary = await _find_in_board(async_client, goal["id"])
+
+    assert summary is not None
+    assert summary["children_progress"] == {"done": 2, "total": 2, "waiting": 0}
+
+
+async def test_children_of_other_goals_do_not_leak_into_progress(async_client):
+    """Two sibling goals each with their own children — counts must be
+    scoped to the correct parent. Locks the `parent_id`-keyed dict in
+    `_enrich_progress` against off-by-parent regressions.
+    """
+    goal_a = await _create(async_client, title="Goal A", type="goal")
+    goal_b = await _create(async_client, title="Goal B", type="goal")
+    # 1 child for A, 3 children for B.
+    await _create(async_client, title="A-c1", parent_id=goal_a["id"])
+    await _create(async_client, title="B-c1", parent_id=goal_b["id"])
+    await _create(async_client, title="B-c2", parent_id=goal_b["id"])
+    await _create(async_client, title="B-c3", parent_id=goal_b["id"])
+
+    sum_a = await _find_in_board(async_client, goal_a["id"])
+    sum_b = await _find_in_board(async_client, goal_b["id"])
+
+    assert sum_a is not None
+    assert sum_a["children_progress"] == {"done": 0, "total": 1, "waiting": 0}
+    assert sum_b is not None
+    assert sum_b["children_progress"] == {"done": 0, "total": 3, "waiting": 0}
+
+
+async def test_root_level_tasks_dont_appear_as_anyones_children(async_client):
+    """A root-level task (parent_id=None) must not be silently attributed to
+    any goal's child counts. Regression guard against using a default key in
+    the children-by-parent dict.
+    """
+    goal = await _create(async_client, title="Goal", type="goal")
+    # A root-level task with NO parent — must be ignored by _enrich_progress.
+    await _create(async_client, title="Orphan", parent_id=None)
+
+    summary = await _find_in_board(async_client, goal["id"])
+
+    assert summary is not None
+    assert summary["children_progress"] is None  # goal has zero real children
+
+
+async def test_children_progress_present_on_all_space_query(
+    async_client, task_store
+):
+    """The `?space_id=all` cross-space query must also include
+    `children_progress` on goal summaries (no scope-dependent code path
+    that bypasses _enrich_progress).
+    """
+    goal = await _create(async_client, title="Goal", type="goal")
+    await _create(async_client, title="C1", parent_id=goal["id"])
+
+    resp = await async_client.get("/api/tasks?space_id=all")
+    assert resp.status_code == 200
+    board = resp.json()
+    found = next(
+        (t for lane in ("backlog", "active", "waiting", "done") for t in board[lane]
+         if t["id"] == goal["id"]),
+        None,
+    )
+
+    assert found is not None
+    assert found["children_progress"] == {"done": 0, "total": 1, "waiting": 0}
