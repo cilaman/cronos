@@ -88,27 +88,39 @@ describe("Lane — onHideLane × button", () => {
     expect(onHideLane).toHaveBeenCalledWith("done");
   });
 
-  it("the hide button uses the group-hover opacity class so it stays hidden until hover", () => {
+  it("the hide button is always visible (no opacity-0 / hover-reveal classes)", () => {
     renderLane({
       state: "active",
       label: "Active",
       onHideLane: vi.fn(),
     });
     const btn = screen.getByRole("button", { name: /Hide Active lane/i });
-    // Default state is opacity-0; group-hover/lane:opacity-100 reveals it.
-    expect(btn.className).toContain("opacity-0");
-    expect(btn.className).toContain("group-hover/lane:opacity-100");
+    // Iteration 2 dropped the opacity gymnastics — the × is rendered visible.
+    expect(btn.className).not.toContain("opacity-0");
+    expect(btn.className).not.toContain("group-hover/lane:opacity-100");
+    expect(btn.className).not.toContain("focus:opacity-100");
   });
 
-  it("the section root has the group/lane class so the hide button can react to hover", () => {
-    const { container } = renderLane({
+  it("the hide button keeps its hover/focus styling classes", () => {
+    renderLane({
       state: "active",
       label: "Active",
       onHideLane: vi.fn(),
     });
-    const section = container.querySelector("section");
-    expect(section).not.toBeNull();
-    expect(section!.className).toContain("group/lane");
+    const btn = screen.getByRole("button", { name: /Hide Active lane/i });
+    expect(btn.className).toContain("hover:text-ink");
+    expect(btn.className).toContain("hover:bg-surface-2");
+    expect(btn.className).toContain("focus-visible:ring-accent");
+  });
+
+  it("the hide button carries a descriptive title attribute", () => {
+    renderLane({
+      state: "active",
+      label: "Active",
+      onHideLane: vi.fn(),
+    });
+    const btn = screen.getByRole("button", { name: /Hide Active lane/i });
+    expect(btn.getAttribute("title")).toBe("Hide Active");
   });
 });
 

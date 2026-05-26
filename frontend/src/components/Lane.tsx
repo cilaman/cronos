@@ -66,7 +66,7 @@ export function Lane({ state, label, tasks, onOpen, onAdd, compact = false, onOp
               onClick={() => onHideLane(state)}
               aria-label={`Hide ${label} lane`}
               title={`Hide ${label}`}
-              className="rounded p-1 text-ink-faint opacity-0 transition hover:bg-surface-2 hover:text-ink focus:opacity-100 focus:outline-none focus-visible:ring-1 focus-visible:ring-accent group-hover/lane:opacity-100"
+              className="rounded p-1 text-ink-faint transition hover:bg-surface-2 hover:text-ink focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
             >
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" aria-hidden="true">
                 <line x1="3" y1="3" x2="9" y2="9" />

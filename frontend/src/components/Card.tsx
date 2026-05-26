@@ -160,6 +160,11 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
     ...(isGoal ? { borderTopWidth: 2 } : {}),
   };
 
+  // When the card has a clickable left gutter, the gutter replaces the 3px colored left border.
+  const bodyStyle = hasChildren
+    ? { ...(isGoal ? { borderTopWidth: 2 } : {}) }
+    : cardBorderStyle;
+
   if (density === "tight") {
     return (
       <div
@@ -242,25 +247,55 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
       data-density={density}
       className={cn("group", isDragging && !isDragOverlay && "opacity-40")}
     >
+      <div className={hasChildren ? "flex" : undefined}>
+      {hasChildren && (
+        <button
+          type="button"
+          aria-expanded={expanded}
+          aria-label={expanded ? "Collapse children" : "Expand children"}
+          title={expanded ? "Collapse" : "Expand"}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleExpand?.();
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              e.stopPropagation();
+              onToggleExpand?.();
+            }
+          }}
+          style={{
+            backgroundColor: borderColor,
+            ...(isGoal ? { borderTopWidth: 2, borderTopColor: "rgb(var(--color-ink))", borderTopStyle: "solid" } : {}),
+          }}
+          className={cn(
+            "flex w-3.5 shrink-0 cursor-pointer items-center justify-center text-white/90 transition hover:brightness-110 focus:outline-none focus-visible:ring-1 focus-visible:ring-accent",
+            expanded ? "rounded-tl-md" : "rounded-l-md",
+          )}
+        >
+          <span aria-hidden className="font-mono text-[10px] leading-none">
+            {expanded ? "▼" : "▶"}
+          </span>
+        </button>
+      )}
       <div
         role="button"
         tabIndex={0}
-        aria-expanded={hasChildren ? expanded : undefined}
-        onClick={() => {
-          if (hasChildren && onToggleExpand) onToggleExpand();
-          else onClick();
-        }}
+        onClick={onClick}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            if (hasChildren && onToggleExpand) onToggleExpand();
-            else onClick();
+            onClick();
           }
         }}
-        style={cardBorderStyle}
+        style={bodyStyle}
         className={cn(
-          "relative block w-full cursor-pointer border border-hairline bg-surface-2 py-3 pl-2.5 pr-3 text-left shadow-inset-hairline transition hover:-translate-y-px hover:border-hairline-strong hover:bg-surface-3 hover:shadow-lift focus:outline-none focus-visible:ring-1 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface-1",
-          expanded && hasChildren ? "rounded-t-md" : "rounded-md",
+          "relative cursor-pointer border bg-surface-2 py-3 pl-2.5 pr-3 text-left shadow-inset-hairline transition hover:-translate-y-px hover:border-hairline-strong hover:bg-surface-3 hover:shadow-lift focus:outline-none focus-visible:ring-1 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface-1",
+          hasChildren ? "min-w-0 flex-1 border-l-0 border-hairline" : "block w-full border-hairline",
+          hasChildren
+            ? expanded ? "rounded-tr-md" : "rounded-r-md"
+            : "rounded-md",
           isGoal && "border-t-ink",
         )}
       >
@@ -350,28 +385,6 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
               <IconFileText />
             </button>
           )}
-          {hasChildren && (
-            <button
-              type="button"
-              aria-label="Open task detail"
-              title="Open detail"
-              onClick={(e) => {
-                e.stopPropagation();
-                onClick();
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.stopPropagation();
-                }
-              }}
-              className="ml-auto flex items-center gap-0.5 rounded border border-hairline bg-surface-1 px-1.5 py-px font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-muted transition hover:border-accent hover:bg-surface-2 hover:text-accent-bright focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
-            >
-              Open
-              <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M3 7l4-4M3 3h4v4" />
-              </svg>
-            </button>
-          )}
         </div>
 
         {task.parent_id && task.parent_title && (
@@ -394,20 +407,7 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
           </span>
         )}
 
-        <h3 className="text-sm font-semibold leading-snug text-ink">
-          {hasChildren && (
-            <span
-              aria-hidden
-              className={cn(
-                "mr-1.5 inline-block w-3 select-none text-[10px] font-normal text-ink-muted transition-transform",
-                expanded && "rotate-90",
-              )}
-            >
-              ▶
-            </span>
-          )}
-          {task.title}
-        </h3>
+        <h3 className="text-sm font-semibold leading-snug text-ink">{task.title}</h3>
         {isGoal && childrenProgress && childrenProgress.total > 0 && (
           <div className="mt-1.5">
             <span className="font-mono text-[10px] text-ink-faint">
@@ -461,6 +461,7 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
         <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.15em] text-ink-faint">
           {formatRelative(task.updated_at)}
         </p>
+      </div>
       </div>
 
       {/* Expanded children list — rendered outside the card body div so the inline children look like a panel attached underneath */}
