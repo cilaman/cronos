@@ -9,6 +9,8 @@ from datetime import UTC, datetime
 from . import autopilot_pr
 from .agent import AgentResult, Status, run_agent
 from . import goal_sync
+from .memory_parser import parse_memory_blocks
+from .memory_store import MemoryStore
 from .models import TaskState
 from .space_storage import SpaceStore
 from .stats import RunStats, _tier_from_real_model, compute_cost, extract_tokens_and_tools
@@ -87,6 +89,7 @@ class Worker:
         space_store: SpaceStore | None = None,
         stats_store: StatsStore | None = None,
         trace_store: TraceStore | None = None,
+        memory_store: MemoryStore | None = None,
         on_idle: Callable[[Worker], Awaitable[None]] | None = None,
         pool: WorkerPool | None = None,
     ) -> None:
@@ -94,6 +97,7 @@ class Worker:
         self.space_store = space_store
         self.stats_store = stats_store
         self.trace_store = trace_store
+        self.memory_store = memory_store
         self.on_idle = on_idle
         self._space_id: str | None = None
         self._pool = pool
@@ -471,6 +475,26 @@ class Worker:
                     await self.trace_store.save_run(task.space_id, task_id, trace)
                 except Exception:
                     log.exception("Failed to save trace for %s", task_id)
+
+        # Capture MEMORY: blocks from the agent's final text and persist as unconfirmed.
+        if self.memory_store is not None and result.final_text:
+            blocks = parse_memory_blocks(result.final_text)
+            if blocks:
+                task = self.store.get(task_id)
+                if task is not None:
+                    for block in blocks:
+                        try:
+                            title = block.content.splitlines()[0][:120]
+                            await self.memory_store.create(
+                                scope=f"space:{task.space_id}",
+                                kind=block.kind_hint or "observation",
+                                title=title,
+                                body=block.content,
+                                confirmed=False,
+                                sources=[f"task:{task_id}", f"run:{run_index}"],
+                            )
+                        except Exception:
+                            log.exception("Failed to save memory block for %s", task_id)
 
         # Auto-resume when the agent hit the turn limit mid-task (up to 3 times
         # per task to prevent infinite loops).
