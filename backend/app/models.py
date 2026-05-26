@@ -193,3 +193,30 @@ class SpaceToolsResponse(BaseModel):
     hooks: list[HookEntry] = []
     permissions: list[PermissionEntry] = []
     has_claude_md: bool = False
+
+
+# ---------------------------------------------------------------------------
+# Memory
+# ---------------------------------------------------------------------------
+
+class MemoryKind(str, Enum):
+    FACT = "fact"
+    PROCEDURE = "procedure"
+    OBSERVATION = "observation"
+    REFERENCE = "reference"
+
+
+class MemoryItem(BaseModel):
+    id: str
+    scope: str  # "global" | "space:{space_id}"
+    kind: MemoryKind
+    title: str
+    body: str = ""
+    confirmed: bool = False
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    score: float = 0.0
+    last_used_at: datetime
+    ref_count: int = 0
+    ttl_until: datetime | None = None
+    sources: list[str] = Field(default_factory=list)
+    links: list[str] = Field(default_factory=list)
