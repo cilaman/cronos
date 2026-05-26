@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -18,6 +18,9 @@ vi.mock("../components/Board", () => ({
     compact?: boolean;
     viewId?: string | null;
     activeLaneStates?: TaskState[];
+    visibleLaneStates?: TaskState[];
+    onHideLane?: (state: TaskState) => void;
+    onShowLane?: (state: TaskState) => void;
   }) => {
     boardSpy(props);
     return (
@@ -29,7 +32,25 @@ vi.mock("../components/Board", () => ({
         data-active-lanes={
           props.activeLaneStates ? props.activeLaneStates.join(",") : "undefined"
         }
-      />
+        data-visible-lanes={
+          props.visibleLaneStates ? props.visibleLaneStates.join(",") : "undefined"
+        }
+      >
+        {props.onHideLane && (
+          <button
+            type="button"
+            data-testid="simulate-hide-active"
+            onClick={() => props.onHideLane?.("active")}
+          />
+        )}
+        {props.onShowLane && (
+          <button
+            type="button"
+            data-testid="simulate-show-done"
+            onClick={() => props.onShowLane?.("done")}
+          />
+        )}
+      </div>
     );
   },
 }));
@@ -461,6 +482,134 @@ describe("BoardPage — activeLaneStates propagation", () => {
         "waiting",
         "done",
       ]);
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Lane override (× hide / + show) — keyed per (space, view) in localStorage.
+// ---------------------------------------------------------------------------
+
+describe("BoardPage — lane override (hide × / show +)", () => {
+  // The jsdom build wired into this Vitest env exposes a stub `localStorage`
+  // whose Storage methods are undefined (see pre-existing failures in
+  // useTheme/storage suites). Until that env regression is fixed, install a
+  // Map-backed in-memory shim on window.localStorage for this describe block
+  // so we can actually exercise the new lane-override persistence code.
+  let originalLocalStorage: Storage | undefined;
+  beforeEach(() => {
+    originalLocalStorage = Object.getOwnPropertyDescriptor(window, "localStorage")?.value;
+    const store = new Map<string, string>();
+    const shim: Storage = {
+      get length() { return store.size; },
+      clear() { store.clear(); },
+      getItem(key: string) { return store.has(key) ? store.get(key)! : null; },
+      key(i: number) { return [...store.keys()][i] ?? null; },
+      removeItem(key: string) { store.delete(key); },
+      setItem(key: string, value: string) { store.set(key, String(value)); },
+    };
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: shim,
+    });
+    boardSpy.mockClear();
+    toolbarSpy.mockClear();
+  });
+  afterEach(() => {
+    if (originalLocalStorage) {
+      Object.defineProperty(window, "localStorage", {
+        configurable: true,
+        value: originalLocalStorage,
+      });
+    }
+  });
+
+  it("loads the persisted lane override on mount and forwards it as visibleLaneStates", async () => {
+    window.localStorage.setItem(
+      "cronos:board:lanes:space-1:_default",
+      JSON.stringify(["active", "waiting"]),
+    );
+    renderPage(["/spaces/space-1"]);
+
+    await waitFor(() => {
+      expect(boardSpy).toHaveBeenCalled();
+    });
+    const latest = boardSpy.mock.calls[boardSpy.mock.calls.length - 1][0];
+    expect(latest.visibleLaneStates).toEqual(["active", "waiting"]);
+  });
+
+  it("hideLane writes the override to localStorage under the (space, view) key", async () => {
+    renderPage(["/spaces/space-1"]);
+    const user = userEvent.setup();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("simulate-hide-active")).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId("simulate-hide-active"));
+
+    await waitFor(() => {
+      const stored = window.localStorage.getItem(
+        "cronos:board:lanes:space-1:_default",
+      );
+      expect(stored).not.toBeNull();
+      // The override must drop "active" — exact order is the LANES order minus active.
+      expect(JSON.parse(stored!)).not.toContain("active");
+    });
+    // Board receives the updated visible set.
+    const latest = boardSpy.mock.calls[boardSpy.mock.calls.length - 1][0];
+    expect(latest.visibleLaneStates).not.toContain("active");
+  });
+
+  it("showLane re-adds a lane in LANES order and clears the override key when full set is restored", async () => {
+    // Start with two lanes hidden so showLane brings us back to the full set.
+    window.localStorage.setItem(
+      "cronos:board:lanes:space-1:_default",
+      JSON.stringify(["backlog", "active", "waiting"]),
+    );
+    renderPage(["/spaces/space-1"]);
+    const user = userEvent.setup();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("simulate-show-done")).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId("simulate-show-done"));
+
+    // The new override equals the base lanes — the key is cleared (null).
+    await waitFor(() => {
+      expect(
+        window.localStorage.getItem("cronos:board:lanes:space-1:_default"),
+      ).toBeNull();
+    });
+    const latest = boardSpy.mock.calls[boardSpy.mock.calls.length - 1][0];
+    // Order is LANES order: backlog, active, waiting, done.
+    expect(latest.visibleLaneStates).toEqual([
+      "backlog",
+      "active",
+      "waiting",
+      "done",
+    ]);
+  });
+
+  it("partial show keeps the override key (doesn't clear unless full set is restored)", async () => {
+    window.localStorage.setItem(
+      "cronos:board:lanes:space-1:_default",
+      JSON.stringify(["backlog"]),
+    );
+    renderPage(["/spaces/space-1"]);
+    const user = userEvent.setup();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("simulate-show-done")).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId("simulate-show-done"));
+
+    await waitFor(() => {
+      const stored = window.localStorage.getItem(
+        "cronos:board:lanes:space-1:_default",
+      );
+      expect(stored).not.toBeNull();
+      // After adding "done" to [backlog], we should now have [backlog, done].
+      expect(JSON.parse(stored!)).toEqual(["backlog", "done"]);
     });
   });
 });

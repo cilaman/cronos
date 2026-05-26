@@ -245,11 +245,16 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
       <div
         role="button"
         tabIndex={0}
-        onClick={onClick}
+        aria-expanded={hasChildren ? expanded : undefined}
+        onClick={() => {
+          if (hasChildren && onToggleExpand) onToggleExpand();
+          else onClick();
+        }}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            onClick();
+            if (hasChildren && onToggleExpand) onToggleExpand();
+            else onClick();
           }
         }}
         style={cardBorderStyle}
@@ -345,41 +350,27 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
               <IconFileText />
             </button>
           )}
-          {/* Expand chevron for goals with children */}
           {hasChildren && (
-            <span
-              role="button"
-              tabIndex={0}
-              aria-expanded={expanded}
-              aria-label={expanded ? "Collapse children" : "Expand children"}
+            <button
+              type="button"
+              aria-label="Open task detail"
+              title="Open detail"
               onClick={(e) => {
                 e.stopPropagation();
-                onToggleExpand?.();
+                onClick();
               }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.stopPropagation();
-                  onToggleExpand?.();
                 }
               }}
-              className="ml-auto flex cursor-pointer select-none items-center gap-1 font-mono text-[10px] text-ink-faint hover:text-ink-muted"
+              className="ml-auto flex items-center gap-0.5 rounded border border-hairline bg-surface-1 px-1.5 py-px font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-muted transition hover:border-accent hover:bg-surface-2 hover:text-accent-bright focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
             >
-              <svg
-                width="6"
-                height="8"
-                viewBox="0 0 6 8"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.75"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-                className={cn("transition-transform duration-100", expanded && "rotate-90")}
-              >
-                <path d="M1.5 1l3 3-3 3" />
+              Open
+              <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M3 7l4-4M3 3h4v4" />
               </svg>
-              {childrenProgress!.total} children
-            </span>
+            </button>
           )}
         </div>
 
@@ -403,7 +394,20 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
           </span>
         )}
 
-        <h3 className="text-sm font-semibold leading-snug text-ink">{task.title}</h3>
+        <h3 className="text-sm font-semibold leading-snug text-ink">
+          {hasChildren && (
+            <span
+              aria-hidden
+              className={cn(
+                "mr-1.5 inline-block w-3 select-none text-[10px] font-normal text-ink-muted transition-transform",
+                expanded && "rotate-90",
+              )}
+            >
+              ▶
+            </span>
+          )}
+          {task.title}
+        </h3>
         {isGoal && childrenProgress && childrenProgress.total > 0 && (
           <div className="mt-1.5">
             <span className="font-mono text-[10px] text-ink-faint">

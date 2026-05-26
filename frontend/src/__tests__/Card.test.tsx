@@ -255,11 +255,39 @@ describe("Card — goal collapsible children", () => {
     });
   }
 
-  it("shows the expand chevron with child count for a goal with children", () => {
+  function getCardBody(container: HTMLElement): HTMLElement {
+    // The role=button div directly inside the data-task-type wrapper is the
+    // clickable card body that owns the new expand/collapse semantics.
+    const root = container.querySelector(
+      "[data-task-type] > div[role='button']",
+    );
+    if (!root) throw new Error("Card body (role=button) not found");
+    return root as HTMLElement;
+  }
+
+  it("renders the ▶ disclosure indicator for a goal with children", () => {
     const task = makeGoalTask();
     renderCard({ task, onClick: () => {} });
-    expect(screen.getByRole("button", { name: /expand children/i })).toBeInTheDocument();
-    expect(screen.getByText(/3 children/)).toBeInTheDocument();
+    // The indicator lives inside the title <h3> as a non-interactive marker.
+    const indicator = screen.getByText("▶");
+    expect(indicator).toBeInTheDocument();
+    expect(indicator.getAttribute("aria-hidden")).not.toBeNull();
+  });
+
+  it("disclosure indicator gets the rotate-90 class when expanded", () => {
+    const task = makeGoalTask();
+    const { rerender } = renderCard({ task, onClick: () => {}, expanded: false });
+    // Collapsed: no rotation class.
+    expect(screen.getByText("▶").className).not.toContain("rotate-90");
+
+    rerender(
+      <DndContext>
+        <SortableContext items={[task.id]}>
+          <Card task={task} onClick={() => {}} expanded={true} />
+        </SortableContext>
+      </DndContext>,
+    );
+    expect(screen.getByText("▶").className).toContain("rotate-90");
   });
 
   it("does not show children rows when collapsed (default)", () => {
@@ -277,18 +305,83 @@ describe("Card — goal collapsible children", () => {
     expect(screen.getByText("Third child task")).toBeInTheDocument();
   });
 
-  it("calls onToggleExpand when chevron is clicked (not onClick)", async () => {
+  it("clicking the card body fires onToggleExpand, NOT onClick (goal with children)", async () => {
     const onClick = vi.fn();
     const onToggleExpand = vi.fn();
     const task = makeGoalTask();
-    renderCard({ task, onClick, onToggleExpand, expanded: false });
+    const { container } = renderCard({ task, onClick, onToggleExpand, expanded: false });
 
     const user = userEvent.setup();
-    const chevron = screen.getByRole("button", { name: /expand children/i });
-    await user.click(chevron);
+    await user.click(getCardBody(container));
 
     expect(onToggleExpand).toHaveBeenCalledTimes(1);
     expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it("Enter key on the card body fires onToggleExpand, NOT onClick", async () => {
+    const onClick = vi.fn();
+    const onToggleExpand = vi.fn();
+    const task = makeGoalTask();
+    const { container } = renderCard({ task, onClick, onToggleExpand });
+
+    const user = userEvent.setup();
+    const body = getCardBody(container);
+    body.focus();
+    await user.keyboard("{Enter}");
+
+    expect(onToggleExpand).toHaveBeenCalledTimes(1);
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it("Space key on the card body fires onToggleExpand, NOT onClick", async () => {
+    const onClick = vi.fn();
+    const onToggleExpand = vi.fn();
+    const task = makeGoalTask();
+    const { container } = renderCard({ task, onClick, onToggleExpand });
+
+    const user = userEvent.setup();
+    const body = getCardBody(container);
+    body.focus();
+    await user.keyboard("[Space]");
+
+    expect(onToggleExpand).toHaveBeenCalledTimes(1);
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it("sets aria-expanded on the card body for goals with children", () => {
+    const task = makeGoalTask();
+    const { container, rerender } = renderCard({ task, onClick: () => {}, expanded: false });
+    expect(getCardBody(container).getAttribute("aria-expanded")).toBe("false");
+
+    rerender(
+      <DndContext>
+        <SortableContext items={[task.id]}>
+          <Card task={task} onClick={() => {}} expanded={true} />
+        </SortableContext>
+      </DndContext>,
+    );
+    expect(getCardBody(container).getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("renders the Open button on goals with children, with the correct aria-label", () => {
+    const task = makeGoalTask();
+    renderCard({ task, onClick: () => {} });
+    const openBtn = screen.getByRole("button", { name: /Open task detail/i });
+    expect(openBtn).toBeInTheDocument();
+    expect(openBtn.textContent).toMatch(/Open/);
+  });
+
+  it("clicking the Open button fires onClick and does NOT toggle expand", async () => {
+    const onClick = vi.fn();
+    const onToggleExpand = vi.fn();
+    const task = makeGoalTask();
+    renderCard({ task, onClick, onToggleExpand });
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /Open task detail/i }));
+
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onToggleExpand).not.toHaveBeenCalled();
   });
 
   it("calls onOpenTask with child id when a child row is clicked", async () => {
@@ -307,21 +400,69 @@ describe("Card — goal collapsible children", () => {
     renderCard({ task, onClick: () => {}, expanded: true });
     // Each child row has a state dot with aria-label
     const dots = screen.getAllByLabelText(/^(active|backlog|done|waiting|archived)$/);
-    // There is also the goal card's own state dot, so >= 3
     expect(dots.length).toBeGreaterThanOrEqual(3);
   });
 
-  it("does not show expand chevron for non-goal tasks", () => {
+  it("does not render the disclosure indicator for non-goal tasks", () => {
     const task = makeTask({ type: "task" });
     renderCard({ task, onClick: () => {} });
-    expect(screen.queryByRole("button", { name: /expand children/i })).not.toBeInTheDocument();
+    expect(screen.queryByText("▶")).not.toBeInTheDocument();
   });
 
-  it("does not show expand chevron for a goal with zero children", () => {
+  it("does not render the Open button for non-goal tasks", () => {
+    const task = makeTask({ type: "task" });
+    renderCard({ task, onClick: () => {} });
+    expect(screen.queryByRole("button", { name: /Open task detail/i })).not.toBeInTheDocument();
+  });
+
+  it("does not omit aria-expanded for non-goal tasks (must be undefined)", () => {
+    const task = makeTask({ type: "task" });
+    const { container } = renderCard({ task, onClick: () => {} });
+    // Non-goal cards must NOT set aria-expanded at all.
+    expect(getCardBody(container).hasAttribute("aria-expanded")).toBe(false);
+  });
+
+  it("non-goal click fires onClick (unchanged behavior)", async () => {
+    const onClick = vi.fn();
+    const onToggleExpand = vi.fn();
+    const task = makeTask({ type: "task" });
+    const { container } = renderCard({ task, onClick, onToggleExpand });
+
+    const user = userEvent.setup();
+    await user.click(getCardBody(container));
+
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onToggleExpand).not.toHaveBeenCalled();
+  });
+
+  it("does not render the disclosure indicator for a goal with zero children", () => {
     const task = makeGoalTask({
       children_progress: { done: 0, total: 0, waiting: 0, items: [] },
     });
     renderCard({ task, onClick: () => {} });
-    expect(screen.queryByRole("button", { name: /expand children/i })).not.toBeInTheDocument();
+    expect(screen.queryByText("▶")).not.toBeInTheDocument();
+  });
+
+  it("does not render the Open button for a goal with zero children", () => {
+    const task = makeGoalTask({
+      children_progress: { done: 0, total: 0, waiting: 0, items: [] },
+    });
+    renderCard({ task, onClick: () => {} });
+    expect(screen.queryByRole("button", { name: /Open task detail/i })).not.toBeInTheDocument();
+  });
+
+  it("a goal without children behaves like a non-goal: clicking body fires onClick", async () => {
+    const onClick = vi.fn();
+    const onToggleExpand = vi.fn();
+    const task = makeGoalTask({
+      children_progress: { done: 0, total: 0, waiting: 0, items: [] },
+    });
+    const { container } = renderCard({ task, onClick, onToggleExpand });
+
+    const user = userEvent.setup();
+    await user.click(getCardBody(container));
+
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onToggleExpand).not.toHaveBeenCalled();
   });
 });

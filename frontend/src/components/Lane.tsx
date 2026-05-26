@@ -18,9 +18,10 @@ interface Props {
   isRunning?: (id: string) => boolean;
   expandedGoals?: Set<string>;
   onToggleGoal?: (id: string) => void;
+  onHideLane?: (state: TaskState) => void;
 }
 
-export function Lane({ state, label, tasks, onOpen, onAdd, compact = false, onOpenTask, blocksCountMap, isRunning, expandedGoals, onToggleGoal }: Props) {
+export function Lane({ state, label, tasks, onOpen, onAdd, compact = false, onOpenTask, blocksCountMap, isRunning, expandedGoals, onToggleGoal, onHideLane }: Props) {
   const { isOver, setNodeRef } = useDroppable({ id: state });
   const taskIds = tasks.map((t) => t.id);
   const anyRunning = isRunning !== undefined && tasks.some((t) => isRunning(t.id));
@@ -29,7 +30,7 @@ export function Lane({ state, label, tasks, onOpen, onAdd, compact = false, onOp
     <section
       ref={setNodeRef}
       className={cn(
-        "flex min-h-0 flex-col rounded-lg shadow-inset-hairline transition-colors",
+        "group/lane flex min-h-0 flex-col rounded-lg shadow-inset-hairline transition-colors",
         isOver ? "bg-accent/10 ring-1 ring-accent-bright" : "bg-surface-1",
       )}
     >
@@ -48,16 +49,32 @@ export function Lane({ state, label, tasks, onOpen, onAdd, compact = false, onOp
             />
           )}
         </div>
-        {state === "backlog" && (
-          <button
-            type="button"
-            onClick={onAdd}
-            aria-label="New task"
-            className="rounded p-1 text-ink-muted transition hover:bg-surface-2 hover:text-accent-bright focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
-          >
-            <span aria-hidden className="text-lg leading-none">＋</span>
-          </button>
-        )}
+        <div className="ml-auto flex items-center gap-1">
+          {state === "backlog" && (
+            <button
+              type="button"
+              onClick={onAdd}
+              aria-label="New task"
+              className="rounded p-1 text-ink-muted transition hover:bg-surface-2 hover:text-accent-bright focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+            >
+              <span aria-hidden className="text-lg leading-none">＋</span>
+            </button>
+          )}
+          {onHideLane && (
+            <button
+              type="button"
+              onClick={() => onHideLane(state)}
+              aria-label={`Hide ${label} lane`}
+              title={`Hide ${label}`}
+              className="rounded p-1 text-ink-faint opacity-0 transition hover:bg-surface-2 hover:text-ink focus:opacity-100 focus:outline-none focus-visible:ring-1 focus-visible:ring-accent group-hover/lane:opacity-100"
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" aria-hidden="true">
+                <line x1="3" y1="3" x2="9" y2="9" />
+                <line x1="9" y1="3" x2="3" y2="9" />
+              </svg>
+            </button>
+          )}
+        </div>
       </StickyToolbar>
       <div className="flex-1 space-y-2 overflow-x-hidden overflow-y-auto p-2">
         <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>

@@ -39,6 +39,12 @@ interface Props {
   viewId?: string | null;
   /** Lane states to render; lanes absent here are hidden (column removed). */
   activeLaneStates?: TaskState[];
+  /** Lane states currently visible on the board. Hidden lanes appear as restore chips above the grid. */
+  visibleLaneStates?: TaskState[];
+  /** Called when the user clicks the × on a lane header. */
+  onHideLane?: (state: TaskState) => void;
+  /** Called when the user clicks a restore chip for a hidden lane. */
+  onShowLane?: (state: TaskState) => void;
   /** Set of goal IDs whose child list is expanded on the board. */
   expandedGoals?: Set<string>;
   /** Called when the user clicks the expand chevron on a goal card. */
@@ -54,6 +60,9 @@ export function Board({
   sortMode = "manual",
   viewId = null,
   activeLaneStates,
+  visibleLaneStates,
+  onHideLane,
+  onShowLane,
   expandedGoals,
   onToggleGoal,
   hideExpandedChildren = false,
@@ -174,20 +183,11 @@ export function Board({
     setActiveTask(null);
   }
 
-  if (isLoading) return <p className="p-6 text-ink-muted">Loading board…</p>;
-  // Silently ignore 404 for deleted/invalid views — BoardPage resets the URL param.
-  if (error && !error.message.startsWith("404 ")) {
-    return <p className="p-6 text-danger">Error: {error.message}</p>;
-  }
-  if (!sortedData || !displayData) return null;
-
-  const laneSet = activeLaneStates ? new Set(activeLaneStates) : null;
-  const visibleLanes = laneSet ? LANES.filter((l) => laneSet.has(l.state)) : LANES;
-
   // When hideExpandedChildren is on, filter out children whose parent goal is expanded.
+  // Must be declared before any early returns (hooks-rules).
   const displayData = useMemo(() => {
+    if (!sortedData) return null;
     if (!hideExpandedChildren || !expandedGoals || expandedGoals.size === 0) return sortedData;
-    if (!sortedData) return sortedData;
     const filterHidden = (tasks: TaskSummary[]) =>
       tasks.filter((t) => !(t.parent_id && expandedGoals.has(t.parent_id)));
     return {
@@ -198,6 +198,23 @@ export function Board({
       done: filterHidden(sortedData.done),
     };
   }, [sortedData, hideExpandedChildren, expandedGoals]);
+
+  if (isLoading) return <p className="p-6 text-ink-muted">Loading board…</p>;
+  // Silently ignore 404 for deleted/invalid views — BoardPage resets the URL param.
+  if (error && !error.message.startsWith("404 ")) {
+    return <p className="p-6 text-danger">Error: {error.message}</p>;
+  }
+  if (!sortedData || !displayData) return null;
+
+  // Prefer visibleLaneStates (new API) but fall back to activeLaneStates for callers not yet updated.
+  const laneStateSet =
+    visibleLaneStates !== undefined
+      ? new Set(visibleLaneStates)
+      : activeLaneStates !== undefined
+        ? new Set(activeLaneStates)
+        : null;
+  const visibleLanes = laneStateSet ? LANES.filter((l) => laneStateSet.has(l.state)) : LANES;
+  const hiddenLanes = laneStateSet ? LANES.filter((l) => !laneStateSet.has(l.state)) : [];
 
   // Dynamic column count so hidden lanes don't leave gaps.
   const colCount = visibleLanes.length;
@@ -216,13 +233,32 @@ export function Board({
         onDragEnd={onDragEnd}
         onDragCancel={onDragCancel}
       >
+        {hiddenLanes.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 px-2 pt-2 lg:px-4">
+            <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-faint">
+              Hidden:
+            </span>
+            {hiddenLanes.map(({ state, label }) => (
+              <button
+                key={state}
+                type="button"
+                onClick={() => onShowLane?.(state)}
+                aria-label={`Show ${label} lane`}
+                title={`Show ${label}`}
+                className="rounded border border-dashed border-hairline px-2 py-0.5 font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-muted transition hover:border-accent hover:bg-surface-2 hover:text-accent-bright focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+              >
+                + {label}
+              </button>
+            ))}
+          </div>
+        )}
         <div className={`grid h-full grid-cols-1 gap-2 p-2 md:grid-cols-2 ${lgCols} lg:gap-3 lg:p-4`}>
           {visibleLanes.map(({ state, label }) => (
             <Lane
               key={state}
               state={state}
               label={label}
-              tasks={displayData ? displayData[state] : []}
+              tasks={displayData[state]}
               onOpen={setOpenId}
               onAdd={onAddTask}
               compact={compact}
@@ -231,6 +267,7 @@ export function Board({
               isRunning={isRunning}
               expandedGoals={expandedGoals}
               onToggleGoal={onToggleGoal}
+              onHideLane={onHideLane}
             />
           ))}
         </div>
