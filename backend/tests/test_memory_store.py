@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -283,3 +283,120 @@ async def test_get_auto_confirm_rebuilds_index(store: MemoryStore, tmp_path: Pat
         await store.get("global", item.id)
     index = (tmp_path / "data" / "memory" / "index.md").read_text()
     assert "✓" in index
+
+
+# ---------------------------------------------------------------------------
+# prune_stale
+# ---------------------------------------------------------------------------
+
+_PAST = datetime(2020, 1, 1, tzinfo=UTC)
+
+
+@pytest.mark.asyncio
+async def test_prune_stale_empty_scope_returns_zero(store: MemoryStore) -> None:
+    count = await store.prune_stale("global")
+    assert count == 0
+
+
+@pytest.mark.asyncio
+async def test_prune_stale_moves_expired_low_score_item(store: MemoryStore, tmp_path: Path) -> None:
+    item = await store.create(
+        scope="global",
+        kind=MemoryKind.FACT,
+        title="Stale",
+        score=0.05,
+        ttl_until=_PAST,
+    )
+    count = await store.prune_stale("global")
+    assert count == 1
+    items_dir = tmp_path / "data" / "memory" / "items"
+    archive_dir = tmp_path / "data" / "memory" / "archive"
+    assert not (items_dir / f"{item.id}.md").exists()
+    assert (archive_dir / f"{item.id}.md").exists()
+
+
+@pytest.mark.asyncio
+async def test_prune_stale_skips_high_score_item(store: MemoryStore) -> None:
+    await store.create(
+        scope="global",
+        kind=MemoryKind.FACT,
+        title="Active",
+        score=5.0,
+        ttl_until=_PAST,
+    )
+    count = await store.prune_stale("global")
+    assert count == 0
+
+
+@pytest.mark.asyncio
+async def test_prune_stale_skips_item_with_no_ttl(store: MemoryStore) -> None:
+    await store.create(
+        scope="global",
+        kind=MemoryKind.FACT,
+        title="No TTL",
+        score=0.0,
+        ttl_until=None,
+    )
+    count = await store.prune_stale("global")
+    assert count == 0
+
+
+@pytest.mark.asyncio
+async def test_prune_stale_skips_item_with_future_ttl(store: MemoryStore) -> None:
+    future = datetime.now(tz=UTC) + timedelta(days=30)
+    await store.create(
+        scope="global",
+        kind=MemoryKind.FACT,
+        title="Fresh",
+        score=0.05,
+        ttl_until=future,
+    )
+    count = await store.prune_stale("global")
+    assert count == 0
+
+
+@pytest.mark.asyncio
+async def test_prune_stale_returns_correct_count(store: MemoryStore) -> None:
+    for i in range(3):
+        await store.create(
+            scope="global",
+            kind=MemoryKind.FACT,
+            title=f"Stale {i}",
+            score=0.05,
+            ttl_until=_PAST,
+        )
+    await store.create(scope="global", kind=MemoryKind.FACT, title="Keeper", score=5.0, ttl_until=_PAST)
+    count = await store.prune_stale("global")
+    assert count == 3
+
+
+@pytest.mark.asyncio
+async def test_prune_stale_rebuilds_index(store: MemoryStore, tmp_path: Path) -> None:
+    item = await store.create(
+        scope="global",
+        kind=MemoryKind.FACT,
+        title="Gone",
+        score=0.05,
+        ttl_until=_PAST,
+    )
+    await store.create(scope="global", kind=MemoryKind.FACT, title="Remaining", score=5.0)
+    await store.prune_stale("global")
+    index = (tmp_path / "data" / "memory" / "index.md").read_text()
+    assert "Gone" not in index
+    assert "Remaining" in index
+
+
+@pytest.mark.asyncio
+async def test_prune_stale_per_space_scope(store: MemoryStore, tmp_path: Path) -> None:
+    scope = "space:test-space"
+    item = await store.create(
+        scope=scope,
+        kind=MemoryKind.OBSERVATION,
+        title="Space stale",
+        score=0.05,
+        ttl_until=_PAST,
+    )
+    count = await store.prune_stale(scope)
+    assert count == 1
+    archive_dir = tmp_path / "spaces" / "test-space" / ".cronos" / "memory" / "archive"
+    assert (archive_dir / f"{item.id}.md").exists()
