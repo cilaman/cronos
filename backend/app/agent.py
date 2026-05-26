@@ -19,7 +19,6 @@ DATA_DIR = Path(os.environ.get("CRONOS_DATA_DIR", "/data"))
 CRONOS_SUBDIR = ".cronos"
 
 UPGRADE_WEBHOOK_URL = os.environ.get("UPGRADE_WEBHOOK_URL", "")
-UPGRADE_WEBHOOK_SECRET = os.environ.get("UPGRADE_WEBHOOK_SECRET", "")
 
 STATUS_CONTRACT = """\
 You are an autonomous task executor. The user is not watching in real time.
@@ -123,24 +122,14 @@ DEFAULT_TOOLS = "Read,Edit,Write,Bash,Skill,Agent"
 
 def _upgrade_instructions() -> str:
     if not UPGRADE_WEBHOOK_URL:
-        return (
-            "# Upgrading the app\n"
-            "UPGRADE_WEBHOOK_URL is not set. You cannot trigger an upgrade from "
-            "inside the container. Ask the user to run `upgrade.sh` manually on "
-            "the host, or follow VPS_SETUP.md §10.2 to install the upgrade webhook."
-        )
-    secret_header = (
-        f'-H "X-Upgrade-Secret: {UPGRADE_WEBHOOK_SECRET}"'
-        if UPGRADE_WEBHOOK_SECRET
-        else ""
-    )
+        return ""
     return (
         "# Upgrading the app\n"
         "When asked to upgrade the application:\n"
         "1. Write your completion summary and **STATUS: DONE** as the very last line "
         "of your text response (before any tool calls in that turn).\n"
         "2. In the same turn, run the upgrade webhook:\n\n"
-        f"  curl -s -X POST {secret_header} {UPGRADE_WEBHOOK_URL}\n\n"
+        f"  curl -s -X POST {UPGRADE_WEBHOOK_URL}\n\n"
         "The container restart will kill this process immediately after the webhook "
         "fires. STATUS: DONE must already be in your output before the curl runs, "
         "or the run will be marked as crashed."

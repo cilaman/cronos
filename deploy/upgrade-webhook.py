@@ -6,6 +6,8 @@ Accepts POST /upgrade and runs upgrade.sh as the cronos user.
 
 Install: see deploy/VPS_SETUP.md §10.
 """
+import datetime
+import hmac
 import http.server
 import os
 import subprocess
@@ -24,9 +26,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._reply(404, b"not found\n")
             return
 
+        ts = datetime.datetime.utcnow().isoformat(timespec="seconds") + "Z"
+        client_ip = self.client_address[0]
+        print(f"[{ts}] POST /upgrade from {client_ip}", flush=True)
+
         if SECRET:
             auth = self.headers.get("X-Upgrade-Secret", "")
-            if auth != SECRET:
+            if not hmac.compare_digest(auth.encode(), SECRET.encode()):
+                print(f"[{ts}] forbidden (bad secret) from {client_ip}", flush=True)
                 self._reply(403, b"forbidden\n")
                 return
 
