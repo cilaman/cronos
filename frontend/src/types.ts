@@ -13,15 +13,25 @@ const USER_TRANSITIONS_SET = new Set<string>([
   "backlog->active",
   "active->backlog",
   "waiting->backlog",
+  "waiting->done",
   "done->backlog",
   "done->archived",
   "waiting->archived",
   "archived->backlog",
+  "archived->done",
 ]);
 
 export function canUserTransition(from: TaskState, to: TaskState): boolean {
   if (from === to) return false;
   return USER_TRANSITIONS_SET.has(`${from}->${to}`);
+}
+
+export interface ChildProgressItem {
+  id: string;
+  title: string;
+  state: TaskState;
+  priority: number;
+  updated_at: string;
 }
 
 export interface TaskSummary {
@@ -47,7 +57,8 @@ export interface TaskSummary {
   unmet_dependencies?: Array<{ id: string; title: string }>;
   pr_url?: string | null;
   proposed_pr_path?: string | null;
-  children_progress?: { done: number; total: number; waiting: number } | null;
+  children_progress?: { done: number; total: number; waiting: number; items?: ChildProgressItem[] } | null;
+  is_running?: boolean;
 }
 
 export type AgentMode = "plan" | "auto" | "ask";

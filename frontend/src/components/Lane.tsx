@@ -15,39 +15,66 @@ interface Props {
   compact?: boolean;
   onOpenTask?: (id: string) => void;
   blocksCountMap?: Record<string, number>;
+  isRunning?: (id: string) => boolean;
+  expandedGoals?: Set<string>;
+  onToggleGoal?: (id: string) => void;
+  onHideLane?: (state: TaskState) => void;
 }
 
-export function Lane({ state, label, tasks, onOpen, onAdd, compact = false, onOpenTask, blocksCountMap }: Props) {
+export function Lane({ state, label, tasks, onOpen, onAdd, compact = false, onOpenTask, blocksCountMap, isRunning, expandedGoals, onToggleGoal, onHideLane }: Props) {
   const { isOver, setNodeRef } = useDroppable({ id: state });
   const taskIds = tasks.map((t) => t.id);
+  const anyRunning = isRunning !== undefined && tasks.some((t) => isRunning(t.id));
 
   return (
     <section
       ref={setNodeRef}
       className={cn(
-        "flex min-h-0 flex-col rounded-lg shadow-inset-hairline transition-colors",
+        "group/lane flex min-h-0 flex-col rounded-lg shadow-inset-hairline transition-colors",
         isOver ? "bg-accent/10 ring-1 ring-accent-bright" : "bg-surface-1",
       )}
     >
       <StickyToolbar className="z-10 h-10 rounded-t-lg px-3">
-        <div className="flex items-baseline gap-2">
+        <div className="flex items-center gap-2">
           <h2 className="font-display text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-muted">
             {label}
           </h2>
           <span className="font-mono text-xs tabular-nums text-ink-faint">
             {String(tasks.length).padStart(2, "0")}
           </span>
+          {anyRunning && (
+            <span
+              className="h-2 w-2 rounded-full bg-accent-bright anim-pulse-dot"
+              aria-label="Task running"
+            />
+          )}
         </div>
-        {state === "backlog" && (
-          <button
-            type="button"
-            onClick={onAdd}
-            aria-label="New task"
-            className="rounded p-1 text-ink-muted transition hover:bg-surface-2 hover:text-accent-bright focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
-          >
-            <span aria-hidden className="text-lg leading-none">＋</span>
-          </button>
-        )}
+        <div className="ml-auto flex items-center gap-1">
+          {state === "backlog" && (
+            <button
+              type="button"
+              onClick={onAdd}
+              aria-label="New task"
+              className="rounded p-1 text-ink-muted transition hover:bg-surface-2 hover:text-accent-bright focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+            >
+              <span aria-hidden className="text-lg leading-none">＋</span>
+            </button>
+          )}
+          {onHideLane && (
+            <button
+              type="button"
+              onClick={() => onHideLane(state)}
+              aria-label={`Hide ${label} lane`}
+              title={`Hide ${label}`}
+              className="rounded p-1 text-ink-faint transition hover:bg-surface-2 hover:text-ink focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" aria-hidden="true">
+                <line x1="3" y1="3" x2="9" y2="9" />
+                <line x1="9" y1="3" x2="3" y2="9" />
+              </svg>
+            </button>
+          )}
+        </div>
       </StickyToolbar>
       <div className="flex-1 space-y-2 overflow-x-hidden overflow-y-auto p-2">
         <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
@@ -62,6 +89,9 @@ export function Lane({ state, label, tasks, onOpen, onAdd, compact = false, onOp
                 compact={compact}
                 onOpenTask={onOpenTask}
                 blocksCount={blocksCountMap?.[task.id] ?? 0}
+                running={isRunning?.(task.id)}
+                expanded={expandedGoals?.has(task.id) ?? false}
+                onToggleExpand={onToggleGoal ? () => onToggleGoal(task.id) : undefined}
               />
             ))
           )}

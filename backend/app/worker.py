@@ -104,11 +104,16 @@ class Worker:
         # mid-run page refresh doesn't show an empty conversation.
         self._run_buffer: dict[str, list[dict]] = defaultdict(list)
         self._current_id: str | None = None
+        # Set to the child task ID when _run_goal is executing a child.
+        self._current_child_id: str | None = None
         self._current_cancel: asyncio.Event | None = None
         self._loop_task: asyncio.Task[None] | None = None
         self._stop = asyncio.Event()
         # Track consecutive auto-resumes per task to prevent infinite loops.
         self._auto_resume_counts: dict[str, int] = {}
+        # Space-level subscribers receive run_start/run_end for all tasks in
+        # this worker's space (used by the space SSE stream).
+        self._space_subscribers: list[asyncio.Queue[dict]] = []
 
     # ---- public api ----
 
@@ -152,6 +157,16 @@ class Worker:
             self._subscribers[task_id].remove(q)
         if not self._subscribers.get(task_id):
             self._subscribers.pop(task_id, None)
+
+    def subscribe_space(self) -> asyncio.Queue[dict]:
+        """Subscribe to run_start/run_end events for any task in this space."""
+        q: asyncio.Queue[dict] = asyncio.Queue(maxsize=256)
+        self._space_subscribers.append(q)
+        return q
+
+    def unsubscribe_space(self, q: asyncio.Queue[dict]) -> None:
+        if q in self._space_subscribers:
+            self._space_subscribers.remove(q)
 
     # ---- lifecycle ----
 
@@ -650,6 +665,7 @@ class Worker:
                 "title": child.title,
             })
 
+            self._current_child_id = child_id
             self._run_buffer[child_id] = []
             await self._publish(child_id, {"type": "run_start", "task_id": child_id})
 
@@ -676,6 +692,7 @@ class Worker:
                 run_exception = str(e)
                 log.exception("Agent error on child %s", child_id)
 
+            self._current_child_id = None
             child_new_state = await self._finalize_child(
                 child_id, child_result, run_exception, started_at=child_started_at
             )
@@ -776,6 +793,20 @@ class Worker:
                     q.put_nowait(event)
                 except asyncio.QueueFull:
                     pass
+        # Forward lifecycle events to space-level subscribers.
+        if event.get("type") in ("run_start", "run_end"):
+            for q in list(self._space_subscribers):
+                try:
+                    q.put_nowait(event)
+                except asyncio.QueueFull:
+                    try:
+                        q.get_nowait()
+                    except asyncio.QueueEmpty:
+                        pass
+                    try:
+                        q.put_nowait(event)
+                    except asyncio.QueueFull:
+                        pass
 
 
 def _extract_subagent_types(events: list[dict]) -> list[str]:
@@ -829,3 +860,22 @@ async def sse_events(task_id: str, worker: Worker) -> AsyncIterator[str]:
             yield f"data: {json.dumps(event)}\n\n"
     finally:
         worker.unsubscribe(task_id, q)
+
+
+async def sse_space_events(worker: Worker) -> AsyncIterator[str]:
+    """Yields run_start/run_end SSE events for all tasks in a worker's space.
+
+    Stays open indefinitely; the client disconnects when done.
+    """
+    import json
+
+    q = worker.subscribe_space()
+    try:
+        yield ": ok\n\n"
+        while True:
+            event = await q.get()
+            if event is _DONE_SENTINEL:
+                return
+            yield f"data: {json.dumps(event)}\n\n"
+    finally:
+        worker.unsubscribe_space(q)

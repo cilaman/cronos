@@ -20,6 +20,7 @@ from ..models import (
     SpacesResponse,
     TaskState,
 )
+from ..worker import sse_space_events
 from ..space_storage import (
     SpaceError,
     SpaceExists,
@@ -124,6 +125,27 @@ async def get_space(space_id: str, request: Request) -> Space:
     if space is None:
         raise HTTPException(status_code=404, detail=f"Space {space_id} not found")
     return space
+
+
+@router.get("/{space_id}/stream")
+async def stream_space(space_id: str, request: Request) -> StreamingResponse:
+    """SSE stream emitting run_start/run_end events for any task in this space."""
+    space_store = get_space_store(request)
+    if not space_store.exists(space_id):
+        raise HTTPException(status_code=404, detail=f"Space {space_id} not found")
+    pool = get_pool(request)
+    worker = pool.get(space_id)
+    if worker is None:
+        raise HTTPException(status_code=503, detail=f"No worker for space {space_id}")
+    return StreamingResponse(
+        sse_space_events(worker),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @router.post("", response_model=Space, status_code=status.HTTP_201_CREATED)

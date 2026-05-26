@@ -246,7 +246,8 @@ describe("HierarchySection — Children section", () => {
     renderSection(makeTask({ id: "t-1", type: "goal" }));
 
     expect(screen.getByText("Children")).toBeInTheDocument();
-    expect(screen.getByText("Child One")).toBeInTheDocument();
+    // GoalDependencyGraph renders the title in both mobile list and graph node
+    expect(screen.getAllByText("Child One").length).toBeGreaterThanOrEqual(1);
   });
 
   it("lists each child of the goal as a clickable button", () => {
@@ -257,8 +258,8 @@ describe("HierarchySection — Children section", () => {
     ]);
     renderSection(makeTask({ id: "t-1", type: "goal" }));
 
-    expect(screen.getByText("First child")).toBeInTheDocument();
-    expect(screen.getByText("Second child")).toBeInTheDocument();
+    expect(screen.getAllByText("First child").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Second child").length).toBeGreaterThanOrEqual(1);
     // Unrelated tasks must not appear in the Children list.
     expect(screen.queryByText("unrelated")).not.toBeInTheDocument();
   });
@@ -269,8 +270,8 @@ describe("HierarchySection — Children section", () => {
     ]);
     renderSection(makeTask({ id: "t-1", type: "goal" }));
 
-    // Child row contains a small state badge with the literal state text.
-    expect(screen.getByText("active")).toBeInTheDocument();
+    // GoalDependencyGraph renders the state in both mobile list and graph node
+    expect(screen.getAllByText("active").length).toBeGreaterThanOrEqual(1);
   });
 
   it("does NOT render the Children section when board data is not yet loaded", () => {

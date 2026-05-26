@@ -1,10 +1,13 @@
 // Centralized localStorage keys + helpers used across pages.
+import type { TaskState } from "../types";
 
 export const STORAGE_KEYS = {
   boardSpaceFilter: "cronos.boardSpaceFilter",
   cardViewMode: "cronos.cardViewMode",
   boardSortMode: "cronos.boardSortMode",
 } as const;
+
+const KNOWN_LANE_STATES: TaskState[] = ["backlog", "active", "waiting", "done", "archived"];
 
 // Tree expand/collapse state — keyed per space (or "_all" for the all-spaces view)
 export function readTreeExpanded(spaceId: string | null): string[] {
@@ -83,5 +86,62 @@ export function writeBoardSortMode(mode: BoardSortMode): void {
     window.localStorage.setItem(STORAGE_KEYS.boardSortMode, mode);
   } catch {
     // localStorage unavailable (private mode) — silently fall back.
+  }
+}
+
+// Board goal expand/collapse state — keyed per space (or "_all" for the all-spaces view)
+export function readBoardGoalExpanded(spaceId: string | null): string[] {
+  const key = `cronos:board:goal-expanded:${spaceId ?? "_all"}`;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return [];
+    return JSON.parse(raw) as string[];
+  } catch {
+    return [];
+  }
+}
+
+export function writeBoardGoalExpanded(spaceId: string | null, ids: string[]): void {
+  const key = `cronos:board:goal-expanded:${spaceId ?? "_all"}`;
+  try {
+    localStorage.setItem(key, JSON.stringify(ids));
+  } catch {
+    // localStorage unavailable — silently fall back
+  }
+}
+
+// Board lane visibility override — keyed per (space, view). Null = no override (use the view's lanes).
+function laneOverrideKey(spaceId: string | null, viewId: string | null): string {
+  return `cronos:board:lanes:${spaceId ?? "_all"}:${viewId ?? "_default"}`;
+}
+
+export function readBoardLaneOverride(
+  spaceId: string | null,
+  viewId: string | null,
+): TaskState[] | null {
+  try {
+    const raw = localStorage.getItem(laneOverrideKey(spaceId, viewId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    return parsed.filter((s): s is TaskState =>
+      typeof s === "string" && KNOWN_LANE_STATES.includes(s as TaskState),
+    );
+  } catch {
+    return null;
+  }
+}
+
+export function writeBoardLaneOverride(
+  spaceId: string | null,
+  viewId: string | null,
+  lanes: TaskState[] | null,
+): void {
+  const key = laneOverrideKey(spaceId, viewId);
+  try {
+    if (lanes === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, JSON.stringify(lanes));
+  } catch {
+    // localStorage unavailable — silently fall back
   }
 }

@@ -47,6 +47,7 @@ USER_TRANSITIONS: set[tuple[TaskState, TaskState]] = {
     (TaskState.DONE, TaskState.ARCHIVED),
     (TaskState.WAITING, TaskState.ARCHIVED),
     (TaskState.ARCHIVED, TaskState.BACKLOG),
+    (TaskState.ARCHIVED, TaskState.DONE),
 }
 
 WORKER_TRANSITIONS: set[tuple[TaskState, TaskState]] = {

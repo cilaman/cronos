@@ -306,6 +306,204 @@ async def test_transition_task_same_state_is_noop(async_client):
 
 
 # ---------------------------------------------------------------------------
+# Detail-view buttons — "Send to Backlog" / "Move to Done"
+#
+# End-to-end coverage through PATCH /api/tasks/{id}/state for the transitions
+# exposed by the new buttons in TaskActionBar.
+# ---------------------------------------------------------------------------
+
+
+async def test_patch_state_archived_to_done_succeeds_for_plain_task(
+    async_client, task_store
+):
+    """End-to-end: PATCH /state from archived to done on a plain task returns
+    200. Mirrors the new 'Move to Done' button on an archived task's detail.
+    """
+    from app.storage import USER_TRANSITIONS as _UT, WORKER_TRANSITIONS as _WT
+
+    task = await task_store.create(space_id=SPACE_ID, title="T", brief="")
+    await task_store.transition(task.id, TaskState.ACTIVE, allowed=_UT)
+    await task_store.transition(task.id, TaskState.DONE, allowed=_WT)
+    await task_store.transition(task.id, TaskState.ARCHIVED, allowed=_UT)
+    assert task_store.get(task.id).state == TaskState.ARCHIVED
+
+    # Act
+    resp = await async_client.patch(
+        f"/api/tasks/{task.id}/state", json={"state": "done"}
+    )
+
+    # Assert
+    assert resp.status_code == 200
+    assert resp.json()["state"] == "done"
+    assert task_store.get(task.id).state == TaskState.DONE
+
+
+async def test_patch_state_archived_to_done_refused_for_goal_with_open_children(
+    async_client, task_store
+):
+    """End-to-end: archived goal with at least one non-terminal child returns
+    409 from PATCH /state when transitioning to done. Locks the goal-guard
+    error path for the new transition.
+    """
+    goal = await task_store.create(
+        space_id=SPACE_ID, title="Parent Goal", brief="", type="goal"
+    )
+    child = await task_store.create(
+        space_id=SPACE_ID, title="Open Child", brief="", parent_id=goal.id
+    )
+    # The legal goal -> archived path requires the child to be terminal first
+    # (since active->done is gated by open_children). Setup bypasses that gate
+    # by writing the archived state directly into the in-memory store, then
+    # exercises the user-facing PATCH endpoint against that state.
+    stored = task_store.get(goal.id)
+    task_store._by_id[goal.id] = stored.model_copy(
+        update={"state": TaskState.ARCHIVED}
+    )
+    assert task_store.get(goal.id).state == TaskState.ARCHIVED
+
+    # Act
+    resp = await async_client.patch(
+        f"/api/tasks/{goal.id}/state", json={"state": "done"}
+    )
+
+    # Assert
+    assert resp.status_code == 409
+    body = resp.json()
+    # Surface enough detail for the UI to identify the blocker.
+    detail = body.get("detail", "")
+    assert "open children" in detail
+    assert child.id in detail
+    # Goal stays in archived — no partial mutation.
+    assert task_store.get(goal.id).state == TaskState.ARCHIVED
+
+
+async def test_patch_state_done_to_backlog_succeeds_for_plain_task(
+    async_client, task_store
+):
+    """End-to-end: 'Send to Backlog' button on a done task. Returns 200."""
+    from app.storage import USER_TRANSITIONS as _UT, WORKER_TRANSITIONS as _WT
+
+    task = await task_store.create(space_id=SPACE_ID, title="T", brief="")
+    await task_store.transition(task.id, TaskState.ACTIVE, allowed=_UT)
+    await task_store.transition(task.id, TaskState.DONE, allowed=_WT)
+    assert task_store.get(task.id).state == TaskState.DONE
+
+    # Act
+    resp = await async_client.patch(
+        f"/api/tasks/{task.id}/state", json={"state": "backlog"}
+    )
+
+    # Assert
+    assert resp.status_code == 200
+    assert resp.json()["state"] == "backlog"
+
+
+# State transitions on a child can leave its parent goal stranded in WAITING
+# (the supervisor loop in worker._run_goal exits when a child ends non-DONE).
+# PATCH /state must call goal_sync.propagate_to_parent so the goal is
+# reactivated and re-enqueued — otherwise marking a stuck child as DONE
+# silently strands the goal.
+
+_FORCE_TRANSITIONS = {
+    (TaskState.BACKLOG, TaskState.WAITING),
+    (TaskState.WAITING, TaskState.ACTIVE),
+}
+
+
+class _RecordingPool:
+    """WorkerPool stand-in that records enqueue() calls."""
+
+    def __init__(self) -> None:
+        self.enqueued: list[tuple[str, str]] = []
+
+    def get(self, space_id):
+        return None
+
+    async def start_for_space(self, space_id):
+        return None
+
+    async def stop_for_space(self, space_id):
+        return None
+
+    async def enqueue(self, space_id: str, task_id: str) -> None:
+        self.enqueued.append((space_id, task_id))
+
+    def items(self):
+        return []
+
+    def running_ids(self, space_id):
+        return set()
+
+
+async def test_transition_child_to_done_reactivates_waiting_goal(
+    async_client, task_store
+):
+    from app.main import app
+
+    goal = await task_store.create(
+        space_id=SPACE_ID, title="Goal", brief="g", type="goal"
+    )
+    child = await task_store.create(
+        space_id=SPACE_ID, title="Child", brief="c", parent_id=goal.id
+    )
+    await task_store.transition(goal.id, TaskState.WAITING, allowed=_FORCE_TRANSITIONS)
+    await task_store.transition(child.id, TaskState.WAITING, allowed=_FORCE_TRANSITIONS)
+
+    pool = _RecordingPool()
+    app.state.worker_pool = pool
+
+    resp = await async_client.patch(
+        f"/api/tasks/{child.id}/state", json={"state": "done"}
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["state"] == "done"
+    assert task_store.get(goal.id).state == TaskState.ACTIVE
+    assert pool.enqueued == [(SPACE_ID, goal.id)]
+
+
+async def test_transition_child_to_archived_reactivates_waiting_goal(
+    async_client, task_store
+):
+    from app.main import app
+
+    goal = await task_store.create(
+        space_id=SPACE_ID, title="Goal", brief="g", type="goal"
+    )
+    child = await task_store.create(
+        space_id=SPACE_ID, title="Child", brief="c", parent_id=goal.id
+    )
+    await task_store.transition(goal.id, TaskState.WAITING, allowed=_FORCE_TRANSITIONS)
+    await task_store.transition(child.id, TaskState.WAITING, allowed=_FORCE_TRANSITIONS)
+
+    pool = _RecordingPool()
+    app.state.worker_pool = pool
+
+    resp = await async_client.patch(
+        f"/api/tasks/{child.id}/state", json={"state": "archived"}
+    )
+
+    assert resp.status_code == 200
+    assert task_store.get(goal.id).state == TaskState.ACTIVE
+    assert pool.enqueued == [(SPACE_ID, goal.id)]
+
+
+async def test_transition_standalone_task_no_parent_propagation_safe(
+    async_client, task_store
+):
+    """Standalone task (no parent) WAITING → DONE must not crash."""
+    task = await task_store.create(space_id=SPACE_ID, title="Solo", brief="b")
+    await task_store.transition(task.id, TaskState.WAITING, allowed=_FORCE_TRANSITIONS)
+
+    resp = await async_client.patch(
+        f"/api/tasks/{task.id}/state", json={"state": "done"}
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["state"] == "done"
+
+
+# ---------------------------------------------------------------------------
 # DELETE /api/tasks/{id}
 # ---------------------------------------------------------------------------
 
@@ -1650,7 +1848,9 @@ async def test_goal_with_mixed_children_states_gets_correct_children_progress(
     assert summary is not None
     progress = summary["children_progress"]
     assert progress is not None, "goal with children must have children_progress"
-    assert progress == {"done": 1, "total": 4, "waiting": 1}
+    assert progress["done"] == 1
+    assert progress["total"] == 4
+    assert progress["waiting"] == 1
     # Defensive: the un-counted children (backlog, active) are in `total`
     # but neither in `done` nor `waiting`.
     assert progress["total"] - progress["done"] - progress["waiting"] == 2
@@ -1749,7 +1949,11 @@ async def test_goal_with_all_children_done_reports_full_progress(
     summary = await _find_in_board(async_client, goal["id"])
 
     assert summary is not None
-    assert summary["children_progress"] == {"done": 2, "total": 2, "waiting": 0}
+    cp = summary["children_progress"]
+    assert cp is not None
+    assert cp["done"] == 2
+    assert cp["total"] == 2
+    assert cp["waiting"] == 0
 
 
 async def test_children_of_other_goals_do_not_leak_into_progress(async_client):
@@ -1769,9 +1973,13 @@ async def test_children_of_other_goals_do_not_leak_into_progress(async_client):
     sum_b = await _find_in_board(async_client, goal_b["id"])
 
     assert sum_a is not None
-    assert sum_a["children_progress"] == {"done": 0, "total": 1, "waiting": 0}
+    cp_a = sum_a["children_progress"]
+    assert cp_a is not None
+    assert cp_a["done"] == 0 and cp_a["total"] == 1 and cp_a["waiting"] == 0
     assert sum_b is not None
-    assert sum_b["children_progress"] == {"done": 0, "total": 3, "waiting": 0}
+    cp_b = sum_b["children_progress"]
+    assert cp_b is not None
+    assert cp_b["done"] == 0 and cp_b["total"] == 3 and cp_b["waiting"] == 0
 
 
 async def test_root_level_tasks_dont_appear_as_anyones_children(async_client):
@@ -1809,4 +2017,6 @@ async def test_children_progress_present_on_all_space_query(
     )
 
     assert found is not None
-    assert found["children_progress"] == {"done": 0, "total": 1, "waiting": 0}
+    cp = found["children_progress"]
+    assert cp is not None
+    assert cp["done"] == 0 and cp["total"] == 1 and cp["waiting"] == 0

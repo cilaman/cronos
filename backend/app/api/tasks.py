@@ -13,7 +13,7 @@ log = logging.getLogger(__name__)
 from .. import git_ops
 from ..agent import CRONOS_SUBDIR, space_dir_for
 from ..file_service import FileEntry, list_files, list_git_changed_files, resolve_safe, save_upload
-from ..models import Board, ChildrenProgress, Space, Task, TaskState, TaskSummary, View
+from ..models import Board, ChildItem, ChildrenProgress, Space, Task, TaskState, TaskSummary, View
 from ..space_storage import SpaceStore
 from ..storage import (
     USER_TRANSITIONS,
@@ -192,8 +192,23 @@ def _enrich_progress(board: Board) -> Board:
                 if children:
                     done = sum(1 for c in children if c.state == TaskState.DONE)
                     waiting = sum(1 for c in children if c.state == TaskState.WAITING)
+                    child_items = [
+                        ChildItem(
+                            id=c.id,
+                            title=c.title,
+                            state=c.state,
+                            priority=c.priority,
+                            updated_at=c.updated_at,
+                        )
+                        for c in children[:20]
+                    ]
                     t = t.model_copy(
-                        update={"children_progress": ChildrenProgress(done=done, total=len(children), waiting=waiting)}
+                        update={"children_progress": ChildrenProgress(
+                            done=done,
+                            total=len(children),
+                            waiting=waiting,
+                            items=child_items,
+                        )}
                     )
             result.append(t)
         return result
@@ -203,6 +218,24 @@ def _enrich_progress(board: Board) -> Board:
         active=fill(board.active),
         waiting=fill(board.waiting),
         done=fill(board.done),
+    )
+
+
+def _annotate_running(board: Board, running: set[str]) -> Board:
+    if not running:
+        return board
+
+    def mark(items: list[TaskSummary]) -> list[TaskSummary]:
+        return [
+            t.model_copy(update={"is_running": True}) if t.id in running else t
+            for t in items
+        ]
+
+    return Board(
+        backlog=mark(board.backlog),
+        active=mark(board.active),
+        waiting=mark(board.waiting),
+        done=mark(board.done),
     )
 
 
@@ -225,10 +258,19 @@ async def list_tasks(
 ) -> Board:
     store = get_store(request)
     space_store = get_space_store(request)
+    pool = get_pool(request)
     scope = None if space_id in (None, "all", "") else space_id
     if scope is not None and not space_store.exists(scope):
         raise HTTPException(status_code=404, detail=f"Space {scope} not found")
     board = _enrich_progress(_enrich_board(store.board(scope), space_store))
+    # Annotate tasks that a worker is actively executing right now.
+    if scope is not None:
+        running = pool.running_ids(scope)
+    else:
+        running = set()
+        for space in space_store.list_all():
+            running |= pool.running_ids(space.id)
+    board = _annotate_running(board, running)
     if view is not None:
         if scope is None:
             raise HTTPException(
@@ -355,8 +397,10 @@ async def update_task(task_id: str, body: UpdateTaskBody, request: Request) -> T
 async def transition_task(
     task_id: str, body: TransitionBody, request: Request
 ) -> TaskRead:
+    store = get_store(request)
+    pool = get_pool(request)
     try:
-        updated = await get_store(request).transition(
+        updated = await store.transition(
             task_id, body.state, allowed=USER_TRANSITIONS
         )
     except TaskNotFound:
@@ -367,7 +411,8 @@ async def transition_task(
         raise HTTPException(status_code=400, detail=str(e)) from None
     if updated.state == TaskState.ACTIVE:
         await get_worker_for_task(request, task_id).enqueue(task_id)
-    return _build_task_read(updated, get_space_store(request).get(updated.space_id), get_store(request))
+    await goal_sync.propagate_to_parent(task_id, store, pool)
+    return _build_task_read(updated, get_space_store(request).get(updated.space_id), store)
 
 
 @router.post("/{task_id}/start", response_model=TaskRead)

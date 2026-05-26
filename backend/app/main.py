@@ -7,7 +7,7 @@ import shutil
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request, Response
+from fastapi import Depends, FastAPI, Request, Response
 from watchfiles import awatch
 
 from .api.activity import router as activity_router
@@ -19,6 +19,7 @@ from .api.test_reports import router as test_reports_router
 from .api.tools import router as tools_router
 from .api.traces import router as traces_router
 from .api.views import router as views_router
+from .auth import require_auth
 from .memory_store import MemoryStore
 from .space_storage import CRONOS_SUBDIR, RESERVED_SPACE_DIRS, SpaceStore
 from .stats_store import StatsStore
@@ -207,16 +208,18 @@ async def lifespan(app: FastAPI):
                 bg_task.cancel()
 
 
+_auth = [Depends(require_auth)]
+
 app = FastAPI(title="Cronos", version="0.0.1", lifespan=lifespan)
-app.include_router(tasks_router)
-app.include_router(spaces_router)
-app.include_router(views_router)
-app.include_router(activity_router)
-app.include_router(tools_router)
-app.include_router(stats_router)
-app.include_router(traces_router)
-app.include_router(test_reports_router)
-app.include_router(memory_router)
+app.include_router(tasks_router, dependencies=_auth)
+app.include_router(spaces_router, dependencies=_auth)
+app.include_router(views_router, dependencies=_auth)
+app.include_router(activity_router, dependencies=_auth)
+app.include_router(tools_router, dependencies=_auth)
+app.include_router(stats_router, dependencies=_auth)
+app.include_router(traces_router, dependencies=_auth)
+app.include_router(test_reports_router, dependencies=_auth)
+app.include_router(memory_router, dependencies=_auth)
 
 
 @app.get("/api/health")

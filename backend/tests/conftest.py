@@ -68,6 +68,9 @@ class _MockWorkerPool:
     def items(self) -> list:
         return []
 
+    def running_ids(self, space_id: str) -> set[str]:
+        return set()
+
 
 @pytest.fixture
 async def async_client(task_store, space_store, tmp_spaces_dir):

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { Board } from "../components/Board";
 import { BoardToolbar } from "../components/BoardToolbar";
@@ -8,7 +8,7 @@ import { useSpaces } from "../hooks/useSpaces";
 import { useCreateTask } from "../hooks/useTasks";
 import { useViews } from "../hooks/useViews";
 import { api } from "../api";
-import type { TaskState } from "../types";
+import { LANES, type TaskState } from "../types";
 import {
   readBoardSpaceFilter,
   writeBoardSpaceFilter,
@@ -16,6 +16,10 @@ import {
   writeCardViewMode,
   readBoardSortMode,
   writeBoardSortMode,
+  readBoardGoalExpanded,
+  writeBoardGoalExpanded,
+  readBoardLaneOverride,
+  writeBoardLaneOverride,
   type BoardSortMode,
 } from "../lib/storage";
 
@@ -29,6 +33,12 @@ export function BoardPage() {
   );
   const [compact, setCompact] = useState(() => readCardViewMode() === "minimal");
   const [sortMode, setSortMode] = useState<BoardSortMode>(() => readBoardSortMode());
+  const [expandedGoals, setExpandedGoals] = useState<Set<string>>(
+    () => new Set(readBoardGoalExpanded(scoped ?? readBoardSpaceFilter())),
+  );
+  const [laneOverride, setLaneOverride] = useState<TaskState[] | null>(() =>
+    readBoardLaneOverride(scoped ?? readBoardSpaceFilter(), null),
+  );
   const [creating, setCreating] = useState(false);
   const [managingViews, setManagingViews] = useState(false);
   const [isWorking, setIsWorking] = useState(false);
@@ -54,11 +64,71 @@ export function BoardPage() {
     return views.find((v) => v.default) ?? views[0] ?? null;
   }, [views, boardSpaceId, urlViewId]);
 
-  // Lane states the board should render (hide others).
+  // Lane states the active View permits (its saved configuration).
   const activeLaneStates = useMemo<TaskState[] | undefined>(() => {
     if (!activeView) return undefined;
     return activeView.lanes;
   }, [activeView]);
+
+  // Base lanes = view's lanes if set, else all known lanes (excluding archived which has no column).
+  const baseLanes = useMemo<TaskState[]>(() => {
+    return activeLaneStates ?? LANES.map((l) => l.state);
+  }, [activeLaneStates]);
+
+  // The user-resolved visible lane set: override if present, otherwise the base.
+  const visibleLaneStates = useMemo<TaskState[]>(() => {
+    return laneOverride ?? baseLanes;
+  }, [laneOverride, baseLanes]);
+
+  // Re-load lane override when (space, view) changes.
+  useEffect(() => {
+    setLaneOverride(readBoardLaneOverride(boardSpaceId, urlViewId));
+  }, [boardSpaceId, urlViewId]);
+
+  const commitOverride = useCallback(
+    (next: TaskState[]) => {
+      // If the new visible set equals the view's base (order-insensitive), clear the override.
+      const sameAsBase =
+        next.length === baseLanes.length &&
+        next.every((s) => baseLanes.includes(s));
+      const override = sameAsBase ? null : next;
+      setLaneOverride(override);
+      writeBoardLaneOverride(boardSpaceId, urlViewId, override);
+    },
+    [baseLanes, boardSpaceId, urlViewId],
+  );
+
+  const hideLane = useCallback(
+    (state: TaskState) => {
+      commitOverride(visibleLaneStates.filter((s) => s !== state));
+    },
+    [commitOverride, visibleLaneStates],
+  );
+
+  const showLane = useCallback(
+    (state: TaskState) => {
+      const next = LANES.map((l) => l.state).filter(
+        (s) => visibleLaneStates.includes(s) || s === state,
+      );
+      commitOverride(next);
+    },
+    [commitOverride, visibleLaneStates],
+  );
+
+  const toggleGoal = useCallback((id: string) => {
+    setExpandedGoals((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      writeBoardGoalExpanded(boardSpaceId, [...next]);
+      return next;
+    });
+  }, [boardSpaceId]);
+
+  // Re-load expanded state when the board space changes.
+  useEffect(() => {
+    setExpandedGoals(new Set(readBoardGoalExpanded(boardSpaceId)));
+  }, [boardSpaceId]);
 
   // Keep filter aligned with the URL when navigating between scoped/unscoped.
   useEffect(() => {
@@ -140,6 +210,11 @@ export function BoardPage() {
           sortMode={sortMode}
           viewId={urlViewId}
           activeLaneStates={activeLaneStates}
+          visibleLaneStates={visibleLaneStates}
+          onHideLane={hideLane}
+          onShowLane={showLane}
+          expandedGoals={expandedGoals}
+          onToggleGoal={toggleGoal}
         />
       </div>
 
