@@ -402,3 +402,24 @@ export interface TestReport extends TestReportSummary {
   coverage_data?: Record<string, number> | null;
   raw_output: string;
 }
+
+// Memory
+export type MemoryKind = "fact" | "procedure" | "observation" | "reference";
+
+export interface MemoryItem {
+  id: string;
+  scope: string;
+  kind: MemoryKind;
+  title: string;
+  body: string;
+  confirmed: boolean;
+  confidence: number;
+  score: number;
+  last_used_at: string;
+  ref_count: number;
+  ttl_until: string | null;
+  sources: string[];
+  links: string[];
+  created_at?: string;
+  updated_at?: string;
+}
