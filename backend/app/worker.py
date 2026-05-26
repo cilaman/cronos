@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from collections import defaultdict, deque
 from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import UTC, datetime
+from pathlib import Path
 
 from . import autopilot_pr
-from .agent import AgentResult, Status, run_agent
+from .agent import AgentResult, CRONOS_SUBDIR, DATA_DIR, Status, run_agent
 from . import goal_sync
 from .memory_parser import parse_memory_blocks
 from .memory_store import MemoryStore
@@ -24,6 +26,18 @@ if TYPE_CHECKING:
     from .worker_pool import WorkerPool
 
 log = logging.getLogger("cronos.worker")
+
+_CLAUDE_PROJECTS_DIR = Path(os.environ.get("CLAUDE_PROJECTS_DIR", "/root/.claude/projects"))
+
+
+def _memory_injected_for_workspace(workspace: Path) -> list[str]:
+    """Return sorted .md filenames from the Claude memory dir for a workspace."""
+    project_key = str(workspace).replace("/", "-").replace(".", "-")
+    memory_dir = _CLAUDE_PROJECTS_DIR / project_key / "memory"
+    if not memory_dir.is_dir():
+        return []
+    return sorted(f.name for f in memory_dir.iterdir() if f.is_file() and f.suffix == ".md")
+
 
 # Sentinel event signalling end-of-stream on a subscriber queue.
 _DONE_SENTINEL: dict = {"type": "stream_end"}
@@ -240,6 +254,8 @@ class Worker:
             await self._publish(task_id, event)
 
         space = self.space_store.get(task.space_id) if self.space_store else None
+        workspace_path = DATA_DIR / task.space_id / CRONOS_SUBDIR / "workspaces" / task.id
+        memory_injected = _memory_injected_for_workspace(workspace_path)
         run_exception: str | None = None
         result = None
         try:
@@ -295,7 +311,7 @@ class Worker:
                     pass
             return
 
-        await self._finalize(task_id, result, started_at=started_at)
+        await self._finalize(task_id, result, started_at=started_at, memory_injected=memory_injected)
 
     async def _finalize(
         self,
@@ -303,6 +319,7 @@ class Worker:
         result: AgentResult,
         *,
         started_at: datetime | None = None,
+        memory_injected: list[str] | None = None,
     ) -> None:
         ended_at = datetime.now(tz=UTC)
         timestamp = ended_at.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -471,6 +488,7 @@ class Worker:
                         exit_reason=exit_reason,
                         session_id=result.session_id,
                         had_crash=result.exit_code != 0 and not result.stopped,
+                        memory_injected=memory_injected or [],
                     )
                     await self.trace_store.save_run(task.space_id, task_id, trace)
                 except Exception:

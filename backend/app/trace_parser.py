@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime
 from typing import Any
 
@@ -46,6 +47,19 @@ def _summarize_input(inp: Any) -> str:
         return _truncate(json.dumps(inp, ensure_ascii=False), 500)
     except Exception:
         return _truncate(str(inp), 500)
+
+
+_MEMORY_FILE_RE = re.compile(r"[/\\]memory[/\\]([^/\\]+\.md)$")
+_FILE_PATH_RE = re.compile(r'"file_path"\s*:\s*"([^"]+)"')
+
+_MEMORY_READ_TOOLS = frozenset({"Read"})
+_MEMORY_WRITE_TOOLS = frozenset({"Write", "Edit"})
+
+
+def _memory_slug(path: str) -> str | None:
+    """Return the filename if path points to a memory file, else None."""
+    m = _MEMORY_FILE_RE.search(path)
+    return m.group(1) if m else None
 
 
 def _summarize_output(content: Any) -> str:
@@ -118,6 +132,10 @@ class RunTrace(BaseModel):
     backtrack_count: int = 0
     final_text_snippet: str = ""
     had_crash: bool = False
+    # Memory tracking
+    memory_injected: list[str] = Field(default_factory=list)
+    memory_used: list[str] = Field(default_factory=list)
+    memory_written: list[str] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -137,6 +155,7 @@ def extract_run_trace(
     exit_reason: str,
     session_id: str | None,
     had_crash: bool,
+    memory_injected: list[str] | None = None,
 ) -> RunTrace:
     """Parse stream-json events into a structured RunTrace."""
     turns: list[AssistantTurnTrace] = []
@@ -284,6 +303,25 @@ def extract_run_trace(
                 backtrack_count += 1
                 break
 
+    # Compute memory tracking fields
+    mem_used: list[str] = []
+    mem_written: list[str] = []
+    seen_mem_used: set[str] = set()
+    seen_mem_written: set[str] = set()
+    for tc in tool_calls:
+        m = _FILE_PATH_RE.search(tc.input_summary)
+        if not m:
+            continue
+        slug = _memory_slug(m.group(1))
+        if not slug:
+            continue
+        if tc.name in _MEMORY_READ_TOOLS and slug not in seen_mem_used:
+            mem_used.append(slug)
+            seen_mem_used.add(slug)
+        elif tc.name in _MEMORY_WRITE_TOOLS and slug not in seen_mem_written:
+            mem_written.append(slug)
+            seen_mem_written.add(slug)
+
     return RunTrace(
         task_id=task_id,
         space_id=space_id,
@@ -308,4 +346,7 @@ def extract_run_trace(
         backtrack_count=backtrack_count,
         final_text_snippet=_truncate(final_text, 500),
         had_crash=had_crash,
+        memory_injected=memory_injected or [],
+        memory_used=mem_used,
+        memory_written=mem_written,
     )
