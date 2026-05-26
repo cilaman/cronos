@@ -34,6 +34,9 @@ status marker on its own last line:
 Rules:
 - The STATUS marker MUST be the very last line you output. No text after it.
 - Write STATUS only once, in the final wrap-up after all tool calls are done.
+- Do NOT format the marker with markdown. Write it exactly as shown above.
+  Right:  STATUS: DONE
+  Wrong:  **STATUS: DONE**  ← asterisks break recognition
 - If you cannot finish the task in this session (e.g. turn limit approaching),
   use STATUS: WAIT and describe exactly what was completed and what still
   remains so the next run can pick up from there.
@@ -50,7 +53,7 @@ class Status(str, Enum):
     BLOCKED = "BLOCKED"
 
 
-_STATUS_LINE = re.compile(r"^\s*STATUS:\s*(DONE|WAIT|BLOCKED)\s*$")
+_STATUS_LINE = re.compile(r"^\s*\*{0,3}STATUS:\s*(DONE|WAIT|BLOCKED)\*{0,3}\s*$")
 
 
 def parse_status(text: str) -> tuple[Status | None, str | None]:
@@ -126,7 +129,7 @@ def _upgrade_instructions() -> str:
     return (
         "# Upgrading the app\n"
         "When asked to upgrade the application:\n"
-        "1. Write your completion summary and **STATUS: DONE** as the very last line "
+        "1. Write your completion summary and STATUS: DONE as the very last line "
         "of your text response (before any tool calls in that turn).\n"
         "2. In the same turn, run the upgrade webhook:\n\n"
         f"  curl -s -X POST {UPGRADE_WEBHOOK_URL}\n\n"

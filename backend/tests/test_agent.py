@@ -91,6 +91,35 @@ def test_parse_status_no_context_line():
     assert ctx is None
 
 
+def test_parse_status_bold_done():
+    status, ctx = parse_status("All done.\n\n**STATUS: DONE**")
+    assert status == Status.DONE
+    assert ctx == "All done."
+
+
+def test_parse_status_bold_wait():
+    status, ctx = parse_status("What color?\n\n**STATUS: WAIT**")
+    assert status == Status.WAIT
+    assert ctx == "What color?"
+
+
+def test_parse_status_bold_blocked():
+    status, ctx = parse_status("No creds.\n\n**STATUS: BLOCKED**")
+    assert status == Status.BLOCKED
+    assert ctx == "No creds."
+
+
+def test_parse_status_triple_bold_done():
+    status, ctx = parse_status("Done.\n***STATUS: DONE***")
+    assert status == Status.DONE
+
+
+def test_parse_status_bold_does_not_match_mid_bold():
+    # Only leading/trailing stars — mixed formatting shouldn't accidentally match
+    status, ctx = parse_status("**bold sentence STATUS: DONE inline**")
+    assert status is None
+
+
 # ---------------------------------------------------------------------------
 # space_dir_for
 # ---------------------------------------------------------------------------
@@ -431,6 +460,32 @@ def test_upgrade_instructions_tells_agent_done_before_curl():
                 "Upgrade instructions should explicitly tell the agent to "
                 "write DONE BEFORE firing the webhook"
             )
+        finally:
+            importlib.reload(agent_module)
+
+
+def test_upgrade_instructions_uses_plain_status_done():
+    """The upgrade instructions must use plain STATUS: DONE, not **STATUS: DONE**.
+
+    Bold markdown around the marker causes the regex to fail to match, leaving
+    the task in WAITING state even though the agent wrote the marker correctly.
+    This was the root cause of every upgrade task ending in WAITING.
+    """
+    with patch.dict(
+        os.environ,
+        {"UPGRADE_WEBHOOK_URL": "http://localhost:9137/upgrade"},
+        clear=False,
+    ):
+        import importlib
+        import app.agent as agent_module
+        importlib.reload(agent_module)
+        try:
+            result = agent_module._upgrade_instructions()
+            assert "**STATUS: DONE**" not in result, (
+                "_upgrade_instructions() must not use **STATUS: DONE** (bold markdown). "
+                "The regex only matches plain STATUS: DONE."
+            )
+            assert "STATUS: DONE" in result
         finally:
             importlib.reload(agent_module)
 
