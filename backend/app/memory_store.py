@@ -33,6 +33,9 @@ _KIND_HEADER = {
 }
 
 
+CONFIRM_THRESHOLD = 3
+
+
 class MemoryNotFound(Exception):
     pass
 
@@ -320,6 +323,25 @@ class MemoryStore:
             path.unlink()
             log.info("Deleted memory item %s from scope %s", item_id, scope)
             self.rebuild_index(scope, self._list_scope_locked(scope))
+
+    async def record_use(self, scope: str, item_id: str) -> MemoryItem:
+        """Increment ref_count and last_used_at; auto-promote to confirmed at CONFIRM_THRESHOLD."""
+        async with self._lock:
+            path = self._item_path(scope, item_id)
+            if not path.exists():
+                raise MemoryNotFound(f"{scope}/{item_id}")
+            item = self._load_item(path)
+            new_ref_count = item.ref_count + 1
+            update_dict: dict = {
+                "ref_count": new_ref_count,
+                "last_used_at": datetime.now(tz=UTC),
+            }
+            if not item.confirmed and new_ref_count >= CONFIRM_THRESHOLD:
+                update_dict["confirmed"] = True
+            updated = item.model_copy(update=update_dict)
+            self._atomic_write(path, self._dump_item(updated))
+            self.rebuild_index(scope, self._list_scope_locked(scope))
+            return updated
 
     async def read_index(self, scope: str) -> str | None:
         """Return the raw index.md content for a scope, or None if it doesn't exist."""
