@@ -11,7 +11,7 @@ from enum import Enum
 from pathlib import Path
 
 from . import git_ops
-from .models import Space, Task
+from .models import MemoryItem, Space, Task
 
 log = logging.getLogger("cronos.agent")
 
@@ -158,17 +158,31 @@ def _upgrade_instructions() -> str:
     )
 
 
-def build_prompt(task: Task, user_message: str | None, goal_context: str | None = None) -> str:
+def build_prompt(
+    task: Task,
+    user_message: str | None,
+    goal_context: str | None = None,
+    memory_items: list[MemoryItem] | None = None,
+) -> str:
     fresh = task.claude_session_id is None
     if user_message and not fresh:
         return user_message
     msg_section = f"\n# Message\n{user_message}\n" if user_message else ""
     goal_section = f"\n# Goal Context\n{goal_context}\n" if goal_context else ""
+    memory_section = ""
+    if memory_items:
+        lines = ["\n# Memory Context\n"]
+        for item in memory_items:
+            first_body_line = item.body.split("\n")[0] if item.body else ""
+            detail = f": {first_body_line}" if first_body_line and first_body_line != item.title else ""
+            lines.append(f"- **{item.title}** ({item.kind.value}){detail}")
+        memory_section = "\n".join(lines) + "\n"
     return (
         f"You are working on task `{task.id}`.\n\n"
         f"# Title\n{task.title}\n\n"
         f"# Brief\n{task.brief}\n"
         f"{goal_section}"
+        f"{memory_section}"
         f"{msg_section}\n"
         "A per-task workspace has been mounted as your working directory; create\n"
         "all files there. Begin work now, and remember the STATUS contract.\n"
