@@ -1,4 +1,6 @@
-# Local development: plain HTTP on :80, no auth.
+# Local development: plain HTTP on :80, no Caddy-level auth.
+# Authentication is handled at the FastAPI layer via CRONOS_BASIC_AUTH_USER /
+# CRONOS_BASIC_AUTH_PASSWORD env vars (disabled when unset — default for dev).
 # Production config is in `Caddyfile` and is mounted via the prod compose overlay.
 
 {

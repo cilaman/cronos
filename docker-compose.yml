@@ -17,6 +17,11 @@ services:
       # over HTTPS. Single-user only — will be replaced by per-user storage
       # once Cronos supports multiple operators. Set in .env, never commit.
       CRONOS_GIT_TOKEN: ${CRONOS_GIT_TOKEN:-}
+      # Application-layer HTTP Basic Auth. When both are set, the API requires
+      # valid credentials on every request (except /api/health). Leave unset in
+      # dev to disable auth. In production, prefer setting these in .env.
+      CRONOS_BASIC_AUTH_USER: ${CRONOS_BASIC_AUTH_USER:-}
+      CRONOS_BASIC_AUTH_PASSWORD: ${CRONOS_BASIC_AUTH_PASSWORD:-}
     # Pass-through: if CLAUDE_CODE_OAUTH_TOKEN is set in the shell or in a
     # project-root .env file, it lands in the container. Listing the bare
     # name (no value) means we *don't* clobber whatever the prod overlay
