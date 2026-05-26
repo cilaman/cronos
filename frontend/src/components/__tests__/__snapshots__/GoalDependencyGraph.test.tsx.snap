@@ -1,0 +1,397 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`GoalDependencyGraph — snapshot > matches snapshot for 5-node fixture with dependency edges 1`] = `
+<DocumentFragment>
+  <div>
+    <div
+      class="sm:hidden"
+    >
+      <div
+        class="space-y-1"
+      >
+        <button
+          class="flex w-full items-center gap-2 rounded border border-hairline px-2.5 py-1.5 text-left transition hover:border-hairline-strong hover:bg-surface-2"
+          type="button"
+        >
+          <span
+            class="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] bg-surface-2 text-ink-muted ring-1 ring-hairline"
+          >
+            backlog
+          </span>
+          <span
+            class="truncate text-xs text-ink"
+          >
+            Task 1
+          </span>
+        </button>
+        <button
+          class="flex w-full items-center gap-2 rounded border border-hairline px-2.5 py-1.5 text-left transition hover:border-hairline-strong hover:bg-surface-2"
+          type="button"
+        >
+          <span
+            class="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] bg-surface-2 text-ink-muted ring-1 ring-hairline"
+          >
+            backlog
+          </span>
+          <span
+            class="truncate text-xs text-ink"
+          >
+            Task 2
+          </span>
+        </button>
+        <button
+          class="flex w-full items-center gap-2 rounded border border-hairline px-2.5 py-1.5 text-left transition hover:border-hairline-strong hover:bg-surface-2"
+          type="button"
+        >
+          <span
+            class="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] bg-surface-2 text-ink-muted ring-1 ring-hairline"
+          >
+            backlog
+          </span>
+          <span
+            class="truncate text-xs text-ink"
+          >
+            Task 3
+          </span>
+        </button>
+        <button
+          class="flex w-full items-center gap-2 rounded border border-hairline px-2.5 py-1.5 text-left transition hover:border-hairline-strong hover:bg-surface-2"
+          type="button"
+        >
+          <span
+            class="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] bg-surface-2 text-ink-muted ring-1 ring-hairline"
+          >
+            backlog
+          </span>
+          <span
+            class="truncate text-xs text-ink"
+          >
+            Task 4
+          </span>
+        </button>
+        <button
+          class="flex w-full items-center gap-2 rounded border border-hairline px-2.5 py-1.5 text-left transition hover:border-hairline-strong hover:bg-surface-2"
+          type="button"
+        >
+          <span
+            class="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] bg-surface-2 text-ink-muted ring-1 ring-hairline"
+          >
+            backlog
+          </span>
+          <span
+            class="truncate text-xs text-ink"
+          >
+            Task 5
+          </span>
+        </button>
+      </div>
+    </div>
+    <div
+      class="hidden sm:block"
+    >
+      <div
+        class="mb-2 flex justify-end"
+      >
+        <div
+          class="inline-flex rounded border border-hairline text-[10px]"
+        >
+          <button
+            class="px-2 py-0.5 transition bg-surface-2 text-ink"
+            type="button"
+          >
+            Graph
+          </button>
+          <button
+            class="border-l border-hairline px-2 py-0.5 transition text-ink-faint hover:text-ink"
+            type="button"
+          >
+            List view
+          </button>
+        </div>
+      </div>
+      <div
+        class="overflow-x-auto rounded border border-hairline bg-surface-1 p-2"
+      >
+        <svg
+          aria-label="Dependency graph"
+          height="352"
+          style="display: block; min-width: 416px;"
+          width="416"
+        >
+          <defs>
+            <marker
+              id="dag-arrow-faint"
+              markerHeight="8"
+              markerWidth="8"
+              orient="auto"
+              refX="6"
+              refY="3"
+            >
+              <path
+                d="M 0 0 L 0 6 L 8 3 z"
+                style="fill: rgb(var(--color-ink-faint));"
+              />
+            </marker>
+            <marker
+              id="dag-arrow-amber"
+              markerHeight="8"
+              markerWidth="8"
+              orient="auto"
+              refX="6"
+              refY="3"
+            >
+              <path
+                d="M 0 0 L 0 6 L 8 3 z"
+                style="fill: rgb(var(--color-warning));"
+              />
+            </marker>
+            <marker
+              id="dag-arrow-ink"
+              markerHeight="8"
+              markerWidth="8"
+              orient="auto"
+              refX="6"
+              refY="3"
+            >
+              <path
+                d="M 0 0 L 0 6 L 8 3 z"
+                style="fill: rgb(var(--color-ink));"
+              />
+            </marker>
+          </defs>
+          <path
+            d="M 242 69.0632911392405 L 310 88 L 310 104"
+            fill="none"
+            marker-end="url(#dag-arrow-faint)"
+            stroke-width="1.5"
+            style="stroke: rgb(var(--color-ink-faint));"
+          />
+          <path
+            d="M 106 160 L 106 176 L 143.0909090909091 192"
+            fill="none"
+            marker-end="url(#dag-arrow-faint)"
+            stroke-width="1.5"
+            style="stroke: rgb(var(--color-ink-faint));"
+          />
+          <path
+            d="M 310 160 L 310 176 L 272.9090909090909 192"
+            fill="none"
+            marker-end="url(#dag-arrow-faint)"
+            stroke-width="1.5"
+            style="stroke: rgb(var(--color-ink-faint));"
+          />
+          <path
+            d="M 62 69.0632911392405 L -6 88 L -6 132 L -6 176 L -6 220 L -6 264 L 62 282.9367088607595"
+            fill="none"
+            marker-end="url(#dag-arrow-faint)"
+            stroke-width="1.5"
+            style="stroke: rgb(var(--color-ink-faint));"
+          />
+          <path
+            d="M 208 248 L 208 264 L 187.63636363636363 280"
+            fill="none"
+            marker-end="url(#dag-arrow-faint)"
+            stroke-width="1.5"
+            style="stroke: rgb(var(--color-ink-faint));"
+          />
+          <foreignobject
+            height="56"
+            width="180"
+            x="62"
+            y="16"
+          >
+            <button
+              class="h-full w-full cursor-pointer rounded border bg-surface-1 px-2.5 py-1.5 text-left transition border-hairline hover:border-hairline-strong hover:bg-surface-2"
+              data-testid="dag-node-T1"
+              type="button"
+            >
+              <div
+                class="flex items-center gap-1.5 overflow-hidden"
+              >
+                <span
+                  class="h-2 w-2 flex-shrink-0 rounded-full bg-surface-3"
+                />
+                <span
+                  class="flex-1 truncate text-[11px] font-medium leading-none text-ink"
+                >
+                  Task 1
+                </span>
+                <span
+                  class="flex-shrink-0 font-mono text-[9px] text-ink-faint"
+                >
+                  P3
+                </span>
+              </div>
+              <div
+                class="mt-1.5"
+              >
+                <span
+                  class="rounded px-1 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] bg-surface-2 text-ink-muted ring-1 ring-hairline"
+                >
+                  backlog
+                </span>
+              </div>
+            </button>
+          </foreignobject>
+          <foreignobject
+            height="56"
+            width="180"
+            x="16"
+            y="104"
+          >
+            <button
+              class="h-full w-full cursor-pointer rounded border bg-surface-1 px-2.5 py-1.5 text-left transition border-hairline hover:border-hairline-strong hover:bg-surface-2"
+              data-testid="dag-node-T2"
+              type="button"
+            >
+              <div
+                class="flex items-center gap-1.5 overflow-hidden"
+              >
+                <span
+                  class="h-2 w-2 flex-shrink-0 rounded-full bg-surface-3"
+                />
+                <span
+                  class="flex-1 truncate text-[11px] font-medium leading-none text-ink"
+                >
+                  Task 2
+                </span>
+                <span
+                  class="flex-shrink-0 font-mono text-[9px] text-ink-faint"
+                >
+                  P3
+                </span>
+              </div>
+              <div
+                class="mt-1.5"
+              >
+                <span
+                  class="rounded px-1 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] bg-surface-2 text-ink-muted ring-1 ring-hairline"
+                >
+                  backlog
+                </span>
+              </div>
+            </button>
+          </foreignobject>
+          <foreignobject
+            height="56"
+            width="180"
+            x="220"
+            y="104"
+          >
+            <button
+              class="h-full w-full cursor-pointer rounded border bg-surface-1 px-2.5 py-1.5 text-left transition border-hairline hover:border-hairline-strong hover:bg-surface-2"
+              data-testid="dag-node-T3"
+              type="button"
+            >
+              <div
+                class="flex items-center gap-1.5 overflow-hidden"
+              >
+                <span
+                  class="h-2 w-2 flex-shrink-0 rounded-full bg-surface-3"
+                />
+                <span
+                  class="flex-1 truncate text-[11px] font-medium leading-none text-ink"
+                >
+                  Task 3
+                </span>
+                <span
+                  class="flex-shrink-0 font-mono text-[9px] text-ink-faint"
+                >
+                  P3
+                </span>
+              </div>
+              <div
+                class="mt-1.5"
+              >
+                <span
+                  class="rounded px-1 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] bg-surface-2 text-ink-muted ring-1 ring-hairline"
+                >
+                  backlog
+                </span>
+              </div>
+            </button>
+          </foreignobject>
+          <foreignobject
+            height="56"
+            width="180"
+            x="118"
+            y="192"
+          >
+            <button
+              class="h-full w-full cursor-pointer rounded border bg-surface-1 px-2.5 py-1.5 text-left transition border-hairline hover:border-hairline-strong hover:bg-surface-2"
+              data-testid="dag-node-T4"
+              type="button"
+            >
+              <div
+                class="flex items-center gap-1.5 overflow-hidden"
+              >
+                <span
+                  class="h-2 w-2 flex-shrink-0 rounded-full bg-surface-3"
+                />
+                <span
+                  class="flex-1 truncate text-[11px] font-medium leading-none text-ink"
+                >
+                  Task 4
+                </span>
+                <span
+                  class="flex-shrink-0 font-mono text-[9px] text-ink-faint"
+                >
+                  P3
+                </span>
+              </div>
+              <div
+                class="mt-1.5"
+              >
+                <span
+                  class="rounded px-1 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] bg-surface-2 text-ink-muted ring-1 ring-hairline"
+                >
+                  backlog
+                </span>
+              </div>
+            </button>
+          </foreignobject>
+          <foreignobject
+            height="56"
+            width="180"
+            x="62"
+            y="280"
+          >
+            <button
+              class="h-full w-full cursor-pointer rounded border bg-surface-1 px-2.5 py-1.5 text-left transition border-hairline hover:border-hairline-strong hover:bg-surface-2"
+              data-testid="dag-node-T5"
+              type="button"
+            >
+              <div
+                class="flex items-center gap-1.5 overflow-hidden"
+              >
+                <span
+                  class="h-2 w-2 flex-shrink-0 rounded-full bg-surface-3"
+                />
+                <span
+                  class="flex-1 truncate text-[11px] font-medium leading-none text-ink"
+                >
+                  Task 5
+                </span>
+                <span
+                  class="flex-shrink-0 font-mono text-[9px] text-ink-faint"
+                >
+                  P3
+                </span>
+              </div>
+              <div
+                class="mt-1.5"
+              >
+                <span
+                  class="rounded px-1 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] bg-surface-2 text-ink-muted ring-1 ring-hairline"
+                >
+                  backlog
+                </span>
+              </div>
+            </button>
+          </foreignobject>
+        </svg>
+      </div>
+    </div>
+  </div>
+</DocumentFragment>
+`;
