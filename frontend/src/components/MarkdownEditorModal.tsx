@@ -140,11 +140,17 @@ export function MarkdownEditorModal({ file, fileUrl, onSave, savePending, onClos
         </div>
 
         {/* Editor body */}
-        <div className="cronos-md-editor min-h-0 flex-1 overflow-hidden" data-color-mode={theme === "light" ? "light" : "dark"}>
+        <div className="cronos-md-editor min-h-0 flex-1 overflow-hidden" data-color-mode={theme}>
           {error ? (
             <p className="p-4 text-sm text-danger">{error}</p>
           ) : content === null ? (
             <p className="p-4 text-sm text-ink-muted">Loading…</p>
+          ) : previewMode === "preview" ? (
+            // Pure preview: use the bare markdown renderer so we own the
+            // scroll container and avoid MDEditor's height/toolbar quirks.
+            <div className="h-full overflow-y-auto">
+              <MDEditor.Markdown source={content} />
+            </div>
           ) : (
             <MDEditor
               value={content}

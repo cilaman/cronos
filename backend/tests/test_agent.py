@@ -173,45 +173,84 @@ def test_build_prompt_includes_status_contract_reminder():
 
 
 def test_upgrade_instructions_no_url():
+    """With no webhook URL configured, the instructions must be empty."""
     with patch.dict(os.environ, {"UPGRADE_WEBHOOK_URL": ""}, clear=False):
         import importlib
         import app.agent as agent_module
         importlib.reload(agent_module)
-        result = agent_module._upgrade_instructions()
-        assert "not set" in result
-        importlib.reload(agent_module)
+        try:
+            result = agent_module._upgrade_instructions()
+            assert result == "", (
+                "When UPGRADE_WEBHOOK_URL is unset, no upgrade instructions "
+                "should be injected into the system prompt"
+            )
+        finally:
+            importlib.reload(agent_module)
 
 
 def test_upgrade_instructions_with_url():
     with patch.dict(
         os.environ,
-        {"UPGRADE_WEBHOOK_URL": "http://localhost:9137/upgrade", "UPGRADE_WEBHOOK_SECRET": ""},
+        {"UPGRADE_WEBHOOK_URL": "http://localhost:9137/upgrade"},
         clear=False,
     ):
         import importlib
         import app.agent as agent_module
         importlib.reload(agent_module)
-        result = agent_module._upgrade_instructions()
-        assert "http://localhost:9137/upgrade" in result
-        assert "curl" in result
-        importlib.reload(agent_module)
+        try:
+            result = agent_module._upgrade_instructions()
+            assert "http://localhost:9137/upgrade" in result
+            assert "curl" in result
+        finally:
+            importlib.reload(agent_module)
 
 
-def test_upgrade_instructions_with_secret():
+def test_upgrade_instructions_does_not_leak_secret_header():
+    """MED-006: the system prompt must NOT contain `X-Upgrade-Secret`.
+
+    Embedding the shared secret (or even the header name with a placeholder)
+    in the agent's system prompt leaks it to the model provider and to any
+    transcript that logs the prompt. The fix removes the
+    `UPGRADE_WEBHOOK_SECRET` read entirely and emits a curl without the
+    `-H "X-Upgrade-Secret: ..."` header; authorization is enforced by
+    network ACL (Docker bridge only) instead.
+
+    This test fails the moment anyone re-introduces the header — whether
+    they hard-code it, read it back from the environment, or templatize it.
+    """
     with patch.dict(
         os.environ,
         {
-            "UPGRADE_WEBHOOK_URL": "http://localhost:9137/upgrade",
-            "UPGRADE_WEBHOOK_SECRET": "my-secret",
+            "UPGRADE_WEBHOOK_URL": "http://dummy.local/upgrade",
+            # Set the secret env var too: if a regression re-adds the
+            # env read, the secret value would land in `result`.
+            "UPGRADE_WEBHOOK_SECRET": "super-secret-value-should-not-appear",
         },
         clear=False,
     ):
         import importlib
         import app.agent as agent_module
         importlib.reload(agent_module)
-        result = agent_module._upgrade_instructions()
-        assert "my-secret" in result
-        importlib.reload(agent_module)
+        try:
+            result = agent_module._upgrade_instructions()
+            # The URL must still be present — sanity that we exercised the
+            # non-empty branch.
+            assert "http://dummy.local/upgrade" in result
+            # Case-insensitive check on the header name: catches any casing
+            # variant a regression might introduce.
+            assert "x-upgrade-secret" not in result.lower(), (
+                "Agent system prompt must not contain the `X-Upgrade-Secret` "
+                "header (MED-006). Embedding it leaks the secret into the "
+                "model context."
+            )
+            # And the secret value itself must not appear either.
+            assert "super-secret-value-should-not-appear" not in result, (
+                "Agent system prompt leaked the UPGRADE_WEBHOOK_SECRET value "
+                "into the curl command (MED-006). The secret must never be "
+                "read by app/agent.py."
+            )
+        finally:
+            importlib.reload(agent_module)
 
 
 # ---------------------------------------------------------------------------
