@@ -9,6 +9,7 @@ from pathlib import Path
 
 import frontmatter
 
+from .memory_lifecycle import boost, should_auto_confirm
 from .models import MemoryItem, MemoryKind
 
 log = logging.getLogger("cronos.memory_store")
@@ -231,14 +232,31 @@ class MemoryStore:
             return item
 
     async def get(self, scope: str, item_id: str) -> MemoryItem | None:
-        path = self._item_path(scope, item_id)
-        if not path.exists():
-            return None
-        try:
-            return self._load_item(path)
-        except Exception:
-            log.exception("Failed to load memory item %s/%s", scope, item_id)
-            return None
+        async with self._lock:
+            path = self._item_path(scope, item_id)
+            if not path.exists():
+                return None
+            try:
+                item = self._load_item(path)
+            except Exception:
+                log.exception("Failed to load memory item %s/%s", scope, item_id)
+                return None
+            now = datetime.now(tz=UTC)
+            new_score, new_ttl = boost(item.score, item.ttl_until, now)
+            new_ref_count = item.ref_count + 1
+            boosted = item.model_copy(update={
+                "score": new_score,
+                "ref_count": new_ref_count,
+                "last_used_at": now,
+                "ttl_until": new_ttl,
+            })
+            if should_auto_confirm(new_ref_count):
+                boosted = boosted.model_copy(update={"confirmed": True})
+                log.info("Auto-confirmed memory item %s", item_id)
+            self._atomic_write(path, self._dump_item(boosted))
+            if boosted.confirmed != item.confirmed:
+                self.rebuild_index(scope, self._list_scope_locked(scope))
+            return boosted
 
     async def list_scope(self, scope: str) -> list[MemoryItem]:
         async with self._lock:

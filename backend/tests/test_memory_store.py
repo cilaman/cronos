@@ -220,3 +220,66 @@ async def test_index_header_has_scope(store: MemoryStore, tmp_path: Path) -> Non
     index_path = tmp_path / "spaces" / "proj-x" / ".cronos" / "memory" / "index.md"
     index = index_path.read_text()
     assert f"Memory Index — {scope}" in index
+
+
+# ---------------------------------------------------------------------------
+# get — access boost
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_increments_ref_count(store: MemoryStore) -> None:
+    item = await store.create(scope="global", kind=MemoryKind.FACT, title="Boosted")
+    assert item.ref_count == 0
+    loaded = await store.get("global", item.id)
+    assert loaded is not None
+    assert loaded.ref_count == 1
+
+
+@pytest.mark.asyncio
+async def test_get_increases_score(store: MemoryStore) -> None:
+    item = await store.create(scope="global", kind=MemoryKind.FACT, title="Scored", score=1.0)
+    loaded = await store.get("global", item.id)
+    assert loaded is not None
+    assert loaded.score > 1.0
+
+
+@pytest.mark.asyncio
+async def test_get_persists_boost_to_disk(store: MemoryStore, tmp_path: Path) -> None:
+    item = await store.create(scope="global", kind=MemoryKind.FACT, title="Persist")
+    await store.get("global", item.id)
+    reloaded = await store.get("global", item.id)
+    assert reloaded is not None
+    assert reloaded.ref_count == 2
+
+
+@pytest.mark.asyncio
+async def test_get_sets_ttl_until(store: MemoryStore) -> None:
+    item = await store.create(scope="global", kind=MemoryKind.FACT, title="TTL")
+    assert item.ttl_until is None
+    loaded = await store.get("global", item.id)
+    assert loaded is not None
+    assert loaded.ttl_until is not None
+
+
+@pytest.mark.asyncio
+async def test_get_auto_confirms_after_threshold(store: MemoryStore) -> None:
+    from app.memory_lifecycle import CONFIRM_MIN_USES as CONFIRM_THRESHOLD
+
+    item = await store.create(scope="global", kind=MemoryKind.FACT, title="Autoconfirm")
+    assert item.confirmed is False
+    for _ in range(CONFIRM_THRESHOLD):
+        loaded = await store.get("global", item.id)
+    assert loaded is not None
+    assert loaded.confirmed is True
+
+
+@pytest.mark.asyncio
+async def test_get_auto_confirm_rebuilds_index(store: MemoryStore, tmp_path: Path) -> None:
+    from app.memory_lifecycle import CONFIRM_MIN_USES as CONFIRM_THRESHOLD
+
+    item = await store.create(scope="global", kind=MemoryKind.FACT, title="IndexConfirm")
+    for _ in range(CONFIRM_THRESHOLD):
+        await store.get("global", item.id)
+    index = (tmp_path / "data" / "memory" / "index.md").read_text()
+    assert "✓" in index
