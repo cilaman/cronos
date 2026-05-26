@@ -227,16 +227,23 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
       data-density={density}
       className={cn("group", isDragging && !isDragOverlay && "opacity-40")}
     >
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         onClick={onClick}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onClick();
+          }
+        }}
         style={{
           borderLeftColor: borderColor,
           borderLeftWidth: 3,
           ...(isGoal ? { borderTopWidth: 2 } : {}),
         }}
         className={cn(
-          "relative block w-full rounded-md border border-hairline bg-surface-2 py-3 pl-2.5 pr-3 text-left shadow-inset-hairline transition hover:-translate-y-px hover:border-hairline-strong hover:bg-surface-3 hover:shadow-lift focus:outline-none focus-visible:ring-1 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface-1",
+          "relative block w-full cursor-pointer rounded-md border border-hairline bg-surface-2 py-3 pl-2.5 pr-3 text-left shadow-inset-hairline transition hover:-translate-y-px hover:border-hairline-strong hover:bg-surface-3 hover:shadow-lift focus:outline-none focus-visible:ring-1 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface-1",
           isGoal && "border-t-ink",
         )}
       >
@@ -396,7 +403,7 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
         <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.15em] text-ink-faint">
           {formatRelative(task.updated_at)}
         </p>
-      </button>
+      </div>
     </div>
   );
 }
