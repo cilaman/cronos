@@ -53,13 +53,27 @@ async def _set_state(store: TaskStore, task_id: str, state: TaskState) -> None:
     await store.transition(task_id, state, allowed=all_transitions)
 
 
+class _MockWorker:
+    """Minimal Worker stand-in with configurable current()."""
+
+    def __init__(self, current_id: str | None = None) -> None:
+        self._current_id = current_id
+
+    def current(self) -> str | None:
+        return self._current_id
+
+
 class _RecordingPool:
     """Minimal WorkerPool stand-in that records enqueue calls."""
 
     enqueued: list[tuple[str, str]]
 
-    def __init__(self) -> None:
+    def __init__(self, *, current_task: str | None = None) -> None:
         self.enqueued = []
+        self._worker = _MockWorker(current_task)
+
+    def get(self, space_id: str) -> _MockWorker | None:
+        return self._worker
 
     async def enqueue(self, space_id: str, task_id: str) -> None:
         self.enqueued.append((space_id, task_id))
@@ -152,8 +166,8 @@ async def test_parent_not_goal_noop(task_store: TaskStore) -> None:
     assert pool.enqueued == []
 
 
-async def test_idempotent_already_active(task_store: TaskStore) -> None:
-    """Calling propagate twice when parent is already ACTIVE is a no-op."""
+async def test_child_done_parent_active_enqueues(task_store: TaskStore) -> None:
+    """Child DONE while parent is already ACTIVE → goal is re-enqueued (no state transition)."""
     goal_id = await _create_goal(task_store)
     child_id = await _create_child(task_store, goal_id)
 
@@ -163,9 +177,24 @@ async def test_idempotent_already_active(task_store: TaskStore) -> None:
     pool = _RecordingPool()
     await propagate_to_parent(child_id, task_store, pool)
 
-    # Parent already ACTIVE → InvalidTransition is silently swallowed.
     assert task_store.get(goal_id).state == TaskState.ACTIVE
-    assert pool.enqueued == []  # no double-enqueue
+    assert pool.enqueued == [(SPACE_ID, goal_id)]
+
+
+async def test_child_done_parent_active_running_no_enqueue(task_store: TaskStore) -> None:
+    """Child DONE while _run_goal is actively running the goal → do not re-enqueue."""
+    goal_id = await _create_goal(task_store)
+    child_id = await _create_child(task_store, goal_id)
+
+    await _set_state(task_store, goal_id, TaskState.ACTIVE)
+    await _set_state(task_store, child_id, TaskState.DONE)
+
+    # Worker reports it is currently running this goal.
+    pool = _RecordingPool(current_task=goal_id)
+    await propagate_to_parent(child_id, task_store, pool)
+
+    assert task_store.get(goal_id).state == TaskState.ACTIVE
+    assert pool.enqueued == []
 
 
 async def test_none_pool_skips_enqueue(task_store: TaskStore) -> None:
