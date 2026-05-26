@@ -397,8 +397,10 @@ async def update_task(task_id: str, body: UpdateTaskBody, request: Request) -> T
 async def transition_task(
     task_id: str, body: TransitionBody, request: Request
 ) -> TaskRead:
+    store = get_store(request)
+    pool = get_pool(request)
     try:
-        updated = await get_store(request).transition(
+        updated = await store.transition(
             task_id, body.state, allowed=USER_TRANSITIONS
         )
     except TaskNotFound:
@@ -409,7 +411,8 @@ async def transition_task(
         raise HTTPException(status_code=400, detail=str(e)) from None
     if updated.state == TaskState.ACTIVE:
         await get_worker_for_task(request, task_id).enqueue(task_id)
-    return _build_task_read(updated, get_space_store(request).get(updated.space_id), get_store(request))
+    await goal_sync.propagate_to_parent(task_id, store, pool)
+    return _build_task_read(updated, get_space_store(request).get(updated.space_id), store)
 
 
 @router.post("/{task_id}/start", response_model=TaskRead)

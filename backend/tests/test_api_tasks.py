@@ -305,6 +305,111 @@ async def test_transition_task_same_state_is_noop(async_client):
     assert resp.json()["state"] == "backlog"
 
 
+# State transitions on a child can leave its parent goal stranded in WAITING
+# (the supervisor loop in worker._run_goal exits when a child ends non-DONE).
+# PATCH /state must call goal_sync.propagate_to_parent so the goal is
+# reactivated and re-enqueued — otherwise marking a stuck child as DONE
+# silently strands the goal.
+
+_FORCE_TRANSITIONS = {
+    (TaskState.BACKLOG, TaskState.WAITING),
+    (TaskState.WAITING, TaskState.ACTIVE),
+}
+
+
+class _RecordingPool:
+    """WorkerPool stand-in that records enqueue() calls."""
+
+    def __init__(self) -> None:
+        self.enqueued: list[tuple[str, str]] = []
+
+    def get(self, space_id):
+        return None
+
+    async def start_for_space(self, space_id):
+        return None
+
+    async def stop_for_space(self, space_id):
+        return None
+
+    async def enqueue(self, space_id: str, task_id: str) -> None:
+        self.enqueued.append((space_id, task_id))
+
+    def items(self):
+        return []
+
+    def running_ids(self, space_id):
+        return set()
+
+
+async def test_transition_child_to_done_reactivates_waiting_goal(
+    async_client, task_store
+):
+    from app.main import app
+
+    goal = await task_store.create(
+        space_id=SPACE_ID, title="Goal", brief="g", type="goal"
+    )
+    child = await task_store.create(
+        space_id=SPACE_ID, title="Child", brief="c", parent_id=goal.id
+    )
+    await task_store.transition(goal.id, TaskState.WAITING, allowed=_FORCE_TRANSITIONS)
+    await task_store.transition(child.id, TaskState.WAITING, allowed=_FORCE_TRANSITIONS)
+
+    pool = _RecordingPool()
+    app.state.worker_pool = pool
+
+    resp = await async_client.patch(
+        f"/api/tasks/{child.id}/state", json={"state": "done"}
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["state"] == "done"
+    assert task_store.get(goal.id).state == TaskState.ACTIVE
+    assert pool.enqueued == [(SPACE_ID, goal.id)]
+
+
+async def test_transition_child_to_archived_reactivates_waiting_goal(
+    async_client, task_store
+):
+    from app.main import app
+
+    goal = await task_store.create(
+        space_id=SPACE_ID, title="Goal", brief="g", type="goal"
+    )
+    child = await task_store.create(
+        space_id=SPACE_ID, title="Child", brief="c", parent_id=goal.id
+    )
+    await task_store.transition(goal.id, TaskState.WAITING, allowed=_FORCE_TRANSITIONS)
+    await task_store.transition(child.id, TaskState.WAITING, allowed=_FORCE_TRANSITIONS)
+
+    pool = _RecordingPool()
+    app.state.worker_pool = pool
+
+    resp = await async_client.patch(
+        f"/api/tasks/{child.id}/state", json={"state": "archived"}
+    )
+
+    assert resp.status_code == 200
+    assert task_store.get(goal.id).state == TaskState.ACTIVE
+    assert pool.enqueued == [(SPACE_ID, goal.id)]
+
+
+async def test_transition_standalone_task_no_parent_propagation_safe(
+    async_client, task_store
+):
+    """Standalone task (no parent) WAITING → DONE must not crash."""
+    task = await task_store.create(space_id=SPACE_ID, title="Solo", brief="b")
+    await task_store.transition(task.id, TaskState.WAITING, allowed=_FORCE_TRANSITIONS)
+
+    resp = await async_client.patch(
+        f"/api/tasks/{task.id}/state", json={"state": "done"}
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["state"] == "done"
+
+
 # ---------------------------------------------------------------------------
 # DELETE /api/tasks/{id}
 # ---------------------------------------------------------------------------
