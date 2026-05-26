@@ -878,6 +878,11 @@ export function Detail({ taskId, onClose }: Props) {
     await transitionTask.mutateAsync({ id: task.id, state: "done" });
   }
 
+  async function onSendToBacklog() {
+    if (!task) return;
+    await transitionTask.mutateAsync({ id: task.id, state: "backlog" });
+  }
+
   async function onModeChange(mode: AgentMode) {
     if (!task || task.agent_mode === mode) return;
     await updateTask.mutateAsync({ agent_mode: mode });
@@ -1018,12 +1023,14 @@ export function Detail({ taskId, onClose }: Props) {
                 isDeleting={deleteTask.isPending}
                 isArchiving={archiveTask.isPending}
                 isMarkingDone={transitionTask.isPending}
+                isSendingToBacklog={transitionTask.isPending}
                 onStart={() => void onStart()}
                 onStop={() => void onStop()}
                 onEdit={() => setEditing(true)}
                 onDelete={() => void onDelete()}
                 onArchive={() => void onArchive()}
                 onMarkDone={() => void onMarkDone()}
+                onSendToBacklog={() => void onSendToBacklog()}
               />
 
               {/* Tab bar */}

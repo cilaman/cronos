@@ -256,6 +256,195 @@ async def test_task_store_transition_missing_raises(task_store):
 
 
 # ---------------------------------------------------------------------------
+# Detail-view "Send to Backlog" / "Move to Done" button transitions
+#
+# These transitions are reachable via the new TaskActionBar buttons in the
+# detail panel. `archived->done` was newly added to USER_TRANSITIONS; the
+# others were already permitted but never directly exposed as buttons, so
+# their coverage was weak.
+# ---------------------------------------------------------------------------
+
+
+async def _drive_to_done(task_store, task_id: str) -> None:
+    """Helper: backlog -> active -> done via the legal transition sets."""
+    await task_store.transition(task_id, TaskState.ACTIVE, allowed=USER_TRANSITIONS)
+    await task_store.transition(task_id, TaskState.DONE, allowed=WORKER_TRANSITIONS)
+
+
+async def test_task_store_transition_archived_to_done_succeeds_for_plain_task(
+    task_store,
+):
+    """A plain task in archived can be reopened straight to done.
+
+    Locks the newly-added `(ARCHIVED, DONE)` pair in USER_TRANSITIONS. Was
+    previously an InvalidTransition; the new "Move to Done" button on the
+    archived detail view depends on this pair being legal.
+    """
+    task = await task_store.create(space_id=SPACE_ID, title="T", brief="")
+    await _drive_to_done(task_store, task.id)
+    await task_store.transition(task.id, TaskState.ARCHIVED, allowed=USER_TRANSITIONS)
+    assert task_store.get(task.id).state == TaskState.ARCHIVED
+
+    # Act
+    updated = await task_store.transition(
+        task.id, TaskState.DONE, allowed=USER_TRANSITIONS
+    )
+
+    # Assert
+    assert updated.state == TaskState.DONE
+    assert task_store.get(task.id).state == TaskState.DONE
+
+
+async def test_task_store_transition_archived_to_done_refused_for_goal_with_open_children(
+    task_store,
+):
+    """Goal in archived state with at least one non-terminal child MUST be
+    refused. The goal-done gate (storage.py:729-734) fires regardless of the
+    starting state — opening this loophole would let the user mark a goal
+    done while real work remains.
+    """
+    goal = await task_store.create(
+        space_id=SPACE_ID, title="Parent Goal", brief="", type="goal"
+    )
+    child = await task_store.create(
+        space_id=SPACE_ID, title="Open Child", brief="", parent_id=goal.id
+    )
+    # The legal path backlog->done is blocked by the goal-done gate while the
+    # child is non-terminal, so we can't reach ARCHIVED through transitions
+    # without first satisfying that gate (which would defeat this test's
+    # purpose). Drive the goal directly into ARCHIVED via the in-memory store.
+    stored = task_store.get(goal.id)
+    task_store._by_id[goal.id] = stored.model_copy(
+        update={"state": TaskState.ARCHIVED}
+    )
+    assert task_store.get(goal.id).state == TaskState.ARCHIVED
+    assert task_store.get(child.id).state == TaskState.BACKLOG  # non-terminal
+
+    # Act / Assert
+    with pytest.raises(InvalidTransition) as excinfo:
+        await task_store.transition(
+            goal.id, TaskState.DONE, allowed=USER_TRANSITIONS
+        )
+
+    msg = str(excinfo.value)
+    assert "open children" in msg
+    assert child.id in msg
+    # Goal MUST remain in archived — gate enforced before state mutation.
+    assert task_store.get(goal.id).state == TaskState.ARCHIVED
+
+
+async def test_task_store_transition_archived_to_done_allowed_for_goal_with_all_children_terminal(
+    task_store,
+):
+    """Goal in archived state with every child in {done, archived} is allowed
+    through to done — the goal-done gate's terminal-child check passes.
+    """
+    goal = await task_store.create(
+        space_id=SPACE_ID, title="Parent Goal", brief="", type="goal"
+    )
+    child_done = await task_store.create(
+        space_id=SPACE_ID, title="Done Child", brief="", parent_id=goal.id
+    )
+    child_archived = await task_store.create(
+        space_id=SPACE_ID, title="Archived Child", brief="", parent_id=goal.id
+    )
+    # Drive both children into terminal states (these are leaf tasks, not goals,
+    # so the goal-done gate does not block them).
+    await _drive_to_done(task_store, child_done.id)
+    await _drive_to_done(task_store, child_archived.id)
+    await task_store.transition(
+        child_archived.id, TaskState.ARCHIVED, allowed=USER_TRANSITIONS
+    )
+    # Drive the goal into DONE via the worker transition (the goal-done gate
+    # now passes — both children are terminal), then user-archive it.
+    await task_store.transition(goal.id, TaskState.ACTIVE, allowed=USER_TRANSITIONS)
+    await task_store.transition(goal.id, TaskState.DONE, allowed=WORKER_TRANSITIONS)
+    await task_store.transition(goal.id, TaskState.ARCHIVED, allowed=USER_TRANSITIONS)
+    assert task_store.get(goal.id).state == TaskState.ARCHIVED
+
+    # Act
+    updated = await task_store.transition(
+        goal.id, TaskState.DONE, allowed=USER_TRANSITIONS
+    )
+
+    # Assert
+    assert updated.state == TaskState.DONE
+    # Children unchanged by the goal transition.
+    assert task_store.get(child_done.id).state == TaskState.DONE
+    assert task_store.get(child_archived.id).state == TaskState.ARCHIVED
+
+
+async def test_task_store_transition_waiting_to_backlog_succeeds_for_plain_task(
+    task_store,
+):
+    """`waiting -> backlog` is the user-visible 'Send to Backlog' button while
+    a task is paused on a question. Regression guard — was previously legal
+    but never directly button-tested.
+    """
+    task = await task_store.create(space_id=SPACE_ID, title="T", brief="")
+    # Drive backlog -> active -> waiting via worker transitions.
+    await task_store.transition(task.id, TaskState.ACTIVE, allowed=USER_TRANSITIONS)
+    await task_store.transition(task.id, TaskState.WAITING, allowed=WORKER_TRANSITIONS)
+    assert task_store.get(task.id).state == TaskState.WAITING
+
+    # Act
+    updated = await task_store.transition(
+        task.id, TaskState.BACKLOG, allowed=USER_TRANSITIONS
+    )
+
+    # Assert
+    assert updated.state == TaskState.BACKLOG
+
+
+async def test_task_store_transition_waiting_to_backlog_clears_waiting_question(
+    task_store,
+):
+    """Leaving the waiting lane MUST clear `waiting_question` (storage.py:742).
+
+    A stale question would re-appear if the task ever cycled back into waiting,
+    confusing the operator. Lock the clear-on-leave behavior specifically for
+    the new 'Send to Backlog' button flow.
+    """
+    task = await task_store.create(space_id=SPACE_ID, title="T", brief="")
+    await task_store.transition(task.id, TaskState.ACTIVE, allowed=USER_TRANSITIONS)
+    await task_store.transition(task.id, TaskState.WAITING, allowed=WORKER_TRANSITIONS)
+    # Stash a question on the waiting task.
+    stored = task_store.get(task.id)
+    task_store._by_id[task.id] = stored.model_copy(
+        update={"waiting_question": "Approve?"}
+    )
+    assert task_store.get(task.id).waiting_question == "Approve?"
+
+    # Act
+    updated = await task_store.transition(
+        task.id, TaskState.BACKLOG, allowed=USER_TRANSITIONS
+    )
+
+    # Assert
+    assert updated.state == TaskState.BACKLOG
+    assert updated.waiting_question is None
+
+
+async def test_task_store_transition_done_to_backlog_succeeds_for_plain_task(
+    task_store,
+):
+    """`done -> backlog` is the 'Send to Backlog' button on a completed task
+    (reopen-as-todo flow). Regression guard.
+    """
+    task = await task_store.create(space_id=SPACE_ID, title="T", brief="")
+    await _drive_to_done(task_store, task.id)
+    assert task_store.get(task.id).state == TaskState.DONE
+
+    # Act
+    updated = await task_store.transition(
+        task.id, TaskState.BACKLOG, allowed=USER_TRANSITIONS
+    )
+
+    # Assert
+    assert updated.state == TaskState.BACKLOG
+
+
+# ---------------------------------------------------------------------------
 # TaskStore.delete
 # ---------------------------------------------------------------------------
 

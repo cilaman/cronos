@@ -15,6 +15,11 @@ vi.mock("../../hooks/useTasks", () => ({
   useStartTask: vi.fn(),
   useStopTask: vi.fn(),
   useTransitionTask: vi.fn(),
+  useRoutePreview: vi.fn(),
+  useBoard: vi.fn(),
+  usePromoteTask: vi.fn(),
+  useSetParent: vi.fn(),
+  useSetDependsOn: vi.fn(),
 }));
 
 vi.mock("../../hooks/useStats", () => ({
@@ -33,12 +38,14 @@ vi.mock("../TaskActionBar", () => ({
     isDeleting: boolean;
     isArchiving: boolean;
     isMarkingDone: boolean;
+    isSendingToBacklog: boolean;
     onStart: () => void;
     onStop: () => void;
     onEdit: () => void;
     onDelete: () => void;
     onArchive: () => void;
     onMarkDone: () => void;
+    onSendToBacklog: () => void;
   }) => (
     <div data-testid="action-bar">
       <button data-testid="start-btn" onClick={props.onStart}>
@@ -55,6 +62,12 @@ vi.mock("../TaskActionBar", () => ({
       </button>
       <button data-testid="done-btn" onClick={props.onMarkDone}>
         Done
+      </button>
+      <button
+        data-testid="send-to-backlog-btn"
+        onClick={props.onSendToBacklog}
+      >
+        Send to Backlog
       </button>
       <button data-testid="edit-btn" onClick={props.onEdit}>
         Edit
@@ -115,6 +128,11 @@ import {
   useStartTask,
   useStopTask,
   useTransitionTask,
+  useRoutePreview,
+  useBoard,
+  usePromoteTask,
+  useSetParent,
+  useSetDependsOn,
 } from "../../hooks/useTasks";
 import { useTaskStats } from "../../hooks/useStats";
 import { useTaskTestReportLatest } from "../../hooks/useTestReports";
@@ -220,6 +238,28 @@ beforeEach(() => {
   );
   vi.mocked(useTransitionTask).mockReturnValue(
     makeMutation(transitionMutateAsync) as unknown as ReturnType<typeof useTransitionTask>,
+  );
+
+  vi.mocked(useRoutePreview).mockReturnValue({
+    data: undefined,
+    isLoading: false,
+    error: null,
+  } as unknown as ReturnType<typeof useRoutePreview>);
+
+  vi.mocked(useBoard).mockReturnValue({
+    data: undefined,
+    isLoading: false,
+    error: null,
+  } as unknown as ReturnType<typeof useBoard>);
+
+  vi.mocked(usePromoteTask).mockReturnValue(
+    makeMutation() as unknown as ReturnType<typeof usePromoteTask>,
+  );
+  vi.mocked(useSetParent).mockReturnValue(
+    makeMutation() as unknown as ReturnType<typeof useSetParent>,
+  );
+  vi.mocked(useSetDependsOn).mockReturnValue(
+    makeMutation() as unknown as ReturnType<typeof useSetDependsOn>,
   );
 
   vi.mocked(useTaskStats).mockReturnValue({
@@ -336,6 +376,19 @@ describe("Detail — mutations via action bar", () => {
       expect(transitionMutateAsync).toHaveBeenCalledWith({
         id: "task-abc",
         state: "done",
+      }),
+    );
+  });
+
+  it("calls transitionTask.mutateAsync with backlog state when Send to Backlog is clicked", async () => {
+    // Mirrors the Mark Done test above. Locks the new onSendToBacklog handler
+    // wiring in Detail.tsx (calls transitionTask with state: "backlog").
+    renderDetail();
+    await userEvent.click(screen.getByTestId("send-to-backlog-btn"));
+    await waitFor(() =>
+      expect(transitionMutateAsync).toHaveBeenCalledWith({
+        id: "task-abc",
+        state: "backlog",
       }),
     );
   });

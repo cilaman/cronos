@@ -305,6 +305,99 @@ async def test_transition_task_same_state_is_noop(async_client):
     assert resp.json()["state"] == "backlog"
 
 
+# ---------------------------------------------------------------------------
+# Detail-view buttons — "Send to Backlog" / "Move to Done"
+#
+# End-to-end coverage through PATCH /api/tasks/{id}/state for the transitions
+# exposed by the new buttons in TaskActionBar.
+# ---------------------------------------------------------------------------
+
+
+async def test_patch_state_archived_to_done_succeeds_for_plain_task(
+    async_client, task_store
+):
+    """End-to-end: PATCH /state from archived to done on a plain task returns
+    200. Mirrors the new 'Move to Done' button on an archived task's detail.
+    """
+    from app.storage import USER_TRANSITIONS as _UT, WORKER_TRANSITIONS as _WT
+
+    task = await task_store.create(space_id=SPACE_ID, title="T", brief="")
+    await task_store.transition(task.id, TaskState.ACTIVE, allowed=_UT)
+    await task_store.transition(task.id, TaskState.DONE, allowed=_WT)
+    await task_store.transition(task.id, TaskState.ARCHIVED, allowed=_UT)
+    assert task_store.get(task.id).state == TaskState.ARCHIVED
+
+    # Act
+    resp = await async_client.patch(
+        f"/api/tasks/{task.id}/state", json={"state": "done"}
+    )
+
+    # Assert
+    assert resp.status_code == 200
+    assert resp.json()["state"] == "done"
+    assert task_store.get(task.id).state == TaskState.DONE
+
+
+async def test_patch_state_archived_to_done_refused_for_goal_with_open_children(
+    async_client, task_store
+):
+    """End-to-end: archived goal with at least one non-terminal child returns
+    409 from PATCH /state when transitioning to done. Locks the goal-guard
+    error path for the new transition.
+    """
+    goal = await task_store.create(
+        space_id=SPACE_ID, title="Parent Goal", brief="", type="goal"
+    )
+    child = await task_store.create(
+        space_id=SPACE_ID, title="Open Child", brief="", parent_id=goal.id
+    )
+    # The legal goal -> archived path requires the child to be terminal first
+    # (since active->done is gated by open_children). Setup bypasses that gate
+    # by writing the archived state directly into the in-memory store, then
+    # exercises the user-facing PATCH endpoint against that state.
+    stored = task_store.get(goal.id)
+    task_store._by_id[goal.id] = stored.model_copy(
+        update={"state": TaskState.ARCHIVED}
+    )
+    assert task_store.get(goal.id).state == TaskState.ARCHIVED
+
+    # Act
+    resp = await async_client.patch(
+        f"/api/tasks/{goal.id}/state", json={"state": "done"}
+    )
+
+    # Assert
+    assert resp.status_code == 409
+    body = resp.json()
+    # Surface enough detail for the UI to identify the blocker.
+    detail = body.get("detail", "")
+    assert "open children" in detail
+    assert child.id in detail
+    # Goal stays in archived — no partial mutation.
+    assert task_store.get(goal.id).state == TaskState.ARCHIVED
+
+
+async def test_patch_state_done_to_backlog_succeeds_for_plain_task(
+    async_client, task_store
+):
+    """End-to-end: 'Send to Backlog' button on a done task. Returns 200."""
+    from app.storage import USER_TRANSITIONS as _UT, WORKER_TRANSITIONS as _WT
+
+    task = await task_store.create(space_id=SPACE_ID, title="T", brief="")
+    await task_store.transition(task.id, TaskState.ACTIVE, allowed=_UT)
+    await task_store.transition(task.id, TaskState.DONE, allowed=_WT)
+    assert task_store.get(task.id).state == TaskState.DONE
+
+    # Act
+    resp = await async_client.patch(
+        f"/api/tasks/{task.id}/state", json={"state": "backlog"}
+    )
+
+    # Assert
+    assert resp.status_code == 200
+    assert resp.json()["state"] == "backlog"
+
+
 # State transitions on a child can leave its parent goal stranded in WAITING
 # (the supervisor loop in worker._run_goal exits when a child ends non-DONE).
 # PATCH /state must call goal_sync.propagate_to_parent so the goal is

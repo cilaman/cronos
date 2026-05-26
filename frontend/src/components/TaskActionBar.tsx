@@ -8,12 +8,14 @@ interface Props {
   isDeleting: boolean;
   isArchiving: boolean;
   isMarkingDone: boolean;
+  isSendingToBacklog: boolean;
   onStart: () => void;
   onStop: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onArchive: () => void;
   onMarkDone: () => void;
+  onSendToBacklog: () => void;
 }
 
 export function TaskActionBar({
@@ -23,17 +25,21 @@ export function TaskActionBar({
   isDeleting,
   isArchiving,
   isMarkingDone,
+  isSendingToBacklog,
   onStart,
   onStop,
   onEdit,
   onDelete,
   onArchive,
   onMarkDone,
+  onSendToBacklog,
 }: Props) {
   const showStart = taskState === "backlog";
   const showStop = taskState === "active";
   const showArchive = taskState === "done" || taskState === "waiting";
-  const showMarkDone = taskState === "waiting";
+  const showMarkDone = taskState === "waiting" || taskState === "archived";
+  const showSendToBacklog =
+    taskState === "waiting" || taskState === "done" || taskState === "archived";
   const archiveLabel = taskState === "waiting" ? "Cancel task (archive)" : "Archive task";
 
   return (
@@ -72,6 +78,18 @@ export function TaskActionBar({
           aria-label="Mark task as done"
         >
           ✓
+        </IconButton>
+      )}
+      {showSendToBacklog && (
+        <IconButton
+          variant="default"
+          onClick={onSendToBacklog}
+          disabled={isSendingToBacklog}
+          loading={isSendingToBacklog}
+          title="Send to backlog"
+          aria-label="Send task to backlog"
+        >
+          ↩
         </IconButton>
       )}
       {showArchive && (

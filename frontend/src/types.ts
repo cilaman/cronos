@@ -13,10 +13,12 @@ const USER_TRANSITIONS_SET = new Set<string>([
   "backlog->active",
   "active->backlog",
   "waiting->backlog",
+  "waiting->done",
   "done->backlog",
   "done->archived",
   "waiting->archived",
   "archived->backlog",
+  "archived->done",
 ]);
 
 export function canUserTransition(from: TaskState, to: TaskState): boolean {
