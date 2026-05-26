@@ -9,6 +9,8 @@ from datetime import UTC, datetime
 from . import autopilot_pr
 from .agent import AgentResult, Status, run_agent
 from . import goal_sync
+from .memory_retrieval import retrieve
+from .memory_store import MemoryStore
 from .models import TaskState
 from .space_storage import SpaceStore
 from .stats import RunStats, _tier_from_real_model, compute_cost, extract_tokens_and_tools
@@ -87,6 +89,7 @@ class Worker:
         space_store: SpaceStore | None = None,
         stats_store: StatsStore | None = None,
         trace_store: TraceStore | None = None,
+        memory_store: MemoryStore | None = None,
         on_idle: Callable[[Worker], Awaitable[None]] | None = None,
         pool: WorkerPool | None = None,
     ) -> None:
@@ -94,6 +97,7 @@ class Worker:
         self.space_store = space_store
         self.stats_store = stats_store
         self.trace_store = trace_store
+        self.memory_store = memory_store
         self.on_idle = on_idle
         self._space_id: str | None = None
         self._pool = pool
@@ -221,6 +225,12 @@ class Worker:
             await self._publish(task_id, event)
 
         space = self.space_store.get(task.space_id) if self.space_store else None
+        memory_items = None
+        if self.memory_store is not None:
+            try:
+                memory_items = await retrieve(task, task.space_id, self.memory_store)
+            except Exception:
+                log.exception("Failed to retrieve memory for task %s", task_id)
         run_exception: str | None = None
         result = None
         try:
@@ -230,6 +240,7 @@ class Worker:
                 on_event=on_event,
                 cancel_event=cancel_event,
                 space=space,
+                memory_items=memory_items,
             )
         except FileNotFoundError as e:
             run_exception = f"claude binary not found: {e}"
@@ -659,6 +670,12 @@ class Worker:
                 await self._publish(goal_id, event)
 
             space = self.space_store.get(child.space_id) if self.space_store else None
+            child_memory_items = None
+            if self.memory_store is not None:
+                try:
+                    child_memory_items = await retrieve(child, child.space_id, self.memory_store)
+                except Exception:
+                    log.exception("Failed to retrieve memory for child task %s", child_id)
             child_result: AgentResult | None = None
             run_exception: str | None = None
             child_started_at = datetime.now(tz=UTC)
@@ -671,6 +688,7 @@ class Worker:
                     cancel_event=cancel_event,
                     space=space,
                     goal_context=goal_context,
+                    memory_items=child_memory_items,
                 )
             except Exception as e:
                 run_exception = str(e)

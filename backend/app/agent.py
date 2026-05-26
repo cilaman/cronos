@@ -11,7 +11,7 @@ from enum import Enum
 from pathlib import Path
 
 from . import git_ops
-from .models import Space, Task
+from .models import MemoryItem, Space, Task
 
 log = logging.getLogger("cronos.agent")
 
@@ -147,17 +147,32 @@ def _upgrade_instructions() -> str:
     )
 
 
-def build_prompt(task: Task, user_message: str | None, goal_context: str | None = None) -> str:
+def build_prompt(
+    task: Task,
+    user_message: str | None,
+    goal_context: str | None = None,
+    memory_items: list[MemoryItem] | None = None,
+) -> str:
     fresh = task.claude_session_id is None
     if user_message and not fresh:
         return user_message
     msg_section = f"\n# Message\n{user_message}\n" if user_message else ""
     goal_section = f"\n# Goal Context\n{goal_context}\n" if goal_context else ""
+    memory_section = ""
+    if memory_items:
+        lines = ["# Memory"]
+        for item in memory_items:
+            entry = f"- [{item.kind.value}] **{item.title}**"
+            if item.body:
+                entry += f": {item.body}"
+            lines.append(entry)
+        memory_section = "\n" + "\n".join(lines) + "\n"
     return (
         f"You are working on task `{task.id}`.\n\n"
         f"# Title\n{task.title}\n\n"
         f"# Brief\n{task.brief}\n"
         f"{goal_section}"
+        f"{memory_section}"
         f"{msg_section}\n"
         "A per-task workspace has been mounted as your working directory; create\n"
         "all files there. Begin work now, and remember the STATUS contract.\n"
@@ -188,6 +203,7 @@ async def run_agent(
     cancel_event: asyncio.Event | None = None,
     space: Space | None = None,
     goal_context: str | None = None,
+    memory_items: list[MemoryItem] | None = None,
 ) -> AgentResult:
     """Spawn claude CLI for one turn of work on `task` and stream its events.
 
@@ -197,7 +213,7 @@ async def run_agent(
     Returns once the process exits.
     """
     workspace = await workspace_for(task, space)
-    prompt = build_prompt(task, user_message, goal_context)
+    prompt = build_prompt(task, user_message, goal_context, memory_items)
     permission_mode = PERMISSION_MODE.get(task.agent_mode, "acceptEdits")
     allowed_tools = PLAN_MODE_TOOLS if task.agent_mode == "plan" else DEFAULT_TOOLS
 

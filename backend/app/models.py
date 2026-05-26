@@ -7,6 +7,25 @@ from typing import Literal
 from pydantic import BaseModel, Field, model_validator
 
 
+class MemoryKind(str, Enum):
+    FACT = "fact"
+    PROCEDURE = "procedure"
+    OBSERVATION = "observation"
+    REFERENCE = "reference"
+
+
+class MemoryItem(BaseModel):
+    id: str
+    scope: str  # "global" | "space:{space_id}"
+    kind: MemoryKind
+    title: str
+    body: str = ""
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    score: float = 0.0
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
 class TaskState(str, Enum):
     BACKLOG = "backlog"
     ACTIVE = "active"

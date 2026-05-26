@@ -879,7 +879,7 @@ async def test_run_goal_runs_children_in_order_and_marks_done(worker, task_store
 
     run_order: list[str] = []
 
-    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None, goal_context=None):
+    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None, goal_context=None, **kwargs):
         run_order.append(task.id)
         return _make_result(exit_code=0, status=Status.DONE)
 
@@ -908,7 +908,7 @@ async def test_run_goal_skips_done_children(worker, task_store, monkeypatch):
 
     ran: list[str] = []
 
-    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None, goal_context=None):
+    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None, goal_context=None, **kwargs):
         ran.append(task.id)
         return _make_result(exit_code=0, status=Status.DONE)
 
@@ -937,7 +937,7 @@ async def test_run_goal_pauses_when_child_fails(worker, task_store, monkeypatch)
     """If a child ends in WAIT, the goal transitions to WAITING."""
     import app.worker as worker_module
 
-    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None, goal_context=None):
+    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None, goal_context=None, **kwargs):
         return _make_result(exit_code=0, status=Status.WAIT, context="Need input")
 
     monkeypatch.setattr(worker_module, "run_agent", fake_run_agent)
@@ -961,7 +961,7 @@ async def test_run_goal_injects_goal_context(worker, task_store, monkeypatch):
 
     captured_contexts: list[str | None] = []
 
-    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None, goal_context=None):
+    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None, goal_context=None, **kwargs):
         captured_contexts.append(goal_context)
         return _make_result(exit_code=0, status=Status.DONE)
 

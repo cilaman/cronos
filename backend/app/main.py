@@ -18,6 +18,7 @@ from .api.test_reports import router as test_reports_router
 from .api.tools import router as tools_router
 from .api.traces import router as traces_router
 from .api.views import router as views_router
+from .memory_store import MemoryStore
 from .space_storage import CRONOS_SUBDIR, RESERVED_SPACE_DIRS, SpaceStore
 from .stats_store import StatsStore
 from .storage import TaskStore
@@ -160,7 +161,16 @@ async def lifespan(app: FastAPI):
     test_report_store = TestReportStore(SPACES_DIR)
     app.state.test_report_store = test_report_store
 
-    worker_pool = WorkerPool(task_store, space_store, stats_store=stats_store, trace_store=trace_store)
+    memory_store = MemoryStore(SPACES_DIR, DATA_DIR / "memory")
+    app.state.memory_store = memory_store
+
+    worker_pool = WorkerPool(
+        task_store,
+        space_store,
+        stats_store=stats_store,
+        trace_store=trace_store,
+        memory_store=memory_store,
+    )
     for space in space_store.list_all():
         await worker_pool.start_for_space(space.id)
     app.state.worker_pool = worker_pool
