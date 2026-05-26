@@ -51,29 +51,39 @@ async def propagate_to_parent(
         except Exception:
             log.exception("Failed to activate parent goal %s", child.parent_id)
 
-    elif child_state in (TaskState.DONE, TaskState.ARCHIVED) and parent_state == TaskState.WAITING:
-        # Child completed → activate goal and re-enqueue so orchestration resumes.
+    elif child_state in (TaskState.DONE, TaskState.ARCHIVED) and parent_state in (
+        TaskState.WAITING,
+        TaskState.ACTIVE,
+    ):
+        # Child completed → ensure goal is ACTIVE and re-enqueue so orchestration resumes.
         # _run_goal skips already-done children, so it will pick the next eligible one.
-        try:
-            await store.transition(
-                child.parent_id, TaskState.ACTIVE, allowed=GOAL_SYNC_TRANSITIONS
-            )
-            log.info("Goal %s → ACTIVE (child %s finished)", child.parent_id, child_id)
-        except InvalidTransition:
-            return  # already active or terminal
-        except Exception:
-            log.exception("Failed to activate parent goal %s", child.parent_id)
-            return
+        # parent_state == ACTIVE happens when a child was run standalone after the goal was
+        # surfaced as ACTIVE by the ACTIVE-child branch above; in that case we skip the
+        # redundant transition and go straight to enqueue.
+        if parent_state == TaskState.WAITING:
+            try:
+                await store.transition(
+                    child.parent_id, TaskState.ACTIVE, allowed=GOAL_SYNC_TRANSITIONS
+                )
+                log.info("Goal %s → ACTIVE (child %s finished)", child.parent_id, child_id)
+            except InvalidTransition:
+                return  # already active or terminal
+            except Exception:
+                log.exception("Failed to activate parent goal %s", child.parent_id)
+                return
 
         if worker_pool is not None:
-            try:
-                await worker_pool.enqueue(parent.space_id, child.parent_id)
-                log.info(
-                    "Goal %s re-enqueued to continue after child %s",
-                    child.parent_id,
-                    child_id,
-                )
-            except Exception:
-                log.exception("Failed to re-enqueue goal %s", child.parent_id)
+            worker = worker_pool.get(parent.space_id)
+            # Don't re-enqueue if _run_goal is already orchestrating this goal.
+            if worker is None or worker.current() != child.parent_id:
+                try:
+                    await worker_pool.enqueue(parent.space_id, child.parent_id)
+                    log.info(
+                        "Goal %s re-enqueued to continue after child %s",
+                        child.parent_id,
+                        child_id,
+                    )
+                except Exception:
+                    log.exception("Failed to re-enqueue goal %s", child.parent_id)
 
     # Child → WAITING while parent ACTIVE: no-op — _run_goal's own loop handles it.
