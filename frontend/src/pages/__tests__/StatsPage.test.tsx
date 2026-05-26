@@ -84,7 +84,7 @@ describe("StatsPage", () => {
 
     vi.mocked(useSpaces).mockReturnValue({
       data: { spaces: [], totals: { backlog: 0, active: 0, waiting: 0, done: 0, archived: 0 } },
-    } as ReturnType<typeof useSpaces>);
+    } as unknown as ReturnType<typeof useSpaces>);
   });
 
   it("renders the Stats page header", () => {
@@ -176,7 +176,7 @@ describe("StatsPage", () => {
 
     vi.mocked(useSpaceStats).mockReturnValue({
       data: [],
-    } as ReturnType<typeof useSpaceStats>);
+    } as unknown as ReturnType<typeof useSpaceStats>);
 
     renderPage();
 

@@ -39,6 +39,7 @@ const mockSpace: Space = {
   git_branch: null,
   git_share_cronos: false,
   agent_defaults: {},
+  autopilot: "disabled",
 };
 
 const mockSpacesResponse: SpacesResponse = {

@@ -97,7 +97,7 @@ describe("TestReportsPage", () => {
   beforeEach(() => {
     vi.mocked(useSpaces).mockReturnValue({
       data: { spaces: [], totals: { backlog: 0, active: 0, waiting: 0, done: 0, archived: 0 } },
-    } as ReturnType<typeof useSpaces>);
+    } as unknown as ReturnType<typeof useSpaces>);
 
     vi.mocked(useTestReports).mockReturnValue({
       data: undefined,
@@ -158,7 +158,7 @@ describe("TestReportsPage", () => {
     vi.mocked(useTestReports).mockReturnValue({
       data: [],
       isLoading: false,
-    } as ReturnType<typeof useTestReports>);
+    } as unknown as ReturnType<typeof useTestReports>);
 
     renderPage();
 
