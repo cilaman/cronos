@@ -136,6 +136,7 @@ class RunTrace(BaseModel):
     memory_injected: list[str] = Field(default_factory=list)
     memory_used: list[str] = Field(default_factory=list)
     memory_written: list[str] = Field(default_factory=list)
+    memory_hit_rate: float = 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -349,4 +350,5 @@ def extract_run_trace(
         memory_injected=memory_injected or [],
         memory_used=mem_used,
         memory_written=mem_written,
+        memory_hit_rate=min(1.0, len(mem_used) / max(1, len(memory_injected or []))),
     )
