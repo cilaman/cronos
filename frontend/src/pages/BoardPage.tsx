@@ -39,7 +39,6 @@ export function BoardPage() {
   const [laneOverride, setLaneOverride] = useState<TaskState[] | null>(() =>
     readBoardLaneOverride(scoped ?? readBoardSpaceFilter(), null),
   );
-  const [hideExpandedChildren, setHideExpandedChildren] = useState(false);
   const [creating, setCreating] = useState(false);
   const [managingViews, setManagingViews] = useState(false);
   const [isWorking, setIsWorking] = useState(false);
@@ -202,8 +201,6 @@ export function BoardPage() {
         viewId={urlViewId}
         onViewChange={scoped ? handleViewChange : undefined}
         onManageViews={boardSpaceId ? () => setManagingViews(true) : undefined}
-        hideExpandedChildren={hideExpandedChildren}
-        onHideExpandedChildrenToggle={() => setHideExpandedChildren((v) => !v)}
       />
       <div className="min-h-0 flex-1">
         <Board
@@ -218,7 +215,6 @@ export function BoardPage() {
           onShowLane={showLane}
           expandedGoals={expandedGoals}
           onToggleGoal={toggleGoal}
-          hideExpandedChildren={hideExpandedChildren}
         />
       </div>
 

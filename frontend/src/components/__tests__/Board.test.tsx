@@ -240,18 +240,18 @@ describe("Board — onHideLane wiring to each Lane", () => {
 });
 
 // ---------------------------------------------------------------------------
-// hideExpandedChildren — children whose expanded parent is on the board
-// are filtered out. Pre-existing behavior but the useMemo was just moved
-// above the early returns, so re-verify it didn't regress.
+// Goal-children filtering — tasks whose parent is a goal on the board are
+// always hidden from lanes (they only render inside the goal's inline panel).
 // ---------------------------------------------------------------------------
 
-describe("Board — hideExpandedChildren (regression: useMemo above early return)", () => {
-  it("filters out child tasks when their parent goal is in expandedGoals", () => {
+describe("Board — goal children always hidden from lanes", () => {
+  it("filters out child tasks when their parent is a goal on the board", () => {
     boardResult = {
       data: {
         backlog: [
-          makeTask({ id: "child-1", title: "Child of expanded goal", parent_id: "goal-1" }),
-          makeTask({ id: "child-2", title: "Independent task" }),
+          makeTask({ id: "goal-1", title: "Parent goal", type: "goal" }),
+          makeTask({ id: "child-1", title: "Child of goal", parent_id: "goal-1" }),
+          makeTask({ id: "loose-1", title: "Independent task" }),
         ],
         active: [],
         waiting: [],
@@ -261,19 +261,36 @@ describe("Board — hideExpandedChildren (regression: useMemo above early return
       isLoading: false,
       error: null,
     };
-    renderBoard({
-      hideExpandedChildren: true,
-      expandedGoals: new Set(["goal-1"]),
-    });
-    expect(screen.queryByText("Child of expanded goal")).not.toBeInTheDocument();
+    renderBoard();
+    expect(screen.getByText("Parent goal")).toBeInTheDocument();
+    expect(screen.queryByText("Child of goal")).not.toBeInTheDocument();
     expect(screen.getByText("Independent task")).toBeInTheDocument();
   });
 
-  it("does NOT filter when hideExpandedChildren is false", () => {
+  it("filters across all lanes (child in done, goal in active)", () => {
+    boardResult = {
+      data: {
+        backlog: [],
+        active: [makeTask({ id: "goal-1", title: "Active goal", state: "active", type: "goal" })],
+        waiting: [],
+        done: [makeTask({ id: "child-1", title: "Finished child", state: "done", parent_id: "goal-1" })],
+        archived: [],
+      },
+      isLoading: false,
+      error: null,
+    };
+    renderBoard();
+    expect(screen.getByText("Active goal")).toBeInTheDocument();
+    expect(screen.queryByText("Finished child")).not.toBeInTheDocument();
+  });
+
+  it("keeps tasks whose parent is not a goal on the board (e.g. task-with-task-parent or orphaned parent_id)", () => {
     boardResult = {
       data: {
         backlog: [
-          makeTask({ id: "child-1", title: "Child of expanded goal", parent_id: "goal-1" }),
+          makeTask({ id: "task-1", title: "Plain parent task", type: "task" }),
+          makeTask({ id: "child-1", title: "Child of plain task", parent_id: "task-1" }),
+          makeTask({ id: "orphan", title: "Orphan with missing parent", parent_id: "ghost" }),
         ],
         active: [],
         waiting: [],
@@ -283,10 +300,9 @@ describe("Board — hideExpandedChildren (regression: useMemo above early return
       isLoading: false,
       error: null,
     };
-    renderBoard({
-      hideExpandedChildren: false,
-      expandedGoals: new Set(["goal-1"]),
-    });
-    expect(screen.getByText("Child of expanded goal")).toBeInTheDocument();
+    renderBoard();
+    expect(screen.getByText("Plain parent task")).toBeInTheDocument();
+    expect(screen.getByText("Child of plain task")).toBeInTheDocument();
+    expect(screen.getByText("Orphan with missing parent")).toBeInTheDocument();
   });
 });

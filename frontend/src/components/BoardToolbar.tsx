@@ -19,9 +19,6 @@ interface Props {
   viewId?: string | null;
   onViewChange?: (viewId: string | null) => void;
   onManageViews?: () => void;
-  /** When true, child tasks of expanded goals are hidden from their lanes. */
-  hideExpandedChildren?: boolean;
-  onHideExpandedChildrenToggle?: () => void;
 }
 
 export function BoardToolbar({
@@ -36,8 +33,6 @@ export function BoardToolbar({
   viewId = null,
   onViewChange,
   onManageViews,
-  hideExpandedChildren = false,
-  onHideExpandedChildrenToggle,
 }: Props) {
   const { data } = useSpaces();
   const active = spaceId ? data?.spaces.find((s) => s.id === spaceId) ?? null : null;
@@ -100,26 +95,6 @@ export function BoardToolbar({
             {sortMode === "priority" ? "Priority" : "Priority"}
           </span>
         </button>
-        {onHideExpandedChildrenToggle && (
-          <button
-            type="button"
-            onClick={onHideExpandedChildrenToggle}
-            aria-pressed={hideExpandedChildren}
-            title={hideExpandedChildren ? "Show expanded children in lanes" : "Hide expanded goal's children from lanes"}
-            className={[
-              "flex h-8 items-center gap-1.5 rounded border px-2.5 font-display text-[10px] uppercase tracking-[0.14em] transition focus:outline-none focus-visible:ring-1 focus-visible:ring-accent",
-              hideExpandedChildren
-                ? "border-accent bg-accent/10 text-accent-bright hover:bg-accent/20"
-                : "border-hairline bg-surface-2 text-ink-muted hover:border-hairline-strong hover:bg-surface-3 hover:text-ink",
-            ].join(" ")}
-          >
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M2 3h8M2 6h5M2 9h3"/>
-              <path d="M9 7v4M7 9l2 2 2-2" strokeWidth="1.25"/>
-            </svg>
-            <span className="hidden sm:inline">Focus</span>
-          </button>
-        )}
         <button
           type="button"
           onClick={onCompactToggle}

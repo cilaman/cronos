@@ -49,8 +49,6 @@ interface Props {
   expandedGoals?: Set<string>;
   /** Called when the user clicks the expand chevron on a goal card. */
   onToggleGoal?: (id: string) => void;
-  /** When true, child tasks whose parent goal is expanded are filtered out of lanes. */
-  hideExpandedChildren?: boolean;
 }
 
 export function Board({
@@ -65,7 +63,6 @@ export function Board({
   onShowLane,
   expandedGoals,
   onToggleGoal,
-  hideExpandedChildren = false,
 }: Props) {
   const effectiveViewId = spaceId ? (viewId ?? "default") : null;
   const { data, isLoading, error } = useBoard(spaceId, effectiveViewId);
@@ -183,13 +180,17 @@ export function Board({
     setActiveTask(null);
   }
 
-  // When hideExpandedChildren is on, filter out children whose parent goal is expanded.
+  // Always hide tasks whose parent is a goal — they render only inside the goal card's inline children panel.
   // Must be declared before any early returns (hooks-rules).
   const displayData = useMemo(() => {
     if (!sortedData) return null;
-    if (!hideExpandedChildren || !expandedGoals || expandedGoals.size === 0) return sortedData;
+    const goalIds = new Set<string>();
+    for (const lane of ["backlog", "active", "waiting", "done"] as const) {
+      for (const t of sortedData[lane]) if (t.type === "goal") goalIds.add(t.id);
+    }
+    if (goalIds.size === 0) return sortedData;
     const filterHidden = (tasks: TaskSummary[]) =>
-      tasks.filter((t) => !(t.parent_id && expandedGoals.has(t.parent_id)));
+      tasks.filter((t) => !(t.parent_id && goalIds.has(t.parent_id)));
     return {
       ...sortedData,
       backlog: filterHidden(sortedData.backlog),
@@ -197,7 +198,7 @@ export function Board({
       waiting: filterHidden(sortedData.waiting),
       done: filterHidden(sortedData.done),
     };
-  }, [sortedData, hideExpandedChildren, expandedGoals]);
+  }, [sortedData]);
 
   if (isLoading) return <p className="p-6 text-ink-muted">Loading board…</p>;
   // Silently ignore 404 for deleted/invalid views — BoardPage resets the URL param.
