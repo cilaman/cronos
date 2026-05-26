@@ -127,7 +127,7 @@ async def test_bootstrap_fake_run_agent(task_store, worker, monkeypatch):
     """Smoke test: worker with a monkeypatched fake completes a run."""
     task_id = await _active_task(task_store)
 
-    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None):
+    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None, **kwargs):
         await on_event({"type": "text", "text": "hello"})
         return _make_result()
 
@@ -162,7 +162,7 @@ async def test_full_lifecycle(task_store, worker, monkeypatch):
         {"type": "text", "text": "done thinking"},
     ]
 
-    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None):
+    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None, **kwargs):
         for ev in published:
             await on_event(ev)
         return _make_result()
@@ -225,7 +225,7 @@ async def test_workerpool_different_spaces_run_concurrently(
     both_seen = asyncio.Event()
     release = asyncio.Event()
 
-    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None):
+    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None, **kwargs):
         if task.id == task_a:
             a_started.set()
         else:
@@ -266,7 +266,7 @@ async def test_serial_per_space(task_store, worker, monkeypatch):
     order: list[tuple[str, str]] = []
     task1_release = asyncio.Event()
 
-    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None):
+    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None, **kwargs):
         order.append(("start", task.id))
         if task.id == task1:
             await asyncio.wait_for(task1_release.wait(), timeout=5.0)
@@ -320,7 +320,7 @@ async def test_mid_run_subscriber_gets_replay_then_live(task_store, worker, monk
     can_attach = asyncio.Event()
     can_continue = asyncio.Event()
 
-    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None):
+    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None, **kwargs):
         await on_event(pre_ev)
         can_attach.set()
         await asyncio.wait_for(can_continue.wait(), timeout=5.0)
@@ -371,7 +371,7 @@ async def test_slow_subscriber_does_not_block_worker(task_store, worker, monkeyp
 
     n_events = 300  # exceeds the 256-event subscriber queue cap
 
-    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None):
+    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None, **kwargs):
         for i in range(n_events):
             await on_event({"type": "text", "text": f"event {i}"})
         return _make_result()
@@ -406,7 +406,7 @@ async def test_stop_for_space_cancels_within_2_seconds(
     task_id = await _active_task(task_store, title="Cancellable task")
     run_started = asyncio.Event()
 
-    async def blocking_agent(task, *, user_message, on_event, cancel_event=None, space=None):
+    async def blocking_agent(task, *, user_message, on_event, cancel_event=None, space=None, **kwargs):
         run_started.set()
         if cancel_event is not None:
             await cancel_event.wait()  # block until cancel_event is set
@@ -443,7 +443,7 @@ async def test_done_sentinel_delivered_to_all_subscribers(task_store, worker, mo
     """Every subscriber queue receives _DONE_SENTINEL when the run ends."""
     task_id = await _active_task(task_store, title="Sentinel test")
 
-    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None):
+    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None, **kwargs):
         return _make_result()
 
     monkeypatch.setattr("app.worker.run_agent", fake_run_agent)
@@ -491,7 +491,7 @@ async def test_auto_resume_max_count_respected(task_store, worker, monkeypatch):
     task_id = await _active_task(task_store, title="Auto-resume test")
     call_count = 0
 
-    async def max_turns_agent(task, *, user_message, on_event, cancel_event=None, space=None):
+    async def max_turns_agent(task, *, user_message, on_event, cancel_event=None, space=None, **kwargs):
         nonlocal call_count
         call_count += 1
         return _make_result(
