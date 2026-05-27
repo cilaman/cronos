@@ -213,6 +213,7 @@ async def run_agent(
     cancel_event: asyncio.Event | None = None,
     space: Space | None = None,
     goal_context: str | None = None,
+    memory_items: list[MemoryItem] | None = None,
 ) -> AgentResult:
     """Spawn claude CLI for one turn of work on `task` and stream its events.
 
@@ -222,7 +223,7 @@ async def run_agent(
     Returns once the process exits.
     """
     workspace = await workspace_for(task, space)
-    prompt = build_prompt(task, user_message, goal_context)
+    prompt = build_prompt(task, user_message, goal_context, memory_items)
     permission_mode = PERMISSION_MODE.get(task.agent_mode, "acceptEdits")
     allowed_tools = PLAN_MODE_TOOLS if task.agent_mode == "plan" else DEFAULT_TOOLS
 

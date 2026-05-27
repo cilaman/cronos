@@ -11,6 +11,7 @@ from pathlib import Path
 from . import autopilot_pr
 from .agent import AgentResult, CRONOS_SUBDIR, DATA_DIR, Status, run_agent
 from . import goal_sync
+from . import memory_retrieval
 from .memory_parser import parse_memory_blocks
 from .memory_store import MemoryStore
 from .models import TaskState
@@ -256,6 +257,12 @@ class Worker:
         space = self.space_store.get(task.space_id) if self.space_store else None
         workspace_path = DATA_DIR / task.space_id / CRONOS_SUBDIR / "workspaces" / task.id
         memory_injected = _memory_injected_for_workspace(workspace_path)
+        retrieved_memory = None
+        if self.memory_store is not None:
+            try:
+                retrieved_memory = await memory_retrieval.retrieve(task, task.space_id, self.memory_store) or None
+            except Exception:
+                log.exception("Failed to retrieve memory for %s", task_id)
         run_exception: str | None = None
         result = None
         try:
@@ -265,6 +272,7 @@ class Worker:
                 on_event=on_event,
                 cancel_event=cancel_event,
                 space=space,
+                memory_items=retrieved_memory,
             )
         except FileNotFoundError as e:
             run_exception = f"claude binary not found: {e}"
@@ -649,6 +657,26 @@ class Worker:
             )
         except Exception:
             log.exception("Failed to finalize child %s", child_id)
+
+        if self.memory_store is not None and result is not None and result.final_text:
+            blocks = parse_memory_blocks(result.final_text)
+            if blocks:
+                child_task = self.store.get(child_id)
+                if child_task is not None:
+                    for block in blocks:
+                        try:
+                            title = block.content.splitlines()[0][:120]
+                            await self.memory_store.create(
+                                scope=f"space:{child_task.space_id}",
+                                kind=block.kind_hint or "observation",
+                                title=title,
+                                body=block.content,
+                                confirmed=False,
+                                sources=[f"task:{child_id}"],
+                            )
+                        except Exception:
+                            log.exception("Failed to save memory block for child %s", child_id)
+
         return new_state
 
     async def _run_goal(self, goal_id: str, user_message: str | None) -> None:
@@ -735,6 +763,12 @@ class Worker:
             child_result: AgentResult | None = None
             run_exception: str | None = None
             child_started_at = datetime.now(tz=UTC)
+            child_memory = None
+            if self.memory_store is not None:
+                try:
+                    child_memory = await memory_retrieval.retrieve(child, child.space_id, self.memory_store) or None
+                except Exception:
+                    log.exception("Failed to retrieve memory for child %s", child_id)
 
             try:
                 child_result = await run_agent(
@@ -744,6 +778,7 @@ class Worker:
                     cancel_event=cancel_event,
                     space=space,
                     goal_context=goal_context,
+                    memory_items=child_memory,
                 )
             except Exception as e:
                 run_exception = str(e)
