@@ -277,17 +277,18 @@ driver in the prod overlay; the rest of the stack doesn't care.
 ### 10.1 — Manual upgrade (always works)
 
 ```bash
-cd /opt/cronos
-git pull
-docker compose \
-  --env-file .env \
-  -f docker-compose.yml -f docker-compose.prod.yml \
-  up -d --build
-sudo systemctl restart cronos.service
+/opt/cronos/upgrade.sh
 ```
 
-`git pull` authenticates unattended via the deploy key set up in §5.1 — no
-prompts.
+The script fetches the latest `main`, builds images, and calls
+`sudo systemctl restart cronos.service`. The unit is the single owner of
+`docker compose up` — running compose directly from this script (or from a
+`/root` wrapper) would run `up` twice per upgrade as different users and
+leave the second invocation fighting the first for container ownership.
+
+`git fetch` authenticates unattended via the deploy key set up in §5.1 — no
+prompts. The `sudo systemctl restart` is unattended too via the sudoers rule
+installed in §10.2.
 
 ### 10.2 — Agent-triggered upgrades ("tell Claude to upgrade")
 
