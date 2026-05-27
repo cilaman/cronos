@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useActivity, useImportSpace, useSpaces } from "../hooks/useSpaces";
 import { useCreateTask } from "../hooks/useTasks";
@@ -120,12 +120,12 @@ function MetricTile({
           : "text-ink";
 
   return (
-    <div className="flex h-24 flex-col justify-between rounded-md border border-hairline bg-surface-2 p-4 shadow-inset-hairline">
+    <div className="flex flex-col gap-1 rounded-md border border-hairline bg-surface-2 p-3 shadow-inset-hairline">
       <p className="font-display text-[10px] uppercase tracking-[0.2em] text-ink-faint">
         {label}
       </p>
       <div>
-        <p className={`font-display text-[24px] font-semibold tabular-nums leading-none ${valueClass}`}>
+        <p className={`font-display text-[22px] font-semibold tabular-nums leading-none ${valueClass}`}>
           {value}
         </p>
         {sub && (
@@ -185,35 +185,35 @@ function ToolBar({ name, count, max }: { name: string; count: number; max: numbe
 
 function SummaryBar({ report }: { report: TestReportSummary }) {
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
-      <div className="flex flex-col gap-0.5 rounded-md border border-hairline bg-surface-2 p-4 shadow-inset-hairline">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-5">
+      <div className="flex flex-col gap-0.5 rounded-md border border-hairline bg-surface-2 p-3 shadow-inset-hairline">
         <span className="font-display text-[9px] uppercase tracking-[0.2em] text-ink-faint">Passed</span>
-        <span className="font-display text-[24px] font-semibold tabular-nums leading-none text-accent-bright">
+        <span className="font-display text-[22px] font-semibold tabular-nums leading-none text-accent-bright">
           {report.total_passed}
         </span>
       </div>
-      <div className="flex flex-col gap-0.5 rounded-md border border-hairline bg-surface-2 p-4 shadow-inset-hairline">
+      <div className="flex flex-col gap-0.5 rounded-md border border-hairline bg-surface-2 p-3 shadow-inset-hairline">
         <span className="font-display text-[9px] uppercase tracking-[0.2em] text-ink-faint">Failed</span>
-        <span className={`font-display text-[24px] font-semibold tabular-nums leading-none ${report.total_failed > 0 ? "text-danger" : "text-ink"}`}>
+        <span className={`font-display text-[22px] font-semibold tabular-nums leading-none ${report.total_failed > 0 ? "text-danger" : "text-ink"}`}>
           {report.total_failed}
         </span>
       </div>
-      <div className="flex flex-col gap-0.5 rounded-md border border-hairline bg-surface-2 p-4 shadow-inset-hairline">
+      <div className="flex flex-col gap-0.5 rounded-md border border-hairline bg-surface-2 p-3 shadow-inset-hairline">
         <span className="font-display text-[9px] uppercase tracking-[0.2em] text-ink-faint">Errors</span>
-        <span className={`font-display text-[24px] font-semibold tabular-nums leading-none ${report.total_errors > 0 ? "text-danger" : "text-ink"}`}>
+        <span className={`font-display text-[22px] font-semibold tabular-nums leading-none ${report.total_errors > 0 ? "text-danger" : "text-ink"}`}>
           {report.total_errors}
         </span>
       </div>
-      <div className="flex flex-col gap-0.5 rounded-md border border-hairline bg-surface-2 p-4 shadow-inset-hairline">
+      <div className="flex flex-col gap-0.5 rounded-md border border-hairline bg-surface-2 p-3 shadow-inset-hairline">
         <span className="font-display text-[9px] uppercase tracking-[0.2em] text-ink-faint">Skipped</span>
-        <span className="font-display text-[24px] font-semibold tabular-nums leading-none text-ink-muted">
+        <span className="font-display text-[22px] font-semibold tabular-nums leading-none text-ink-muted">
           {report.total_skipped}
         </span>
       </div>
       {report.coverage_pct != null && (
-        <div className="flex flex-col gap-0.5 rounded-md border border-hairline bg-surface-2 p-4 shadow-inset-hairline">
+        <div className="flex flex-col gap-0.5 rounded-md border border-hairline bg-surface-2 p-3 shadow-inset-hairline">
           <span className="font-display text-[9px] uppercase tracking-[0.2em] text-ink-faint">Coverage</span>
-          <span className={`font-display text-[24px] font-semibold tabular-nums leading-none ${
+          <span className={`font-display text-[22px] font-semibold tabular-nums leading-none ${
             report.coverage_pct < 40 ? "text-danger" : report.coverage_pct < 70 ? "text-warning" : "text-accent-bright"
           }`}>
             {report.coverage_pct.toFixed(0)}%
@@ -257,7 +257,7 @@ function TrendStrip({ reports }: { reports: TestReportSummary[] }) {
   );
 }
 
-// ── Existing helpers ──────────────────────────────────────────────────────────
+// ── Space + activity components ───────────────────────────────────────────────
 
 const LANE_ABBREV: Partial<Record<TaskState, string>> = { backlog: "todo" };
 
@@ -310,12 +310,12 @@ function ActivityRow({
   return (
     <Link
       to={`/spaces/${event.space_id}?task=${encodeURIComponent(event.task_id)}`}
-      className="grid grid-cols-[3.5rem_auto_1fr_5rem] items-center gap-2 border-b border-hairline px-3 py-2 transition hover:bg-surface-2/60"
+      className="grid grid-cols-[3.5rem_1fr_auto] items-center gap-2 border-b border-hairline px-3 py-1.5 transition hover:bg-surface-2/60"
+      style={{ borderLeft: `3px solid ${space?.color ?? "transparent"}` }}
     >
       <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-faint">
         {formatRelative(event.updated_at)}
       </span>
-      <SpaceTag color={space?.color} size="xs" />
       <span className="truncate text-[12px] text-ink">{event.title}</span>
       <span className="text-right font-mono text-[10px] uppercase tracking-[0.14em] text-ink-muted">
         {event.state}
@@ -385,6 +385,45 @@ function SectionHeader({
   );
 }
 
+// ── Pagination controls ───────────────────────────────────────────────────────
+
+function PaginationControls({
+  page,
+  totalPages,
+  onChange,
+}: {
+  page: number;
+  totalPages: number;
+  onChange: (p: number) => void;
+}) {
+  if (totalPages <= 1) return null;
+  return (
+    <div className="flex items-center gap-1.5">
+      <button
+        type="button"
+        disabled={page === 0}
+        onClick={() => onChange(page - 1)}
+        className="flex h-6 w-6 items-center justify-center rounded border border-hairline bg-surface-2 font-mono text-[13px] text-ink-muted transition hover:border-hairline-strong hover:text-ink disabled:opacity-30"
+        aria-label="Previous page"
+      >
+        ‹
+      </button>
+      <span className="font-mono text-[10px] tabular-nums text-ink-faint">
+        {page + 1}/{totalPages}
+      </span>
+      <button
+        type="button"
+        disabled={page >= totalPages - 1}
+        onClick={() => onChange(page + 1)}
+        className="flex h-6 w-6 items-center justify-center rounded border border-hairline bg-surface-2 font-mono text-[13px] text-ink-muted transition hover:border-hairline-strong hover:text-ink disabled:opacity-30"
+        aria-label="Next page"
+      >
+        ›
+      </button>
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 const ACTIVITY_PAGE_SIZE = 10;
@@ -418,6 +457,13 @@ export function DashboardPage() {
     (totals.active ?? 0) +
     (totals.waiting ?? 0) +
     (totals.done ?? 0);
+
+  // Auto-select the first space for test health when there's only one
+  useEffect(() => {
+    if (spaces.length === 1 && !testsSpaceId) {
+      setTestsSpaceId(spaces[0].id);
+    }
+  }, [spaces, testsSpaceId]);
 
   const statsTools = globalStats
     ? Object.entries(globalStats.tool_use_summary).sort(([, a], [, b]) => b - a).slice(0, 5)
@@ -495,7 +541,9 @@ export function DashboardPage() {
         </div>
       </header>
 
-      {/* ── Stat tiles ─────────────────────────────────────────────────────── */}
+      {/* ── Zone A: Mission Control ─────────────────────────────────────────── */}
+
+      {/* Stat tiles */}
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
         <StatTile label="To Do" value={totals.backlog ?? 0} to="/board" />
         <StatTile
@@ -515,107 +563,12 @@ export function DashboardPage() {
         <StatTile label="Total tasks" value={totalTasks} to="/board" />
       </section>
 
-      {/* ── Spaces + Activity ──────────────────────────────────────────────── */}
-      {spaces.length === 0 ? (
-        <section className="rounded-lg border border-dashed border-hairline-strong bg-surface-1 p-10 shadow-inset-hairline">
-          <EmptyState
-            title="Create your first space"
-            description="Spaces group tasks like projects. Each one owns its own tasks, workspaces, and (soon) a bound git repository."
-          >
-            <Link
-              to="/spaces/new"
-              className="inline-flex h-9 items-center rounded border border-accent bg-accent px-4 text-[12px] font-medium text-canvas transition hover:bg-accent-bright"
-            >
-              New space
-            </Link>
-          </EmptyState>
-        </section>
-      ) : (
-        <section className="grid gap-6 xl:grid-cols-[2fr_1fr]">
-          {/* Spaces grid */}
-          <div>
-            <SectionHeader title="Spaces" count={spaces.length} />
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3">
-              {spaces.map((space) => (
-                <SpaceCard key={space.id} space={space} />
-              ))}
-              <Link
-                to="/spaces/new"
-                className="flex min-h-[150px] items-center justify-center rounded-md border border-dashed border-hairline-strong bg-surface-1/40 text-[12px] uppercase tracking-[0.2em] text-ink-muted transition hover:border-accent hover:text-accent-bright"
-              >
-                + New space
-              </Link>
-            </div>
-          </div>
-
-          {/* Activity feed — paginated */}
-          <div>
-            <SectionHeader
-              title="Activity"
-              count={activity?.length ?? 0}
-              right={
-                totalActivityPages > 1 ? (
-                  <span className="font-mono text-[10px] text-ink-faint">
-                    {activityPage + 1} / {totalActivityPages}
-                  </span>
-                ) : undefined
-              }
-            />
-            <div className="overflow-hidden rounded-md border border-hairline bg-surface-1 shadow-inset-hairline">
-              {!activity || activity.length === 0 ? (
-                <EmptyState title="No activity yet" />
-              ) : (
-                <>
-                  <div>
-                    {pagedActivity.map((ev) => (
-                      <ActivityRow
-                        key={ev.task_id + ev.updated_at}
-                        event={ev}
-                        spaceLookup={lookup}
-                      />
-                    ))}
-                  </div>
-                  {totalActivityPages > 1 && (
-                    <div className="flex items-center justify-between border-t border-hairline px-3 py-2">
-                      <span className="font-mono text-[10px] text-ink-faint">
-                        {activityPage * ACTIVITY_PAGE_SIZE + 1}–
-                        {Math.min((activityPage + 1) * ACTIVITY_PAGE_SIZE, activity.length)}{" "}
-                        of {activity.length}
-                      </span>
-                      <div className="flex gap-1">
-                        <button
-                          type="button"
-                          disabled={activityPage === 0}
-                          onClick={() => setActivityPage((p) => p - 1)}
-                          className="flex h-7 w-7 items-center justify-center rounded border border-hairline bg-surface-2 font-mono text-[13px] text-ink-muted transition hover:border-hairline-strong hover:text-ink disabled:opacity-30"
-                          aria-label="Previous page"
-                        >
-                          ‹
-                        </button>
-                        <button
-                          type="button"
-                          disabled={activityPage >= totalActivityPages - 1}
-                          onClick={() => setActivityPage((p) => p + 1)}
-                          className="flex h-7 w-7 items-center justify-center rounded border border-hairline bg-surface-2 font-mono text-[13px] text-ink-muted transition hover:border-hairline-strong hover:text-ink disabled:opacity-30"
-                          aria-label="Next page"
-                        >
-                          ›
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* ── Analytics row — always visible ────────────────────────────────── */}
-      <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      {/* Analytics — above the fold, always visible */}
+      <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
 
         {/* AI Performance card */}
         <div className="overflow-hidden rounded-md border border-hairline bg-surface-1 shadow-inset-hairline">
+          <div className="h-[2px] bg-accent" />
           <div className="flex items-center gap-2 border-b border-hairline px-4 py-3">
             <h2 className="font-display text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
               AI Performance
@@ -633,10 +586,11 @@ export function DashboardPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <MetricTile label="Total runs" value={globalStats.total_runs} />
+                {/* 4-column metric row — avoids 2×2 tall grid */}
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <MetricTile label="Runs" value={globalStats.total_runs} />
                   <MetricTile
-                    label="Total tokens"
+                    label="Tokens"
                     value={formatTokens(
                       globalStats.total_input_tokens + globalStats.total_output_tokens,
                     )}
@@ -699,6 +653,7 @@ export function DashboardPage() {
 
         {/* Test Health card */}
         <div className="overflow-hidden rounded-md border border-hairline bg-surface-1 shadow-inset-hairline">
+          <div className="h-[2px] bg-warning" />
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-hairline px-4 py-3">
             <div className="flex items-center gap-2">
               <h2 className="font-display text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
@@ -766,6 +721,81 @@ export function DashboardPage() {
           </div>
         </div>
       </section>
+
+      {/* ── Zone B: Spaces & Activity ───────────────────────────────────────── */}
+
+      {/* Zone divider */}
+      <div className="flex items-center gap-3">
+        <div className="h-px flex-1 bg-surface-3" />
+        <span className="font-display text-[9px] uppercase tracking-[0.28em] text-ink-faint">
+          Spaces & Activity
+        </span>
+        <div className="h-px flex-1 bg-surface-3" />
+      </div>
+
+      {spaces.length === 0 ? (
+        <section className="rounded-lg border border-dashed border-hairline-strong bg-surface-1 p-10 shadow-inset-hairline">
+          <EmptyState
+            title="Create your first space"
+            description="Spaces group tasks like projects. Each one owns its own tasks, workspaces, and (soon) a bound git repository."
+          >
+            <Link
+              to="/spaces/new"
+              className="inline-flex h-9 items-center rounded border border-accent bg-accent px-4 text-[12px] font-medium text-canvas transition hover:bg-accent-bright"
+            >
+              New space
+            </Link>
+          </EmptyState>
+        </section>
+      ) : (
+        <section className="grid gap-6 xl:grid-cols-[2fr_1fr]">
+          {/* Spaces grid */}
+          <div>
+            <SectionHeader title="Spaces" count={spaces.length} />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3">
+              {spaces.map((space) => (
+                <SpaceCard key={space.id} space={space} />
+              ))}
+              <Link
+                to="/spaces/new"
+                className="flex min-h-[150px] items-center justify-center rounded-md border border-dashed border-hairline-strong bg-surface-1/40 text-[12px] uppercase tracking-[0.2em] text-ink-muted transition hover:border-accent hover:text-accent-bright"
+              >
+                + New space
+              </Link>
+            </div>
+          </div>
+
+          {/* Activity feed — compact, height-capped, scrollable */}
+          <div>
+            <SectionHeader
+              title="Activity"
+              count={activity?.length ?? 0}
+              right={
+                <PaginationControls
+                  page={activityPage}
+                  totalPages={totalActivityPages}
+                  onChange={setActivityPage}
+                />
+              }
+            />
+            <div className="overflow-hidden rounded-md border border-hairline bg-surface-1 shadow-inset-hairline">
+              {!activity || activity.length === 0 ? (
+                <EmptyState title="No activity yet" />
+              ) : (
+                <div className="max-h-[340px] overflow-y-auto">
+                  {pagedActivity.map((ev) => (
+                    <ActivityRow
+                      key={ev.task_id + ev.updated_at}
+                      event={ev}
+                      spaceLookup={lookup}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ── TaskForm modal ─────────────────────────────────────────────────── */}
       {creating && (
