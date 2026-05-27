@@ -2,12 +2,51 @@ import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useActivity, useImportSpace, useSpaces } from "../hooks/useSpaces";
 import { useCreateTask } from "../hooks/useTasks";
+import { useGlobalStats } from "../hooks/useStats";
+import { useTestReports } from "../hooks/useTestReports";
 import { TaskForm } from "../components/TaskForm";
 import { EmptyState } from "../components/ui/EmptyState";
 import { SpaceTag } from "../components/ui/SpaceTag";
 import { api } from "../api";
 import { formatRelative } from "../utils/format";
-import type { Activity, SpaceSummary, TaskState } from "../types";
+import type { Activity, SpaceSummary, TaskState, TestReportSummary } from "../types";
+
+// ── Formatters ────────────────────────────────────────────────────────────────
+
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+}
+
+function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  const s = Math.round(seconds % 60);
+  return `${m}m ${s}s`;
+}
+
+function formatCost(usd: number): string {
+  if (usd === 0) return "$0.00";
+  if (usd < 0.0001) return "<$0.0001";
+  if (usd < 0.01) return `$${usd.toFixed(4)}`;
+  if (usd < 1) return `$${usd.toFixed(3)}`;
+  return `$${usd.toFixed(2)}`;
+}
+
+function fmtDate(iso: string | null): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+// ── Task count tiles ──────────────────────────────────────────────────────────
 
 function StatTile({
   label,
@@ -57,6 +96,168 @@ function StatTile({
     <div className={baseClass}>{inner}</div>
   );
 }
+
+// ── AI stats metric tiles ─────────────────────────────────────────────────────
+
+function MetricTile({
+  label,
+  value,
+  tone = "ink",
+  sub,
+}: {
+  label: string;
+  value: string | number;
+  tone?: "ink" | "accent" | "warning" | "danger";
+  sub?: string;
+}) {
+  const valueClass =
+    tone === "accent"
+      ? "text-accent-bright"
+      : tone === "warning"
+        ? "text-warning"
+        : tone === "danger"
+          ? "text-danger"
+          : "text-ink";
+
+  return (
+    <div className="flex h-24 flex-col justify-between rounded-md border border-hairline bg-surface-1 p-4 shadow-inset-hairline">
+      <p className="font-display text-[10px] uppercase tracking-[0.2em] text-ink-faint">
+        {label}
+      </p>
+      <div>
+        <p className={`font-display text-[24px] font-semibold tabular-nums leading-none ${valueClass}`}>
+          {value}
+        </p>
+        {sub && (
+          <p className="mt-1 font-mono text-[10px] tracking-wide text-ink-faint">{sub}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── AI stats sub-components ───────────────────────────────────────────────────
+
+const EXIT_REASON_STYLE: Record<string, { label: string; cls: string }> = {
+  DONE:    { label: "Done",    cls: "text-accent-bright border-accent/30 bg-accent/10" },
+  WAIT:    { label: "Wait",    cls: "text-warning border-warning/30 bg-warning/10" },
+  BLOCKED: { label: "Blocked", cls: "text-danger border-danger/30 bg-danger/10" },
+  STOPPED: { label: "Stopped", cls: "text-ink-muted border-hairline bg-surface-2" },
+  CRASHED: { label: "Crashed", cls: "text-danger border-danger/30 bg-danger/10" },
+};
+
+function ExitReasonBadge({ reason, count }: { reason: string; count: number }) {
+  const style = EXIT_REASON_STYLE[reason] ?? {
+    label: reason,
+    cls: "text-ink-muted border-hairline bg-surface-2",
+  };
+  return (
+    <div className={`flex items-center gap-2 rounded border px-3 py-2 ${style.cls}`}>
+      <span className="font-display text-[10px] uppercase tracking-[0.18em]">
+        {style.label}
+      </span>
+      <span className="ml-auto font-mono text-[13px] font-semibold tabular-nums">
+        {count}
+      </span>
+    </div>
+  );
+}
+
+function ToolBar({ name, count, max }: { name: string; count: number; max: number }) {
+  const pct = max > 0 ? (count / max) * 100 : 0;
+  return (
+    <div className="grid grid-cols-[7rem_1fr_3.5rem] items-center gap-3">
+      <span className="truncate font-mono text-[11px] text-ink-muted">{name}</span>
+      <div className="h-1.5 overflow-hidden rounded-full bg-surface-3">
+        <div
+          className="h-full rounded-full bg-accent transition-all duration-500"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <span className="text-right font-mono text-[11px] tabular-nums text-ink">
+        {count.toLocaleString()}
+      </span>
+    </div>
+  );
+}
+
+// ── Test health sub-components ────────────────────────────────────────────────
+
+function SummaryBar({ report }: { report: TestReportSummary }) {
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
+      <div className="flex flex-col gap-0.5 rounded-md border border-hairline bg-surface-1 p-4 shadow-inset-hairline">
+        <span className="font-display text-[9px] uppercase tracking-[0.2em] text-ink-faint">Passed</span>
+        <span className="font-display text-[24px] font-semibold tabular-nums leading-none text-accent-bright">
+          {report.total_passed}
+        </span>
+      </div>
+      <div className="flex flex-col gap-0.5 rounded-md border border-hairline bg-surface-1 p-4 shadow-inset-hairline">
+        <span className="font-display text-[9px] uppercase tracking-[0.2em] text-ink-faint">Failed</span>
+        <span className={`font-display text-[24px] font-semibold tabular-nums leading-none ${report.total_failed > 0 ? "text-danger" : "text-ink"}`}>
+          {report.total_failed}
+        </span>
+      </div>
+      <div className="flex flex-col gap-0.5 rounded-md border border-hairline bg-surface-1 p-4 shadow-inset-hairline">
+        <span className="font-display text-[9px] uppercase tracking-[0.2em] text-ink-faint">Errors</span>
+        <span className={`font-display text-[24px] font-semibold tabular-nums leading-none ${report.total_errors > 0 ? "text-danger" : "text-ink"}`}>
+          {report.total_errors}
+        </span>
+      </div>
+      <div className="flex flex-col gap-0.5 rounded-md border border-hairline bg-surface-1 p-4 shadow-inset-hairline">
+        <span className="font-display text-[9px] uppercase tracking-[0.2em] text-ink-faint">Skipped</span>
+        <span className="font-display text-[24px] font-semibold tabular-nums leading-none text-ink-muted">
+          {report.total_skipped}
+        </span>
+      </div>
+      {report.coverage_pct != null && (
+        <div className="flex flex-col gap-0.5 rounded-md border border-hairline bg-surface-1 p-4 shadow-inset-hairline">
+          <span className="font-display text-[9px] uppercase tracking-[0.2em] text-ink-faint">Coverage</span>
+          <span className={`font-display text-[24px] font-semibold tabular-nums leading-none ${
+            report.coverage_pct < 40 ? "text-danger" : report.coverage_pct < 70 ? "text-warning" : "text-accent-bright"
+          }`}>
+            {report.coverage_pct.toFixed(0)}%
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TrendStrip({ reports }: { reports: TestReportSummary[] }) {
+  const recent = [...reports].reverse().slice(0, 10);
+  const maxTests = Math.max(...recent.map((r) => r.total_tests), 1);
+
+  return (
+    <div className="flex h-14 items-end gap-1">
+      {recent.map((r) => {
+        const total = r.total_tests || 1;
+        const passedPct = (r.total_passed / total) * 100;
+        const failedPct = ((r.total_failed + r.total_errors) / total) * 100;
+        const barH = Math.max((total / maxTests) * 100, 8);
+
+        return (
+          <div
+            key={r.id}
+            title={`${fmtDate(r.started_at)} · ${r.total_passed}✓ ${r.total_failed + r.total_errors}✗`}
+            className="relative flex flex-1 flex-col-reverse overflow-hidden rounded-sm bg-surface-3"
+            style={{ height: `${barH}%` }}
+          >
+            <div className="w-full bg-accent/80" style={{ height: `${passedPct}%` }} />
+            {failedPct > 0 && (
+              <div className="w-full bg-danger/80" style={{ height: `${failedPct}%` }} />
+            )}
+          </div>
+        );
+      })}
+      {recent.length === 0 && (
+        <p className="self-center font-mono text-[11px] text-ink-faint">No reports yet</p>
+      )}
+    </div>
+  );
+}
+
+// ── Existing helpers ──────────────────────────────────────────────────────────
 
 const LANE_ABBREV: Partial<Record<TaskState, string>> = { backlog: "todo" };
 
@@ -123,6 +324,43 @@ function ActivityRow({
   );
 }
 
+// ── Collapsible section header ────────────────────────────────────────────────
+
+function SectionToggle({
+  title,
+  open,
+  onToggle,
+  badge,
+  children,
+}: {
+  title: string;
+  open: boolean;
+  onToggle: () => void;
+  badge?: React.ReactNode;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="group flex items-center gap-2 text-left"
+      >
+        <h2 className="font-display text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted transition group-hover:text-ink">
+          {title}
+        </h2>
+        <span className="font-mono text-[9px] text-ink-faint transition group-hover:text-ink-muted">
+          {open ? "▲" : "▼"}
+        </span>
+      </button>
+      {badge && <span className="font-mono text-[10px] tabular-nums text-ink-faint">{badge}</span>}
+      {children && <div className="ml-auto flex items-center gap-2">{children}</div>}
+    </div>
+  );
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
+
 export function DashboardPage() {
   const navigate = useNavigate();
   const { data: spacesData, isLoading: spacesLoading } = useSpaces();
@@ -134,6 +372,15 @@ export function DashboardPage() {
   const [isWorking, setIsWorking] = useState(false);
   const [workError, setWorkError] = useState<string | null>(null);
 
+  const [statsOpen, setStatsOpen] = useState(false);
+  const [testsOpen, setTestsOpen] = useState(false);
+  const [testsSpaceId, setTestsSpaceId] = useState("");
+
+  const { data: globalStats } = useGlobalStats();
+  const { data: testReports, isLoading: testReportsLoading } = useTestReports(
+    testsSpaceId || undefined,
+  );
+
   const spaces = spacesData?.spaces ?? [];
   const totals = spacesData?.totals ?? { backlog: 0, active: 0, waiting: 0, done: 0 };
   const lookup = new Map(spaces.map((s) => [s.id, s] as const));
@@ -143,6 +390,14 @@ export function DashboardPage() {
     (totals.active ?? 0) +
     (totals.waiting ?? 0) +
     (totals.done ?? 0);
+
+  const statsTools = globalStats
+    ? Object.entries(globalStats.tool_use_summary).sort(([, a], [, b]) => b - a).slice(0, 5)
+    : [];
+  const maxTool = statsTools[0]?.[1] ?? 1;
+
+  const latestTestReport =
+    testReports && testReports.length > 0 ? testReports[testReports.length - 1] : null;
 
   async function handleImport(file: File) {
     try {
@@ -289,6 +544,152 @@ export function DashboardPage() {
           </div>
         </section>
       )}
+
+      {/* ── AI Performance ─────────────────────────────────────────────────── */}
+      <section>
+        <div className="mb-3">
+          <SectionToggle
+            title="AI Performance"
+            open={statsOpen}
+            onToggle={() => setStatsOpen((o) => !o)}
+            badge={globalStats ? `${globalStats.total_runs} runs` : undefined}
+          />
+        </div>
+        {statsOpen && (
+          <>
+            {!globalStats ? (
+              <div className="py-8 text-center font-mono text-[11px] text-ink-faint">
+                Loading statistics…
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <MetricTile label="Total runs" value={globalStats.total_runs} />
+                  <MetricTile
+                    label="Total tokens"
+                    value={formatTokens(
+                      globalStats.total_input_tokens + globalStats.total_output_tokens,
+                    )}
+                    tone="accent"
+                  />
+                  <MetricTile
+                    label="Est. cost"
+                    value={formatCost(globalStats.total_cost_usd)}
+                  />
+                  <MetricTile
+                    label="Total time"
+                    value={formatDuration(globalStats.total_duration_seconds)}
+                  />
+                </div>
+
+                <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
+                  <div>
+                    <p className="mb-3 font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
+                      Top tools
+                    </p>
+                    <div className="rounded-md border border-hairline bg-surface-1 p-4 shadow-inset-hairline">
+                      {statsTools.length === 0 ? (
+                        <p className="py-4 text-center font-mono text-[11px] text-ink-faint">
+                          No tool data yet
+                        </p>
+                      ) : (
+                        <div className="space-y-3">
+                          {statsTools.map(([name, count]) => (
+                            <ToolBar key={name} name={name} count={count} max={maxTool} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="mb-3 font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
+                      Exit reasons
+                    </p>
+                    <div className="space-y-2">
+                      {["DONE", "WAIT", "BLOCKED", "STOPPED", "CRASHED"].map((reason) => (
+                        <ExitReasonBadge
+                          key={reason}
+                          reason={reason}
+                          count={globalStats.exit_reason_counts[reason] ?? 0}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </section>
+
+      {/* ── Test Health ────────────────────────────────────────────────────── */}
+      <section>
+        <div className="mb-3">
+          <SectionToggle
+            title="Test Health"
+            open={testsOpen}
+            onToggle={() => setTestsOpen((o) => !o)}
+            badge={latestTestReport ? `${latestTestReport.total_passed}✓ ${latestTestReport.total_failed + latestTestReport.total_errors}✗` : undefined}
+          >
+            {testsOpen && spaces.length > 0 && (
+              <>
+                <label
+                  htmlFor="tests-space-filter"
+                  className="font-display text-[10px] uppercase tracking-[0.18em] text-ink-faint"
+                >
+                  Space
+                </label>
+                <select
+                  id="tests-space-filter"
+                  value={testsSpaceId}
+                  onChange={(e) => setTestsSpaceId(e.target.value)}
+                  className="h-8 rounded border border-hairline bg-surface-1 px-2 font-mono text-[12px] text-ink shadow-inset-hairline transition focus:border-accent focus:outline-none"
+                >
+                  <option value="">Select…</option>
+                  {spaces.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
+          </SectionToggle>
+        </div>
+
+        {testsOpen && (
+          <>
+            {!testsSpaceId ? (
+              <div className="rounded-md border border-dashed border-hairline bg-surface-1 p-8 text-center shadow-inset-hairline">
+                <p className="font-mono text-[11px] text-ink-faint">
+                  Select a space above to view test health.
+                </p>
+              </div>
+            ) : testReportsLoading ? (
+              <div className="py-8 text-center font-mono text-[11px] text-ink-faint">
+                Loading…
+              </div>
+            ) : !latestTestReport ? (
+              <div className="rounded-md border border-dashed border-hairline bg-surface-1 p-8 text-center shadow-inset-hairline">
+                <p className="font-mono text-[11px] text-ink-faint">
+                  No test reports yet for this space.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <SummaryBar report={latestTestReport} />
+                <div className="rounded-md border border-hairline bg-surface-1 p-4 shadow-inset-hairline">
+                  <p className="mb-3 font-display text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+                    Last {Math.min(testReports!.length, 10)} runs
+                  </p>
+                  <TrendStrip reports={testReports!} />
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </section>
 
       {creating && (
         <TaskForm

@@ -35,6 +35,7 @@ vi.mock("../../hooks/useTasks", () => ({
   usePromoteTask: () => baseMutation,
   useSetParent: () => baseMutation,
   useSetDependsOn: () => baseMutation,
+  useRoutePreview: () => ({ data: undefined, isLoading: false }),
   useBoard: () =>
     ({
       data: {
