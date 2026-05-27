@@ -8,10 +8,11 @@ Type=simple
 User=root
 Group=root
 Environment=HOME=/root
-WorkingDirectory=/opt/cronos
+WorkingDirectory=/data/spaces/cronos-development
 # Optional shared secret — set the same value in .env as UPGRADE_WEBHOOK_SECRET
-# EnvironmentFile=/opt/cronos/.env
-ExecStart=/usr/bin/python3 /opt/cronos/deploy/upgrade-webhook.py
+# EnvironmentFile=/data/spaces/cronos-development/.env
+Environment=UPGRADE_SCRIPT=/data/spaces/cronos-development/upgrade.sh
+ExecStart=/usr/bin/python3 /data/spaces/cronos-development/deploy/upgrade-webhook.py
 Restart=on-failure
 RestartSec=5
 
