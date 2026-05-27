@@ -56,6 +56,28 @@ function ExitBadge({ reason }: { reason: string }) {
   );
 }
 
+// ── Memory hit chip ───────────────────────────────────────────────────────────
+
+function MemChip({ injected, hitRate }: { injected: string[]; hitRate: number | null | undefined }) {
+  const pct = hitRate != null ? Math.round(hitRate * 100) : null;
+  const tooltip = [
+    `${injected.length} memor${injected.length === 1 ? "y" : "ies"} injected`,
+    pct != null ? `${pct}% hit rate` : null,
+    injected.length > 0 ? `Keys: ${injected.slice(0, 5).join(", ")}${injected.length > 5 ? "…" : ""}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <span
+      title={tooltip}
+      className="rounded border border-violet-500/30 bg-violet-500/10 px-1.5 py-0.5 font-mono text-[10px] text-violet-400 cursor-default"
+    >
+      MEM {pct != null ? `${pct}%` : `${injected.length}`}
+    </span>
+  );
+}
+
 // ── Stat chip ─────────────────────────────────────────────────────────────────
 
 function StatChip({ label, value }: { label: string; value: string }) {
@@ -335,6 +357,9 @@ export function TracePanel({ taskId }: { taskId: string }) {
           ))}
         </select>
         {selectedRun && <ExitBadge reason={selectedRun.exit_reason} />}
+        {selectedRun && selectedRun.memory_injected && selectedRun.memory_injected.length > 0 && (
+          <MemChip injected={selectedRun.memory_injected} hitRate={selectedRun.memory_hit_rate} />
+        )}
         {selectedRun && (
           <span className="font-mono text-[10px] text-ink-faint">
             {new Date(selectedRun.started_at).toLocaleString(undefined, {

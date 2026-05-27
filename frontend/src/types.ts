@@ -293,6 +293,8 @@ export interface RunTrace {
   backtrack_count: number;
   final_text_snippet: string;
   had_crash: boolean;
+  memory_injected?: string[] | null;
+  memory_hit_rate?: number | null;
 }
 
 // --- AI Tools Inventory ---
