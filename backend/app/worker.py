@@ -18,7 +18,7 @@ from .space_storage import SpaceStore
 from .stats import RunStats, _tier_from_real_model, compute_cost, extract_tokens_and_tools
 from .stats_store import StatsStore
 from .storage import InvalidTransition, TaskStore, USER_TRANSITIONS
-from .trace_parser import extract_run_trace
+from .trace_parser import RunTrace, extract_run_trace
 from .trace_store import TraceStore
 
 from typing import TYPE_CHECKING
@@ -434,6 +434,30 @@ class Worker:
                   ("CRASHED" if result.exit_code != 0 else "NO_STATUS"))
         )
 
+        # Pre-compute run trace when needed for memory_hit_rate or for saving.
+        # Doing this before RunStats lets us embed memory_hit_rate in the stats record.
+        computed_trace: RunTrace | None = None
+        if self.trace_store is not None or bool(memory_injected):
+            task = self.store.get(task_id)
+            if task is not None:
+                try:
+                    computed_trace = extract_run_trace(
+                        result.raw_events,
+                        task_id=task_id,
+                        space_id=task.space_id,
+                        run_index=run_index,
+                        model=task.agent_model,
+                        mode=task.agent_mode,
+                        started_at=started_at or ended_at,
+                        ended_at=ended_at,
+                        exit_reason=exit_reason,
+                        session_id=result.session_id,
+                        had_crash=result.exit_code != 0 and not result.stopped,
+                        memory_injected=memory_injected or [],
+                    )
+                except Exception:
+                    log.exception("Failed to compute trace for %s", task_id)
+
         # Persist run statistics (usage and run_index already computed above)
         if self.stats_store is not None:
             task = self.store.get(task_id)
@@ -464,6 +488,11 @@ class Worker:
                         tool_uses=usage["tool_uses"],
                         error_count=usage["error_count"],
                         had_crash=result.exit_code != 0 and not result.stopped,
+                        memory_hit_rate=(
+                            computed_trace.memory_hit_rate
+                            if computed_trace is not None and memory_injected
+                            else None
+                        ),
                     )
                     await self.stats_store.append_run(
                         task.space_id, task_id, task.title, run_stats
@@ -471,26 +500,12 @@ class Worker:
                 except Exception:
                     log.exception("Failed to save stats for %s", task_id)
 
-        # Persist run trace (run_index already computed above)
-        if self.trace_store is not None:
+        # Persist run trace using the pre-computed trace (if trace_store is active)
+        if self.trace_store is not None and computed_trace is not None:
             task = self.store.get(task_id)
             if task is not None:
                 try:
-                    trace = extract_run_trace(
-                        result.raw_events,
-                        task_id=task_id,
-                        space_id=task.space_id,
-                        run_index=run_index,
-                        model=task.agent_model,
-                        mode=task.agent_mode,
-                        started_at=started_at or ended_at,
-                        ended_at=ended_at,
-                        exit_reason=exit_reason,
-                        session_id=result.session_id,
-                        had_crash=result.exit_code != 0 and not result.stopped,
-                        memory_injected=memory_injected or [],
-                    )
-                    await self.trace_store.save_run(task.space_id, task_id, trace)
+                    await self.trace_store.save_run(task.space_id, task_id, computed_trace)
                 except Exception:
                     log.exception("Failed to save trace for %s", task_id)
 
