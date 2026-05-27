@@ -80,9 +80,9 @@ describe("useBoard", () => {
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(api.board).toHaveBeenCalledWith(null);
-    // Verify data is cached under ["board", "all"]
-    expect(client.getQueryData(["board", "all"])).toEqual(emptyBoard);
+    expect(api.board).toHaveBeenCalledWith(null, null);
+    // Verify data is cached under ["board", "all", null]
+    expect(client.getQueryData(["board", "all", null])).toEqual(emptyBoard);
   });
 
   it('uses ["board", spaceId] key when spaceId is provided', async () => {
@@ -95,7 +95,7 @@ describe("useBoard", () => {
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(client.getQueryData(["board", "space-1"])).toEqual(emptyBoard);
+    expect(client.getQueryData(["board", "space-1", null])).toEqual(emptyBoard);
   });
 });
 
