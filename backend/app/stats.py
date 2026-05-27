@@ -219,6 +219,19 @@ class TaskStats(BaseModel):
             return None
         return round(sum(rates) / len(rates), 4)
 
+    def filter_by_timeframe(
+        self, from_dt: datetime | None, to_dt: datetime | None
+    ) -> "TaskStats":
+        """Return a copy with only runs whose started_at falls within [from_dt, to_dt]."""
+        if from_dt is None and to_dt is None:
+            return self
+        filtered = [
+            r for r in self.runs
+            if (from_dt is None or r.started_at >= from_dt)
+            and (to_dt is None or r.started_at <= to_dt)
+        ]
+        return self.model_copy(update={"runs": filtered})
+
     def to_file_dict(self) -> dict[str, Any]:
         """Serialise only stored fields (no computed aggregates) for disk writes."""
         return {
