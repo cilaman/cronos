@@ -458,7 +458,7 @@ docker compose --env-file /opt/cronos/.env \
 
 You can also drop the public DNS record entirely and use the Tailscale
 MagicDNS hostname (e.g. `https://cronos-vps.<tailnet>.ts.net/`) with
-`tailscale cert` for an auto-renewed cert — but keeping `cronos.ultc.at` +
+`tailscale cert` for an auto-renewed cert — but keeping `cronos.cilaman.com` +
 LE works just as well and means you don't have to change the Caddyfile
 hostname.
 
