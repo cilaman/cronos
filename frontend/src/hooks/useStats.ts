@@ -21,10 +21,10 @@ export function useSpaceStats(spaceId: string | undefined) {
   });
 }
 
-export function useGlobalStats() {
+export function useGlobalStats(params?: { from_dt?: string; to_dt?: string }) {
   return useQuery({
-    queryKey: ["global-stats"],
-    queryFn: () => api.globalStats(),
+    queryKey: ["global-stats", params?.from_dt, params?.to_dt],
+    queryFn: () => api.globalStats(params),
     refetchInterval: 60_000,
     staleTime: 30_000,
   });

@@ -228,7 +228,13 @@ export const api = {
     request<TaskStats>(`/api/tasks/${taskId}/stats`),
   spaceStats: (spaceId: string) =>
     request<TaskStats[]>(`/api/spaces/${spaceId}/stats`),
-  globalStats: () => request<GlobalStats>("/api/stats"),
+  globalStats: (params?: { from_dt?: string; to_dt?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.from_dt) qs.set("from_dt", params.from_dt);
+    if (params?.to_dt) qs.set("to_dt", params.to_dt);
+    const query = qs.toString();
+    return request<GlobalStats>(query ? `/api/stats?${query}` : "/api/stats");
+  },
 
   // --- traces ---
   taskTraces: (taskId: string) =>
