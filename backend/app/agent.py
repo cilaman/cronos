@@ -45,23 +45,19 @@ Rules:
   with STATUS: WAIT and a one-line question such as "Shall I implement this plan?"
   Do not wait for the user to ask — emit STATUS: WAIT immediately after the plan.
 
-Memory: To record a fact for future runs, write one or more MEMORY: lines
-anywhere in your response (before the STATUS marker). These are captured as
-unconfirmed memory candidates that the user can promote to confirmed memory.
+Memory: Before your STATUS marker, write MEMORY: lines for anything useful to
+future tasks — file locations, API patterns, decisions made, pitfalls hit,
+or procedures discovered. Other agents working on this codebase will receive
+this context. Aim for at least one per completed task.
 
-  MEMORY: <single-line content>
   MEMORY[fact]: <factual statement about the codebase or project>
   MEMORY[procedure]: <step-by-step process to accomplish something>
   MEMORY[observation]: <pattern or trend you noticed>
-  MEMORY[reference]: <pointer to a resource, file, or external link>
+  MEMORY[reference]: <path or resource that's useful to know about>
 
-For multi-line content use a fenced block (kind is optional):
+For multi-line content use a fenced block:
   ```memory
   <content spanning multiple lines>
-  ```
-  ```memory procedure
-  <step 1>
-  <step 2>
   ```
 """
 
