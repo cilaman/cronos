@@ -3,13 +3,14 @@ import { Link, useNavigate } from "react-router-dom";
 import { useActivity, useImportSpace, useSpaces } from "../hooks/useSpaces";
 import { useCreateTask } from "../hooks/useTasks";
 import { useGlobalStats } from "../hooks/useStats";
-import { useTestReports } from "../hooks/useTestReports";
+import { useTestReports, useLatestTestReport } from "../hooks/useTestReports";
 import { TaskForm } from "../components/TaskForm";
 import { EmptyState } from "../components/ui/EmptyState";
 import { SpaceTag } from "../components/ui/SpaceTag";
+import { TestStatusBadge } from "../components/TestStatusBadge";
 import { api } from "../api";
 import { formatRelative } from "../utils/format";
-import type { Activity, SpaceSummary, TaskState, TestReportSummary } from "../types";
+import type { Activity, SpaceSummary, TaskState, TestReportSummary, TestSuite, TestCase, TestReport } from "../types";
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
@@ -257,6 +258,111 @@ function TrendStrip({ reports }: { reports: TestReportSummary[] }) {
   );
 }
 
+function fmtDuration(seconds: number | null): string {
+  if (seconds == null) return "—";
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  return `${m}m ${s}s`;
+}
+
+function SuiteRow({ suite }: { suite: TestSuite }) {
+  const hasFailed = suite.failed > 0 || suite.errors > 0;
+  return (
+    <details className="group border-b border-hairline last:border-0">
+      <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-2.5 hover:bg-surface-2/40">
+        <span className="flex-1 truncate font-mono text-[12px] text-ink">{suite.name}</span>
+        <span className="font-mono text-[10px] tabular-nums text-accent-bright">{suite.passed}✓</span>
+        {hasFailed && (
+          <span className="font-mono text-[10px] tabular-nums text-danger">{suite.failed + suite.errors}✗</span>
+        )}
+        {suite.skipped > 0 && (
+          <span className="font-mono text-[10px] tabular-nums text-ink-faint">{suite.skipped} skip</span>
+        )}
+        <span className="font-mono text-[10px] text-ink-faint">{fmtDuration(suite.duration_seconds)}</span>
+        <span className="ml-1 font-mono text-[10px] text-ink-faint group-open:hidden">▶</span>
+        <span className="ml-1 hidden font-mono text-[10px] text-ink-faint group-open:inline">▼</span>
+      </summary>
+      <div className="pb-1">
+        {suite.tests.map((tc: TestCase) => (
+          <TestCaseRow key={tc.id} tc={tc} />
+        ))}
+      </div>
+    </details>
+  );
+}
+
+function TestCaseRow({ tc }: { tc: TestCase }) {
+  const isFailed = tc.status === "failed" || tc.status === "error";
+  return (
+    <div className={`flex items-start gap-3 px-4 py-1.5 ${isFailed ? "border-l-2 border-danger" : ""}`}>
+      <TestStatusBadge status={tc.status} size="sm" />
+      <span className="flex-1 truncate font-mono text-[11px] text-ink" title={tc.name}>
+        {tc.name.length > 80 ? tc.name.slice(0, 80) + "…" : tc.name}
+      </span>
+      <span className="font-mono text-[10px] tabular-nums text-ink-faint">
+        {fmtDuration(tc.duration_seconds ?? null)}
+      </span>
+      {tc.error_message && (
+        <details className="col-span-full mt-1 w-full pl-8">
+          <summary className="cursor-pointer font-mono text-[10px] text-danger">
+            {tc.error_message.slice(0, 60)}{tc.error_message.length > 60 ? "…" : ""}
+          </summary>
+          <pre className="mt-1 max-h-40 overflow-auto rounded border border-hairline bg-canvas p-2 font-mono text-[10px] text-ink-muted whitespace-pre-wrap">
+            {tc.error_message}
+          </pre>
+        </details>
+      )}
+    </div>
+  );
+}
+
+function CoverageBar({ module, pct }: { module: string; pct: number }) {
+  const color = pct < 40 ? "bg-danger" : pct < 70 ? "bg-warning" : "bg-accent";
+  return (
+    <div className="grid grid-cols-[10rem_1fr_3rem] items-center gap-3">
+      <span className="truncate font-mono text-[11px] text-ink-muted" title={module}>{module}</span>
+      <div className="h-1.5 overflow-hidden rounded-full bg-surface-3">
+        <div className={`h-full rounded-full transition-all duration-500 ${color}`} style={{ width: `${Math.min(pct, 100)}%` }} />
+      </div>
+      <span className="text-right font-mono text-[11px] tabular-nums text-ink">{pct.toFixed(0)}%</span>
+    </div>
+  );
+}
+
+function TestDetails({ report }: { report: TestReport }) {
+  const coverageEntries = report.coverage_data
+    ? Object.entries(report.coverage_data).sort(([, a], [, b]) => a - b)
+    : [];
+
+  return (
+    <div className="space-y-4">
+      {report.suites.length > 0 && (
+        <div className="overflow-hidden rounded-md border border-hairline bg-surface-1 shadow-inset-hairline">
+          <p className="border-b border-hairline px-4 py-2 font-display text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+            Test Suites
+          </p>
+          {report.suites.map((suite) => (
+            <SuiteRow key={suite.name} suite={suite} />
+          ))}
+        </div>
+      )}
+      {coverageEntries.length > 0 && (
+        <div className="rounded-md border border-hairline bg-surface-1 p-4 shadow-inset-hairline">
+          <p className="mb-3 font-display text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+            Coverage by module
+          </p>
+          <div className="space-y-2">
+            {coverageEntries.map(([mod, pct]) => (
+              <CoverageBar key={mod} module={mod} pct={pct} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Space + activity components ───────────────────────────────────────────────
 
 const LANE_ABBREV: Partial<Record<TaskState, string>> = { backlog: "todo" };
@@ -447,6 +553,7 @@ export function DashboardPage() {
   const { data: testReports, isLoading: testReportsLoading } = useTestReports(
     testsSpaceId || undefined,
   );
+  const { data: latestFullReport } = useLatestTestReport(testsSpaceId || undefined);
 
   const spaces = spacesData?.spaces ?? [];
   const totals = spacesData?.totals ?? { backlog: 0, active: 0, waiting: 0, done: 0 };
@@ -716,6 +823,7 @@ export function DashboardPage() {
                   </p>
                   <TrendStrip reports={testReports!} />
                 </div>
+                {latestFullReport && <TestDetails report={latestFullReport} />}
               </div>
             )}
           </div>
