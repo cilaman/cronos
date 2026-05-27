@@ -120,7 +120,7 @@ function MetricTile({
           : "text-ink";
 
   return (
-    <div className="flex h-24 flex-col justify-between rounded-md border border-hairline bg-surface-1 p-4 shadow-inset-hairline">
+    <div className="flex h-24 flex-col justify-between rounded-md border border-hairline bg-surface-2 p-4 shadow-inset-hairline">
       <p className="font-display text-[10px] uppercase tracking-[0.2em] text-ink-faint">
         {label}
       </p>
@@ -186,32 +186,32 @@ function ToolBar({ name, count, max }: { name: string; count: number; max: numbe
 function SummaryBar({ report }: { report: TestReportSummary }) {
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
-      <div className="flex flex-col gap-0.5 rounded-md border border-hairline bg-surface-1 p-4 shadow-inset-hairline">
+      <div className="flex flex-col gap-0.5 rounded-md border border-hairline bg-surface-2 p-4 shadow-inset-hairline">
         <span className="font-display text-[9px] uppercase tracking-[0.2em] text-ink-faint">Passed</span>
         <span className="font-display text-[24px] font-semibold tabular-nums leading-none text-accent-bright">
           {report.total_passed}
         </span>
       </div>
-      <div className="flex flex-col gap-0.5 rounded-md border border-hairline bg-surface-1 p-4 shadow-inset-hairline">
+      <div className="flex flex-col gap-0.5 rounded-md border border-hairline bg-surface-2 p-4 shadow-inset-hairline">
         <span className="font-display text-[9px] uppercase tracking-[0.2em] text-ink-faint">Failed</span>
         <span className={`font-display text-[24px] font-semibold tabular-nums leading-none ${report.total_failed > 0 ? "text-danger" : "text-ink"}`}>
           {report.total_failed}
         </span>
       </div>
-      <div className="flex flex-col gap-0.5 rounded-md border border-hairline bg-surface-1 p-4 shadow-inset-hairline">
+      <div className="flex flex-col gap-0.5 rounded-md border border-hairline bg-surface-2 p-4 shadow-inset-hairline">
         <span className="font-display text-[9px] uppercase tracking-[0.2em] text-ink-faint">Errors</span>
         <span className={`font-display text-[24px] font-semibold tabular-nums leading-none ${report.total_errors > 0 ? "text-danger" : "text-ink"}`}>
           {report.total_errors}
         </span>
       </div>
-      <div className="flex flex-col gap-0.5 rounded-md border border-hairline bg-surface-1 p-4 shadow-inset-hairline">
+      <div className="flex flex-col gap-0.5 rounded-md border border-hairline bg-surface-2 p-4 shadow-inset-hairline">
         <span className="font-display text-[9px] uppercase tracking-[0.2em] text-ink-faint">Skipped</span>
         <span className="font-display text-[24px] font-semibold tabular-nums leading-none text-ink-muted">
           {report.total_skipped}
         </span>
       </div>
       {report.coverage_pct != null && (
-        <div className="flex flex-col gap-0.5 rounded-md border border-hairline bg-surface-1 p-4 shadow-inset-hairline">
+        <div className="flex flex-col gap-0.5 rounded-md border border-hairline bg-surface-2 p-4 shadow-inset-hairline">
           <span className="font-display text-[9px] uppercase tracking-[0.2em] text-ink-faint">Coverage</span>
           <span className={`font-display text-[24px] font-semibold tabular-nums leading-none ${
             report.coverage_pct < 40 ? "text-danger" : report.coverage_pct < 70 ? "text-warning" : "text-accent-bright"
@@ -359,7 +359,35 @@ function SectionToggle({
   );
 }
 
+// ── Shared section header ─────────────────────────────────────────────────────
+
+function SectionHeader({
+  title,
+  count,
+  right,
+}: {
+  title: string;
+  count?: string | number;
+  right?: React.ReactNode;
+}) {
+  return (
+    <div className="mb-3 flex items-center gap-2">
+      <h2 className="font-display text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
+        {title}
+      </h2>
+      {count != null && (
+        <span className="font-mono text-[10px] tabular-nums text-ink-faint">
+          {typeof count === "number" ? String(count).padStart(2, "0") : count}
+        </span>
+      )}
+      {right && <div className="ml-auto flex items-center gap-2">{right}</div>}
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
+
+const ACTIVITY_PAGE_SIZE = 10;
 
 export function DashboardPage() {
   const navigate = useNavigate();
@@ -372,8 +400,8 @@ export function DashboardPage() {
   const [isWorking, setIsWorking] = useState(false);
   const [workError, setWorkError] = useState<string | null>(null);
 
+  const [activityPage, setActivityPage] = useState(0);
   const [statsOpen, setStatsOpen] = useState(false);
-  const [testsOpen, setTestsOpen] = useState(false);
   const [testsSpaceId, setTestsSpaceId] = useState("");
 
   const { data: globalStats } = useGlobalStats();
@@ -399,6 +427,11 @@ export function DashboardPage() {
   const latestTestReport =
     testReports && testReports.length > 0 ? testReports[testReports.length - 1] : null;
 
+  const pagedActivity = activity
+    ? activity.slice(activityPage * ACTIVITY_PAGE_SIZE, (activityPage + 1) * ACTIVITY_PAGE_SIZE)
+    : [];
+  const totalActivityPages = activity ? Math.ceil(activity.length / ACTIVITY_PAGE_SIZE) : 0;
+
   async function handleImport(file: File) {
     try {
       const space = await importMutation.mutateAsync({ file });
@@ -414,6 +447,8 @@ export function DashboardPage() {
 
   return (
     <div className="mx-auto max-w-[1280px] space-y-8 p-6 lg:p-8">
+
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink-faint">
@@ -460,6 +495,7 @@ export function DashboardPage() {
         </div>
       </header>
 
+      {/* ── Stat tiles ─────────────────────────────────────────────────────── */}
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
         <StatTile label="To Do" value={totals.backlog ?? 0} to="/board" />
         <StatTile
@@ -479,6 +515,7 @@ export function DashboardPage() {
         <StatTile label="Total tasks" value={totalTasks} to="/board" />
       </section>
 
+      {/* ── Spaces + Activity ──────────────────────────────────────────────── */}
       {spaces.length === 0 ? (
         <section className="rounded-lg border border-dashed border-hairline-strong bg-surface-1 p-10 shadow-inset-hairline">
           <EmptyState
@@ -495,15 +532,9 @@ export function DashboardPage() {
         </section>
       ) : (
         <section className="grid gap-6 xl:grid-cols-[2fr_1fr]">
+          {/* Spaces grid */}
           <div>
-            <div className="mb-3 flex items-baseline gap-2">
-              <h2 className="font-display text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
-                Spaces
-              </h2>
-              <span className="font-mono text-[10px] tabular-nums text-ink-faint">
-                {String(spaces.length).padStart(2, "0")}
-              </span>
-            </div>
+            <SectionHeader title="Spaces" count={spaces.length} />
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3">
               {spaces.map((space) => (
                 <SpaceCard key={space.id} space={space} />
@@ -517,53 +548,92 @@ export function DashboardPage() {
             </div>
           </div>
 
+          {/* Activity feed — paginated */}
           <div>
-            <div className="mb-3 flex items-baseline gap-2">
-              <h2 className="font-display text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
-                Activity
-              </h2>
-              <span className="font-mono text-[10px] tabular-nums text-ink-faint">
-                {String(activity?.length ?? 0).padStart(2, "0")}
-              </span>
-            </div>
+            <SectionHeader
+              title="Activity"
+              count={activity?.length ?? 0}
+              right={
+                totalActivityPages > 1 ? (
+                  <span className="font-mono text-[10px] text-ink-faint">
+                    {activityPage + 1} / {totalActivityPages}
+                  </span>
+                ) : undefined
+              }
+            />
             <div className="overflow-hidden rounded-md border border-hairline bg-surface-1 shadow-inset-hairline">
               {!activity || activity.length === 0 ? (
                 <EmptyState title="No activity yet" />
               ) : (
-                <div>
-                  {activity.map((ev) => (
-                    <ActivityRow
-                      key={ev.task_id + ev.updated_at}
-                      event={ev}
-                      spaceLookup={lookup}
-                    />
-                  ))}
-                </div>
+                <>
+                  <div>
+                    {pagedActivity.map((ev) => (
+                      <ActivityRow
+                        key={ev.task_id + ev.updated_at}
+                        event={ev}
+                        spaceLookup={lookup}
+                      />
+                    ))}
+                  </div>
+                  {totalActivityPages > 1 && (
+                    <div className="flex items-center justify-between border-t border-hairline px-3 py-2">
+                      <span className="font-mono text-[10px] text-ink-faint">
+                        {activityPage * ACTIVITY_PAGE_SIZE + 1}–
+                        {Math.min((activityPage + 1) * ACTIVITY_PAGE_SIZE, activity.length)}{" "}
+                        of {activity.length}
+                      </span>
+                      <div className="flex gap-1">
+                        <button
+                          type="button"
+                          disabled={activityPage === 0}
+                          onClick={() => setActivityPage((p) => p - 1)}
+                          className="flex h-7 w-7 items-center justify-center rounded border border-hairline bg-surface-2 font-mono text-[13px] text-ink-muted transition hover:border-hairline-strong hover:text-ink disabled:opacity-30"
+                          aria-label="Previous page"
+                        >
+                          ‹
+                        </button>
+                        <button
+                          type="button"
+                          disabled={activityPage >= totalActivityPages - 1}
+                          onClick={() => setActivityPage((p) => p + 1)}
+                          className="flex h-7 w-7 items-center justify-center rounded border border-hairline bg-surface-2 font-mono text-[13px] text-ink-muted transition hover:border-hairline-strong hover:text-ink disabled:opacity-30"
+                          aria-label="Next page"
+                        >
+                          ›
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
         </section>
       )}
 
-      {/* ── AI Performance ─────────────────────────────────────────────────── */}
-      <section>
-        <div className="mb-3">
-          <SectionToggle
-            title="AI Performance"
-            open={statsOpen}
-            onToggle={() => setStatsOpen((o) => !o)}
-            badge={globalStats ? `${globalStats.total_runs} runs` : undefined}
-          />
-        </div>
-        {statsOpen && (
-          <>
+      {/* ── Analytics row — always visible ────────────────────────────────── */}
+      <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+
+        {/* AI Performance card */}
+        <div className="overflow-hidden rounded-md border border-hairline bg-surface-1 shadow-inset-hairline">
+          <div className="flex items-center gap-2 border-b border-hairline px-4 py-3">
+            <h2 className="font-display text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
+              AI Performance
+            </h2>
+            {globalStats && (
+              <span className="font-mono text-[10px] tabular-nums text-ink-faint">
+                {globalStats.total_runs} runs
+              </span>
+            )}
+          </div>
+          <div className="p-4">
             {!globalStats ? (
-              <div className="py-8 text-center font-mono text-[11px] text-ink-faint">
+              <div className="flex items-center justify-center py-8 font-mono text-[11px] text-ink-faint">
                 Loading statistics…
               </div>
             ) : (
-              <div className="space-y-6">
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
                   <MetricTile label="Total runs" value={globalStats.total_runs} />
                   <MetricTile
                     label="Total tokens"
@@ -581,59 +651,68 @@ export function DashboardPage() {
                     value={formatDuration(globalStats.total_duration_seconds)}
                   />
                 </div>
-
-                <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
-                  <div>
-                    <p className="mb-3 font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
-                      Top tools
-                    </p>
-                    <div className="rounded-md border border-hairline bg-surface-1 p-4 shadow-inset-hairline">
-                      {statsTools.length === 0 ? (
-                        <p className="py-4 text-center font-mono text-[11px] text-ink-faint">
-                          No tool data yet
+                <div className="border-t border-hairline pt-3">
+                  <SectionToggle
+                    title="Details"
+                    open={statsOpen}
+                    onToggle={() => setStatsOpen((o) => !o)}
+                  />
+                  {statsOpen && (
+                    <div className="mt-4 grid gap-6 sm:grid-cols-2">
+                      <div>
+                        <p className="mb-3 font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
+                          Top tools
                         </p>
-                      ) : (
-                        <div className="space-y-3">
-                          {statsTools.map(([name, count]) => (
-                            <ToolBar key={name} name={name} count={count} max={maxTool} />
+                        {statsTools.length === 0 ? (
+                          <p className="py-2 font-mono text-[11px] text-ink-faint">
+                            No tool data yet
+                          </p>
+                        ) : (
+                          <div className="space-y-3">
+                            {statsTools.map(([name, count]) => (
+                              <ToolBar key={name} name={name} count={count} max={maxTool} />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <p className="mb-3 font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
+                          Exit reasons
+                        </p>
+                        <div className="space-y-2">
+                          {["DONE", "WAIT", "BLOCKED", "STOPPED", "CRASHED"].map((reason) => (
+                            <ExitReasonBadge
+                              key={reason}
+                              reason={reason}
+                              count={globalStats.exit_reason_counts[reason] ?? 0}
+                            />
                           ))}
                         </div>
-                      )}
+                      </div>
                     </div>
-                  </div>
-
-                  <div>
-                    <p className="mb-3 font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
-                      Exit reasons
-                    </p>
-                    <div className="space-y-2">
-                      {["DONE", "WAIT", "BLOCKED", "STOPPED", "CRASHED"].map((reason) => (
-                        <ExitReasonBadge
-                          key={reason}
-                          reason={reason}
-                          count={globalStats.exit_reason_counts[reason] ?? 0}
-                        />
-                      ))}
-                    </div>
-                  </div>
+                  )}
                 </div>
               </div>
             )}
-          </>
-        )}
-      </section>
+          </div>
+        </div>
 
-      {/* ── Test Health ────────────────────────────────────────────────────── */}
-      <section>
-        <div className="mb-3">
-          <SectionToggle
-            title="Test Health"
-            open={testsOpen}
-            onToggle={() => setTestsOpen((o) => !o)}
-            badge={latestTestReport ? `${latestTestReport.total_passed}✓ ${latestTestReport.total_failed + latestTestReport.total_errors}✗` : undefined}
-          >
-            {testsOpen && spaces.length > 0 && (
-              <>
+        {/* Test Health card */}
+        <div className="overflow-hidden rounded-md border border-hairline bg-surface-1 shadow-inset-hairline">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-hairline px-4 py-3">
+            <div className="flex items-center gap-2">
+              <h2 className="font-display text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
+                Test Health
+              </h2>
+              {latestTestReport && (
+                <span className="font-mono text-[10px] tabular-nums text-ink-faint">
+                  {latestTestReport.total_passed}✓{" "}
+                  {latestTestReport.total_failed + latestTestReport.total_errors}✗
+                </span>
+              )}
+            </div>
+            {spaces.length > 0 && (
+              <div className="flex items-center gap-2">
                 <label
                   htmlFor="tests-space-filter"
                   className="font-display text-[10px] uppercase tracking-[0.18em] text-ink-faint"
@@ -644,7 +723,7 @@ export function DashboardPage() {
                   id="tests-space-filter"
                   value={testsSpaceId}
                   onChange={(e) => setTestsSpaceId(e.target.value)}
-                  className="h-8 rounded border border-hairline bg-surface-1 px-2 font-mono text-[12px] text-ink shadow-inset-hairline transition focus:border-accent focus:outline-none"
+                  className="h-8 rounded border border-hairline bg-surface-2 px-2 font-mono text-[12px] text-ink shadow-inset-hairline transition focus:border-accent focus:outline-none"
                 >
                   <option value="">Select…</option>
                   {spaces.map((s) => (
@@ -653,25 +732,22 @@ export function DashboardPage() {
                     </option>
                   ))}
                 </select>
-              </>
+              </div>
             )}
-          </SectionToggle>
-        </div>
-
-        {testsOpen && (
-          <>
+          </div>
+          <div className="p-4">
             {!testsSpaceId ? (
-              <div className="rounded-md border border-dashed border-hairline bg-surface-1 p-8 text-center shadow-inset-hairline">
+              <div className="flex items-center justify-center py-8">
                 <p className="font-mono text-[11px] text-ink-faint">
                   Select a space above to view test health.
                 </p>
               </div>
             ) : testReportsLoading ? (
-              <div className="py-8 text-center font-mono text-[11px] text-ink-faint">
+              <div className="flex items-center justify-center py-8 font-mono text-[11px] text-ink-faint">
                 Loading…
               </div>
             ) : !latestTestReport ? (
-              <div className="rounded-md border border-dashed border-hairline bg-surface-1 p-8 text-center shadow-inset-hairline">
+              <div className="flex items-center justify-center py-8">
                 <p className="font-mono text-[11px] text-ink-faint">
                   No test reports yet for this space.
                 </p>
@@ -679,7 +755,7 @@ export function DashboardPage() {
             ) : (
               <div className="space-y-4">
                 <SummaryBar report={latestTestReport} />
-                <div className="rounded-md border border-hairline bg-surface-1 p-4 shadow-inset-hairline">
+                <div>
                   <p className="mb-3 font-display text-[9px] uppercase tracking-[0.2em] text-ink-faint">
                     Last {Math.min(testReports!.length, 10)} runs
                   </p>
@@ -687,17 +763,21 @@ export function DashboardPage() {
                 </div>
               </div>
             )}
-          </>
-        )}
+          </div>
+        </div>
       </section>
 
+      {/* ── TaskForm modal ─────────────────────────────────────────────────── */}
       {creating && (
         <TaskForm
           heading="New task"
           showSpacePicker
           submitting={isWorking}
           error={workError}
-          onCancel={() => { setCreating(false); setWorkError(null); }}
+          onCancel={() => {
+            setCreating(false);
+            setWorkError(null);
+          }}
           onSubmit={async (body) => {
             if (!body.space_id) return;
             setIsWorking(true);
