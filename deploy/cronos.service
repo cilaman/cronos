@@ -15,6 +15,11 @@ Group=cronos
 # systemd just needs to make HOME resolve correctly for compose's
 # variable substitution.
 Environment=HOME=/home/cronos
+# Ensure ~/.docker exists and is cronos-owned. A root-owned config.json
+# here breaks docker CLI plugin discovery, which makes `docker compose`
+# fail with `unknown flag: --env-file`. `+` runs as root regardless of User=.
+ExecStartPre=+/bin/mkdir -p /home/cronos/.docker
+ExecStartPre=+/bin/chown -R cronos:cronos /home/cronos/.docker
 ExecStart=/usr/bin/docker compose \
   --env-file /opt/cronos/.env \
   -f docker-compose.yml -f docker-compose.prod.yml \
