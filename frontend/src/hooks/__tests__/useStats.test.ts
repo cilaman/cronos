@@ -52,7 +52,7 @@ describe("useSpaceStats", () => {
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     const { api } = await import("../../api");
-    expect(api.spaceStats).toHaveBeenCalledWith("space-1");
+    expect(api.spaceStats).toHaveBeenCalledWith("space-1", undefined, undefined);
   });
 });
 

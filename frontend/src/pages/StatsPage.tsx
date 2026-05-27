@@ -1,7 +1,12 @@
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useGlobalStats, useSpaceStats } from "../hooks/useStats";
 import { useSpaces } from "../hooks/useSpaces";
+import {
+  TimeFrameSelector,
+  type TimeFrame,
+  type TimeFramePreset,
+} from "../components/TimeFrameSelector";
 import type { GlobalStats, TaskStats } from "../types";
 
 // ── Formatters ────────────────────────────────────────────────────────────────
@@ -27,6 +32,26 @@ function formatCost(usd: number): string {
   if (usd < 0.01) return `$${usd.toFixed(4)}`;
   if (usd < 1) return `$${usd.toFixed(3)}`;
   return `$${usd.toFixed(2)}`;
+}
+
+// ── URL helpers ───────────────────────────────────────────────────────────────
+
+const VALID_PRESETS = new Set<TimeFramePreset>([
+  "6h", "24h", "7d", "30d", "90d", "all", "custom",
+]);
+
+function parseTimeFrame(params: URLSearchParams): TimeFrame {
+  const raw = params.get("preset");
+  if (raw && VALID_PRESETS.has(raw as TimeFramePreset)) {
+    if (raw === "custom") {
+      const from = params.get("from") ?? "";
+      const to = params.get("to") ?? "";
+      if (from && to) return { preset: "custom", from, to };
+    } else {
+      return { preset: raw as Exclude<TimeFramePreset, "custom"> };
+    }
+  }
+  return { preset: "all" };
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -274,10 +299,26 @@ function SpaceTaskTable({ tasks, spaceId }: { tasks: TaskStats[]; spaceId: strin
 export function StatsPage() {
   const { spaceId: paramSpaceId } = useParams<{ spaceId?: string }>();
   const [selectedSpaceId, setSelectedSpaceId] = useState<string>(paramSpaceId ?? "");
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const timeFrame = parseTimeFrame(searchParams);
+
+  function handleTimeFrameChange(tf: TimeFrame) {
+    const next = new URLSearchParams(searchParams);
+    next.set("preset", tf.preset);
+    if (tf.preset === "custom") {
+      next.set("from", tf.from);
+      next.set("to", tf.to);
+    } else {
+      next.delete("from");
+      next.delete("to");
+    }
+    setSearchParams(next, { replace: true });
+  }
 
   const { data: spacesData } = useSpaces();
-  const { data: globalStats, isLoading: globalLoading } = useGlobalStats();
-  const { data: spaceStats } = useSpaceStats(selectedSpaceId || undefined);
+  const { data: globalStats, isLoading: globalLoading } = useGlobalStats(timeFrame);
+  const { data: spaceStats } = useSpaceStats(selectedSpaceId || undefined, timeFrame);
 
   const spaces = spacesData?.spaces ?? [];
   const activeSpace = spaces.find((s) => s.id === selectedSpaceId);
@@ -285,40 +326,45 @@ export function StatsPage() {
   return (
     <div className="mx-auto max-w-[1280px] space-y-8 p-6 lg:p-8">
       {/* Page header */}
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink-faint">
-            Cronos · Analytics
-          </p>
-          <h1 className="font-display text-[22px] font-semibold uppercase tracking-[0.14em] text-ink">
-            Stats
-          </h1>
+      <header className="space-y-4">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink-faint">
+              Cronos · Analytics
+            </p>
+            <h1 className="font-display text-[22px] font-semibold uppercase tracking-[0.14em] text-ink">
+              Stats
+            </h1>
+          </div>
+
+          {/* Space filter */}
+          {spaces.length > 0 && (
+            <div className="flex items-center gap-2">
+              <label
+                htmlFor="space-filter"
+                className="font-display text-[10px] uppercase tracking-[0.18em] text-ink-faint"
+              >
+                Space
+              </label>
+              <select
+                id="space-filter"
+                value={selectedSpaceId}
+                onChange={(e) => setSelectedSpaceId(e.target.value)}
+                className="h-9 rounded border border-hairline bg-surface-1 px-3 font-mono text-[12px] text-ink shadow-inset-hairline transition focus:border-accent focus:outline-none"
+              >
+                <option value="">All spaces</option>
+                {spaces.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
-        {/* Space filter */}
-        {spaces.length > 0 && (
-          <div className="flex items-center gap-2">
-            <label
-              htmlFor="space-filter"
-              className="font-display text-[10px] uppercase tracking-[0.18em] text-ink-faint"
-            >
-              Space
-            </label>
-            <select
-              id="space-filter"
-              value={selectedSpaceId}
-              onChange={(e) => setSelectedSpaceId(e.target.value)}
-              className="h-9 rounded border border-hairline bg-surface-1 px-3 font-mono text-[12px] text-ink shadow-inset-hairline transition focus:border-accent focus:outline-none"
-            >
-              <option value="">All spaces</option>
-              {spaces.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
+        {/* Time frame selector */}
+        <TimeFrameSelector value={timeFrame} onChange={handleTimeFrameChange} />
       </header>
 
       {/* Global stats */}
