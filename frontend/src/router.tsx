@@ -18,7 +18,6 @@ export function AppRoutes() {
       <Route element={<App />}>
         <Route index element={<DashboardPage />} />
         <Route path="board" element={<BoardPage />} />
-        <Route path="tree" element={<TreePage />} />
         <Route path="archived" element={<ArchivedPage />} />
         <Route path="tools" element={<SpaceToolsPage />} />
         <Route path="stats" element={<StatsPage />} />

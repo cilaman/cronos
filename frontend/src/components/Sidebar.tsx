@@ -139,14 +139,6 @@ export function Sidebar({ onClose }: Props) {
             </>
           )}
         </NavLink>
-        <NavLink to="/tree" className={primaryNavLinkClasses} onClick={onClose}>
-          {({ isActive }) => (
-            <>
-              {isActive && <ActiveStrip />}
-              Tree
-            </>
-          )}
-        </NavLink>
         <NavLink to="/archived" className={primaryNavLinkClasses} onClick={onClose}>
           {({ isActive }) => (
             <>
