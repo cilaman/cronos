@@ -42,9 +42,10 @@ export function timeFrameToDateParams(tf: TimeFrame): { fromDt?: string; toDt?: 
 interface Props {
   value: TimeFrame;
   onChange: (tf: TimeFrame) => void;
+  compact?: boolean;
 }
 
-export function TimeFrameSelector({ value, onChange }: Props) {
+export function TimeFrameSelector({ value, onChange, compact = false }: Props) {
   const today = new Date().toISOString().slice(0, 10);
   const sevenDaysAgo = new Date(Date.now() - DURATION_MS["7d"]).toISOString().slice(0, 10);
 
@@ -66,7 +67,10 @@ export function TimeFrameSelector({ value, onChange }: Props) {
               }
             }}
             className={cn(
-              "rounded px-2.5 py-1 font-display text-[11px] uppercase tracking-[0.1em] transition",
+              "rounded transition",
+              compact
+                ? "px-2 py-0.5 font-display text-[9px] uppercase tracking-[0.1em]"
+                : "px-2.5 py-1 font-display text-[11px] uppercase tracking-[0.1em]",
               value.preset === preset
                 ? "bg-accent text-white shadow-sm"
                 : "text-ink-muted hover:bg-surface-2 hover:text-ink",

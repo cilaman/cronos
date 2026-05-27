@@ -8,6 +8,8 @@ import { TaskForm } from "../components/TaskForm";
 import { EmptyState } from "../components/ui/EmptyState";
 import { SpaceTag } from "../components/ui/SpaceTag";
 import { TestStatusBadge } from "../components/TestStatusBadge";
+import { TimeFrameSelector } from "../components/TimeFrameSelector";
+import type { TimeFrame } from "../components/TimeFrameSelector";
 import { api } from "../api";
 import { formatRelative } from "../utils/format";
 import type { Activity, SpaceSummary, TaskState, TestReportSummary, TestSuite, TestCase, TestReport } from "../types";
@@ -548,8 +550,9 @@ export function DashboardPage() {
   const [activityPage, setActivityPage] = useState(0);
   const [statsOpen, setStatsOpen] = useState(false);
   const [testsSpaceId, setTestsSpaceId] = useState("");
+  const [timeFrame, setTimeFrame] = useState<TimeFrame>({ preset: "all" });
 
-  const { data: globalStats } = useGlobalStats();
+  const { data: globalStats } = useGlobalStats(timeFrame);
   const { data: testReports, isLoading: testReportsLoading } = useTestReports(
     testsSpaceId || undefined,
   );
@@ -676,15 +679,18 @@ export function DashboardPage() {
         {/* AI Performance card */}
         <div className="overflow-hidden rounded-md border border-hairline bg-surface-1 shadow-inset-hairline">
           <div className="h-[2px] bg-accent" />
-          <div className="flex items-center gap-2 border-b border-hairline px-4 py-3">
-            <h2 className="font-display text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
-              AI Performance
-            </h2>
-            {globalStats && (
-              <span className="font-mono text-[10px] tabular-nums text-ink-faint">
-                {globalStats.total_runs} runs
-              </span>
-            )}
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-hairline px-4 py-3">
+            <div className="flex items-center gap-2">
+              <h2 className="font-display text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
+                AI Performance
+              </h2>
+              {globalStats && (
+                <span className="font-mono text-[10px] tabular-nums text-ink-faint">
+                  {globalStats.total_runs} runs
+                </span>
+              )}
+            </div>
+            <TimeFrameSelector value={timeFrame} onChange={setTimeFrame} compact />
           </div>
           <div className="p-4">
             {!globalStats ? (
