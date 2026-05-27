@@ -224,11 +224,27 @@ export const api = {
   },
 
   // --- stats ---
-  taskStats: (taskId: string) =>
-    request<TaskStats>(`/api/tasks/${taskId}/stats`),
-  spaceStats: (spaceId: string) =>
-    request<TaskStats[]>(`/api/spaces/${spaceId}/stats`),
-  globalStats: () => request<GlobalStats>("/api/stats"),
+  taskStats: (taskId: string, timeFrame?: { from?: string; to?: string }) => {
+    const p = new URLSearchParams();
+    if (timeFrame?.from) p.set("from_dt", timeFrame.from);
+    if (timeFrame?.to) p.set("to_dt", timeFrame.to);
+    const qs = p.toString();
+    return request<TaskStats>(`/api/tasks/${taskId}/stats${qs ? `?${qs}` : ""}`);
+  },
+  spaceStats: (spaceId: string, timeFrame?: { from?: string; to?: string }) => {
+    const p = new URLSearchParams();
+    if (timeFrame?.from) p.set("from_dt", timeFrame.from);
+    if (timeFrame?.to) p.set("to_dt", timeFrame.to);
+    const qs = p.toString();
+    return request<TaskStats[]>(`/api/spaces/${spaceId}/stats${qs ? `?${qs}` : ""}`);
+  },
+  globalStats: (timeFrame?: { from?: string; to?: string }) => {
+    const p = new URLSearchParams();
+    if (timeFrame?.from) p.set("from_dt", timeFrame.from);
+    if (timeFrame?.to) p.set("to_dt", timeFrame.to);
+    const qs = p.toString();
+    return request<GlobalStats>(`/api/stats${qs ? `?${qs}` : ""}`);
+  },
 
   // --- traces ---
   taskTraces: (taskId: string) =>

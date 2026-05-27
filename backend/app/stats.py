@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from pydantic import BaseModel, Field, computed_field
@@ -241,6 +241,36 @@ class GlobalStats(BaseModel):
     exit_reason_counts: dict[str, int] = Field(default_factory=dict)
     avg_tokens_per_run: float = 0.0
     avg_memory_hit_rate: float | None = None
+
+
+def _to_utc(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def filter_task_stats(
+    ts: TaskStats,
+    from_dt: datetime | None = None,
+    to_dt: datetime | None = None,
+) -> TaskStats | None:
+    """Return a copy of ts with only runs whose started_at falls in [from_dt, to_dt].
+
+    Returns None when the filtered run list is empty (task excluded from aggregations).
+    Returns ts unchanged when no filter is specified.
+    """
+    if from_dt is None and to_dt is None:
+        return ts
+    from_utc = _to_utc(from_dt) if from_dt is not None else None
+    to_utc = _to_utc(to_dt) if to_dt is not None else None
+    runs = [
+        r for r in ts.runs
+        if (from_utc is None or _to_utc(r.started_at) >= from_utc)
+        and (to_utc is None or _to_utc(r.started_at) <= to_utc)
+    ]
+    if not runs:
+        return None
+    return TaskStats(task_id=ts.task_id, space_id=ts.space_id, title=ts.title, runs=runs)
 
 
 def aggregate_global(all_stats: list[TaskStats]) -> GlobalStats:
