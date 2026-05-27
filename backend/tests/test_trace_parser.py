@@ -372,6 +372,71 @@ def test_extract_run_trace_session_from_system_init():
 
 
 # ---------------------------------------------------------------------------
+# memory_hit_rate
+# ---------------------------------------------------------------------------
+
+
+def test_memory_hit_rate_no_memory():
+    trace = extract_run_trace([], **_base_kwargs())
+    assert trace.memory_hit_rate == 0.0
+
+
+def test_memory_hit_rate_none_injected():
+    trace = extract_run_trace([], **_base_kwargs(), memory_injected=None)
+    assert trace.memory_hit_rate == 0.0
+
+
+def test_memory_hit_rate_all_used(tmp_path):
+    mem_dir = tmp_path / "memory"
+    mem_dir.mkdir()
+    for name in ("a.md", "b.md"):
+        (mem_dir / name).write_text("content")
+    events = [
+        _make_assistant_event(tool_uses=[
+            _tool_use_block("Read", "tu-1", {"file_path": str(mem_dir / "a.md")}),
+            _tool_use_block("Read", "tu-2", {"file_path": str(mem_dir / "b.md")}),
+        ]),
+    ]
+    trace = extract_run_trace(
+        events, **_base_kwargs(), memory_injected=["a.md", "b.md"]
+    )
+    assert trace.memory_hit_rate == pytest.approx(1.0)
+
+
+def test_memory_hit_rate_partial(tmp_path):
+    mem_dir = tmp_path / "memory"
+    mem_dir.mkdir()
+    (mem_dir / "a.md").write_text("x")
+    events = [
+        _make_assistant_event(tool_uses=[
+            _tool_use_block("Read", "tu-1", {"file_path": str(mem_dir / "a.md")}),
+        ]),
+    ]
+    trace = extract_run_trace(
+        events, **_base_kwargs(), memory_injected=["a.md", "b.md", "c.md", "d.md"]
+    )
+    assert trace.memory_hit_rate == pytest.approx(0.25)
+
+
+def test_memory_hit_rate_clamped_to_one(tmp_path):
+    mem_dir = tmp_path / "memory"
+    mem_dir.mkdir()
+    for name in ("a.md", "b.md"):
+        (mem_dir / name).write_text("x")
+    events = [
+        _make_assistant_event(tool_uses=[
+            _tool_use_block("Read", "tu-1", {"file_path": str(mem_dir / "a.md")}),
+            _tool_use_block("Read", "tu-2", {"file_path": str(mem_dir / "b.md")}),
+        ]),
+    ]
+    # Only one file injected but two used — rate must be clamped to 1.0
+    trace = extract_run_trace(
+        events, **_base_kwargs(), memory_injected=["a.md"]
+    )
+    assert trace.memory_hit_rate == pytest.approx(1.0)
+
+
+# ---------------------------------------------------------------------------
 # TraceStore
 # ---------------------------------------------------------------------------
 

@@ -2,19 +2,23 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from collections import defaultdict, deque
 from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import UTC, datetime
+from pathlib import Path
 
 from . import autopilot_pr
-from .agent import AgentResult, Status, run_agent
+from .agent import AgentResult, CRONOS_SUBDIR, DATA_DIR, Status, run_agent
 from . import goal_sync
+from .memory_parser import parse_memory_blocks
+from .memory_store import MemoryStore
 from .models import TaskState
 from .space_storage import SpaceStore
 from .stats import RunStats, _tier_from_real_model, compute_cost, extract_tokens_and_tools
 from .stats_store import StatsStore
 from .storage import InvalidTransition, TaskStore, USER_TRANSITIONS
-from .trace_parser import extract_run_trace
+from .trace_parser import RunTrace, extract_run_trace
 from .trace_store import TraceStore
 
 from typing import TYPE_CHECKING
@@ -22,6 +26,18 @@ if TYPE_CHECKING:
     from .worker_pool import WorkerPool
 
 log = logging.getLogger("cronos.worker")
+
+_CLAUDE_PROJECTS_DIR = Path(os.environ.get("CLAUDE_PROJECTS_DIR", "/root/.claude/projects"))
+
+
+def _memory_injected_for_workspace(workspace: Path) -> list[str]:
+    """Return sorted .md filenames from the Claude memory dir for a workspace."""
+    project_key = str(workspace).replace("/", "-").replace(".", "-")
+    memory_dir = _CLAUDE_PROJECTS_DIR / project_key / "memory"
+    if not memory_dir.is_dir():
+        return []
+    return sorted(f.name for f in memory_dir.iterdir() if f.is_file() and f.suffix == ".md")
+
 
 # Sentinel event signalling end-of-stream on a subscriber queue.
 _DONE_SENTINEL: dict = {"type": "stream_end"}
@@ -87,6 +103,7 @@ class Worker:
         space_store: SpaceStore | None = None,
         stats_store: StatsStore | None = None,
         trace_store: TraceStore | None = None,
+        memory_store: MemoryStore | None = None,
         on_idle: Callable[[Worker], Awaitable[None]] | None = None,
         pool: WorkerPool | None = None,
     ) -> None:
@@ -94,6 +111,7 @@ class Worker:
         self.space_store = space_store
         self.stats_store = stats_store
         self.trace_store = trace_store
+        self.memory_store = memory_store
         self.on_idle = on_idle
         self._space_id: str | None = None
         self._pool = pool
@@ -236,6 +254,8 @@ class Worker:
             await self._publish(task_id, event)
 
         space = self.space_store.get(task.space_id) if self.space_store else None
+        workspace_path = DATA_DIR / task.space_id / CRONOS_SUBDIR / "workspaces" / task.id
+        memory_injected = _memory_injected_for_workspace(workspace_path)
         run_exception: str | None = None
         result = None
         try:
@@ -291,7 +311,7 @@ class Worker:
                     pass
             return
 
-        await self._finalize(task_id, result, started_at=started_at)
+        await self._finalize(task_id, result, started_at=started_at, memory_injected=memory_injected)
 
     async def _finalize(
         self,
@@ -299,6 +319,7 @@ class Worker:
         result: AgentResult,
         *,
         started_at: datetime | None = None,
+        memory_injected: list[str] | None = None,
     ) -> None:
         ended_at = datetime.now(tz=UTC)
         timestamp = ended_at.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -413,6 +434,30 @@ class Worker:
                   ("CRASHED" if result.exit_code != 0 else "NO_STATUS"))
         )
 
+        # Pre-compute run trace when needed for memory_hit_rate or for saving.
+        # Doing this before RunStats lets us embed memory_hit_rate in the stats record.
+        computed_trace: RunTrace | None = None
+        if self.trace_store is not None or bool(memory_injected):
+            task = self.store.get(task_id)
+            if task is not None:
+                try:
+                    computed_trace = extract_run_trace(
+                        result.raw_events,
+                        task_id=task_id,
+                        space_id=task.space_id,
+                        run_index=run_index,
+                        model=task.agent_model,
+                        mode=task.agent_mode,
+                        started_at=started_at or ended_at,
+                        ended_at=ended_at,
+                        exit_reason=exit_reason,
+                        session_id=result.session_id,
+                        had_crash=result.exit_code != 0 and not result.stopped,
+                        memory_injected=memory_injected or [],
+                    )
+                except Exception:
+                    log.exception("Failed to compute trace for %s", task_id)
+
         # Persist run statistics (usage and run_index already computed above)
         if self.stats_store is not None:
             task = self.store.get(task_id)
@@ -443,6 +488,11 @@ class Worker:
                         tool_uses=usage["tool_uses"],
                         error_count=usage["error_count"],
                         had_crash=result.exit_code != 0 and not result.stopped,
+                        memory_hit_rate=(
+                            computed_trace.memory_hit_rate
+                            if computed_trace is not None and memory_injected
+                            else None
+                        ),
                     )
                     await self.stats_store.append_run(
                         task.space_id, task_id, task.title, run_stats
@@ -450,27 +500,34 @@ class Worker:
                 except Exception:
                     log.exception("Failed to save stats for %s", task_id)
 
-        # Persist run trace (run_index already computed above)
-        if self.trace_store is not None:
+        # Persist run trace using the pre-computed trace (if trace_store is active)
+        if self.trace_store is not None and computed_trace is not None:
             task = self.store.get(task_id)
             if task is not None:
                 try:
-                    trace = extract_run_trace(
-                        result.raw_events,
-                        task_id=task_id,
-                        space_id=task.space_id,
-                        run_index=run_index,
-                        model=task.agent_model,
-                        mode=task.agent_mode,
-                        started_at=started_at or ended_at,
-                        ended_at=ended_at,
-                        exit_reason=exit_reason,
-                        session_id=result.session_id,
-                        had_crash=result.exit_code != 0 and not result.stopped,
-                    )
-                    await self.trace_store.save_run(task.space_id, task_id, trace)
+                    await self.trace_store.save_run(task.space_id, task_id, computed_trace)
                 except Exception:
                     log.exception("Failed to save trace for %s", task_id)
+
+        # Capture MEMORY: blocks from the agent's final text and persist as unconfirmed.
+        if self.memory_store is not None and result.final_text:
+            blocks = parse_memory_blocks(result.final_text)
+            if blocks:
+                task = self.store.get(task_id)
+                if task is not None:
+                    for block in blocks:
+                        try:
+                            title = block.content.splitlines()[0][:120]
+                            await self.memory_store.create(
+                                scope=f"space:{task.space_id}",
+                                kind=block.kind_hint or "observation",
+                                title=title,
+                                body=block.content,
+                                confirmed=False,
+                                sources=[f"task:{task_id}", f"run:{run_index}"],
+                            )
+                        except Exception:
+                            log.exception("Failed to save memory block for %s", task_id)
 
         # Auto-resume when the agent hit the turn limit mid-task (up to 3 times
         # per task to prevent infinite loops).

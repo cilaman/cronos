@@ -139,6 +139,7 @@ class RunStats(BaseModel):
     tool_uses: dict[str, int] = Field(default_factory=dict)
     error_count: int = 0
     had_crash: bool = False
+    memory_hit_rate: float | None = None  # None when no memory was injected
 
 
 class TaskStats(BaseModel):
@@ -210,6 +211,14 @@ class TaskStats(BaseModel):
         crashes = sum(1 for r in self.runs if r.had_crash)
         return round(crashes / len(self.runs), 4)
 
+    @computed_field
+    @property
+    def avg_memory_hit_rate(self) -> float | None:
+        rates = [r.memory_hit_rate for r in self.runs if r.memory_hit_rate is not None]
+        if not rates:
+            return None
+        return round(sum(rates) / len(rates), 4)
+
     def to_file_dict(self) -> dict[str, Any]:
         """Serialise only stored fields (no computed aggregates) for disk writes."""
         return {
@@ -231,6 +240,7 @@ class GlobalStats(BaseModel):
     tool_use_summary: dict[str, int] = Field(default_factory=dict)
     exit_reason_counts: dict[str, int] = Field(default_factory=dict)
     avg_tokens_per_run: float = 0.0
+    avg_memory_hit_rate: float | None = None
 
 
 def aggregate_global(all_stats: list[TaskStats]) -> GlobalStats:
@@ -238,6 +248,7 @@ def aggregate_global(all_stats: list[TaskStats]) -> GlobalStats:
     reason_counts: dict[str, int] = {}
     total_tokens = 0
     total_runs = 0
+    memory_rates: list[float] = []
 
     g = GlobalStats(total_tasks_with_stats=len(all_stats))
     for ts in all_stats:
@@ -253,9 +264,13 @@ def aggregate_global(all_stats: list[TaskStats]) -> GlobalStats:
             reason_counts[reason] = reason_counts.get(reason, 0) + count
         total_tokens += ts.total_input_tokens + ts.total_output_tokens
         total_runs += ts.total_runs
+        for run in ts.runs:
+            if run.memory_hit_rate is not None:
+                memory_rates.append(run.memory_hit_rate)
 
     g.tool_use_summary = tool_summary
     g.exit_reason_counts = reason_counts
     g.total_cost_usd = round(g.total_cost_usd, 6)
     g.avg_tokens_per_run = round(total_tokens / total_runs, 1) if total_runs else 0.0
+    g.avg_memory_hit_rate = round(sum(memory_rates) / len(memory_rates), 4) if memory_rates else None
     return g

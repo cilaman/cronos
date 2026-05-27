@@ -3,6 +3,7 @@ import App from "./App";
 import { ArchivedPage } from "./pages/ArchivedPage";
 import { BoardPage } from "./pages/BoardPage";
 import { DashboardPage } from "./pages/DashboardPage";
+import { MemoryPage } from "./pages/MemoryPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { SpaceCreatePage } from "./pages/SpaceCreatePage";
 import { SpaceSettingsPage } from "./pages/SpaceSettingsPage";
@@ -22,6 +23,7 @@ export function AppRoutes() {
         <Route path="tools" element={<SpaceToolsPage />} />
         <Route path="stats" element={<StatsPage />} />
         <Route path="tests" element={<TestReportsPage />} />
+        <Route path="memory" element={<MemoryPage />} />
         <Route path="spaces/new" element={<SpaceCreatePage />} />
         <Route path="spaces/:spaceId" element={<BoardPage />} />
         <Route path="spaces/:spaceId/tree" element={<TreePage />} />

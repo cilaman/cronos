@@ -166,7 +166,7 @@ async def lifespan(app: FastAPI):
     memory_store = MemoryStore(DATA_DIR, SPACES_DIR)
     app.state.memory_store = memory_store
 
-    worker_pool = WorkerPool(task_store, space_store, stats_store=stats_store, trace_store=trace_store)
+    worker_pool = WorkerPool(task_store, space_store, stats_store=stats_store, trace_store=trace_store, memory_store=memory_store)
     for space in space_store.list_all():
         await worker_pool.start_for_space(space.id)
     app.state.worker_pool = worker_pool

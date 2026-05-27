@@ -434,7 +434,7 @@ async def test_on_idle_called_when_queue_drains(task_store, monkeypatch):
     """The on_idle hook fires once after the worker processes its single queued task."""
     import app.worker as worker_module
 
-    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None):
+    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None, **kwargs):
         return _make_result()
 
     monkeypatch.setattr(worker_module, "run_agent", fake_run_agent)
@@ -472,7 +472,7 @@ async def test_on_idle_not_called_when_disabled(task_store, monkeypatch):
     """A worker with on_idle=None must process tasks normally and raise nothing."""
     import app.worker as worker_module
 
-    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None):
+    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None, **kwargs):
         return _make_result()
 
     monkeypatch.setattr(worker_module, "run_agent", fake_run_agent)
@@ -502,7 +502,7 @@ async def test_on_idle_exception_does_not_kill_loop(task_store, monkeypatch, cap
 
     import app.worker as worker_module
 
-    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None):
+    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None, **kwargs):
         return _make_result()
 
     monkeypatch.setattr(worker_module, "run_agent", fake_run_agent)
@@ -563,7 +563,7 @@ async def test_on_idle_not_called_during_stop(task_store, monkeypatch):
     """
     import app.worker as worker_module
 
-    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None):
+    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None, **kwargs):
         return _make_result()
 
     monkeypatch.setattr(worker_module, "run_agent", fake_run_agent)
@@ -611,7 +611,7 @@ async def test_autopilot_pickup_integration(
 
     run_order: list[str] = []
 
-    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None):
+    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None, **kwargs):
         run_order.append(task.id)
         return _make_result()
 
@@ -656,7 +656,7 @@ async def test_autopilot_does_not_pick_when_disabled_integration(
 
     run_order: list[str] = []
 
-    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None):
+    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None, **kwargs):
         run_order.append(task.id)
         return _make_result()
 
@@ -708,7 +708,7 @@ async def test_autopilot_pickup_rereads_space_each_idle(
 
     run_order: list[str] = []
 
-    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None):
+    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None, **kwargs):
         run_order.append(task.id)
         return _make_result()
 

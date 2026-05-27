@@ -200,6 +200,7 @@ def _make_run(
     exit_reason: str = "DONE",
     tool_uses: dict | None = None,
     duration: float = 60.0,
+    memory_hit_rate: float | None = None,
 ) -> RunStats:
     now = datetime(2025, 1, 1, tzinfo=UTC)
     return RunStats(
@@ -215,6 +216,7 @@ def _make_run(
         cost_usd=cost_usd,
         had_crash=had_crash,
         tool_uses=tool_uses or {},
+        memory_hit_rate=memory_hit_rate,
     )
 
 
@@ -307,6 +309,51 @@ def test_task_stats_to_file_dict_excludes_computed():
     assert "total_runs" not in d
 
 
+def test_run_stats_memory_hit_rate_none_by_default():
+    run = _make_run()
+    assert run.memory_hit_rate is None
+
+
+def test_run_stats_memory_hit_rate_stored():
+    run = _make_run(memory_hit_rate=0.75)
+    assert run.memory_hit_rate == pytest.approx(0.75)
+
+
+def test_task_stats_avg_memory_hit_rate_none_when_no_memory():
+    ts = TaskStats(
+        task_id="t1",
+        space_id=SPACE_ID,
+        title="T",
+        runs=[_make_run(), _make_run()],
+    )
+    assert ts.avg_memory_hit_rate is None
+
+
+def test_task_stats_avg_memory_hit_rate_excludes_none_runs():
+    ts = TaskStats(
+        task_id="t1",
+        space_id=SPACE_ID,
+        title="T",
+        runs=[
+            _make_run(memory_hit_rate=0.8),
+            _make_run(memory_hit_rate=None),  # no memory active
+            _make_run(memory_hit_rate=0.6),
+        ],
+    )
+    # Average of 0.8 and 0.6 only
+    assert ts.avg_memory_hit_rate == pytest.approx(0.7, rel=1e-4)
+
+
+def test_task_stats_avg_memory_hit_rate_single_run():
+    ts = TaskStats(
+        task_id="t1",
+        space_id=SPACE_ID,
+        title="T",
+        runs=[_make_run(memory_hit_rate=1.0)],
+    )
+    assert ts.avg_memory_hit_rate == pytest.approx(1.0)
+
+
 # ---------------------------------------------------------------------------
 # aggregate_global
 # ---------------------------------------------------------------------------
@@ -342,6 +389,29 @@ def test_aggregate_global_tool_summary():
     g = aggregate_global([ts])
     assert g.tool_use_summary["Read"] == 3
     assert g.tool_use_summary["Write"] == 1
+
+
+def test_aggregate_global_avg_memory_hit_rate_none_when_no_memory():
+    ts = TaskStats(
+        task_id="t1", space_id=SPACE_ID, title="T",
+        runs=[_make_run(), _make_run()],
+    )
+    g = aggregate_global([ts])
+    assert g.avg_memory_hit_rate is None
+
+
+def test_aggregate_global_avg_memory_hit_rate_across_tasks():
+    ts1 = TaskStats(
+        task_id="t1", space_id=SPACE_ID, title="T1",
+        runs=[_make_run(memory_hit_rate=1.0), _make_run(memory_hit_rate=0.5)],
+    )
+    ts2 = TaskStats(
+        task_id="t2", space_id=SPACE_ID, title="T2",
+        runs=[_make_run(memory_hit_rate=0.0), _make_run()],  # one run has no memory
+    )
+    g = aggregate_global([ts1, ts2])
+    # Average of 1.0, 0.5, 0.0 = 0.5; the None run is excluded
+    assert g.avg_memory_hit_rate == pytest.approx(0.5, rel=1e-4)
 
 
 # ---------------------------------------------------------------------------

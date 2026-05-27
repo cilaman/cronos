@@ -4,6 +4,7 @@ import type {
   AgentModel,
   Board,
   GlobalStats,
+  MemoryItem,
   ReplyResponse,
   RunTrace,
   Space,
@@ -236,6 +237,19 @@ export const api = {
     request<RunTrace>(`/api/tasks/${taskId}/traces/latest`),
   taskTrace: (taskId: string, runIndex: number) =>
     request<RunTrace>(`/api/tasks/${taskId}/traces/${runIndex}`),
+
+  // --- memory ---
+  memoryList: (scope: string) =>
+    request<MemoryItem[]>(`/api/memory/${encodeURIComponent(scope)}`),
+  memoryConfirm: (scope: string, itemId: string) =>
+    request<MemoryItem>(`/api/memory/${encodeURIComponent(scope)}/${itemId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ confirmed: true }),
+    }),
+  memoryReject: (scope: string, itemId: string) =>
+    request<void>(`/api/memory/${encodeURIComponent(scope)}/${itemId}`, {
+      method: "DELETE",
+    }),
 
   // --- test reports ---
   testReports: (spaceId: string) =>
