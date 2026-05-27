@@ -135,7 +135,7 @@ export function Sidebar({ onClose }: Props) {
           {({ isActive }) => (
             <>
               {isActive && <ActiveStrip />}
-              Board
+              Kanban
             </>
           )}
         </NavLink>
@@ -183,7 +183,7 @@ export function Sidebar({ onClose }: Props) {
           {({ isActive }) => (
             <>
               {isActive && <ActiveStrip />}
-              Memory
+              Memory Browser
             </>
           )}
         </NavLink>

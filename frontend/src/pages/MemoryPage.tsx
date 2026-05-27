@@ -186,7 +186,7 @@ export function MemoryPage() {
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink-faint">
-            Cronos · Memory
+            Cronos · Memory Browser
           </p>
           <h1 className="font-display text-[22px] font-semibold uppercase tracking-[0.14em] text-ink">
             Memory Browser
