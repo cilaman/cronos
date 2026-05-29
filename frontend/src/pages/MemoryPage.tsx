@@ -110,9 +110,9 @@ function MemoryRow({
           </div>
         </div>
 
-        {/* Actions — only for unconfirmed items */}
-        {!item.confirmed && (
-          <div className="flex shrink-0 items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+        {/* Actions */}
+        <div className="flex shrink-0 items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+          {!item.confirmed && (
             <button
               type="button"
               disabled={confirm.isPending}
@@ -121,16 +121,16 @@ function MemoryRow({
             >
               {confirm.isPending ? "…" : "Confirm"}
             </button>
-            <button
-              type="button"
-              disabled={reject.isPending}
-              onClick={() => reject.mutate(item.id)}
-              className="rounded border border-danger/40 bg-danger/10 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-danger transition hover:bg-danger/20 disabled:opacity-50"
-            >
-              {reject.isPending ? "…" : "Reject"}
-            </button>
-          </div>
-        )}
+          )}
+          <button
+            type="button"
+            disabled={reject.isPending}
+            onClick={() => reject.mutate(item.id)}
+            className="rounded border border-danger/40 bg-danger/10 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-danger transition hover:bg-danger/20 disabled:opacity-50"
+          >
+            {reject.isPending ? "…" : item.confirmed ? "Delete" : "Reject"}
+          </button>
+        </div>
       </div>
 
       {/* Expanded body */}
