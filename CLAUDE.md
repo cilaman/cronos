@@ -124,3 +124,4 @@ Test reports stored at `{space}/.cronos/test-reports/{timestamp}.json`; coverage
 | [goal-branch-setup](.claude/skills/goal-branch-setup/) | Sets up feature branches for goals |
 | [frontend-design](.claude/skills/frontend-design/) | Frontend styling and UX work |
 | [evaluate-run](.claude/skills/evaluate-run/) | Assesses agent run outcomes |
+| [create-goal](.claude/skills/create-goal/) | Creates a goal with child tasks in the Cronos board via the backend API |
