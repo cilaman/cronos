@@ -125,3 +125,4 @@ Test reports stored at `{space}/.cronos/test-reports/{timestamp}.json`; coverage
 | [frontend-design](.claude/skills/frontend-design/) | Frontend styling and UX work |
 | [evaluate-run](.claude/skills/evaluate-run/) | Assesses agent run outcomes |
 | [create-goal](.claude/skills/create-goal/) | Creates a goal with child tasks in the Cronos board via the backend API |
+| [create-task](.claude/skills/create-task/) | Creates a single task in the Cronos board via the backend API |
