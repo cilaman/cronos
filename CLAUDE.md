@@ -126,3 +126,4 @@ Test reports stored at `{space}/.cronos/test-reports/{timestamp}.json`; coverage
 | [evaluate-run](.claude/skills/evaluate-run/) | Assesses agent run outcomes |
 | [create-goal](.claude/skills/create-goal/) | Creates a goal with child tasks in the Cronos board via the backend API |
 | [create-task](.claude/skills/create-task/) | Creates a single task in the Cronos board via the backend API |
+| [write-memory](.claude/skills/write-memory/) | Writes memory to the correct workspace-scoped path (never the space root) |
