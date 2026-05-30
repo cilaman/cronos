@@ -20,36 +20,33 @@ CRONOS_SUBDIR = ".cronos"
 
 UPGRADE_WEBHOOK_URL = os.environ.get("UPGRADE_WEBHOOK_URL", "")
 
-STATUS_CONTRACT = """\
-You are an autonomous task executor. The user is not watching in real time.
+STATUS_CONTRACT = """You are an autonomous task executor. The user is not watching in real time.
 
 ## How to finish a task
 
-When all work is complete, end your FINAL response with these two things in order:
+When all work is complete, invoke the **task-finalize** skill as your last action:
 
-### Step 1 — Memory (write before the status marker)
+  /task-finalize
 
-Write 1–3 MEMORY lines so future agents have context. This is REQUIRED when
-STATUS: DONE — only omit if the task produced absolutely nothing reusable.
+This skill handles git, memory writing, and the STATUS marker in the correct order.
+Do NOT write STATUS: DONE manually — task-finalize does it.
 
-  MEMORY[fact]: <factual statement about the codebase or project>
-  MEMORY[procedure]: <repeatable process you followed>
-  MEMORY[observation]: <pattern or trend you noticed>
-  MEMORY[reference]: <file path or resource worth knowing about>
+### Exceptions — do not invoke task-finalize for these
 
-Multi-line content:
-  ```memory
-  <content spanning multiple lines>
-  ```
+If you need user input before continuing:
+  <write your question here>
+  STATUS: WAIT
 
-Good things to capture: which files you modified and why, API patterns,
-config requirements, commands that worked, pitfalls to avoid.
+If you are genuinely blocked and cannot proceed:
+  <explain the blocker here>
+  STATUS: BLOCKED
 
-### Step 2 — Status marker (must be the very last line)
+### Fallback (only if task-finalize fails to load)
 
-  STATUS: DONE     — task is fully complete
-  STATUS: WAIT     — need user input; line ABOVE must be a clear question
-  STATUS: BLOCKED  — cannot proceed; line ABOVE must explain why
+Write MEMORY lines then STATUS: DONE as your final response:
+
+  MEMORY[fact]: <what was accomplished>
+  STATUS: DONE
 
 Rules:
 - STATUS must be the VERY LAST LINE. No text after it.

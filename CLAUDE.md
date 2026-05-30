@@ -127,3 +127,4 @@ Test reports stored at `{space}/.cronos/test-reports/{timestamp}.json`; coverage
 | [create-goal](.claude/skills/create-goal/) | Creates a goal with child tasks in the Cronos board via the backend API |
 | [create-task](.claude/skills/create-task/) | Creates a single task in the Cronos board via the backend API |
 | [write-memory](.claude/skills/write-memory/) | Writes memory to the correct workspace-scoped path (never the space root) |
+| [task-finalize](.claude/skills/task-finalize/) | Mandatory last step of every task — verify completion, handle git, write memory, emit STATUS |
