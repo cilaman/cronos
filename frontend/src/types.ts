@@ -71,13 +71,14 @@ export const AGENT_MODES: { value: AgentMode; label: string }[] = [
   { value: "ask", label: "Ask only" },
 ];
 
-export type AgentModel = "default" | "sonnet" | "opus" | "haiku";
+export type AgentModel = "default" | "sonnet" | "opus" | "haiku" | "opus-4-8";
 
 export const AGENT_MODELS: { value: AgentModel; label: string }[] = [
   { value: "default", label: "Default" },
   { value: "sonnet", label: "Sonnet" },
   { value: "opus", label: "Opus" },
   { value: "haiku", label: "Haiku" },
+  { value: "opus-4-8", label: "Opus 4.8" },
 ];
 
 export interface Task {

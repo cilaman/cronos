@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from .models import AgentMode, AgentModel, Board, Task, TaskState, TaskSummary
 
 VALID_AGENT_MODES: tuple[AgentMode, ...] = ("plan", "auto", "ask")
-VALID_AGENT_MODELS: tuple[AgentModel, ...] = ("default", "sonnet", "opus", "haiku")
+VALID_AGENT_MODELS: tuple[AgentModel, ...] = ("default", "sonnet", "opus", "haiku", "opus-4-8")
 
 
 @dataclass

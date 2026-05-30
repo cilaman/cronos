@@ -132,6 +132,10 @@ PERMISSION_MODE: dict[str, str] = {
 PLAN_MODE_TOOLS = "Read,Grep,Glob,Skill,Agent"
 DEFAULT_TOOLS = "Read,Edit,Write,Bash,Skill,Agent"
 
+_MODEL_CLI_NAMES: dict[str, str] = {
+    "opus-4-8": "claude-opus-4-8",
+}
+
 
 def _upgrade_instructions() -> str:
     if not UPGRADE_WEBHOOK_URL:
@@ -237,7 +241,8 @@ async def run_agent(
         _upgrade_instructions(),
     ]
     if task.agent_model != "default":
-        cmd += ["--model", task.agent_model]
+        cli_model = _MODEL_CLI_NAMES.get(task.agent_model, task.agent_model)
+        cmd += ["--model", cli_model]
     if task.claude_session_id:
         cmd += ["--resume", task.claude_session_id]
 
