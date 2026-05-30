@@ -303,33 +303,76 @@ async def run_agent(
 
     assert proc.stdout is not None
     read_error: Exception | None = None
+    got_result = False
+
+    async def handle_line(raw_line: bytes) -> None:
+        nonlocal session_id, result_subtype, got_result
+        line = raw_line.decode("utf-8", errors="replace").strip()
+        if not line:
+            return
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            log.warning("Non-JSON line from claude: %s", line[:200])
+            return
+
+        raw_events.append(event)
+
+        # Capture session id from system/init and final result events.
+        if isinstance(event, dict):
+            if event.get("type") == "system" and event.get("subtype") == "init":
+                session_id = event.get("session_id") or session_id
+            elif event.get("type") == "result":
+                session_id = event.get("session_id") or session_id
+                result_subtype = event.get("subtype") or result_subtype
+                got_result = True
+
+        # Extract assistant text blocks for our final_text accumulation.
+        text = _extract_assistant_text(event)
+        if text:
+            final_text_parts.append(text)
+
+        await on_event(event)
+
+    # claude emits exactly one terminal `result` event and then exits, so we
+    # stop reading as soon as we see it rather than waiting for stdout to reach
+    # EOF. A Bash tool may have spawned a background process (dev server,
+    # docker compose, uvicorn) that inherited claude's stdout pipe; that orphan
+    # keeps the pipe open after claude itself exits, so waiting for EOF would
+    # block forever and strand the task in ACTIVE. Each read is also raced
+    # against process exit to cover a crash that never emits `result`.
+    exited: asyncio.Task[int] = asyncio.ensure_future(proc.wait())
     try:
-        async for raw_line in proc.stdout:
-            line = raw_line.decode("utf-8", errors="replace").strip()
-            if not line:
+        while True:
+            line_fut: asyncio.Task[bytes] = asyncio.ensure_future(proc.stdout.readline())
+            done, _ = await asyncio.wait(
+                {line_fut, exited}, return_when=asyncio.FIRST_COMPLETED
+            )
+            if line_fut in done:
+                raw_line = line_fut.result()
+                if not raw_line:
+                    break  # genuine stdout EOF
+                await handle_line(raw_line)
+                if got_result:
+                    break
                 continue
-            try:
-                event = json.loads(line)
-            except json.JSONDecodeError:
-                log.warning("Non-JSON line from claude: %s", line[:200])
-                continue
-
-            raw_events.append(event)
-
-            # Capture session id from system/init and final result events.
-            if isinstance(event, dict):
-                if event.get("type") == "system" and event.get("subtype") == "init":
-                    session_id = event.get("session_id") or session_id
-                elif event.get("type") == "result":
-                    session_id = event.get("session_id") or session_id
-                    result_subtype = event.get("subtype") or result_subtype
-
-            # Extract assistant text blocks for our final_text accumulation.
-            text = _extract_assistant_text(event)
-            if text:
-                final_text_parts.append(text)
-
-            await on_event(event)
+            # Process exited before the next line arrived. Drain whatever is
+            # still buffered in the pipe (bounded), then stop — never block on
+            # EOF that a leaked background child may be holding off.
+            while True:
+                try:
+                    raw_line = await asyncio.wait_for(line_fut, timeout=0.5)
+                except asyncio.TimeoutError:
+                    break
+                except Exception:
+                    break
+                if not raw_line:
+                    break
+                await handle_line(raw_line)
+                if got_result:
+                    break
+                line_fut = asyncio.ensure_future(proc.stdout.readline())
+            break
     except Exception as exc:
         read_error = exc
         log.error("Error reading claude stdout for task %s: %s", task.id, exc)
@@ -338,13 +381,31 @@ async def run_agent(
         except ProcessLookupError:
             pass
     finally:
-        exit_code = await proc.wait()
+        if not exited.done():
+            try:
+                await asyncio.wait_for(asyncio.shield(exited), timeout=10)
+            except asyncio.TimeoutError:
+                log.warning("claude did not exit after run for %s; killing", task.id)
+                try:
+                    proc.kill()
+                except ProcessLookupError:
+                    pass
+        exit_code = await exited
         cancel_task.cancel()
         try:
             await cancel_task
         except (asyncio.CancelledError, Exception):
             pass
-        await stderr_task
+        # Bound the stderr drain too: a leaked background child can hold the
+        # stderr pipe open, so don't wait on its EOF indefinitely.
+        try:
+            await asyncio.wait_for(asyncio.shield(stderr_task), timeout=2)
+        except asyncio.TimeoutError:
+            stderr_task.cancel()
+            try:
+                await stderr_task
+            except (asyncio.CancelledError, Exception):
+                pass
 
     if read_error is not None:
         raise read_error

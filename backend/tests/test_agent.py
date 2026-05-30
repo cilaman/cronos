@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 from datetime import datetime, timezone
@@ -528,6 +529,11 @@ class _FakeStream:
             raise StopAsyncIteration
         return self._lines.pop(0)
 
+    async def readline(self) -> bytes:
+        if not self._lines:
+            return b""
+        return self._lines.pop(0)
+
     async def read(self, _n: int) -> bytes:
         return b""
 
@@ -712,3 +718,136 @@ async def test_run_agent_third_pass_picks_latest_earlier_turn(tmp_path):
 
     # Reverse-scan should hit the most recent earlier turn first → DONE.
     assert result.status == Status.DONE
+
+
+# ---------------------------------------------------------------------------
+# run_agent: must not hang when claude exits but stdout pipe stays open
+# (a Bash tool left a background process holding the inherited pipe).
+# ---------------------------------------------------------------------------
+
+
+def _result_event(subtype: str = "success") -> bytes:
+    payload = {"type": "result", "subtype": subtype, "session_id": "sess-1"}
+    return (json.dumps(payload) + "\n").encode("utf-8")
+
+
+class _PipeHeldOpenStream:
+    """Yields queued lines, then blocks forever on the next read.
+
+    Models a stdout/stderr pipe kept open by a leaked background child after
+    the claude process itself has exited.
+    """
+
+    def __init__(self, lines: list[bytes]) -> None:
+        self._lines = list(lines)
+
+    async def readline(self) -> bytes:
+        if self._lines:
+            return self._lines.pop(0)
+        await asyncio.Event().wait()  # never resolves
+        return b""  # pragma: no cover
+
+    async def read(self, _n: int) -> bytes:
+        if self._lines:
+            return self._lines.pop(0)
+        await asyncio.Event().wait()  # never resolves
+        return b""  # pragma: no cover
+
+
+class _ExitsButPipeOpenProc:
+    """Process whose wait() resolves while stdout (and optionally stderr) stay
+    open — the exact condition that used to hang run_agent forever."""
+
+    def __init__(
+        self,
+        stdout_lines: list[bytes],
+        *,
+        exit_code: int = 0,
+        exit_delay: float = 0.05,
+        block_stderr: bool = False,
+    ) -> None:
+        self.stdout = _PipeHeldOpenStream(stdout_lines)
+        self.stderr = _PipeHeldOpenStream([]) if block_stderr else _FakeStream([])
+        self._exit_code = exit_code
+        self._exit_delay = exit_delay
+        self.returncode: int | None = None
+
+    async def wait(self) -> int:
+        await asyncio.sleep(self._exit_delay)
+        self.returncode = self._exit_code
+        return self._exit_code
+
+    def terminate(self) -> None:
+        pass
+
+    def kill(self) -> None:
+        pass
+
+
+async def test_run_agent_returns_when_result_seen_despite_open_pipe(tmp_path):
+    """Agent emits STATUS: DONE + result, then a leaked child holds stdout open.
+
+    Previously run_agent waited for stdout EOF, which never came, so the task
+    stayed stuck in ACTIVE. It must now stop on the terminal `result` event.
+    """
+    import app.agent as agent_module
+
+    stdout_lines = [_assistant_event("done.\nSTATUS: DONE"), _result_event()]
+    task = _make_task()
+    original_data_dir = agent_module.DATA_DIR
+    agent_module.DATA_DIR = tmp_path
+
+    async def on_event(event: dict) -> None:
+        pass
+
+    fake_proc = _ExitsButPipeOpenProc(stdout_lines, exit_code=0, block_stderr=True)
+
+    async def fake_create_subprocess_exec(*_args, **_kwargs):
+        return fake_proc
+
+    try:
+        with patch(
+            "app.agent.asyncio.create_subprocess_exec",
+            side_effect=fake_create_subprocess_exec,
+        ):
+            result = await asyncio.wait_for(
+                run_agent(task, user_message=None, on_event=on_event), timeout=10
+            )
+    finally:
+        agent_module.DATA_DIR = original_data_dir
+
+    assert result.status == Status.DONE
+    assert result.exit_code == 0
+
+
+async def test_run_agent_returns_when_process_exits_without_result(tmp_path):
+    """Crash path: no `result` event and stdout never EOFs, but the process
+    exits. run_agent must observe the exit and return instead of hanging."""
+    import app.agent as agent_module
+
+    stdout_lines = [_assistant_event("working on it...")]
+    task = _make_task()
+    original_data_dir = agent_module.DATA_DIR
+    agent_module.DATA_DIR = tmp_path
+
+    async def on_event(event: dict) -> None:
+        pass
+
+    fake_proc = _ExitsButPipeOpenProc(stdout_lines, exit_code=1, exit_delay=0.05)
+
+    async def fake_create_subprocess_exec(*_args, **_kwargs):
+        return fake_proc
+
+    try:
+        with patch(
+            "app.agent.asyncio.create_subprocess_exec",
+            side_effect=fake_create_subprocess_exec,
+        ):
+            result = await asyncio.wait_for(
+                run_agent(task, user_message=None, on_event=on_event), timeout=10
+            )
+    finally:
+        agent_module.DATA_DIR = original_data_dir
+
+    assert result.status is None
+    assert result.exit_code == 1
