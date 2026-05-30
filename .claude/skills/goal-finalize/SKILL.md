@@ -34,7 +34,21 @@ GOAL_TITLE=$(grep "^title:" "/data/spaces/cronos-development/.cronos/tasks/${GOA
 git -C "$SPACE_DIR" fetch origin --prune
 ```
 
-### Step 3: Run the full test suite
+### Step 3: Run the pipeline eval gate
+
+Before the full test suite, run the CC-v1 eval harness as a fast regression check:
+
+```bash
+cd /data/spaces/cronos-development/backend && python -m app.pipeline.run_evals --all
+```
+
+This runs all golden fixtures (must pass verify()) and all negative fixtures (must fail verify() after normalize()). Exit code 0 = pass, 1 = regression detected.
+
+**If evals fail**: Stop here. A golden fixture regressing means a change to the contract, schemas, normalizer, or verifier broke a known-good artifact. A negative fixture starting to pass means the verifier no longer catches a hard-fail condition. Neither is safe to merge. Report the failures clearly, create a follow-up task to fix the regression, then re-run `/goal-finalize`.
+
+**If evals pass**: Continue.
+
+### Step 4: Run the full test suite
 
 Invoke the `test-architect` subagent to run all tests against the feature branch state.
 
@@ -42,7 +56,7 @@ Invoke the `test-architect` subagent to run all tests against the feature branch
 
 **If tests pass**: Continue.
 
-### Step 4: Rebase the feature branch onto latest main
+### Step 5: Rebase the feature branch onto latest main
 
 ```bash
 git -C "$SPACE_DIR" checkout "${FEATURE_BRANCH}"
@@ -55,7 +69,7 @@ git -C "$SPACE_DIR" rebase --abort
 ```
 Report the conflicting files. Do NOT merge. The user must resolve conflicts manually, then re-run this skill.
 
-### Step 5: Merge to main
+### Step 6: Merge to main
 
 ```bash
 # Switch to main and pull latest
@@ -71,7 +85,7 @@ EOF
 )"
 ```
 
-### Step 6: Push main to origin
+### Step 7: Push main to origin
 
 ```bash
 REMOTE_URL=$(git -C "$SPACE_DIR" remote get-url origin 2>/dev/null || echo "")
@@ -87,7 +101,7 @@ else
 fi
 ```
 
-### Step 7: Confirm
+### Step 8: Confirm
 
 ```bash
 git -C "$SPACE_DIR" log --oneline -5
