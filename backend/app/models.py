@@ -16,7 +16,7 @@ class TaskState(str, Enum):
 
 
 AgentMode = Literal["plan", "auto", "ask"]
-AgentModel = Literal["default", "sonnet", "opus", "haiku"]
+AgentModel = Literal["default", "sonnet", "opus", "haiku", "opus-4-8"]
 TaskType = Literal["task", "goal", "issue"]
 
 

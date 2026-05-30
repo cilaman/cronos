@@ -1,7 +1,7 @@
 ---
 name: test-architect
 description: Senior test architect — maintains the test suite, identifies coverage gaps, writes new tests, spawns the tester agent to run them, and produces test reports. Invoke for any test strategy or coverage work.
-model: claude-opus-4-7
+model: claude-opus-4-8
 tools: Read, Edit, Write, Bash, Agent
 ---
 
