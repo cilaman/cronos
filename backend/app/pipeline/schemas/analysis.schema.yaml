@@ -1,0 +1,189 @@
+# Schema: analysis-class artifact YAML header (CC-v1)
+# Class: analysis
+# Phase identifier: analysis
+# Artifact path: {space}/.cronos/pipeline/{goal_slug}/analysis-report-{goal_slug}.md
+#
+# Validation: python backend/app/pipeline/verifier.py --class analysis --slug <slug>
+#
+# Cronos deviations from Delivery Notes v1.0:
+#   - cc_version + phase are new base-header fields
+#   - kb_hits → memory_hits
+#   - duration_s / token_spend are trace-owned; agents MUST NOT write them
+#   - agent field is not restricted to a specific enum (no named agents yet)
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "analysis.schema.yaml"
+title: "Analysis-Class Artifact YAML Header (CC-v1)"
+description: "Strict schema for analysis-class pipeline artifacts — requirement decomposition and traceability."
+type: object
+additionalProperties: false
+
+required:
+  - cc_version
+  - agent
+  - slug
+  - phase
+  - status
+  - confidence
+  - inputs_used
+  - outputs_produced
+  - blockers
+  - next_consumer
+  - metrics
+  - request
+  - has_ui
+  - coverage_summary
+  - traceability
+
+properties:
+
+  cc_version:
+    type: string
+    const: "1.0"
+
+  agent:
+    type: string
+    minLength: 1
+    description: "Agent name from the pipeline registry (e.g. 'analyst')."
+
+  slug:
+    type: string
+    pattern: "^[a-z0-9]+(-[a-z0-9]+)*(--[a-z0-9]+(-[a-z0-9]+)*)?$"
+    maxLength: 120
+
+  phase:
+    type: string
+    const: "analysis"
+
+  status:
+    type: string
+    enum: ["done", "partial", "blocked", "failed"]
+
+  confidence:
+    type: number
+    minimum: 0.0
+    maximum: 1.0
+
+  inputs_used:
+    type: array
+    items:
+      type: string
+      pattern: "^(?![/\\\\])(?![A-Za-z]:).*$"
+
+  outputs_produced:
+    type: array
+    minItems: 1
+    items:
+      type: string
+      pattern: "^(?![/\\\\])(?![A-Za-z]:).*$"
+
+  blockers:
+    type: array
+    items:
+      type: object
+      required: [description, severity]
+      properties:
+        description: { type: string, minLength: 1 }
+        severity: { type: string, enum: ["low", "medium", "high", "critical"] }
+        suggested_resolution: { type: string }
+
+  next_consumer:
+    type: string
+    minLength: 1
+
+  # --- analysis-class specific fields ---
+
+  request:
+    type: string
+    minLength: 1
+    description: "Verbatim feature/change request from the user or orchestrator. Never paraphrased. The traceability anchor for every derived requirement."
+
+  has_ui:
+    type: boolean
+    description: "Whether this feature involves UI changes. Real boolean — not a string. Determines whether a design phase is invoked."
+
+  coverage_summary:
+    type: object
+    required: [searched, excluded, strategies]
+    description: "Areas consulted while deriving requirements."
+    properties:
+      searched:
+        type: array
+        items: { type: string }
+      excluded:
+        type: array
+        items: { type: string }
+      strategies:
+        type: array
+        minItems: 1
+        items:
+          type: string
+          enum:
+            - "memory_retrieval"
+            - "read_targeted"
+            - "grep_symbol"
+            - "grep_keyword"
+            - "glob_structural"
+            - "requirements_decomposition"
+            - "traceability_mapping"
+
+  traceability:
+    type: array
+    minItems: 1
+    description: "Maps each requirement to acceptance criteria and the downstream phase that verifies it. Machine-readable routing table for the orchestrator."
+    items:
+      type: object
+      required: [requirement_id, statement, acceptance_criteria, verifying_phase]
+      properties:
+        requirement_id:
+          type: string
+          pattern: "^R[0-9]+$"
+          description: "Stable identifier (R1, R2, …). Never renumbered in revision mode."
+        statement:
+          type: string
+          minLength: 1
+        acceptance_criteria:
+          type: array
+          minItems: 1
+          items: { type: string }
+        verifying_phase:
+          type: string
+          enum: ["test", "review", "design", "manual"]
+          description: "Which downstream phase is responsible for verifying this requirement."
+        confidence:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+          description: "Optional per-requirement confidence. < 0.5 on a critical requirement should trigger escalation."
+
+  metrics:
+    type: object
+    required: [tool_calls, files_read, memory_hits]
+    additionalProperties: true
+    properties:
+      tool_calls: { type: integer, minimum: 1 }
+      files_read: { type: integer, minimum: 0 }
+      memory_hits:
+        type: integer
+        minimum: 0
+        description: "Memory store entries relied on. R4: files_read + memory_hits >= len(inputs_used)."
+
+# Cross-field rules enforced by verifier.py:
+#
+# R1: Non-empty blockers requires status in {blocked, failed}.
+# R2: status=done requires confidence >= 0.7.
+# R3: confidence in [0.0, 1.0].
+# R4: metrics.files_read + metrics.memory_hits >= len(inputs_used).
+# R5: outputs_produced[0] matches canonical artifact path (warning).
+# R6: slug verbatim from orchestrator.
+# R7: workspace-relative forward-slash paths only.
+#
+# Additional analysis-class checks:
+#   - has_ui must be a real boolean (not string "true"/"false").
+#   - request must be non-empty.
+#   - traceability rows have unique requirement_ids.
+#   - per-row confidence, if present, must be in [0.0, 1.0].
+#
+# Required markdown sections:
+#   ## Summary, ## Scope, ## Requirements, ## Acceptance criteria,
+#   ## Traceability, ## Assumptions, ## Open questions, ## Next consumer brief

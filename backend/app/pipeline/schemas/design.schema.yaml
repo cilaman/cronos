@@ -1,0 +1,205 @@
+# Schema: design-class artifact YAML header (CC-v1)
+# Class: design
+# Phase identifier: design
+# Artifact path: {space}/.cronos/pipeline/{goal_slug}/design-report-{goal_slug}.md
+#
+# Validation: python backend/app/pipeline/verifier.py --class design --slug <slug>
+#
+# Cronos deviations from Delivery Notes v1.0:
+#   - cc_version + phase are new base-header fields
+#   - kb_hits → memory_hits
+#   - duration_s / token_spend are trace-owned; agents MUST NOT write them
+#   - iterations[] schema matches Delivery Notes exactly (type/scope_files/validation_command/
+#     max_diff_lines/depends_on) — these fields are load-bearing for the verifier and
+#     the downstream implementation-class agents
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "design.schema.yaml"
+title: "Design-Class Artifact YAML Header (CC-v1)"
+description: "Strict schema for design-class pipeline artifacts — architecture and implementation plan."
+type: object
+additionalProperties: false
+
+required:
+  - cc_version
+  - agent
+  - slug
+  - phase
+  - status
+  - confidence
+  - inputs_used
+  - outputs_produced
+  - blockers
+  - next_consumer
+  - metrics
+  - iterations
+  - risks
+  - coverage_summary
+
+properties:
+
+  cc_version:
+    type: string
+    const: "1.0"
+
+  agent:
+    type: string
+    minLength: 1
+    description: "Agent name from the pipeline registry (e.g. 'architect')."
+
+  slug:
+    type: string
+    pattern: "^[a-z0-9]+(-[a-z0-9]+)*(--[a-z0-9]+(-[a-z0-9]+)*)?$"
+    maxLength: 120
+
+  phase:
+    type: string
+    const: "design"
+
+  status:
+    type: string
+    enum: ["done", "partial", "blocked", "failed"]
+
+  confidence:
+    type: number
+    minimum: 0.0
+    maximum: 1.0
+
+  inputs_used:
+    type: array
+    items:
+      type: string
+      pattern: "^(?![/\\\\])(?![A-Za-z]:).*$"
+
+  outputs_produced:
+    type: array
+    minItems: 1
+    items:
+      type: string
+      pattern: "^(?![/\\\\])(?![A-Za-z]:).*$"
+    description: "Design agents may produce multiple artifacts (primary report + ADRs). All listed here."
+
+  blockers:
+    type: array
+    items:
+      type: object
+      required: [description, severity]
+      properties:
+        description: { type: string, minLength: 1 }
+        severity: { type: string, enum: ["low", "medium", "high", "critical"] }
+        suggested_resolution: { type: string }
+
+  next_consumer:
+    type: string
+    minLength: 1
+
+  # --- design-class specific fields ---
+
+  iterations:
+    type: array
+    minItems: 1
+    description: "Machine-readable implementation plan. Each entry is one atomic iteration the downstream implementation agent executes."
+    items:
+      type: object
+      required: [id, type, scope_files, validation_command, depends_on]
+      properties:
+        id:
+          type: string
+          pattern: "^I[0-9]+$"
+          description: "Stable identifier (I1, I2, …). Never renumbered in revision mode."
+        type:
+          type: string
+          enum: ["data", "backend", "frontend", "infra"]
+          description: "Implementor category. Determines which implementation agent runs this iteration."
+        scope_files:
+          type: array
+          items:
+            type: string
+            pattern: "^(?![/\\\\])(?![A-Za-z]:).*$"
+          description: "Workspace-relative forward-slash paths this iteration will create or modify."
+        validation_command:
+          type: string
+          minLength: 1
+          description: "Concrete shell command to run after the iteration completes. Placeholder strings ('TODO', 'run tests', 'pending') are rejected by the verifier."
+        max_diff_lines:
+          type: integer
+          minimum: 0
+          description: "Optional diff budget in lines. Convention default is 300 when absent."
+        depends_on:
+          type: array
+          items:
+            type: string
+            pattern: "^I[0-9]+$"
+          description: "Iteration IDs that must complete before this one starts. All refs must exist in this iterations[] list. Empty list means no dependencies."
+
+  risks:
+    type: array
+    minItems: 1
+    description: "Top risks. At least one entry is required — forces the agent to reason about failure modes."
+    items:
+      type: object
+      required: [description, severity, mitigation]
+      properties:
+        description: { type: string, minLength: 1 }
+        severity: { type: string, enum: ["low", "medium", "high", "critical"] }
+        mitigation: { type: string, minLength: 1 }
+
+  coverage_summary:
+    type: object
+    required: [searched, excluded, strategies]
+    description: "Areas consulted while producing the design."
+    properties:
+      searched:
+        type: array
+        items: { type: string }
+      excluded:
+        type: array
+        items: { type: string }
+      strategies:
+        type: array
+        minItems: 1
+        items:
+          type: string
+          enum:
+            - "memory_retrieval"
+            - "read_targeted"
+            - "grep_symbol"
+            - "grep_keyword"
+            - "glob_structural"
+            - "component_decomposition"
+            - "iteration_planning"
+            - "risk_identification"
+
+  metrics:
+    type: object
+    required: [tool_calls, files_read, memory_hits]
+    additionalProperties: true
+    properties:
+      tool_calls: { type: integer, minimum: 1 }
+      files_read: { type: integer, minimum: 0 }
+      memory_hits: { type: integer, minimum: 0 }
+      iterations_planned:
+        type: integer
+        minimum: 0
+        description: "Convenience count — MUST equal len(iterations)."
+
+# Cross-field rules enforced by verifier.py:
+#
+# R1: Non-empty blockers requires status in {blocked, failed}.
+# R2: status=done requires confidence >= 0.7.
+# R3: confidence in [0.0, 1.0].
+# R4: metrics.files_read + metrics.memory_hits >= len(inputs_used).
+# R5: outputs_produced[0] matches canonical path (warning).
+# R6: slug verbatim from orchestrator.
+# R7: workspace-relative forward-slash paths only.
+#
+# Additional design-class checks:
+#   - iterations[] non-empty; iteration IDs are unique; all depends_on refs resolve.
+#   - validation_command is not a placeholder string.
+#   - scope_files use workspace-relative forward-slash paths.
+#   - risks[] non-empty; each risk has non-empty description and mitigation.
+#   - iterations_planned (if present) must equal len(iterations).
+#
+# Required markdown sections:
+#   ## Summary, ## Components, ## Implementation plan, ## Risks,
+#   ## Assumptions, ## Open questions, ## Next consumer brief
