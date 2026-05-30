@@ -138,6 +138,7 @@ class PhaseEntry:
     """Full state entry for one pipeline phase to be written into pipeline-state.json."""
     phase: str
     status: str
+    cc_version: str = CC_VERSION
     agent: str = ""
     task_id: str = ""
     run_index: int = 0
@@ -153,6 +154,7 @@ class PhaseEntry:
         return {
             "phase": self.phase,
             "status": self.status,
+            "cc_version": self.cc_version,
             "agent": self.agent,
             "task_id": self.task_id,
             "run_index": self.run_index,
@@ -305,6 +307,7 @@ def record_phase_log(
     task_id: str,
     run_index: int,
     timestamp: str | None = None,
+    cc_version: str = CC_VERSION,
 ) -> None:
     """Append one JSON line to phases-log.jsonl for the completed phase.
 
@@ -313,6 +316,9 @@ def record_phase_log(
     pipeline-state.json after every phase.  Use ``load_last_phase_log()``
     to quickly check "did the previous phase succeed?" without loading the
     full state.
+
+    ``cc_version`` records which contract version the phase ran under,
+    enabling replay and audit if the contract is bumped mid-pipeline.
     """
     entry = {
         "phase": phase,
@@ -320,6 +326,7 @@ def record_phase_log(
         "gate_decision": gate_decision,
         "task_id": task_id,
         "run_index": run_index,
+        "cc_version": cc_version,
         "timestamp": timestamp or _iso_now(),
     }
     lp = log_path(space, goal_slug)
