@@ -18,11 +18,26 @@ from app.pipeline.contract import (
     STATUS_VALUES,
     TRACE_OWNED_METRICS,
 )
+from app.pipeline.verify import (
+    CLASS_CONFIG,
+    EXIT_ESCALATE,
+    EXIT_FAIL,
+    EXIT_PROCEED,
+    EXIT_RETRY,
+    VerifyResult,
+    canonical_artifact_relpath,
+    verify,
+)
 
 __all__ = [
     "AGENT_REPORTED_METRICS",
     "ARTIFACT_PATH_TEMPLATE",
     "CC_VERSION",
+    "CLASS_CONFIG",
+    "EXIT_ESCALATE",
+    "EXIT_FAIL",
+    "EXIT_PROCEED",
+    "EXIT_RETRY",
     "HEADER_FIELDS",
     "HEADER_REQUIRED_FIELDS",
     "NEXT_CONSUMER_USER_SENTINEL",
@@ -30,4 +45,7 @@ __all__ = [
     "REQUIRED_SECTIONS",
     "STATUS_VALUES",
     "TRACE_OWNED_METRICS",
+    "VerifyResult",
+    "canonical_artifact_relpath",
+    "verify",
 ]
