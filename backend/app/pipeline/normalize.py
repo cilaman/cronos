@@ -111,6 +111,34 @@ _STRATEGY_SYNONYMS: dict[str, str] = {
     "sourcequalityreview": "source_quality_review",
 }
 
+
+# Sidecar registry — extra synonyms appended at module-load time by the
+# auto-improvement applier (task 4.4). The file ships with an empty
+# strategy_synonyms map and is the durable home for synonyms learned from
+# retro findings (fix_type=normalize_rule, target=normalize:strategy_synonym).
+_NORMALIZE_RULES_PATH: Path = Path(__file__).parent / "normalize_rules.json"
+
+
+def _load_synonym_registry() -> dict[str, str]:
+    """Read the sidecar synonym registry; return empty dict if missing/invalid."""
+    if not _NORMALIZE_RULES_PATH.exists():
+        return {}
+    try:
+        data = json.loads(_NORMALIZE_RULES_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    raw = data.get("strategy_synonyms")
+    if not isinstance(raw, dict):
+        return {}
+    return {
+        str(k): str(v)
+        for k, v in raw.items()
+        if isinstance(k, str) and isinstance(v, str)
+    }
+
+
+_STRATEGY_SYNONYMS.update(_load_synonym_registry())
+
 _RESEARCH_STRATEGIES: frozenset[str] = frozenset(
     {
         "memory_retrieval",
