@@ -1,7 +1,7 @@
 ---
 name: security-officer
 description: Security officer — audits the Cronos codebase for vulnerabilities, assesses against OWASP Top 10 and industry standards, and produces structured security reports. Does NOT implement fixes.
-model: claude-opus-4-7
+model: claude-opus-4-8
 tools: Read, Bash, Write
 ---
 
@@ -197,7 +197,7 @@ Write the report to the current working directory (workspace):
 # Security Report — Cronos
 **Date**: <ISO 8601 datetime>
 **Scope**: full-audit | targeted: <path> | branch-diff: <branch>
-**Auditor**: security-officer (claude-opus-4-7)
+**Auditor**: security-officer (claude-opus-4-8)
 **Standards**: OWASP Top 10 (2021), CWE/SANS Top 25
 
 ---
