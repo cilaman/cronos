@@ -210,6 +210,36 @@ export PY_EXIT=$?
 
 ---
 
+## Step 3b — Retro memory write-back (only when PHASE=retro and gate passes)
+
+When `PHASE=retro` **and** `VERIFY_EXIT == 0` **and** `PY_EXIT == 0`, run the
+memory writer to persist each finding from the retro artifact as a global
+Cronos memory item. This is the mechanism that closes the self-improvement loop:
+findings surface in future pipeline runs via `app.memory_retrieval.retrieve`.
+
+Skip this step entirely for any other phase — it is retro-specific.
+
+```bash
+if [ "$PHASE" = "retro" ] && [ "$VERIFY_EXIT" -eq 0 ] && [ "$PY_EXIT" -eq 0 ]; then
+  cd "${SPACE_DIR}/backend"
+  python -m app.pipeline.retro_memory_writer \
+      --space "${SPACE_DIR}" \
+      --slug  "${GOAL_SLUG}" > /tmp/retro-memory-writer.out 2>&1
+  export MEM_EXIT=$?
+  cat /tmp/retro-memory-writer.out
+  if [ "$MEM_EXIT" -ne 0 ]; then
+    echo "retro memory write-back failed (exit $MEM_EXIT) — lessons not persisted but gate still PASS"
+  fi
+fi
+```
+
+The memory writer failure is **non-blocking** — if it fails, the gate still emits
+`STATUS: DONE` (the retro artifact itself passed verification; memory write-back is
+a best-effort side effect). Log the failure for human review but do not downgrade
+to `STATUS: BLOCKED`.
+
+---
+
 ## Step 4 — Emit STATUS as the last line of your response
 
 The Cronos worker (`backend/app/agent.py::parse_status`) routes the gate task by reading the final `STATUS:` line. Pick **one**:
