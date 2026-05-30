@@ -1,0 +1,149 @@
+# Schema: doc-class artifact YAML header (CC-v1)
+# Class: doc
+# Phase identifier: doc
+# Artifact path: {space}/.cronos/pipeline/{goal_slug}/doc-report-{goal_slug}.md
+#
+# Validation: python backend/app/pipeline/verifier.py --class doc --slug <slug>
+#
+# Cronos deviations from Delivery Notes v1.0 (documentation-class):
+#   - cc_version + phase are new base-header fields
+#   - kb_hits removed (memory_hits optional; no .kb/ substrate in Cronos)
+#   - duration_s / token_spend are trace-owned; agents MUST NOT write them
+#   - doc_authority_map / kb_adjacent_docs removed (Cronos has no KB sync phase)
+#   - intentionally_not_updated and docs_updated are retained as-is (load-bearing for R-doc-*)
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "doc.schema.yaml"
+title: "Doc-Class Artifact YAML Header (CC-v1)"
+description: "Strict schema for doc-class pipeline artifacts — documentation sync after implementation."
+type: object
+additionalProperties: false
+
+required:
+  - cc_version
+  - agent
+  - slug
+  - phase
+  - status
+  - confidence
+  - inputs_used
+  - outputs_produced
+  - blockers
+  - next_consumer
+  - metrics
+  - intentionally_not_updated
+
+properties:
+
+  cc_version:
+    type: string
+    const: "1.0"
+
+  agent:
+    type: string
+    minLength: 1
+    description: "Agent name from the pipeline registry (e.g. 'doc-writer')."
+
+  slug:
+    type: string
+    pattern: "^[a-z0-9]+(-[a-z0-9]+)*(--[a-z0-9]+(-[a-z0-9]+)*)?$"
+    maxLength: 120
+
+  phase:
+    type: string
+    const: "doc"
+
+  status:
+    type: string
+    enum: ["done", "partial", "blocked", "failed"]
+
+  confidence:
+    type: number
+    minimum: 0.0
+    maximum: 1.0
+
+  inputs_used:
+    type: array
+    items:
+      type: string
+      pattern: "^(?![/\\\\])(?![A-Za-z]:).*$"
+    description: "Source files that drove the doc updates + upstream reports that were read."
+
+  outputs_produced:
+    type: array
+    minItems: 1
+    items:
+      type: string
+      pattern: "^(?![/\\\\])(?![A-Za-z]:).*$"
+    description: "Entry [0] is ALWAYS the doc report itself (R-doc-1). Subsequent entries are documentation files actually modified."
+
+  blockers:
+    type: array
+    items:
+      type: object
+      required: [description, severity]
+      properties:
+        description: { type: string, minLength: 1 }
+        severity: { type: string, enum: ["low", "medium", "high", "critical"] }
+        suggested_resolution: { type: string }
+
+  next_consumer:
+    type: string
+    minLength: 1
+    description: "Typically 'user' (end of pipeline) or an orchestrator commit phase."
+
+  # --- doc-class specific fields ---
+
+  intentionally_not_updated:
+    type: array
+    description: "Documentation files the agent considered but DID NOT update, with explicit reason. R-doc-3: required (empty list is acceptable). R-doc-4: if outputs_produced has only the report entry, this must be non-empty."
+    items:
+      type: object
+      required: [path, reason]
+      properties:
+        path:
+          type: string
+          pattern: "^(?![/\\\\])(?![A-Za-z]:).*$"
+        reason:
+          type: string
+          minLength: 1
+          description: "Explicit justification for skipping this doc."
+
+  metrics:
+    type: object
+    required: [tool_calls, files_read]
+    additionalProperties: true
+    properties:
+      tool_calls: { type: integer, minimum: 1 }
+      files_read: { type: integer, minimum: 0 }
+      memory_hits: { type: integer, minimum: 0 }
+      docs_updated:
+        type: integer
+        minimum: 0
+        description: "MUST equal len(outputs_produced) - 1 (excluding the report itself). R-doc-5."
+      docs_considered:
+        type: integer
+        minimum: 0
+        description: "len(docs_updated) + len(intentionally_not_updated). Agents should never consider zero docs."
+
+# Cross-field rules enforced by verifier.py:
+#
+# R1: Non-empty blockers requires status in {blocked, failed}.
+# R2: status=done requires confidence >= 0.7.
+# R3: confidence in [0.0, 1.0].
+# R4: metrics.files_read + metrics.memory_hits >= len(inputs_used).
+# R5: outputs_produced[0] matches canonical path (warning).
+# R6: slug verbatim from orchestrator.
+# R7: workspace-relative forward-slash paths only.
+#
+# Doc-class extensions (R-doc):
+#   R-doc-1: outputs_produced[0] is always the doc report itself.
+#   R-doc-2: every path in outputs_produced[1:] corresponds to a doc the agent modified.
+#   R-doc-3: intentionally_not_updated must be present (empty list is acceptable).
+#   R-doc-4: status=done with only the report in outputs_produced requires
+#            intentionally_not_updated to be non-empty.
+#   R-doc-5: metrics.docs_updated (if present) must equal len(outputs_produced) - 1.
+#
+# Required markdown sections:
+#   ## Summary, ## Updated docs, ## Intentionally not updated,
+#   ## Assumptions, ## Open questions, ## Next consumer brief

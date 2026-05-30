@@ -1,0 +1,177 @@
+# Schema: research-class artifact YAML header (CC-v1)
+# Class: research
+# Phase identifier: scout
+# Artifact path: {space}/.cronos/pipeline/{goal_slug}/scout-report-{goal_slug}.md
+#
+# Validation: python backend/app/pipeline/verifier.py --class research --slug <slug>
+#
+# Cronos deviations from Delivery Notes v1.0:
+#   - cc_version + phase are new base-header fields (§2 of CONTRACT.md)
+#   - kb_hits → memory_hits (Cronos uses memory_store, not .kb/)
+#   - duration_s / token_spend are trace-owned; agents MUST NOT write them
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "research.schema.yaml"
+title: "Research-Class Artifact YAML Header (CC-v1)"
+description: "Strict schema for the YAML front-matter block of every research-class pipeline artifact."
+type: object
+additionalProperties: false
+
+required:
+  - cc_version
+  - agent
+  - slug
+  - phase
+  - status
+  - confidence
+  - inputs_used
+  - outputs_produced
+  - blockers
+  - next_consumer
+  - metrics
+  - coverage_summary
+
+properties:
+
+  cc_version:
+    type: string
+    const: "1.0"
+    description: "Contract version this artifact was written against. Must match CC_VERSION in contract.py."
+
+  agent:
+    type: string
+    minLength: 1
+    description: "Agent name from the pipeline registry (e.g. 'scout')."
+
+  slug:
+    type: string
+    pattern: "^[a-z0-9]+(-[a-z0-9]+)*(--[a-z0-9]+(-[a-z0-9]+)*)?$"
+    maxLength: 120
+    description: "Goal slug verbatim from the orchestrator. Agents NEVER re-derive or reformat it."
+
+  phase:
+    type: string
+    const: "scout"
+    description: "Phase identifier for research-class artifacts."
+
+  status:
+    type: string
+    enum: ["done", "partial", "blocked", "failed"]
+
+  confidence:
+    type: number
+    minimum: 0.0
+    maximum: 1.0
+    description: "Self-assessed confidence in coverage and relevance. R2: must be >= 0.7 when status=done."
+
+  inputs_used:
+    type: array
+    items:
+      type: string
+      pattern: "^(?![/\\\\])(?![A-Za-z]:).*$"
+    description: "Workspace-relative forward-slash paths actually read during this run. R7 enforced."
+
+  outputs_produced:
+    type: array
+    minItems: 1
+    items:
+      type: string
+      pattern: "^(?![/\\\\])(?![A-Za-z]:).*$"
+    description: "Workspace-relative paths of artifacts written. First entry is the primary artifact (R5)."
+
+  blockers:
+    type: array
+    items:
+      type: object
+      required: [description, severity]
+      properties:
+        description: { type: string, minLength: 1 }
+        severity: { type: string, enum: ["low", "medium", "high", "critical"] }
+        suggested_resolution: { type: string }
+    description: "R1: non-empty blockers require status in {blocked, failed}."
+
+  next_consumer:
+    type: string
+    minLength: 1
+    description: "Downstream agent name (e.g. 'analysis') or 'user' for standalone mode."
+
+  coverage_summary:
+    type: object
+    required: [searched, excluded, strategies]
+    description: "What was explored, what was skipped, and which strategies were used."
+    properties:
+      searched:
+        type: array
+        items: { type: string }
+        description: "Top-level areas actually explored (paths, modules, memory entries)."
+      excluded:
+        type: array
+        items: { type: string }
+        description: "Areas deliberately skipped, with reason."
+      strategies:
+        type: array
+        minItems: 1
+        items:
+          type: string
+          enum:
+            - "memory_retrieval"
+            - "glob_structural"
+            - "grep_symbol"
+            - "grep_keyword"
+            - "read_targeted"
+            - "repo_map"
+            - "web_search"
+            - "fetch_url"
+        description: "Plain-string strategy labels used during research."
+
+  brief:
+    type: string
+    maxLength: 1000
+    description: "Optional: verbatim research brief passed by the orchestrator. Used for eval replay."
+
+  top_relevance:
+    type: array
+    description: "Optional: top-N most relevant findings with relevance score 1-5."
+    items:
+      type: object
+      required: [path, score, reason]
+      properties:
+        path: { type: string }
+        score: { type: integer, minimum: 1, maximum: 5 }
+        reason: { type: string, maxLength: 200 }
+
+  metrics:
+    type: object
+    required: [tool_calls, files_read, memory_hits]
+    additionalProperties: true
+    properties:
+      tool_calls:
+        type: integer
+        minimum: 1
+        description: "Every tool invocation including the final Write of this artifact."
+      files_read:
+        type: integer
+        minimum: 0
+        description: "Unique files opened via the Read tool during this run."
+      memory_hits:
+        type: integer
+        minimum: 0
+        description: "Memory store entries the agent relied on. R4: files_read + memory_hits >= len(inputs_used)."
+      sub_topics_covered:
+        type: array
+        items: { type: string }
+        description: "Only present in fan-out reports covering multiple sub-topics."
+
+# Cross-field rules enforced by verifier.py (not expressible in pure JSON Schema):
+#
+# R1: Non-empty blockers requires status in {blocked, failed}.
+# R2: status=done requires confidence >= 0.7.
+# R3: confidence must be in [0.0, 1.0].
+# R4: metrics.files_read + metrics.memory_hits >= len(inputs_used).
+# R5: outputs_produced[0] should match the artifact's canonical path (warning, not hard fail).
+# R6: slug in header must equal slug passed by orchestrator.
+# R7: All paths in inputs_used / outputs_produced must be workspace-relative forward-slash.
+#
+# Required markdown sections:
+#   ## Summary, ## Coverage, ## Findings, ## Assumptions, ## Open questions,
+#   ## Next consumer brief

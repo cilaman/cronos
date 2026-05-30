@@ -1,0 +1,172 @@
+# Schema: implementation-class artifact YAML header (CC-v1)
+# Class: implementation
+# Phase identifier: impl (suffixed with iteration id, e.g. impl-i1)
+# Artifact path: {space}/.cronos/pipeline/{goal_slug}/impl-report-{goal_slug}--{iter_id_lower}.md
+#
+# Slug convention: orchestrator passes slug = "{goal_slug}--{iter_id_lower}"
+#   e.g. "pipeline-foundation--i2" for goal "pipeline-foundation", iteration "I2".
+#   iteration_id field in header = "I2" (UPPERCASE, matches design iterations[] entry).
+#
+# Validation: python backend/app/pipeline/verifier.py --class implementation --slug <slug>
+#
+# Cronos deviations from Delivery Notes v1.0:
+#   - cc_version + phase are new base-header fields
+#   - kb_hits removed (replaced by memory_hits in shared metrics)
+#   - duration_s / token_spend are trace-owned; agents MUST NOT write them
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "implementation.schema.yaml"
+title: "Implementation-Class Artifact YAML Header (CC-v1)"
+description: "Strict schema for implementation-class pipeline artifacts — per-iteration code changes."
+type: object
+additionalProperties: false
+
+required:
+  - cc_version
+  - agent
+  - slug
+  - phase
+  - status
+  - confidence
+  - inputs_used
+  - outputs_produced
+  - blockers
+  - next_consumer
+  - metrics
+  - iteration_id
+  - files_changed
+  - validation_command_passed
+
+properties:
+
+  cc_version:
+    type: string
+    const: "1.0"
+
+  agent:
+    type: string
+    minLength: 1
+    description: "Agent name from the pipeline registry (e.g. 'backend-impl')."
+
+  slug:
+    type: string
+    pattern: "^[a-z0-9]+(-[a-z0-9]+)*(--[a-z0-9]+(-[a-z0-9]+)*)?$"
+    maxLength: 120
+    description: "Compound slug: '{goal_slug}--{iter_id_lower}' passed verbatim by orchestrator."
+
+  phase:
+    type: string
+    const: "impl"
+    description: "Phase identifier for implementation-class artifacts."
+
+  status:
+    type: string
+    enum: ["done", "partial", "blocked", "failed"]
+
+  confidence:
+    type: number
+    minimum: 0.0
+    maximum: 1.0
+
+  inputs_used:
+    type: array
+    items:
+      type: string
+      pattern: "^(?![/\\\\])(?![A-Za-z]:).*$"
+    description: "Files read to understand existing state before editing. Distinct from files_changed."
+
+  outputs_produced:
+    type: array
+    minItems: 1
+    items:
+      type: string
+      pattern: "^(?![/\\\\])(?![A-Za-z]:).*$"
+
+  blockers:
+    type: array
+    items:
+      type: object
+      required: [description, severity]
+      properties:
+        description: { type: string, minLength: 1 }
+        severity: { type: string, enum: ["low", "medium", "high", "critical"] }
+        suggested_resolution: { type: string }
+
+  next_consumer:
+    type: string
+    minLength: 1
+    description: "Typically 'test' on completion, or another iteration in a chain."
+
+  # --- implementation-class specific fields ---
+
+  iteration_id:
+    type: string
+    pattern: "^I[0-9]+$"
+    description: "UPPERCASE iteration ID matching the design plan (e.g. 'I2'). R-impl-1."
+
+  files_changed:
+    type: array
+    items:
+      type: string
+      pattern: "^(?![/\\\\])(?![A-Za-z]:).*$"
+    description: "Workspace-relative paths of source files created or modified by this iteration. R-impl-3: must be non-empty when status=done."
+
+  validation_command_passed:
+    type: boolean
+    description: "Whether the iteration's validation_command exited 0. R-impl-4: must be a real boolean. R-impl-5: false + status=done is incoherent."
+
+  out_of_scope_findings:
+    type: array
+    description: "Things noticed but NOT fixed (out of iteration scope). Reported to orchestrator, not actioned."
+    items:
+      type: object
+      required: [description, location, severity]
+      properties:
+        description: { type: string }
+        location:
+          type: string
+          description: "file:line or module reference."
+        severity: { type: string, enum: ["low", "medium", "high", "critical"] }
+
+  metrics:
+    type: object
+    required: [tool_calls, files_read, diff_lines_added, diff_lines_removed]
+    additionalProperties: true
+    properties:
+      tool_calls: { type: integer, minimum: 1 }
+      files_read: { type: integer, minimum: 0 }
+      memory_hits: { type: integer, minimum: 0 }
+      diff_lines_added:
+        type: integer
+        minimum: 0
+        description: "Lines added across all files_changed. R-impl-6: must be a non-negative integer."
+      diff_lines_removed:
+        type: integer
+        minimum: 0
+        description: "Lines removed across all files_changed. R-impl-6: must be a non-negative integer."
+      tests_added:
+        type: integer
+        minimum: 0
+        description: "New test cases added in this iteration (0 unless implementation touched tests)."
+
+# Cross-field rules enforced by verifier.py:
+#
+# R1: Non-empty blockers requires status in {blocked, failed}.
+# R2: status=done requires confidence >= 0.7.
+# R3: confidence in [0.0, 1.0].
+# R4: metrics.files_read + metrics.memory_hits >= len(inputs_used).
+# R5: outputs_produced[0] matches canonical path (warning).
+# R6: slug verbatim from orchestrator.
+# R7: workspace-relative forward-slash paths only.
+#
+# Implementation-class extensions (R-impl):
+#   R-impl-1: iteration_id matches ^I[0-9]+$ (uppercase).
+#   R-impl-2: slug ends with "--" + iteration_id.lower() when slug contains "--".
+#   R-impl-3: files_changed is non-empty when status=done.
+#   R-impl-4: validation_command_passed is a real boolean (not string).
+#   R-impl-5: validation_command_passed=false with status=done is rejected.
+#   R-impl-6: metrics.diff_lines_added / diff_lines_removed are non-negative integers.
+#
+# Required markdown sections:
+#   ## Summary, ## Files changed, ## Out-of-scope findings,
+#   ## Assumptions, ## Open questions, ## Next consumer brief
