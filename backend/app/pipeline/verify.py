@@ -107,6 +107,11 @@ CLASS_CONFIG: dict[str, dict[str, str]] = {
         "phase_const": "doc",
         "filename_prefix": "doc-report",
     },
+    "retro": {
+        "schema_file": "retro.schema.yaml",
+        "phase_const": "retro",
+        "filename_prefix": "retro",
+    },
 }
 
 
@@ -116,6 +121,19 @@ CLASS_CONFIG: dict[str, dict[str, str]] = {
 
 BLOCKER_SEVERITY_ENUM = {"low", "medium", "high", "critical"}
 FINDING_SEVERITY_ENUM = {"critical", "high", "medium", "low"}
+RETRO_FIX_TYPE_ENUM = {
+    "normalize_rule",
+    "verifier_rule_or_schema_field",
+    "agent_prompt_refinement",
+    "contract_change",
+}
+RETRO_SCORE_DIMENSIONS = (
+    "planning",
+    "error_handling",
+    "efficiency",
+    "completion",
+    "communication",
+)
 
 SLUG_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*(--[a-z0-9]+(-[a-z0-9]+)*)?$")
 ITER_PATTERN = re.compile(r"^I[0-9]+$")
@@ -175,6 +193,14 @@ PER_CLASS_REQUIRED_SECTIONS: dict[str, tuple[str, ...]] = {
         "Summary",
         "Updated docs",
         "Intentionally not updated",
+        "Assumptions",
+        "Open questions",
+        "Next consumer brief",
+    ),
+    "retro": (
+        "Summary",
+        "Scores",
+        "Findings",
         "Assumptions",
         "Open questions",
         "Next consumer brief",
@@ -1078,6 +1104,89 @@ def _check_doc(result: VerifyResult, header: dict[str, Any], artifact_rel: str) 
                 )
 
 
+def _check_retro(result: VerifyResult, header: dict[str, Any]) -> None:
+    """R-retro-1..4."""
+    outputs = header.get("outputs_produced")
+    scores = header.get("scores")
+    findings = header.get("findings")
+
+    # R-retro-1: outputs_produced has exactly one entry (the retro itself).
+    if isinstance(outputs, list) and len(outputs) != 1:
+        result.fail(
+            f"R-retro-1: retro outputs_produced must have exactly one entry "
+            f"(the retro artifact); got {len(outputs)}"
+        )
+
+    # R-retro-3: scores object has all five dimensions, each int in [1, 5].
+    if scores is None:
+        # already reported by required-fields check
+        pass
+    elif not isinstance(scores, dict):
+        result.fail("R-retro-3: scores must be a mapping")
+    else:
+        for dim in RETRO_SCORE_DIMENSIONS:
+            if dim not in scores:
+                result.fail(f"R-retro-3: scores.{dim} missing")
+                continue
+            val = scores[dim]
+            if not _is_non_negative_int(val):
+                result.fail(
+                    f"R-retro-3: scores.{dim} must be an integer, got {val!r}"
+                )
+            elif not 1 <= val <= 5:
+                result.fail(
+                    f"R-retro-3: scores.{dim} {val} out of range [1, 5]"
+                )
+
+    # R-retro-2 + R-retro-4: findings structure + fix_type + unique F-ids.
+    if findings is None:
+        return
+    if not isinstance(findings, list):
+        result.fail("findings must be a list")
+        return
+    seen_ids: set[str] = set()
+    for idx, f in enumerate(findings):
+        if not isinstance(f, dict):
+            result.fail(f"findings[{idx}] must be a mapping")
+            continue
+        for fn in ("id", "severity", "fix_type", "target", "evidence", "suggested_action"):
+            if fn not in f:
+                result.fail(f"findings[{idx}] missing required field {fn!r}")
+        fid = f.get("id")
+        if isinstance(fid, str):
+            # R-retro-4: id matches ^F[0-9]+$ and is unique within findings[].
+            if not FINDING_PATTERN.match(fid):
+                result.fail(
+                    f"R-retro-4: findings[{idx}].id {fid!r} does not match '^F[0-9]+$'"
+                )
+            elif fid in seen_ids:
+                result.fail(f"R-retro-4: findings[{idx}].id {fid!r} is duplicated")
+            else:
+                seen_ids.add(fid)
+        sev = f.get("severity")
+        if sev is not None and sev not in FINDING_SEVERITY_ENUM:
+            result.fail(
+                f"findings[{idx}].severity {sev!r} not in "
+                f"{sorted(FINDING_SEVERITY_ENUM)}"
+            )
+        # R-retro-2: every finding has a fix_type from the enum.
+        fix_type = f.get("fix_type")
+        if fix_type is None:
+            # already reported by required-fields check
+            pass
+        elif fix_type not in RETRO_FIX_TYPE_ENUM:
+            result.fail(
+                f"R-retro-2: findings[{idx}].fix_type {fix_type!r} not in "
+                f"{sorted(RETRO_FIX_TYPE_ENUM)}"
+            )
+        target = f.get("target")
+        if target is not None and (not isinstance(target, str) or not target.strip()):
+            result.fail(f"findings[{idx}].target must be a non-empty string")
+        action = f.get("suggested_action")
+        if action is not None and (not isinstance(action, str) or not action.strip()):
+            result.fail(f"findings[{idx}].suggested_action must be a non-empty string")
+
+
 # ---------------------------------------------------------------------------
 # Top-level verify
 # ---------------------------------------------------------------------------
@@ -1159,6 +1268,8 @@ def verify(agent: str, slug: str, space: Path) -> VerifyResult:
         _check_review(result, header)
     elif agent == "doc":
         _check_doc(result, header, artifact_rel)
+    elif agent == "retro":
+        _check_retro(result, header)
 
     # 7. Outcome resolution: if no hard errors, decide proceed vs escalate
     if result.passed:
