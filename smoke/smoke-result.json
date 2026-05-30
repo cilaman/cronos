@@ -1,0 +1,284 @@
+{
+  "green": {
+    "space": "/data/spaces/cronos-development/.cronos/workspaces/2026-05-30-1437-3-5-end-to-end-smoke-run/smoke/green-space",
+    "goal_slug": "smoke-csv-export-green",
+    "outcomes": [
+      {
+        "phase": "research",
+        "slug": "smoke-csv-export-green",
+        "exit_code": 0,
+        "passed": true,
+        "outcome": "proceed",
+        "errors": [],
+        "artifact_rel": ".cronos/pipeline/smoke-csv-export-green/scout-report-smoke-csv-export-green.md"
+      },
+      {
+        "phase": "analysis",
+        "slug": "smoke-csv-export-green",
+        "exit_code": 0,
+        "passed": true,
+        "outcome": "proceed",
+        "errors": [],
+        "artifact_rel": ".cronos/pipeline/smoke-csv-export-green/analysis-report-smoke-csv-export-green.md"
+      },
+      {
+        "phase": "design",
+        "slug": "smoke-csv-export-green",
+        "exit_code": 0,
+        "passed": true,
+        "outcome": "proceed",
+        "errors": [],
+        "artifact_rel": ".cronos/pipeline/smoke-csv-export-green/design-report-smoke-csv-export-green.md"
+      },
+      {
+        "phase": "implementation",
+        "slug": "smoke-csv-export-green--i1",
+        "exit_code": 0,
+        "passed": true,
+        "outcome": "proceed",
+        "errors": [],
+        "artifact_rel": ".cronos/pipeline/smoke-csv-export-green/impl-report-smoke-csv-export-green--i1.md"
+      },
+      {
+        "phase": "test",
+        "slug": "smoke-csv-export-green",
+        "exit_code": 0,
+        "passed": true,
+        "outcome": "proceed",
+        "errors": [],
+        "artifact_rel": ".cronos/pipeline/smoke-csv-export-green/test-report-smoke-csv-export-green.md"
+      },
+      {
+        "phase": "review",
+        "slug": "smoke-csv-export-green--attempt1",
+        "exit_code": 0,
+        "passed": true,
+        "outcome": "proceed",
+        "errors": [],
+        "artifact_rel": ".cronos/pipeline/smoke-csv-export-green/review-report-smoke-csv-export-green--attempt1.md"
+      },
+      {
+        "phase": "doc",
+        "slug": "smoke-csv-export-green",
+        "exit_code": 0,
+        "passed": true,
+        "outcome": "proceed",
+        "errors": [],
+        "artifact_rel": ".cronos/pipeline/smoke-csv-export-green/doc-report-smoke-csv-export-green.md"
+      }
+    ],
+    "state_summary": {
+      "cc_version": "1.0",
+      "status": "running",
+      "phase_count": 7,
+      "phases": {
+        "research": {
+          "status": "done",
+          "gate_decision": "proceed",
+          "errors": []
+        },
+        "analysis": {
+          "status": "done",
+          "gate_decision": "proceed",
+          "errors": []
+        },
+        "design": {
+          "status": "done",
+          "gate_decision": "proceed",
+          "errors": []
+        },
+        "implementation": {
+          "status": "done",
+          "gate_decision": "proceed",
+          "errors": []
+        },
+        "test": {
+          "status": "done",
+          "gate_decision": "proceed",
+          "errors": []
+        },
+        "review": {
+          "status": "done",
+          "gate_decision": "proceed",
+          "errors": []
+        },
+        "doc": {
+          "status": "done",
+          "gate_decision": "proceed",
+          "errors": []
+        }
+      },
+      "telemetry": {
+        "total_duration_s": 0.0,
+        "total_token_spend": 0,
+        "total_tool_calls": 0,
+        "total_files_read": 0,
+        "total_memory_hits": 0,
+        "phases_completed": 7,
+        "phases_escalated": 0,
+        "phases_retried": 0,
+        "phases_failed": 0
+      }
+    },
+    "log_count": 7,
+    "log_entries": [
+      {
+        "phase": "research",
+        "status": "done",
+        "gate_decision": "proceed",
+        "task_id": "smoke-research-smoke-csv-export-green",
+        "run_index": 0,
+        "timestamp": "2026-05-30T19:48:29.967458+00:00"
+      },
+      {
+        "phase": "analysis",
+        "status": "done",
+        "gate_decision": "proceed",
+        "task_id": "smoke-analysis-smoke-csv-export-green",
+        "run_index": 0,
+        "timestamp": "2026-05-30T19:48:30.345213+00:00"
+      },
+      {
+        "phase": "design",
+        "status": "done",
+        "gate_decision": "proceed",
+        "task_id": "smoke-design-smoke-csv-export-green",
+        "run_index": 0,
+        "timestamp": "2026-05-30T19:48:30.720809+00:00"
+      },
+      {
+        "phase": "implementation",
+        "status": "done",
+        "gate_decision": "proceed",
+        "task_id": "smoke-implementation-smoke-csv-export-green--i1",
+        "run_index": 0,
+        "timestamp": "2026-05-30T19:48:31.097914+00:00"
+      },
+      {
+        "phase": "test",
+        "status": "done",
+        "gate_decision": "proceed",
+        "task_id": "smoke-test-smoke-csv-export-green",
+        "run_index": 0,
+        "timestamp": "2026-05-30T19:48:31.496889+00:00"
+      },
+      {
+        "phase": "review",
+        "status": "done",
+        "gate_decision": "proceed",
+        "task_id": "smoke-review-smoke-csv-export-green--attempt1",
+        "run_index": 0,
+        "timestamp": "2026-05-30T19:48:31.889185+00:00"
+      },
+      {
+        "phase": "doc",
+        "status": "done",
+        "gate_decision": "proceed",
+        "task_id": "smoke-doc-smoke-csv-export-green",
+        "run_index": 0,
+        "timestamp": "2026-05-30T19:48:32.235612+00:00"
+      }
+    ]
+  },
+  "broken": {
+    "space": "/data/spaces/cronos-development/.cronos/workspaces/2026-05-30-1437-3-5-end-to-end-smoke-run/smoke/broken-space",
+    "goal_slug": "smoke-csv-export-broken",
+    "halted": true,
+    "halted_at": "design",
+    "outcomes": [
+      {
+        "phase": "research",
+        "slug": "smoke-csv-export-broken",
+        "exit_code": 0,
+        "passed": true,
+        "outcome": "proceed",
+        "errors": [],
+        "artifact_rel": ".cronos/pipeline/smoke-csv-export-broken/scout-report-smoke-csv-export-broken.md"
+      },
+      {
+        "phase": "analysis",
+        "slug": "smoke-csv-export-broken",
+        "exit_code": 0,
+        "passed": true,
+        "outcome": "proceed",
+        "errors": [],
+        "artifact_rel": ".cronos/pipeline/smoke-csv-export-broken/analysis-report-smoke-csv-export-broken.md"
+      },
+      {
+        "phase": "design",
+        "slug": "smoke-csv-export-broken",
+        "exit_code": 1,
+        "passed": false,
+        "outcome": "fail",
+        "errors": [
+          "cc_version='9.9' not supported by this verifier (expected '1.0')"
+        ],
+        "artifact_rel": ".cronos/pipeline/smoke-csv-export-broken/design-report-smoke-csv-export-broken.md"
+      }
+    ],
+    "state_summary": {
+      "cc_version": "1.0",
+      "status": "running",
+      "phase_count": 3,
+      "phases": {
+        "research": {
+          "status": "done",
+          "gate_decision": "proceed",
+          "errors": []
+        },
+        "analysis": {
+          "status": "done",
+          "gate_decision": "proceed",
+          "errors": []
+        },
+        "design": {
+          "status": "blocked",
+          "gate_decision": "fail",
+          "errors": [
+            "cc_version='9.9' not supported by this verifier (expected '1.0')"
+          ]
+        }
+      },
+      "telemetry": {
+        "total_duration_s": 0.0,
+        "total_token_spend": 0,
+        "total_tool_calls": 0,
+        "total_files_read": 0,
+        "total_memory_hits": 0,
+        "phases_completed": 2,
+        "phases_escalated": 0,
+        "phases_retried": 0,
+        "phases_failed": 1
+      }
+    },
+    "log_count": 3,
+    "log_entries": [
+      {
+        "phase": "research",
+        "status": "done",
+        "gate_decision": "proceed",
+        "task_id": "smoke-research-smoke-csv-export-broken",
+        "run_index": 0,
+        "timestamp": "2026-05-30T19:48:32.599063+00:00"
+      },
+      {
+        "phase": "analysis",
+        "status": "done",
+        "gate_decision": "proceed",
+        "task_id": "smoke-analysis-smoke-csv-export-broken",
+        "run_index": 0,
+        "timestamp": "2026-05-30T19:48:32.986621+00:00"
+      },
+      {
+        "phase": "design",
+        "status": "blocked",
+        "gate_decision": "fail",
+        "task_id": "smoke-design-smoke-csv-export-broken",
+        "run_index": 0,
+        "timestamp": "2026-05-30T19:48:33.408967+00:00"
+      }
+    ]
+  },
+  "green_assertions_failed": [],
+  "broken_assertions_failed": []
+}
