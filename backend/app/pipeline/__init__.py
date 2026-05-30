@@ -18,6 +18,7 @@ from app.pipeline.contract import (
     STATUS_VALUES,
     TRACE_OWNED_METRICS,
 )
+from app.pipeline.normalize import NormalizeResult, normalize
 from app.pipeline.verify import (
     CLASS_CONFIG,
     EXIT_ESCALATE,
@@ -41,11 +42,13 @@ __all__ = [
     "HEADER_FIELDS",
     "HEADER_REQUIRED_FIELDS",
     "NEXT_CONSUMER_USER_SENTINEL",
+    "NormalizeResult",
     "R_RULES",
     "REQUIRED_SECTIONS",
     "STATUS_VALUES",
     "TRACE_OWNED_METRICS",
     "VerifyResult",
     "canonical_artifact_relpath",
+    "normalize",
     "verify",
 ]

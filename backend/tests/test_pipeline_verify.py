@@ -1139,10 +1139,10 @@ def test_cli_invalid_space_dir_returns_retry(tmp_path: Path, capsys) -> None:
     assert code == EXIT_RETRY
 
 
-def test_cli_normalize_without_normalizer_returns_retry(
+def test_cli_normalize_flag_runs_normalizer_and_proceeds(
     tmp_path: Path, capsys
 ) -> None:
-    """Until task 1.4 lands, --normalize must fail loudly, not silently."""
+    """--normalize runs the normalizer then verifies; a clean artifact proceeds."""
     write_artifact(tmp_path, "research", "test-feature", research_header())
     code = main(
         [
@@ -1152,9 +1152,29 @@ def test_cli_normalize_without_normalizer_returns_retry(
             "--normalize",
         ]
     )
-    # Normalizer module does not exist yet -> retry exit code with a clear
-    # error message.
-    assert code == EXIT_RETRY
+    assert code == EXIT_PROCEED
+
+
+def test_cli_normalize_json_includes_normalize_key(
+    tmp_path: Path, capsys
+) -> None:
+    """--normalize --json output includes a 'normalize' key from the normalizer."""
+    write_artifact(tmp_path, "research", "test-feature", research_header())
+    code = main(
+        [
+            "--agent", "research",
+            "--slug", "test-feature",
+            "--space", str(tmp_path),
+            "--normalize",
+            "--json",
+        ]
+    )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert code == EXIT_PROCEED
+    assert "normalize" in payload
+    assert payload["normalize"]["modified"] is False
+    assert payload["normalize"]["error"] is None
 
 
 def test_cli_via_subprocess_matches_module_main(tmp_path: Path) -> None:
