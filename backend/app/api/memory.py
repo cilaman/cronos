@@ -120,6 +120,24 @@ async def update_item(scope: str, item_id: str, body: UpdateMemoryBody, request:
         raise HTTPException(status_code=404, detail=f"Memory item {item_id!r} not found in scope {scope!r}")
 
 
+@router.post("/{scope}/{item_id}/confirm", response_model=MemoryItem)
+async def confirm_item(scope: str, item_id: str, request: Request) -> MemoryItem:
+    store = get_store(request)
+    try:
+        return await store.update(scope, item_id, confirmed=True)
+    except MemoryNotFound:
+        raise HTTPException(status_code=404, detail=f"Memory item {item_id!r} not found in scope {scope!r}")
+
+
+@router.post("/{scope}/{item_id}/reject", response_model=MemoryItem)
+async def reject_item(scope: str, item_id: str, request: Request) -> MemoryItem:
+    store = get_store(request)
+    try:
+        return await store.update(scope, item_id, confirmed=False)
+    except MemoryNotFound:
+        raise HTTPException(status_code=404, detail=f"Memory item {item_id!r} not found in scope {scope!r}")
+
+
 @router.delete("/{scope}/{item_id}", status_code=204)
 async def delete_item(scope: str, item_id: str, request: Request) -> None:
     store = get_store(request)

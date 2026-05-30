@@ -181,6 +181,141 @@ async def test_index_endpoint_missing_scope(memory_client) -> None:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Confirm / Reject explicit endpoints
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_confirm_sets_confirmed_true(memory_client) -> None:
+    cr = await memory_client.post("/api/memory/global", json={"kind": "fact", "title": "To confirm"})
+    item_id = cr.json()["id"]
+    assert cr.json()["confirmed"] is False
+
+    r = await memory_client.post(f"/api/memory/global/{item_id}/confirm")
+    assert r.status_code == 200
+    assert r.json()["confirmed"] is True
+
+
+@pytest.mark.asyncio
+async def test_reject_sets_confirmed_false(memory_client) -> None:
+    cr = await memory_client.post(
+        "/api/memory/global",
+        json={"kind": "fact", "title": "Already confirmed", "confirmed": True},
+    )
+    item_id = cr.json()["id"]
+    assert cr.json()["confirmed"] is True
+
+    r = await memory_client.post(f"/api/memory/global/{item_id}/reject")
+    assert r.status_code == 200
+    assert r.json()["confirmed"] is False
+
+
+@pytest.mark.asyncio
+async def test_confirm_missing_returns_404(memory_client) -> None:
+    r = await memory_client.post("/api/memory/global/no-such-id/confirm")
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_reject_missing_returns_404(memory_client) -> None:
+    r = await memory_client.post("/api/memory/global/no-such-id/reject")
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_confirm_persists_on_get(memory_client) -> None:
+    cr = await memory_client.post("/api/memory/global", json={"kind": "fact", "title": "Persist check"})
+    item_id = cr.json()["id"]
+    await memory_client.post(f"/api/memory/global/{item_id}/confirm")
+
+    r = await memory_client.get(f"/api/memory/global/{item_id}")
+    assert r.status_code == 200
+    assert r.json()["confirmed"] is True
+
+
+# ---------------------------------------------------------------------------
+# Auto-confirm via record_use
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_auto_confirm_after_threshold_uses(memory_client) -> None:
+    from app.main import app as _app
+    from app.memory_store import CONFIRM_THRESHOLD
+
+    cr = await memory_client.post("/api/memory/global", json={"kind": "fact", "title": "Auto-confirm me"})
+    item_id = cr.json()["id"]
+    assert cr.json()["confirmed"] is False
+
+    store = _app.state.memory_store
+    for _ in range(CONFIRM_THRESHOLD):
+        item = await store.record_use("global", item_id)
+
+    assert item.confirmed is True
+
+
+@pytest.mark.asyncio
+async def test_auto_confirm_not_triggered_before_threshold(memory_client) -> None:
+    from app.main import app as _app
+    from app.memory_store import CONFIRM_THRESHOLD
+
+    cr = await memory_client.post("/api/memory/global", json={"kind": "fact", "title": "Not yet"})
+    item_id = cr.json()["id"]
+
+    store = _app.state.memory_store
+    for _ in range(CONFIRM_THRESHOLD - 1):
+        item = await store.record_use("global", item_id)
+
+    assert item.confirmed is False
+
+
+@pytest.mark.asyncio
+async def test_auto_confirm_already_confirmed_stays_confirmed(memory_client) -> None:
+    from app.main import app as _app
+
+    cr = await memory_client.post(
+        "/api/memory/global",
+        json={"kind": "fact", "title": "Already confirmed", "confirmed": True, "ref_count": 10},
+    )
+    item_id = cr.json()["id"]
+
+    store = _app.state.memory_store
+    item = await store.record_use("global", item_id)
+    assert item.confirmed is True
+
+
+@pytest.mark.asyncio
+async def test_record_use_increments_ref_count(memory_client) -> None:
+    from app.main import app as _app
+
+    cr = await memory_client.post("/api/memory/global", json={"kind": "fact", "title": "Count me"})
+    item_id = cr.json()["id"]
+    assert cr.json()["ref_count"] == 0
+
+    store = _app.state.memory_store
+    item = await store.record_use("global", item_id)
+    assert item.ref_count == 1
+
+    item = await store.record_use("global", item_id)
+    assert item.ref_count == 2
+
+
+@pytest.mark.asyncio
+async def test_record_use_missing_raises(memory_client) -> None:
+    from app.main import app as _app
+    from app.memory_store import MemoryNotFound
+
+    store = _app.state.memory_store
+    with pytest.raises(MemoryNotFound):
+        await store.record_use("global", "no-such-id")
+
+
+# ---------------------------------------------------------------------------
+# Round-trip: all fields survive create → get
+# ---------------------------------------------------------------------------
+
+
 @pytest.mark.asyncio
 async def test_roundtrip_full_item(memory_client) -> None:
     payload = {
@@ -205,7 +340,8 @@ async def test_roundtrip_full_item(memory_client) -> None:
     assert data["body"] == "Some body text"
     assert data["confirmed"] is True
     assert data["confidence"] == pytest.approx(0.85)
-    assert data["score"] == pytest.approx(1.5)
-    assert data["ref_count"] == 3
+    # GET applies an access-boost: score *= 1.2 and ref_count += 1
+    assert data["score"] == pytest.approx(1.5 * 1.2)
+    assert data["ref_count"] == 4
     assert data["sources"] == ["task-abc", "task-def"]
     assert data["links"] == ["mem-other"]
