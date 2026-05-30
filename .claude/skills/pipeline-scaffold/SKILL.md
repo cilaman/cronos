@@ -326,11 +326,13 @@ For each iteration `iter`:
    and emit `STATUS: BLOCKED` for the whole task — do not advance to the next
    iteration with a known-bad upstream.
 
-## Step 4 — final status
+## Step 4 — commit + final status
 
-If every iteration's gate passed, write a one-line summary listing the
-iteration ids that ran and emit `STATUS: DONE`. Otherwise the BLOCKED status
-from Step 3 is already the task's final status — do not overwrite it.
+If every iteration's gate passed:
+1. Invoke `/goal-task-commit` to push all implementor changes to `feature/{GOAL_SLUG}`.
+2. Write a one-line summary listing the iteration ids that ran and emit `STATUS: DONE`.
+
+Otherwise the BLOCKED status from Step 3 is already the task's final status — do not overwrite it.
 """
 
 briefs["test"] = f"""# Phase 5 — test: {TITLE}
@@ -402,13 +404,58 @@ attempt uses a compound slug `{GOAL_SLUG}--attempt<k>`. Loop:
    failure), the gate's status is final — do not overwrite it.
 """
 
-briefs["doc"] = phase_brief(
-    7, "doc", "pipeline-doc-sync",
-    "Update documentation for the implementation diff. Emits `doc-report-{slug}.md` (class=doc) with `intentionally_not_updated[]` always present. Terminal phase — no downstream consumer.",
-    f"review_report_path = {PIPELINE_REL}/review-report-{GOAL_SLUG}--attempt<final_k>.md\n"
-    f"impl_report_paths  = [<paths to every impl-report-{GOAL_SLUG}--*.md>]",
-    GOAL_SLUG,
-)
+briefs["doc"] = f"""# Phase 7 — doc: {TITLE}
+
+Goal slug: `{GOAL_SLUG}` · Pipeline dir: `{PIPELINE_REL}/` · Sub-agent: `pipeline-doc-sync`.
+
+Update documentation for the implementation diff. Emits `doc-report-{{slug}}.md` (class=doc)
+with `intentionally_not_updated[]` always present. Terminal phase — merges the feature branch
+to main via `/goal-finalize` after the gate passes.
+
+## Step 1 — spawn the sub-agent
+
+Use the `Agent` tool with `subagent_type="pipeline-doc-sync"` and the brief below.
+The sub-agent writes its CC-v1 artifact under `{PIPELINE_REL}/` and returns a
+short conversational summary; do not paraphrase or post-process its output here.
+
+```text
+slug   = {GOAL_SLUG}
+space  = $SPACE_DIR    (resolved from $PWD as in Step 2)
+review_report_path = {PIPELINE_REL}/review-report-{GOAL_SLUG}--attempt<final_k>.md
+impl_report_paths  = [<paths to every impl-report-{GOAL_SLUG}--*.md>]
+```
+
+Wait for the sub-agent to return. Do not read the artifact body yourself — the
+gate (Step 2) verifies it mechanically.
+
+## Step 2 — close the gate (on PASS continue to Step 3)
+
+Set the inputs and invoke the [[pipeline-gate]] skill. The gate validates the
+artifact and records phase metrics into `pipeline-state.json`.
+
+```bash
+TASK_ID=$(basename "$PWD")
+SPACE_DIR=$(echo "$PWD" | sed 's|/.cronos/workspaces/.*||'  )
+export GOAL_SLUG={GOAL_SLUG}
+export PHASE=doc
+export AGENT_NAME=pipeline-doc-sync
+export UPSTREAM_TASK_ID="$TASK_ID"
+```
+
+Invoke `/pipeline-gate`. Check the outcome:
+- **Exit 0 (pass)**: gate records state — do NOT emit STATUS yet, continue to Step 3.
+- **Any other exit**: gate emits `STATUS: BLOCKED` — this is the final status; stop.
+
+## Step 3 — merge the feature branch to main (`/goal-finalize`)
+
+The doc phase is the terminal pipeline phase. All code changes are already
+committed to `feature/{GOAL_SLUG}` by the impl phase (via `/goal-task-commit`).
+
+Invoke `/goal-finalize`. That skill runs the full test suite, rebases
+`feature/{GOAL_SLUG}` onto `origin/main`, merges `--no-ff`, and pushes. It
+emits the final `STATUS: DONE` (merge succeeded) or `STATUS: BLOCKED` (test
+failures or rebase conflicts). That is the final status for this task.
+"""
 
 # ---- 5. POST the seven phase tasks in dependency order ---------------
 phase_plan = [
@@ -453,7 +500,7 @@ __PY__
 
 - **Run any sub-agent.** Phase tasks run when the Cronos worker activates them; the scaffold only wires the DAG.
 - **Choose the slug arbitrarily.** It always defers to `backend/app/storage.py::slugify` (via the goal POST), then derives `goal_slug` by stripping the timestamp prefix. The `slug_hint` is only an upstream input to that derivation, not a bypass.
-- **Create a feature branch.** That belongs to [[goal-branch-setup]], invoked from the first code-changing task (impl, per the brief written by this skill).
+- **Run the feature-branch workflow directly.** The workflow is wired into the task briefs: [[goal-branch-setup]] in the impl task (Step 1), [[goal-task-commit]] in the impl task (Step 4 after all iterations pass), and [[goal-finalize]] in the doc task (Step 3, terminal). The skills execute when those tasks run, not when the scaffold POSTs the tasks.
 - **Read or interpret sub-agent artifacts.** Every routing decision downstream comes from YAML headers via [[pipeline-gate]] → `app.pipeline.verify` (CC-v1 R-rules).
 - **Touch the worker / agent / DB.** The skill only POSTs over the public Cronos API and writes to the pipeline directory.
 - **Re-init pipeline-state.json if the goal already exists.** Re-running the scaffold against a duplicate title creates a new Cronos goal with a fresh slug; if you need to resume an interrupted run, edit `pipeline-state.json` directly or re-spawn the failed phase task.
