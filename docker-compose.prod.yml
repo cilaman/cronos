@@ -13,6 +13,11 @@
 
 services:
   caddy:
+    build:
+      args:
+        VITE_BUILD_COMMIT: ${BUILD_COMMIT:-}
+        VITE_BUILD_TIME: ${BUILD_TIME:-}
+        VITE_BUILD_REPO_URL: ${BUILD_REPO_URL:-}
     ports:
       - "80:80"
       - "443:443"
@@ -31,7 +36,15 @@ services:
         max-file: "5"
 
   backend:
+    build:
+      args:
+        BUILD_COMMIT: ${BUILD_COMMIT:-}
+        BUILD_TIME: ${BUILD_TIME:-}
+        BUILD_REPO_URL: ${BUILD_REPO_URL:-}
     environment:
+      BUILD_COMMIT: ${BUILD_COMMIT:-}
+      BUILD_TIME: ${BUILD_TIME:-}
+      BUILD_REPO_URL: ${BUILD_REPO_URL:-}
       # URL the agent calls to trigger a host-side upgrade.
       # Set in .env: UPGRADE_WEBHOOK_URL=http://172.18.0.1:9137/upgrade
       # Leave blank to disable (agent will report it can't upgrade).

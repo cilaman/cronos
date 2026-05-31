@@ -406,6 +406,13 @@ export interface TestReport extends TestReportSummary {
   raw_output: string;
 }
 
+// Build info
+export interface BuildInfo {
+  commit_sha: string | null;
+  build_time: string | null;
+  repo_url: string | null;
+}
+
 // Memory
 export type MemoryKind = "fact" | "procedure" | "observation" | "reference";
 

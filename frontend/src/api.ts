@@ -3,6 +3,7 @@ import type {
   AgentMode,
   AgentModel,
   Board,
+  BuildInfo,
   GlobalStats,
   MemoryItem,
   ReplyResponse,
@@ -261,6 +262,9 @@ export const api = {
     request<void>(`/api/memory/${encodeURIComponent(scope)}/${itemId}`, {
       method: "DELETE",
     }),
+
+  // --- build info ---
+  getInfo: (): Promise<BuildInfo> => request<BuildInfo>("/api/info"),
 
   // --- test reports ---
   testReports: (spaceId: string) =>

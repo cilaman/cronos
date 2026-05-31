@@ -222,6 +222,26 @@ app.include_router(test_reports_router, dependencies=_auth)
 app.include_router(memory_router, dependencies=_auth)
 
 
+@app.get("/api/info")
+async def info() -> dict[str, object]:
+    """Return build metadata baked into the container image.
+
+    All three fields are ``None`` in local dev and CI where the ``BUILD_*``
+    environment variables are not set.  ``os.environ.get`` (not
+    ``os.environ[...]``) is used deliberately so missing vars never raise.
+
+    NOTE: this endpoint is protected by HTTP Basic Auth via Caddy like all
+    other ``/api/*`` routes; do not relax the auth in front of it — the
+    commit SHA could be used to fingerprint deployed versions against a
+    public GitHub repository.
+    """
+    return {
+        "commit_sha": os.environ.get("BUILD_COMMIT"),
+        "build_time": os.environ.get("BUILD_TIME"),
+        "repo_url": os.environ.get("BUILD_REPO_URL"),
+    }
+
+
 @app.get("/api/health")
 async def health(request: Request, response: Response) -> dict[str, object]:
     """Liveness + light readiness check.
