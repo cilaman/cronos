@@ -276,6 +276,13 @@ driver in the prod overlay; the rest of the stack doesn't care.
 
 ### 10.1 — Manual upgrade (always works)
 
+> **Note:** `upgrade.sh` is now repo-tracked at `deploy/upgrade.sh`. After every
+> `git pull` (or as part of the upgrade itself) refresh the host copy:
+>
+> ```bash
+> sudo install -m 755 /opt/cronos/deploy/upgrade.sh /opt/cronos/upgrade.sh
+> ```
+
 ```bash
 /opt/cronos/upgrade.sh
 ```

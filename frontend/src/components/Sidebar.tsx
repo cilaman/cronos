@@ -3,6 +3,7 @@ import { cn } from "../utils/cn";
 import { useSpaces } from "../hooks/useSpaces";
 import type { SpaceSummary } from "../types";
 import { ThemePicker } from "./ThemePicker";
+import { BuildInfo } from "./BuildInfo";
 
 const primaryNavLinkClasses = ({ isActive }: { isActive: boolean }) =>
   cn(
@@ -203,9 +204,7 @@ export function Sidebar({ onClose }: Props) {
 
       <div className="mt-auto flex items-center justify-between border-t border-hairline px-3 py-2">
         <ThemePicker />
-        <span className="font-mono text-[10px] tracking-[0.14em] text-ink-faint">
-          v0.0.1
-        </span>
+        <BuildInfo />
       </div>
     </aside>
   );

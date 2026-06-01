@@ -29,5 +29,14 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 8000
 
+# Build-time metadata — values injected by upgrade.sh via --build-arg.
+# Defaults are empty so local dev and CI work without these args.
+ARG BUILD_COMMIT
+ARG BUILD_TIME
+ARG BUILD_REPO_URL
+ENV BUILD_COMMIT=$BUILD_COMMIT \
+    BUILD_TIME=$BUILD_TIME \
+    BUILD_REPO_URL=$BUILD_REPO_URL
+
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
