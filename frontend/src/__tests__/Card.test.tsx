@@ -476,11 +476,13 @@ describe("Card — goal collapsible children", () => {
     expect(onOpenTask).toHaveBeenCalledWith("child-2");
   });
 
-  it("shows state dot for each child row when expanded", () => {
+  it("shows state badge pill for each child row when expanded", () => {
     const task = makeGoalTask();
     renderCard({ task, onClick: () => {}, expanded: true });
-    // Each child row has a state dot with aria-label
-    const dots = screen.getAllByLabelText(/^(active|backlog|done|waiting|archived)$/);
-    expect(dots.length).toBeGreaterThanOrEqual(3);
+    // Each child row has a state badge pill with visible label text.
+    // "Backlog" appears both in the parent card header and child-2, so use getAllByText.
+    expect(screen.getAllByText("Active").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Backlog").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("Done").length).toBeGreaterThanOrEqual(1);
   });
 });

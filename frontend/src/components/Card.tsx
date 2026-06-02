@@ -92,12 +92,20 @@ const TYPE_BADGE_STYLES: Partial<Record<TaskType, string>> = {
   issue: "border-orange-200 bg-orange-50 text-orange-600 dark:border-orange-400/30 dark:bg-orange-400/10 dark:text-orange-400",
 };
 
-const STATE_DOT_STYLES: Record<TaskState, string> = {
-  backlog: "bg-ink-faint",
-  active: "bg-emerald-500",
-  waiting: "bg-amber-500",
-  done: "bg-sky-500",
-  archived: "bg-ink-faint/40",
+const STATE_BADGE_STYLES: Record<TaskState, string> = {
+  backlog: "border-hairline bg-surface-2 text-ink-faint",
+  active: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-400",
+  waiting: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-400",
+  done: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-400/30 dark:bg-sky-400/10 dark:text-sky-400",
+  archived: "border-hairline bg-surface-2 text-ink-faint/60",
+};
+
+const STATE_LABELS: Record<TaskState, string> = {
+  backlog: "Backlog",
+  active: "Active",
+  waiting: "Waiting",
+  done: "Done",
+  archived: "Archived",
 };
 
 function formatCompactAge(iso: string | null | undefined): string {
@@ -194,9 +202,13 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
           <h3 className="truncate text-sm font-semibold leading-snug text-ink">{task.title}</h3>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
             <span
-              className={cn("h-1.5 w-1.5 shrink-0 rounded-full", STATE_DOT_STYLES[task.state])}
-              aria-label={task.state}
-            />
+              className={cn(
+                "inline-flex items-center rounded border px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide",
+                STATE_BADGE_STYLES[task.state],
+              )}
+            >
+              {STATE_LABELS[task.state]}
+            </span>
             <span
               className={cn("h-1.5 w-1.5 shrink-0 rounded-full", pStyle.dot)}
               aria-label={`priority ${priority}`}
@@ -326,6 +338,14 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
             )}
           >
             P{priority}
+          </span>
+          <span
+            className={cn(
+              "inline-flex items-center rounded border px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide",
+              STATE_BADGE_STYLES[task.state],
+            )}
+          >
+            {STATE_LABELS[task.state]}
           </span>
           {typeBadgeStyle && (
             <span
@@ -483,14 +503,13 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
                 className="flex w-full items-center gap-1.5 rounded px-1 py-1 text-left transition hover:bg-surface-3 focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
               >
                 <span
-                  className={cn("h-1.5 w-1.5 shrink-0 rounded-full", STATE_DOT_STYLES[child.state])}
-                  aria-label={child.state}
-                />
-                {child.type === "goal" && (
-                  <span className="shrink-0 inline-flex items-center rounded border border-accent/40 bg-accent/10 px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide text-accent/80">
-                    goal
-                  </span>
-                )}
+                  className={cn(
+                    "inline-flex shrink-0 items-center rounded border px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide",
+                    STATE_BADGE_STYLES[child.state],
+                  )}
+                >
+                  {STATE_LABELS[child.state]}
+                </span>
                 <span className="flex-1 truncate text-xs text-ink-muted">{child.title}</span>
                 <span className="shrink-0 font-mono text-[9px] text-ink-faint">
                   {formatCompactAge(child.updated_at)}

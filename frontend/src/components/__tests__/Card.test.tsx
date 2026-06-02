@@ -438,15 +438,14 @@ describe("Card — density='tight'", () => {
     expect(getCardRoot(container).getAttribute("data-density")).toBe("tight");
   });
 
-  it("renders a state dot with aria-label matching the task's state", () => {
+  it("renders a state badge pill for the task's state", () => {
     const task = makeTask({ state: "active" });
 
     renderCard({ task, onClick: () => {}, density: "tight" });
 
-    const stateDot = screen.getByLabelText("active");
-    expect(stateDot).toBeInTheDocument();
-    // It's a colored circle (uses rounded-full + a size class).
-    expect(stateDot.className).toContain("rounded-full");
+    const stateBadge = screen.getByText("Active");
+    expect(stateBadge).toBeInTheDocument();
+    expect(stateBadge.className).toContain("rounded");
   });
 
   it("renders a priority dot with aria-label containing 'priority'", () => {
