@@ -206,6 +206,16 @@ class SpaceToolsResponse(BaseModel):
     has_claude_md: bool = False
 
 
+class AiToolDetail(BaseModel):
+    name: str
+    path: str
+    description: str | None = None
+    scope: Literal["space", "global"]
+    modified_at: str
+    category: Literal["agent", "command", "skill", "context"]
+    content: str
+
+
 # ---------------------------------------------------------------------------
 # Memory
 # ---------------------------------------------------------------------------

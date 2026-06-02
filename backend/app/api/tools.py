@@ -4,10 +4,11 @@ import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request
 
-from ..models import AiToolEntry, HookEntry, PermissionEntry, SpaceToolsResponse
+from ..models import AiToolDetail, AiToolEntry, HookEntry, PermissionEntry, SpaceToolsResponse
 from ..space_storage import SpaceStore
 
 log = logging.getLogger(__name__)
@@ -267,4 +268,59 @@ async def get_space_tools(space_id: str, request: Request) -> SpaceToolsResponse
         hooks=s_hooks + g_hooks,
         permissions=s_perms + g_perms,
         has_claude_md=has_claude_md,
+    )
+
+
+@router.get("/{space_id}/tool-content", response_model=AiToolDetail)
+async def get_tool_content(
+    space_id: str,
+    path: str,
+    scope: Literal["space", "global"],
+    request: Request,
+) -> AiToolDetail:
+    space_store = _get_space_store(request)
+    space = space_store.get(space_id)
+    if space is None:
+        raise HTTPException(status_code=404, detail=f"Space {space_id} not found")
+
+    if scope == "space":
+        space_dir = space_store.space_dir(space_id)
+        allowed_root = (space_dir / ".claude").resolve()
+        resolved = (space_dir / path).resolve()
+    else:
+        if path.startswith("~"):
+            resolved = Path(path).expanduser().resolve()
+        else:
+            resolved = (Path.home() / path).resolve()
+        allowed_root = GLOBAL_CLAUDE_DIR.resolve()
+
+    if not resolved.is_relative_to(allowed_root):
+        raise HTTPException(status_code=400, detail="Path is outside the allowed directory")
+
+    if not resolved.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    try:
+        content = resolved.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    path_str = str(resolved)
+    if "/.claude/agents/" in path_str:
+        category: Literal["agent", "command", "skill", "context"] = "agent"
+    elif "/.claude/commands/" in path_str:
+        category = "command"
+    elif "/.claude/skills/" in path_str:
+        category = "skill"
+    else:
+        category = "context"
+
+    return AiToolDetail(
+        name=resolved.stem,
+        path=path,
+        description=_extract_description(resolved),
+        scope=scope,
+        modified_at=_mtime_iso(resolved),
+        category=category,
+        content=content,
     )
