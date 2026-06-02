@@ -2,6 +2,7 @@ import type {
   Activity,
   AgentMode,
   AgentModel,
+  AiToolDetail,
   Board,
   BuildInfo,
   GlobalStats,
@@ -216,6 +217,8 @@ export const api = {
   // --- ai tools ---
   spaceTools: (spaceId: string) =>
     request<SpaceToolsResponse>(`/api/spaces/${spaceId}/tools`),
+  toolContent: (spaceId: string, path: string, scope: string) =>
+    request<AiToolDetail>(`/api/spaces/${spaceId}/tool-content?path=${encodeURIComponent(path)}&scope=${scope}`),
 
   // --- activity ---
   activity: (limit = 50, spaceId: string | null = null) => {

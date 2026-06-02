@@ -332,6 +332,11 @@ export interface SpaceToolsResponse {
   has_claude_md: boolean;
 }
 
+export interface AiToolDetail extends AiToolEntry {
+  category: "agent" | "command" | "skill" | "context";
+  content: string;
+}
+
 export interface PresetColor {
   name: string;
   value: string;
