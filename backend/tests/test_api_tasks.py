@@ -2020,3 +2020,67 @@ async def test_children_progress_present_on_all_space_query(
     cp = found["children_progress"]
     assert cp is not None
     assert cp["done"] == 0 and cp["total"] == 1 and cp["waiting"] == 0
+
+
+async def test_sub_goal_child_item_carries_children_progress(async_client, task_store):
+    """A goal whose direct child is itself a goal should expose
+    `children_progress` on that child item inside the parent's
+    `children_progress.items` list.
+
+    Locks the contract that `_enrich_progress` recurses into sub-goals so the
+    frontend can render inline tree expansion without extra API round-trips.
+    """
+    root = await _create(async_client, title="Root Goal", type="goal")
+    sub_goal = await _create(
+        async_client, title="Sub Goal", type="goal", parent_id=root["id"]
+    )
+    leaf = await _create(
+        async_client, title="Leaf Task", parent_id=sub_goal["id"]
+    )
+
+    # Act
+    root_summary = await _find_in_board(async_client, root["id"])
+
+    # Assert root has children_progress
+    assert root_summary is not None
+    root_cp = root_summary["children_progress"]
+    assert root_cp is not None
+    assert root_cp["total"] == 1
+
+    # The one child item is the sub-goal
+    items = root_cp["items"]
+    assert len(items) == 1
+    sub_item = items[0]
+    assert sub_item["id"] == sub_goal["id"]
+    assert sub_item["type"] == "goal"
+
+    # The sub-goal child item must itself carry children_progress
+    sub_cp = sub_item["children_progress"]
+    assert sub_cp is not None, "sub-goal child must carry its own children_progress"
+    assert sub_cp["total"] == 1
+    assert sub_cp["done"] == 0
+
+    # And the leaf task in sub_cp.items must have no children_progress
+    sub_items = sub_cp["items"]
+    assert len(sub_items) == 1
+    leaf_item = sub_items[0]
+    assert leaf_item["id"] == leaf["id"]
+    assert leaf_item.get("children_progress") is None
+
+
+async def test_task_child_item_has_no_children_progress(async_client):
+    """A goal whose direct child is a regular task must expose
+    `children_progress=None` on that child item — only goal-type children
+    get the recursive field populated.
+    """
+    root = await _create(async_client, title="Root Goal", type="goal")
+    await _create(async_client, title="Task Child", parent_id=root["id"])
+
+    root_summary = await _find_in_board(async_client, root["id"])
+    assert root_summary is not None
+
+    items = root_summary["children_progress"]["items"]
+    assert len(items) == 1
+    task_item = items[0]
+    assert task_item["type"] == "task"
+    assert task_item.get("children_progress") is None

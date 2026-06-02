@@ -486,3 +486,182 @@ describe("Card — goal collapsible children", () => {
     expect(screen.getAllByText("Done").length).toBeGreaterThanOrEqual(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Inline tree expansion — sub-goal children
+// ---------------------------------------------------------------------------
+
+describe("Card — inline tree expansion of sub-goals", () => {
+  const subGoalChildren = [
+    {
+      id: "sg-child-1",
+      title: "Sub-goal task alpha",
+      state: "active" as const,
+      priority: 2,
+      updated_at: "2024-01-15T10:00:00Z",
+    },
+    {
+      id: "sg-child-2",
+      title: "Sub-goal task beta",
+      state: "done" as const,
+      priority: 3,
+      updated_at: "2024-01-14T10:00:00Z",
+    },
+  ];
+
+  const childItems = [
+    {
+      id: "task-child-1",
+      title: "Regular task child",
+      state: "backlog" as const,
+      priority: 3,
+      updated_at: "2024-01-15T08:00:00Z",
+      type: "task" as const,
+    },
+    {
+      id: "goal-child-1",
+      title: "Sub-goal with children",
+      state: "active" as const,
+      priority: 2,
+      updated_at: "2024-01-15T09:00:00Z",
+      type: "goal" as const,
+      children_progress: {
+        done: 1,
+        total: 2,
+        waiting: 0,
+        items: subGoalChildren,
+      },
+    },
+    {
+      id: "goal-child-2",
+      title: "Empty sub-goal",
+      state: "backlog" as const,
+      priority: 3,
+      updated_at: "2024-01-15T07:00:00Z",
+      type: "goal" as const,
+    },
+  ];
+
+  function makeGoalWithSubGoals(): TaskSummary {
+    return makeTask({
+      type: "goal",
+      children_progress: {
+        done: 0,
+        total: 3,
+        waiting: 0,
+        items: childItems,
+      },
+    });
+  }
+
+  it("renders exactly one sub-expand button — only for the goal child that has children", () => {
+    const task = makeGoalWithSubGoals();
+    renderCard({ task, onClick: () => {}, expanded: true });
+
+    // childItems has 3 items: 1 regular task + 1 goal-with-children + 1 empty-goal
+    // Only the goal-with-children should get an expand button.
+    expect(screen.getAllByTitle("Expand sub-goal")).toHaveLength(1);
+    // The regular task child and empty sub-goal are visible but have no chevron.
+    expect(screen.getByText("Regular task child")).toBeInTheDocument();
+    expect(screen.getByText("Empty sub-goal")).toBeInTheDocument();
+  });
+
+  it("renders an expand button (▶) for a sub-goal child that has children", () => {
+    const task = makeGoalWithSubGoals();
+    renderCard({ task, onClick: () => {}, expanded: true });
+
+    const expandBtns = screen.getAllByTitle("Expand sub-goal");
+    expect(expandBtns).toHaveLength(1);
+    expect(expandBtns[0].textContent).toContain("▶");
+  });
+
+  it("does NOT render an expand button for a sub-goal with no children", () => {
+    const task = makeGoalWithSubGoals();
+    renderCard({ task, onClick: () => {}, expanded: true });
+
+    // "Empty sub-goal" has no children_progress, so no chevron
+    // Only one expand button should exist (for "Sub-goal with children")
+    expect(screen.getAllByTitle("Expand sub-goal")).toHaveLength(1);
+  });
+
+  it("sub-goal children are hidden before the sub-goal is expanded", () => {
+    const task = makeGoalWithSubGoals();
+    renderCard({ task, onClick: () => {}, expanded: true });
+
+    expect(screen.queryByText("Sub-goal task alpha")).not.toBeInTheDocument();
+    expect(screen.queryByText("Sub-goal task beta")).not.toBeInTheDocument();
+  });
+
+  it("clicking the sub-goal expand button reveals its children", async () => {
+    const task = makeGoalWithSubGoals();
+    renderCard({ task, onClick: () => {}, expanded: true });
+
+    const user = userEvent.setup();
+    const expandBtn = screen.getByTitle("Expand sub-goal");
+    await user.click(expandBtn);
+
+    expect(screen.getByText("Sub-goal task alpha")).toBeInTheDocument();
+    expect(screen.getByText("Sub-goal task beta")).toBeInTheDocument();
+  });
+
+  it("clicking the sub-goal expand button again collapses the nested children", async () => {
+    const task = makeGoalWithSubGoals();
+    renderCard({ task, onClick: () => {}, expanded: true });
+
+    const user = userEvent.setup();
+    const expandBtn = screen.getByTitle("Expand sub-goal");
+
+    // Expand
+    await user.click(expandBtn);
+    expect(screen.getByText("Sub-goal task alpha")).toBeInTheDocument();
+
+    // Collapse
+    await user.click(screen.getByTitle("Collapse sub-goal"));
+    expect(screen.queryByText("Sub-goal task alpha")).not.toBeInTheDocument();
+  });
+
+  it("sub-goal expand button shows ▼ when expanded", async () => {
+    const task = makeGoalWithSubGoals();
+    renderCard({ task, onClick: () => {}, expanded: true });
+
+    const user = userEvent.setup();
+    await user.click(screen.getByTitle("Expand sub-goal"));
+
+    const collapseBtn = screen.getByTitle("Collapse sub-goal");
+    expect(collapseBtn.textContent).toContain("▼");
+    expect(collapseBtn.textContent).not.toContain("▶");
+  });
+
+  it("clicking sub-goal expand button does NOT fire the card's onClick", async () => {
+    const onClick = vi.fn();
+    const task = makeGoalWithSubGoals();
+    renderCard({ task, onClick, expanded: true });
+
+    const user = userEvent.setup();
+    await user.click(screen.getByTitle("Expand sub-goal"));
+
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it("clicking a nested child row calls onOpenTask with its id", async () => {
+    const onOpenTask = vi.fn();
+    const task = makeGoalWithSubGoals();
+    renderCard({ task, onClick: () => {}, onOpenTask, expanded: true });
+
+    const user = userEvent.setup();
+    await user.click(screen.getByTitle("Expand sub-goal"));
+    await user.click(screen.getByText("Sub-goal task alpha"));
+
+    expect(onOpenTask).toHaveBeenCalledWith("sg-child-1");
+  });
+
+  it("shows a 'goal' badge next to sub-goal children in the list", () => {
+    const task = makeGoalWithSubGoals();
+    renderCard({ task, onClick: () => {}, expanded: true });
+
+    // "Sub-goal with children" and "Empty sub-goal" are goal-type children
+    const goalBadges = screen.getAllByText("goal");
+    // At least two goal badges (one for the card-level type badge, plus the child goal badges)
+    expect(goalBadges.length).toBeGreaterThanOrEqual(2);
+  });
+});

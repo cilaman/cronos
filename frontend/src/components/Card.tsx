@@ -1,9 +1,10 @@
+import { useState } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { cn } from "../utils/cn";
 import { formatRelative } from "../utils/format";
 import { SpaceTag } from "./ui/SpaceTag";
-import type { AgentMode, TaskSummary, TaskState, TaskType } from "../types";
+import type { AgentMode, ChildProgressItem, TaskSummary, TaskState, TaskType } from "../types";
 
 function IconGitPR({ className }: { className?: string }) {
   return (
@@ -122,6 +123,89 @@ function formatCompactAge(iso: string | null | undefined): string {
   return `${Math.round(seconds / (86_400 * 365))}y`;
 }
 
+function ChildRow({
+  child,
+  onOpenTask,
+  expandedChildIds,
+  toggleChildExpand,
+}: {
+  child: ChildProgressItem;
+  onOpenTask?: (id: string) => void;
+  expandedChildIds: Set<string>;
+  toggleChildExpand: (id: string) => void;
+}) {
+  const childPStyle = PRIORITY_STYLES[child.priority] ?? PRIORITY_STYLES[3];
+  const isGoalChild = child.type === "goal";
+  const hasSubChildren = isGoalChild && (child.children_progress?.total ?? 0) > 0;
+  const childExpanded = expandedChildIds.has(child.id);
+
+  return (
+    <div>
+      <div className="flex items-stretch">
+        {hasSubChildren ? (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); toggleChildExpand(child.id); }}
+            aria-expanded={childExpanded}
+            title={childExpanded ? "Collapse sub-goal" : "Expand sub-goal"}
+            className="flex w-4 shrink-0 items-center justify-center text-ink-faint transition hover:text-ink focus:outline-none"
+          >
+            <span aria-hidden className="font-mono text-[9px] leading-none">
+              {childExpanded ? "▼" : "▶"}
+            </span>
+          </button>
+        ) : (
+          <span className="w-4 shrink-0" />
+        )}
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onOpenTask?.(child.id); }}
+          className="flex flex-1 items-center gap-2 rounded px-1 py-1.5 text-left transition hover:bg-surface-3 focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+        >
+          <span
+            className={cn(
+              "inline-flex shrink-0 items-center rounded border px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide",
+              STATE_BADGE_STYLES[child.state],
+            )}
+          >
+            {STATE_LABELS[child.state]}
+          </span>
+          {isGoalChild && (
+            <span className="inline-flex shrink-0 items-center rounded border border-accent/40 bg-accent/10 px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide text-accent/80">
+              goal
+            </span>
+          )}
+          <span className="flex-1 truncate text-sm font-medium text-ink">{child.title}</span>
+          <span className="shrink-0 font-mono text-[9px] text-ink-faint">
+            {formatCompactAge(child.updated_at)}
+          </span>
+          <span
+            className={cn(
+              "inline-flex shrink-0 items-center rounded border px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide",
+              childPStyle.badge,
+            )}
+          >
+            P{child.priority}
+          </span>
+        </button>
+      </div>
+      {hasSubChildren && childExpanded && (child.children_progress?.items?.length ?? 0) > 0 && (
+        <div className="ml-4 border-l border-hairline">
+          {child.children_progress!.items!.map((subChild) => (
+            <ChildRow
+              key={subChild.id}
+              child={subChild}
+              onOpenTask={onOpenTask}
+              expandedChildIds={expandedChildIds}
+              toggleChildExpand={toggleChildExpand}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface Props {
   task: TaskSummary;
   onClick: () => void;
@@ -141,6 +225,15 @@ interface Props {
 export function Card({ task, onClick, compact = false, density = "default", isDragOverlay = false, dragDisabled = false, onOpenTask, blocksCount = 0, running = false, expanded = false, onToggleExpand }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id, disabled: isDragOverlay || dragDisabled });
+
+  const [expandedChildIds, setExpandedChildIds] = useState<Set<string>>(() => new Set());
+  const toggleChildExpand = (id: string) => {
+    setExpandedChildIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
 
   const style =
     !isDragOverlay
@@ -490,46 +583,15 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
           style={{ borderLeftColor: borderColor, borderLeftWidth: 3 }}
           className="divide-y divide-hairline rounded-b-md border border-t-0 border-hairline bg-surface-2 px-2 pb-1 pt-0.5"
         >
-          {childrenProgress!.items!.map((child) => {
-            const childPStyle = PRIORITY_STYLES[child.priority] ?? PRIORITY_STYLES[3];
-            return (
-              <button
-                key={child.id}
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onOpenTask?.(child.id);
-                }}
-                className="flex w-full items-center gap-2 rounded px-1 py-1.5 text-left transition hover:bg-surface-3 focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
-              >
-                <span
-                  className={cn(
-                    "inline-flex shrink-0 items-center rounded border px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide",
-                    STATE_BADGE_STYLES[child.state],
-                  )}
-                >
-                  {STATE_LABELS[child.state]}
-                </span>
-                {child.type === "goal" && (
-                  <span className="inline-flex shrink-0 items-center rounded border border-accent/40 bg-accent/10 px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide text-accent/80">
-                    goal
-                  </span>
-                )}
-                <span className="flex-1 truncate text-sm font-medium text-ink">{child.title}</span>
-                <span className="shrink-0 font-mono text-[9px] text-ink-faint">
-                  {formatCompactAge(child.updated_at)}
-                </span>
-                <span
-                  className={cn(
-                    "inline-flex shrink-0 items-center rounded border px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide",
-                    childPStyle.badge,
-                  )}
-                >
-                  P{child.priority}
-                </span>
-              </button>
-            );
-          })}
+          {childrenProgress!.items!.map((child) => (
+            <ChildRow
+              key={child.id}
+              child={child}
+              onOpenTask={onOpenTask}
+              expandedChildIds={expandedChildIds}
+              toggleChildExpand={toggleChildExpand}
+            />
+          ))}
         </div>
       )}
     </div>

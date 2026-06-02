@@ -33,6 +33,7 @@ export interface ChildProgressItem {
   priority: number;
   updated_at: string;
   type?: TaskType;
+  children_progress?: { done: number; total: number; waiting: number; items?: ChildProgressItem[] } | null;
 }
 
 export interface TaskSummary {

@@ -62,6 +62,7 @@ class ChildItem(BaseModel):
     priority: int
     updated_at: datetime
     type: Literal["task", "goal", "issue"] = "task"
+    children_progress: ChildrenProgress | None = None
 
 
 class ChildrenProgress(BaseModel):
@@ -69,6 +70,9 @@ class ChildrenProgress(BaseModel):
     total: int
     waiting: int
     items: list[ChildItem] = Field(default_factory=list)
+
+
+ChildItem.model_rebuild()
 
 
 class TaskSummary(BaseModel):

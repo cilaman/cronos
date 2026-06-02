@@ -184,6 +184,29 @@ def _enrich_progress(board: Board) -> Board:
         if t.parent_id:
             children_by_parent.setdefault(t.parent_id, []).append(t)
 
+    def make_child_item(c: TaskSummary) -> ChildItem:
+        child_progress = None
+        if c.type == "goal":
+            sub_children = children_by_parent.get(c.id, [])
+            if sub_children:
+                sub_done = sum(1 for sc in sub_children if sc.state == TaskState.DONE)
+                sub_waiting = sum(1 for sc in sub_children if sc.state == TaskState.WAITING)
+                child_progress = ChildrenProgress(
+                    done=sub_done,
+                    total=len(sub_children),
+                    waiting=sub_waiting,
+                    items=[make_child_item(sc) for sc in sub_children[:20]],
+                )
+        return ChildItem(
+            id=c.id,
+            title=c.title,
+            state=c.state,
+            priority=c.priority,
+            updated_at=c.updated_at,
+            type=c.type,
+            children_progress=child_progress,
+        )
+
     def fill(items: list[TaskSummary]) -> list[TaskSummary]:
         result = []
         for t in items:
@@ -192,23 +215,12 @@ def _enrich_progress(board: Board) -> Board:
                 if children:
                     done = sum(1 for c in children if c.state == TaskState.DONE)
                     waiting = sum(1 for c in children if c.state == TaskState.WAITING)
-                    child_items = [
-                        ChildItem(
-                            id=c.id,
-                            title=c.title,
-                            state=c.state,
-                            priority=c.priority,
-                            updated_at=c.updated_at,
-                            type=c.type,
-                        )
-                        for c in children[:20]
-                    ]
                     t = t.model_copy(
                         update={"children_progress": ChildrenProgress(
                             done=done,
                             total=len(children),
                             waiting=waiting,
-                            items=child_items,
+                            items=[make_child_item(c) for c in children[:20]],
                         )}
                     )
             result.append(t)
