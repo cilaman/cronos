@@ -450,3 +450,37 @@ async def test_get_space_tools_detects_claude_md(async_client, space_store, tmp_
     resp = await async_client.get(f"/api/spaces/{SPACE_ID}/tools")
     assert resp.status_code == 200
     assert resp.json()["has_claude_md"] is True
+
+
+async def test_tool_content_roundtrip_for_listed_path(async_client, space_store, tmp_spaces_dir):
+    """A path returned by the listing endpoint must resolve via the content endpoint.
+
+    Regression: listing emitted paths relative to .claude (e.g. ``agents/x.md``)
+    while the content endpoint joined them to the space dir, yielding 404.
+    """
+    space_dir = tmp_spaces_dir / SPACE_ID
+    agents_dir = space_dir / ".claude" / "agents"
+    agents_dir.mkdir(parents=True, exist_ok=True)
+    (agents_dir / "test-agent.md").write_text("---\ndescription: Test agent\n---\nbody\n")
+
+    listing = (await async_client.get(f"/api/spaces/{SPACE_ID}/tools")).json()
+    entry = next(a for a in listing["agents"] if a["name"] == "test-agent")
+    assert entry["path"] == ".claude/agents/test-agent.md"
+
+    resp = await async_client.get(
+        f"/api/spaces/{SPACE_ID}/tool-content",
+        params={"path": entry["path"], "scope": entry["scope"]},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["category"] == "agent"
+    assert "body" in body["content"]
+
+
+async def test_tool_content_rejects_path_traversal(async_client, space_store, tmp_spaces_dir):
+    (tmp_spaces_dir / SPACE_ID).mkdir(parents=True, exist_ok=True)
+    resp = await async_client.get(
+        f"/api/spaces/{SPACE_ID}/tool-content",
+        params={"path": "../../etc/passwd", "scope": "space"},
+    )
+    assert resp.status_code == 400

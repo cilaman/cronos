@@ -97,7 +97,7 @@ def _scan_category(
     for md_file in sorted(target.glob(pattern)):
         if not md_file.is_file():
             continue
-        rel = md_file.relative_to(claude_dir)
+        rel = md_file.relative_to(claude_dir.parent)
         entries.append(AiToolEntry(
             name=md_file.stem,
             path=str(rel).replace("\\", "/"),
@@ -121,7 +121,7 @@ def _scan_skills(claude_dir: Path, scope: str) -> list[AiToolEntry]:
     for md_file in sorted(target.glob("*.md")):
         if not md_file.is_file():
             continue
-        rel = md_file.relative_to(claude_dir)
+        rel = md_file.relative_to(claude_dir.parent)
         entries.append(AiToolEntry(
             name=md_file.stem,
             path=str(rel).replace("\\", "/"),
@@ -138,7 +138,7 @@ def _scan_skills(claude_dir: Path, scope: str) -> list[AiToolEntry]:
         skill_file = skill_dir / "SKILL.md"
         if not skill_file.is_file():
             continue
-        rel = skill_file.relative_to(claude_dir)
+        rel = skill_file.relative_to(claude_dir.parent)
         entries.append(AiToolEntry(
             name=skill_dir.name,
             path=str(rel).replace("\\", "/"),
@@ -158,7 +158,7 @@ def _scan_context(claude_dir: Path, scope: str) -> list[AiToolEntry]:
     if context_md.is_file():
         entries.append(AiToolEntry(
             name="CONTEXT",
-            path="CONTEXT.md",
+            path=str(context_md.relative_to(claude_dir.parent)).replace("\\", "/"),
             description=_extract_description(context_md),
             scope=scope,
             modified_at=_mtime_iso(context_md),
@@ -168,7 +168,7 @@ def _scan_context(claude_dir: Path, scope: str) -> list[AiToolEntry]:
     if context_dir.is_dir():
         for f in sorted(context_dir.iterdir()):
             if f.is_file():
-                rel = f".claude/context/{f.name}"
+                rel = str(f.relative_to(claude_dir.parent)).replace("\\", "/")
                 entries.append(AiToolEntry(
                     name=f.stem if f.suffix else f.name,
                     path=rel,
