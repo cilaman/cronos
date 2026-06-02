@@ -83,6 +83,10 @@ def default_body(class_name: str) -> str:
             "Summary", "Updated docs", "Intentionally not updated",
             "Assumptions", "Open questions", "Next consumer brief",
         ],
+        "retro": [
+            "Summary", "Scores", "Findings", "Assumptions",
+            "Open questions", "Next consumer brief",
+        ],
     }
     parts = []
     for s in sections_by_class[class_name]:
@@ -274,6 +278,48 @@ def doc_header(slug: str = "test-feature") -> dict:
     }
 
 
+def retro_header(slug: str = "test-feature") -> dict:
+    return {
+        "cc_version": "1.0",
+        "agent": "pipeline-retro",
+        "slug": slug,
+        "phase": "retro",
+        "status": "done",
+        "confidence": 0.9,
+        "inputs_used": [".cronos/pipeline/test-feature/pipeline-state.json"],
+        "outputs_produced": [canonical_artifact_relpath("retro", slug)],
+        "blockers": [],
+        "next_consumer": "user",
+        "metrics": {
+            "tool_calls": 6,
+            "files_read": 1,
+            "memory_hits": 0,
+            "phases_reviewed": 7,
+            "traces_reviewed": 7,
+        },
+        "scores": {
+            "planning": 4,
+            "error_handling": 4,
+            "efficiency": 3,
+            "completion": 5,
+            "communication": 4,
+        },
+        "findings": [
+            {
+                "id": "F1",
+                "severity": "medium",
+                "fix_type": "agent_prompt_refinement",
+                "target": "agent:pipeline-implementor",
+                "evidence": "Implementor backtracked twice on backend/app/foo.py.",
+                "suggested_action": (
+                    "Add 'read scope_files before first Edit' to the implementor "
+                    "preflight checklist."
+                ),
+            }
+        ],
+    }
+
+
 GOOD_HEADERS = {
     "research": research_header,
     "analysis": analysis_header,
@@ -282,6 +328,7 @@ GOOD_HEADERS = {
     "test": _make_test_header,
     "review": review_header,
     "doc": doc_header,
+    "retro": retro_header,
 }
 
 
@@ -1048,6 +1095,76 @@ def test_R_doc_5_docs_updated_metric_mismatch(tmp_path: Path) -> None:
     result = verify("doc", "test-feature", tmp_path)
     assert not result.passed
     assert any("R-doc-5" in e for e in result.errors)
+
+
+# ---------------------------------------------------------------------------
+# Retro-class checks (R-retro-1..4).
+# ---------------------------------------------------------------------------
+
+
+def test_R_retro_1_extra_output_entry_fails(tmp_path: Path) -> None:
+    h = retro_header()
+    h["outputs_produced"] = [
+        canonical_artifact_relpath("retro", "test-feature"),
+        "docs/should-not-be-here.md",
+    ]
+    write_artifact(tmp_path, "retro", "test-feature", h)
+    result = verify("retro", "test-feature", tmp_path)
+    assert not result.passed
+    assert any("R-retro-1" in e for e in result.errors)
+
+
+def test_R_retro_2_fix_type_must_be_in_enum(tmp_path: Path) -> None:
+    h = retro_header()
+    h["findings"][0]["fix_type"] = "rewrite_orchestrator"
+    write_artifact(tmp_path, "retro", "test-feature", h)
+    result = verify("retro", "test-feature", tmp_path)
+    assert not result.passed
+    assert any("R-retro-2" in e for e in result.errors)
+
+
+def test_R_retro_3_scores_missing_dimension_fails(tmp_path: Path) -> None:
+    h = retro_header()
+    del h["scores"]["communication"]
+    write_artifact(tmp_path, "retro", "test-feature", h)
+    result = verify("retro", "test-feature", tmp_path)
+    assert not result.passed
+    assert any("R-retro-3" in e for e in result.errors)
+
+
+def test_R_retro_3_score_out_of_range_fails(tmp_path: Path) -> None:
+    h = retro_header()
+    h["scores"]["planning"] = 7
+    write_artifact(tmp_path, "retro", "test-feature", h)
+    result = verify("retro", "test-feature", tmp_path)
+    assert not result.passed
+    assert any("R-retro-3" in e for e in result.errors)
+
+
+def test_R_retro_4_duplicate_finding_id_fails(tmp_path: Path) -> None:
+    h = retro_header()
+    h["findings"].append(
+        {
+            "id": "F1",  # duplicate
+            "severity": "low",
+            "fix_type": "normalize_rule",
+            "target": "normalize:trailing_whitespace",
+            "evidence": "Trailing whitespace in slugs across scout reports.",
+            "suggested_action": "Strip trailing whitespace in normalize.py.",
+        }
+    )
+    write_artifact(tmp_path, "retro", "test-feature", h)
+    result = verify("retro", "test-feature", tmp_path)
+    assert not result.passed
+    assert any("R-retro-4" in e for e in result.errors)
+
+
+def test_retro_finding_missing_target_fails(tmp_path: Path) -> None:
+    h = retro_header()
+    del h["findings"][0]["target"]
+    write_artifact(tmp_path, "retro", "test-feature", h)
+    result = verify("retro", "test-feature", tmp_path)
+    assert not result.passed
 
 
 # ---------------------------------------------------------------------------

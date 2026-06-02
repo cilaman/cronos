@@ -1,8 +1,10 @@
-import { useNavigate, useParams } from "react-router-dom";
+import { useMemo } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useSpaces, useSpaceTools } from "../hooks/useSpaces";
 import { cn } from "../utils/cn";
 import { formatRelative } from "../utils/format";
 import type { AiToolEntry, HookEntry, PermissionEntry } from "../types";
+import { ToolDetailPanel } from "../components/ToolDetailPanel";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -61,9 +63,23 @@ function SectionEmptyState({ label, subfolder }: { label: string; subfolder: str
   );
 }
 
-function ToolCard({ entry, category }: { entry: AiToolEntry; category: string }) {
+function ToolCard({
+  entry,
+  category,
+  onClick,
+}: {
+  entry: AiToolEntry;
+  category: string;
+  onClick: () => void;
+}) {
   return (
-    <div className="group relative rounded-md border border-hairline bg-surface-1 p-4 shadow-inset-hairline transition hover:-translate-y-px hover:border-hairline-strong hover:shadow-lift">
+    <div
+      className="group relative cursor-pointer rounded-md border border-hairline bg-surface-1 p-4 shadow-inset-hairline transition hover:-translate-y-px hover:border-hairline-strong hover:shadow-lift focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+      onClick={onClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onClick()}
+    >
       <div className="mb-2 flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <span className="shrink-0 text-[18px] leading-none" aria-hidden>
@@ -97,11 +113,13 @@ function ToolGrid({
   category,
   label,
   subfolder,
+  onToolClick,
 }: {
   entries: AiToolEntry[];
   category: string;
   label: string;
   subfolder: string;
+  onToolClick: (entry: AiToolEntry) => void;
 }) {
   return (
     <section>
@@ -111,7 +129,12 @@ function ToolGrid({
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {entries.map((e) => (
-            <ToolCard key={`${e.scope}:${e.path}`} entry={e} category={category} />
+            <ToolCard
+              key={`${e.scope}:${e.path}`}
+              entry={e}
+              category={category}
+              onClick={() => onToolClick(e)}
+            />
           ))}
         </div>
       )}
@@ -197,6 +220,46 @@ export function SpaceToolsPage() {
 
   const { data: tools, isLoading: toolsLoading, isError: toolsError } = useSpaceTools(activeSpaceId);
 
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const toolName = searchParams.get("tool");
+  const toolCategory = searchParams.get("category") as "agent" | "command" | "skill" | "context" | null;
+  const toolScope = searchParams.get("scope") as "space" | "global" | null;
+
+  const selectedTool = useMemo(() => {
+    if (!tools || !toolName || !toolCategory || !toolScope) return null;
+    const allTools = [
+      ...tools.agents.map((e) => ({ ...e, category: "agent" as const })),
+      ...tools.commands.map((e) => ({ ...e, category: "command" as const })),
+      ...tools.skills.map((e) => ({ ...e, category: "skill" as const })),
+      ...tools.context_files.map((e) => ({ ...e, category: "context" as const })),
+    ];
+    return allTools.find((e) => e.name === toolName && e.category === toolCategory && e.scope === toolScope) ?? null;
+  }, [tools, toolName, toolCategory, toolScope]);
+
+  function handleToolClick(
+    entry: AiToolEntry,
+    category: "agent" | "command" | "skill" | "context",
+  ) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("tool", entry.name);
+      next.set("category", category);
+      next.set("scope", entry.scope);
+      return next;
+    });
+  }
+
+  function handleClose() {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("tool");
+      next.delete("category");
+      next.delete("scope");
+      return next;
+    });
+  }
+
   function handleSpaceChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const val = e.target.value;
     if (val) {
@@ -274,6 +337,15 @@ export function SpaceToolsPage() {
         </div>
       )}
 
+      {/* Tool detail panel */}
+      {selectedTool && activeSpaceId && (
+        <ToolDetailPanel
+          tool={selectedTool}
+          spaceId={activeSpaceId}
+          onClose={handleClose}
+        />
+      )}
+
       {/* Content */}
       {activeSpaceId && tools && (
         <>
@@ -317,24 +389,28 @@ export function SpaceToolsPage() {
             category="agent"
             label="Agents"
             subfolder="agents"
+            onToolClick={(e) => handleToolClick(e, "agent")}
           />
           <ToolGrid
             entries={tools.commands}
             category="command"
             label="Commands"
             subfolder="commands"
+            onToolClick={(e) => handleToolClick(e, "command")}
           />
           <ToolGrid
             entries={tools.skills}
             category="skill"
             label="Skills"
             subfolder="skills"
+            onToolClick={(e) => handleToolClick(e, "skill")}
           />
           <ToolGrid
             entries={tools.context_files}
             category="context"
             label="Context"
             subfolder="context"
+            onToolClick={(e) => handleToolClick(e, "context")}
           />
 
           {/* Settings */}

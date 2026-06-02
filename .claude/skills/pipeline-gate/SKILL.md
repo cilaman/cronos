@@ -210,6 +210,79 @@ export PY_EXIT=$?
 
 ---
 
+## Step 3b — Retro memory write-back (only when PHASE=retro and gate passes)
+
+When `PHASE=retro` **and** `VERIFY_EXIT == 0` **and** `PY_EXIT == 0`, run the
+memory writer to persist each finding from the retro artifact as a global
+Cronos memory item. This is the mechanism that closes the self-improvement loop:
+findings surface in future pipeline runs via `app.memory_retrieval.retrieve`.
+
+Skip this step entirely for any other phase — it is retro-specific.
+
+```bash
+if [ "$PHASE" = "retro" ] && [ "$VERIFY_EXIT" -eq 0 ] && [ "$PY_EXIT" -eq 0 ]; then
+  cd "${SPACE_DIR}/backend"
+  python -m app.pipeline.retro_memory_writer \
+      --space "${SPACE_DIR}" \
+      --slug  "${GOAL_SLUG}" > /tmp/retro-memory-writer.out 2>&1
+  export MEM_EXIT=$?
+  cat /tmp/retro-memory-writer.out
+  if [ "$MEM_EXIT" -ne 0 ]; then
+    echo "retro memory write-back failed (exit $MEM_EXIT) — lessons not persisted but gate still PASS"
+  fi
+fi
+```
+
+The memory writer failure is **non-blocking** — if it fails, the gate still emits
+`STATUS: DONE` (the retro artifact itself passed verification; memory write-back is
+a best-effort side effect). Log the failure for human review but do not downgrade
+to `STATUS: BLOCKED`.
+
+---
+
+## Step 3c — Auto-improvement applier (only when PHASE=retro and gate passes)
+
+After the memory writer runs, invoke the auto-improvement applier on the same
+retro artifact. The applier reads `findings[]`, filters to machine-applicable
+recipes (`fix_type=normalize_rule` with `target=normalize:strategy_synonym`,
+or `target=fixture:<rel_path>`), applies each change, bumps `CC_VERSION` by
+one minor across `contract.py` + schemas + fixtures, and re-runs the goal-1
+fixture harness. On red the applier restores every touched file from an
+in-memory snapshot — the version bump is rolled back too. Findings of
+`fix_type ∈ {agent_prompt_refinement, contract_change}` are deliberately
+skipped: they need human review.
+
+Skip this step entirely for any other phase — it is retro-specific. Like
+the memory writer, the applier is **non-blocking**: a non-zero exit (which
+also covers the "evals failed, rolled back" case, exit 1) does NOT downgrade
+the gate to `STATUS: BLOCKED`. The retro itself verified; auto-application
+is a best-effort side effect.
+
+```bash
+if [ "$PHASE" = "retro" ] && [ "$VERIFY_EXIT" -eq 0 ] && [ "$PY_EXIT" -eq 0 ]; then
+  cd "${SPACE_DIR}/backend"
+  python -m app.pipeline.auto_improver \
+      --space "${SPACE_DIR}" \
+      --slug  "${GOAL_SLUG}" > /tmp/auto-improver.out 2>&1
+  export APPLIER_EXIT=$?
+  cat /tmp/auto-improver.out
+  if [ "$APPLIER_EXIT" -eq 1 ]; then
+    echo "auto-improver rolled back — evals went red; no change applied but gate still PASS"
+  elif [ "$APPLIER_EXIT" -ne 0 ]; then
+    echo "auto-improver errored (exit $APPLIER_EXIT) — no change applied but gate still PASS"
+  fi
+fi
+```
+
+Run order: Step 3b (memory write-back) → Step 3c (auto-improvement applier).
+Both consume the same `retro-{slug}.md` and they are independent — neither
+modifies that artifact. The applier rewrites source files
+(`contract.py`, `schemas/*.schema.yaml`, `fixtures/**/*.md`,
+`normalize_rules.json`); the memory writer only touches the Cronos memory
+store.
+
+---
+
 ## Step 4 — Emit STATUS as the last line of your response
 
 The Cronos worker (`backend/app/agent.py::parse_status`) routes the gate task by reading the final `STATUS:` line. Pick **one**:

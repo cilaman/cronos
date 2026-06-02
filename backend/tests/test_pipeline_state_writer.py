@@ -254,6 +254,22 @@ class TestRecordPhaseLog:
         assert entry["gate_decision"] == "fail"
         assert entry["run_index"] == 2
 
+    def test_cc_version_default_in_log_entry(self, tmp_path):
+        init_pipeline(tmp_path, GOAL_SLUG)
+        record_phase_log(tmp_path, GOAL_SLUG,
+                         phase="scout", status="done", gate_decision="proceed",
+                         task_id="t1", run_index=0)
+        entry = json.loads(log_path(tmp_path, GOAL_SLUG).read_text().strip())
+        assert entry["cc_version"] == CC_VERSION
+
+    def test_cc_version_explicit_in_log_entry(self, tmp_path):
+        init_pipeline(tmp_path, GOAL_SLUG)
+        record_phase_log(tmp_path, GOAL_SLUG,
+                         phase="scout", status="done", gate_decision="proceed",
+                         task_id="t1", run_index=0, cc_version="1.1")
+        entry = json.loads(log_path(tmp_path, GOAL_SLUG).read_text().strip())
+        assert entry["cc_version"] == "1.1"
+
 
 # ---------------------------------------------------------------------------
 # update_phase
@@ -379,6 +395,21 @@ class TestUpdatePhase:
         sp = state_path(tmp_path, GOAL_SLUG)
         tmp_file = sp.with_suffix(".tmp")
         assert not tmp_file.exists()
+
+    def test_cc_version_default_in_phase_entry(self, tmp_path):
+        init_pipeline(tmp_path, GOAL_SLUG)
+        update_phase(tmp_path, GOAL_SLUG, _make_phase("scout"))
+        stored = load_state(tmp_path, GOAL_SLUG)["phases"]["scout"]
+        assert stored["cc_version"] == CC_VERSION
+
+    def test_cc_version_explicit_in_phase_entry(self, tmp_path):
+        init_pipeline(tmp_path, GOAL_SLUG)
+        phase = PhaseEntry(phase="scout", status="done", cc_version="1.1",
+                           verify_result=PhaseVerifyResult(gate_decision="proceed"),
+                           metrics=PhaseMetrics())
+        update_phase(tmp_path, GOAL_SLUG, phase)
+        stored = load_state(tmp_path, GOAL_SLUG)["phases"]["scout"]
+        assert stored["cc_version"] == "1.1"
 
 
 # ---------------------------------------------------------------------------

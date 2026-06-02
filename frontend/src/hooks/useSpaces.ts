@@ -109,6 +109,15 @@ export function useSpaceTools(spaceId: string | null) {
   });
 }
 
+export function useToolContent(spaceId: string | null, path: string | null, scope: string | null) {
+  return useQuery({
+    queryKey: ["tool-content", spaceId, path, scope],
+    queryFn: () => api.toolContent(spaceId!, path!, scope!),
+    enabled: !!spaceId && !!path && !!scope,
+    staleTime: 60_000,
+  });
+}
+
 export function useImportSpace() {
   const qc = useQueryClient();
   return useMutation({

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import frontmatter
 
-from .memory_lifecycle import boost, should_auto_confirm
+from .memory_lifecycle import boost, should_auto_confirm, should_prune
 from .models import MemoryItem, MemoryKind
 
 log = logging.getLogger("cronos.memory_store")
@@ -67,6 +67,9 @@ class MemoryStore:
 
     def _items_dir(self, scope: str) -> Path:
         return self._scope_dir(scope) / ITEMS_SUBDIR
+
+    def _archive_dir(self, scope: str) -> Path:
+        return self._scope_dir(scope) / "archive"
 
     def _index_path(self, scope: str) -> Path:
         return self._scope_dir(scope) / INDEX_FILE
@@ -342,6 +345,30 @@ class MemoryStore:
             self._atomic_write(path, self._dump_item(updated))
             self.rebuild_index(scope, self._list_scope_locked(scope))
             return updated
+
+    async def prune_stale(self, scope: str) -> int:
+        """Move items matching should_prune() to archive/. Returns count of pruned items."""
+        async with self._lock:
+            now = datetime.now(tz=UTC)
+            items_dir = self._items_dir(scope)
+            if not items_dir.is_dir():
+                return 0
+            archive_dir = self._archive_dir(scope)
+            pruned = 0
+            for path in sorted(items_dir.glob("*.md")):
+                try:
+                    item = self._load_item(path)
+                except Exception:
+                    log.warning("Skipping unreadable item during prune %s", path)
+                    continue
+                if should_prune(item.score, item.ttl_until, now):
+                    archive_dir.mkdir(parents=True, exist_ok=True)
+                    os.replace(path, archive_dir / path.name)
+                    log.info("Archived stale memory item %s from scope %s", item.id, scope)
+                    pruned += 1
+            if pruned:
+                self.rebuild_index(scope, self._list_scope_locked(scope))
+            return pruned
 
     async def read_index(self, scope: str) -> str | None:
         """Return the raw index.md content for a scope, or None if it doesn't exist."""

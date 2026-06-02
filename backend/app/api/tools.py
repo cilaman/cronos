@@ -4,10 +4,11 @@ import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request
 
-from ..models import AiToolEntry, HookEntry, PermissionEntry, SpaceToolsResponse
+from ..models import AiToolDetail, AiToolEntry, HookEntry, PermissionEntry, SpaceToolsResponse
 from ..space_storage import SpaceStore
 
 log = logging.getLogger(__name__)
@@ -96,7 +97,7 @@ def _scan_category(
     for md_file in sorted(target.glob(pattern)):
         if not md_file.is_file():
             continue
-        rel = md_file.relative_to(claude_dir)
+        rel = md_file.relative_to(claude_dir.parent)
         entries.append(AiToolEntry(
             name=md_file.stem,
             path=str(rel).replace("\\", "/"),
@@ -120,7 +121,7 @@ def _scan_skills(claude_dir: Path, scope: str) -> list[AiToolEntry]:
     for md_file in sorted(target.glob("*.md")):
         if not md_file.is_file():
             continue
-        rel = md_file.relative_to(claude_dir)
+        rel = md_file.relative_to(claude_dir.parent)
         entries.append(AiToolEntry(
             name=md_file.stem,
             path=str(rel).replace("\\", "/"),
@@ -137,7 +138,7 @@ def _scan_skills(claude_dir: Path, scope: str) -> list[AiToolEntry]:
         skill_file = skill_dir / "SKILL.md"
         if not skill_file.is_file():
             continue
-        rel = skill_file.relative_to(claude_dir)
+        rel = skill_file.relative_to(claude_dir.parent)
         entries.append(AiToolEntry(
             name=skill_dir.name,
             path=str(rel).replace("\\", "/"),
@@ -157,7 +158,7 @@ def _scan_context(claude_dir: Path, scope: str) -> list[AiToolEntry]:
     if context_md.is_file():
         entries.append(AiToolEntry(
             name="CONTEXT",
-            path="CONTEXT.md",
+            path=str(context_md.relative_to(claude_dir.parent)).replace("\\", "/"),
             description=_extract_description(context_md),
             scope=scope,
             modified_at=_mtime_iso(context_md),
@@ -167,7 +168,7 @@ def _scan_context(claude_dir: Path, scope: str) -> list[AiToolEntry]:
     if context_dir.is_dir():
         for f in sorted(context_dir.iterdir()):
             if f.is_file():
-                rel = f".claude/context/{f.name}"
+                rel = str(f.relative_to(claude_dir.parent)).replace("\\", "/")
                 entries.append(AiToolEntry(
                     name=f.stem if f.suffix else f.name,
                     path=rel,
@@ -267,4 +268,59 @@ async def get_space_tools(space_id: str, request: Request) -> SpaceToolsResponse
         hooks=s_hooks + g_hooks,
         permissions=s_perms + g_perms,
         has_claude_md=has_claude_md,
+    )
+
+
+@router.get("/{space_id}/tool-content", response_model=AiToolDetail)
+async def get_tool_content(
+    space_id: str,
+    path: str,
+    scope: Literal["space", "global"],
+    request: Request,
+) -> AiToolDetail:
+    space_store = _get_space_store(request)
+    space = space_store.get(space_id)
+    if space is None:
+        raise HTTPException(status_code=404, detail=f"Space {space_id} not found")
+
+    if scope == "space":
+        space_dir = space_store.space_dir(space_id)
+        allowed_root = (space_dir / ".claude").resolve()
+        resolved = (space_dir / path).resolve()
+    else:
+        if path.startswith("~"):
+            resolved = Path(path).expanduser().resolve()
+        else:
+            resolved = (Path.home() / path).resolve()
+        allowed_root = GLOBAL_CLAUDE_DIR.resolve()
+
+    if not resolved.is_relative_to(allowed_root):
+        raise HTTPException(status_code=400, detail="Path is outside the allowed directory")
+
+    if not resolved.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    try:
+        content = resolved.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    path_str = str(resolved)
+    if "/.claude/agents/" in path_str:
+        category: Literal["agent", "command", "skill", "context"] = "agent"
+    elif "/.claude/commands/" in path_str:
+        category = "command"
+    elif "/.claude/skills/" in path_str:
+        category = "skill"
+    else:
+        category = "context"
+
+    return AiToolDetail(
+        name=resolved.stem,
+        path=path,
+        description=_extract_description(resolved),
+        scope=scope,
+        modified_at=_mtime_iso(resolved),
+        category=category,
+        content=content,
     )

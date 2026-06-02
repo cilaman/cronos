@@ -84,6 +84,8 @@ print('PARENT:' + parent if parent else 'STANDALONE')
 /goal-task-commit
 ```
 
+`goal-task-commit` automatically resolves the **root** goal's feature branch by walking the `parent_id` chain, so tasks nested under sub-goals need no special handling.
+
 **B. Standalone task on a repo-linked space** — check for changes and commit:
 
 ```bash

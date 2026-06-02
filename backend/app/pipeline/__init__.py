@@ -47,10 +47,20 @@ from app.pipeline.state_writer import (
     state_path,
     update_phase,
 )
+from app.pipeline.auto_improver import (
+    AppliedChange,
+    ApplierResult,
+    SkippedFinding,
+    apply_retro_improvements,
+    bump_minor,
+    read_cc_version,
+)
 
 __all__ = [
     "AGENT_REPORTED_METRICS",
     "ARTIFACT_PATH_TEMPLATE",
+    "AppliedChange",
+    "ApplierResult",
     "CC_VERSION",
     "CLASS_CONFIG",
     "EXIT_ESCALATE",
@@ -71,8 +81,11 @@ __all__ = [
     "R_RULES",
     "REQUIRED_SECTIONS",
     "STATUS_VALUES",
+    "SkippedFinding",
     "TRACE_OWNED_METRICS",
     "VerifyResult",
+    "apply_retro_improvements",
+    "bump_minor",
     "canonical_artifact_relpath",
     "finalize_pipeline",
     "init_pipeline",
@@ -81,6 +94,7 @@ __all__ = [
     "log_path",
     "normalize",
     "pipeline_dir",
+    "read_cc_version",
     "record_phase_log",
     "state_path",
     "update_phase",

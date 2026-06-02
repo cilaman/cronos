@@ -118,6 +118,7 @@ data/             Per-deployment state (gitignored)
 | [pipeline-implementor](.claude/agents/pipeline-implementor.md) | Sonnet 4.6 | CC-v1 implementation agent — executes one iterations[] entry, emits impl-report |
 | [pipeline-reviewer](.claude/agents/pipeline-reviewer.md) | Opus 4.7 | CC-v1 review agent — audits implementor diff, emits verdict (pass/needs_fix/fail) |
 | [pipeline-doc-sync](.claude/agents/pipeline-doc-sync.md) | Haiku 4.5 | CC-v1 doc agent — updates docs for changed files, emits doc-report (terminal) |
+| [pipeline-retro](.claude/agents/pipeline-retro.md) | Opus 4.7 | CC-v1 retro agent — post-goal retrospective; scores 5 dimensions, emits retro-{slug}.md with fix-type-classified findings |
 
 Test reports stored at `{space}/.cronos/test-reports/{timestamp}.json`; coverage summaries at `{space}/.cronos/test-coverage.md`.
 

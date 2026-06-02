@@ -28,7 +28,6 @@ export function BuildInfo() {
   const backendTime = data?.build_time ?? null;
   const repoUrl = data?.repo_url ?? null;
 
-  const frontendCommit: string | null = import.meta.env.VITE_BUILD_COMMIT || null;
   const frontendTime: string | null = import.meta.env.VITE_BUILD_TIME || null;
 
   const shortSha = backendSha ? backendSha.slice(0, 7) : null;

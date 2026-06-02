@@ -39,6 +39,7 @@ SPACES_DIR = DATA_DIR / "spaces"
 LEGACY_TASKS_DIR = DATA_DIR / "tasks"
 LEGACY_WORKSPACES_DIR = DATA_DIR / "workspaces"
 ARCHIVE_AFTER_DAYS = int(os.environ.get("CRONOS_ARCHIVE_AFTER_DAYS", "7"))
+MEMORY_PRUNE_INTERVAL = int(os.environ.get("CRONOS_MEMORY_PRUNE_INTERVAL", "3600"))
 
 
 def _path_is_reserved(path: Path, root: Path) -> bool:
@@ -63,6 +64,25 @@ async def auto_archive_loop(
             log.exception("Error during auto-archive sweep")
         try:
             await asyncio.wait_for(stop_event.wait(), timeout=3600.0)
+        except asyncio.TimeoutError:
+            pass
+
+
+async def memory_prune_loop(
+    memory_store: MemoryStore,
+    space_store: SpaceStore,
+    stop_event: asyncio.Event,
+) -> None:
+    while not stop_event.is_set():
+        try:
+            scopes = ["global"] + [f"space:{s.id}" for s in space_store.list_all()]
+            total = sum([await memory_store.prune_stale(scope) for scope in scopes])
+            if total:
+                log.info("Memory prune: archived %d stale item(s)", total)
+        except Exception:
+            log.exception("Error during memory prune sweep")
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=float(MEMORY_PRUNE_INTERVAL))
         except asyncio.TimeoutError:
             pass
 
@@ -180,6 +200,10 @@ async def lifespan(app: FastAPI):
         auto_archive_loop(task_store, ARCHIVE_AFTER_DAYS, stop_event),
         name="archiver",
     )
+    memory_pruner = asyncio.create_task(
+        memory_prune_loop(memory_store, space_store, stop_event),
+        name="memory_pruner",
+    )
 
     # Recover in-flight runs: any task left in ACTIVE on startup gets
     # re-enqueued on its space's worker. The agent resumes via its stored
@@ -201,7 +225,7 @@ async def lifespan(app: FastAPI):
     finally:
         stop_event.set()
         await worker_pool.stop_all()
-        for bg_task in (watcher, archiver):
+        for bg_task in (watcher, archiver, memory_pruner):
             try:
                 await asyncio.wait_for(bg_task, timeout=5.0)
             except asyncio.TimeoutError:

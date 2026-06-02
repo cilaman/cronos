@@ -744,6 +744,35 @@ class Worker:
             if child is None:
                 continue
 
+            # Sub-goals are orchestrated recursively instead of being sent to run_agent.
+            if child.type == "goal":
+                await self._publish(goal_id, {
+                    "type": "goal_child_start",
+                    "child_id": child_id,
+                    "title": child.title,
+                })
+                await self._run_goal(child_id, user_message=None)
+                # Restore parent context overwritten by the recursive call.
+                self._current_id = goal_id
+                self._current_cancel = cancel_event
+                child_after = self.store.get(child_id)
+                child_new_state = child_after.state if child_after is not None else TaskState.WAITING
+                await self._publish(goal_id, {
+                    "type": "goal_child_end",
+                    "child_id": child_id,
+                    "title": child.title,
+                    "new_state": child_new_state.value,
+                })
+                if cancel_event.is_set():
+                    stopped = True
+                    break
+                if child_new_state != TaskState.DONE:
+                    failed_child_id = child_id
+                    fail_reason = f"Sub-goal '{child.title}' ended in {child_new_state.value} state."
+                    break
+                completed.append(child_id)
+                continue
+
             await self._publish(goal_id, {
                 "type": "goal_child_start",
                 "child_id": child_id,
