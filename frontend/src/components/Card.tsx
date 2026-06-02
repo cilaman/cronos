@@ -488,7 +488,7 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
       {expanded && hasChildren && (childrenProgress?.items?.length ?? 0) > 0 && (
         <div
           style={{ borderLeftColor: borderColor, borderLeftWidth: 3 }}
-          className="rounded-b-md border border-t-0 border-hairline bg-surface-2 px-2 pb-2 pt-1"
+          className="divide-y divide-hairline rounded-b-md border border-t-0 border-hairline bg-surface-2 px-2 pb-1 pt-0.5"
         >
           {childrenProgress!.items!.map((child) => {
             const childPStyle = PRIORITY_STYLES[child.priority] ?? PRIORITY_STYLES[3];
@@ -500,7 +500,7 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
                   e.stopPropagation();
                   onOpenTask?.(child.id);
                 }}
-                className="flex w-full items-center gap-1.5 rounded px-1 py-1 text-left transition hover:bg-surface-3 focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+                className="flex w-full items-center gap-2 rounded px-1 py-1.5 text-left transition hover:bg-surface-3 focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
               >
                 <span
                   className={cn(
@@ -510,7 +510,12 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
                 >
                   {STATE_LABELS[child.state]}
                 </span>
-                <span className="flex-1 truncate text-xs text-ink-muted">{child.title}</span>
+                {child.type === "goal" && (
+                  <span className="inline-flex shrink-0 items-center rounded border border-accent/40 bg-accent/10 px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide text-accent/80">
+                    goal
+                  </span>
+                )}
+                <span className="flex-1 truncate text-sm font-medium text-ink">{child.title}</span>
                 <span className="shrink-0 font-mono text-[9px] text-ink-faint">
                   {formatCompactAge(child.updated_at)}
                 </span>
