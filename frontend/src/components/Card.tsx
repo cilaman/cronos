@@ -486,6 +486,11 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
                   className={cn("h-1.5 w-1.5 shrink-0 rounded-full", STATE_DOT_STYLES[child.state])}
                   aria-label={child.state}
                 />
+                {child.type === "goal" && (
+                  <span className="shrink-0 inline-flex items-center rounded border border-accent/40 bg-accent/10 px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide text-accent/80">
+                    goal
+                  </span>
+                )}
                 <span className="flex-1 truncate text-xs text-ink-muted">{child.title}</span>
                 <span className="shrink-0 font-mono text-[9px] text-ink-faint">
                   {formatCompactAge(child.updated_at)}

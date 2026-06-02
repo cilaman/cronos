@@ -199,6 +199,7 @@ def _enrich_progress(board: Board) -> Board:
                             state=c.state,
                             priority=c.priority,
                             updated_at=c.updated_at,
+                            type=c.type,
                         )
                         for c in children[:20]
                     ]

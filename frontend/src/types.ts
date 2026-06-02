@@ -32,6 +32,7 @@ export interface ChildProgressItem {
   state: TaskState;
   priority: number;
   updated_at: string;
+  type?: TaskType;
 }
 
 export interface TaskSummary {

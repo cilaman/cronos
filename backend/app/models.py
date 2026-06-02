@@ -61,6 +61,7 @@ class ChildItem(BaseModel):
     state: TaskState
     priority: int
     updated_at: datetime
+    type: Literal["task", "goal", "issue"] = "task"
 
 
 class ChildrenProgress(BaseModel):
