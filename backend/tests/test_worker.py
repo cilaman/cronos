@@ -985,6 +985,117 @@ async def test_run_goal_injects_goal_context(worker, task_store, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# _run_goal: nested goal (sub-goal recursion) tests
+# ---------------------------------------------------------------------------
+
+
+async def test_nested_goal_two_level_hierarchy(worker, task_store, monkeypatch):
+    """goal → sub-goal → [task1, task2]: all tasks run in order, parent reaches DONE."""
+    import app.worker as worker_module
+
+    run_order: list[str] = []
+
+    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None, goal_context=None, **kwargs):
+        run_order.append(task.id)
+        return _make_result(exit_code=0, status=Status.DONE)
+
+    monkeypatch.setattr(worker_module, "run_agent", fake_run_agent)
+
+    parent = await task_store.create(space_id=SPACE_ID, title="Parent Goal", brief="parent brief", type="goal")
+    sub = await task_store.create(space_id=SPACE_ID, title="Sub Goal", brief="sub brief", type="goal", parent_id=parent.id)
+    t1 = await task_store.create(space_id=SPACE_ID, title="T1", brief="b", parent_id=sub.id)
+    t2 = await task_store.create(space_id=SPACE_ID, title="T2", brief="b", parent_id=sub.id, depends_on=[t1.id])
+    await task_store.transition(parent.id, TaskState.ACTIVE, allowed={(TaskState.BACKLOG, TaskState.ACTIVE)})
+
+    await worker._run_goal(parent.id, None)
+
+    assert run_order == [t1.id, t2.id]
+    assert task_store.get(t1.id).state == TaskState.DONE
+    assert task_store.get(t2.id).state == TaskState.DONE
+    assert task_store.get(sub.id).state == TaskState.DONE
+    assert task_store.get(parent.id).state == TaskState.DONE
+
+
+async def test_nested_goal_mixed_children(worker, task_store, monkeypatch):
+    """goal → [direct_task, sub-goal → nested_task]: both leaves run, parent reaches DONE."""
+    import app.worker as worker_module
+
+    run_order: list[str] = []
+
+    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None, goal_context=None, **kwargs):
+        run_order.append(task.id)
+        return _make_result(exit_code=0, status=Status.DONE)
+
+    monkeypatch.setattr(worker_module, "run_agent", fake_run_agent)
+
+    parent = await task_store.create(space_id=SPACE_ID, title="Parent Goal", brief="g", type="goal")
+    direct = await task_store.create(space_id=SPACE_ID, title="Direct Task", brief="b", parent_id=parent.id)
+    sub = await task_store.create(space_id=SPACE_ID, title="Sub Goal", brief="s", type="goal", parent_id=parent.id, depends_on=[direct.id])
+    nested = await task_store.create(space_id=SPACE_ID, title="Nested Task", brief="b", parent_id=sub.id)
+    await task_store.transition(parent.id, TaskState.ACTIVE, allowed={(TaskState.BACKLOG, TaskState.ACTIVE)})
+
+    await worker._run_goal(parent.id, None)
+
+    assert direct.id in run_order
+    assert nested.id in run_order
+    assert run_order.index(direct.id) < run_order.index(nested.id)
+    assert task_store.get(direct.id).state == TaskState.DONE
+    assert task_store.get(nested.id).state == TaskState.DONE
+    assert task_store.get(sub.id).state == TaskState.DONE
+    assert task_store.get(parent.id).state == TaskState.DONE
+
+
+async def test_nested_goal_three_level_hierarchy(worker, task_store, monkeypatch):
+    """goal → sub-goal → child-goal → leaf_task: 3-level recursion reaches DONE."""
+    import app.worker as worker_module
+
+    ran: list[str] = []
+
+    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None, goal_context=None, **kwargs):
+        ran.append(task.id)
+        return _make_result(exit_code=0, status=Status.DONE)
+
+    monkeypatch.setattr(worker_module, "run_agent", fake_run_agent)
+
+    grandparent = await task_store.create(space_id=SPACE_ID, title="Grandparent", brief="g", type="goal")
+    parent = await task_store.create(space_id=SPACE_ID, title="Parent", brief="p", type="goal", parent_id=grandparent.id)
+    child_goal = await task_store.create(space_id=SPACE_ID, title="Child Goal", brief="c", type="goal", parent_id=parent.id)
+    leaf = await task_store.create(space_id=SPACE_ID, title="Leaf Task", brief="b", parent_id=child_goal.id)
+    await task_store.transition(grandparent.id, TaskState.ACTIVE, allowed={(TaskState.BACKLOG, TaskState.ACTIVE)})
+
+    await worker._run_goal(grandparent.id, None)
+
+    assert ran == [leaf.id]
+    assert task_store.get(leaf.id).state == TaskState.DONE
+    assert task_store.get(child_goal.id).state == TaskState.DONE
+    assert task_store.get(parent.id).state == TaskState.DONE
+    assert task_store.get(grandparent.id).state == TaskState.DONE
+
+
+async def test_nested_goal_subgoal_failure_pauses_parent(worker, task_store, monkeypatch):
+    """If a sub-goal's task fails (WAIT), sub-goal and parent both land in WAITING."""
+    import app.worker as worker_module
+
+    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None, goal_context=None, **kwargs):
+        return _make_result(exit_code=0, status=Status.WAIT, context="Needs input")
+
+    monkeypatch.setattr(worker_module, "run_agent", fake_run_agent)
+
+    parent = await task_store.create(space_id=SPACE_ID, title="Parent Goal", brief="g", type="goal")
+    sub = await task_store.create(space_id=SPACE_ID, title="Sub Goal", brief="s", type="goal", parent_id=parent.id)
+    await task_store.create(space_id=SPACE_ID, title="Failing Task", brief="b", parent_id=sub.id)
+    await task_store.transition(parent.id, TaskState.ACTIVE, allowed={(TaskState.BACKLOG, TaskState.ACTIVE)})
+
+    await worker._run_goal(parent.id, None)
+
+    assert task_store.get(sub.id).state == TaskState.WAITING
+    parent_task = task_store.get(parent.id)
+    assert parent_task.state == TaskState.WAITING
+    assert parent_task.waiting_question is not None
+    assert "Sub Goal" in parent_task.waiting_question
+
+
+# ---------------------------------------------------------------------------
 # _finalize: autopilot post-DONE PR hook
 # ---------------------------------------------------------------------------
 
