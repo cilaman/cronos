@@ -224,3 +224,13 @@ for lane in tasks.values():
 - **Pipeline task brief**: always include (1) scout report path, (2) agent contract file, (3) artifact output path, (4) `/pipeline-gate` at the end.
 - **Dependencies**: `"depends_on": ["<task-id>"]` — each pipeline phase depends on the prior phase.
 - **Model**: `"agent_model": "opus"` for architect and reviewer; `"haiku"` for scout and doc; `"sonnet"` for analyst, impl, test.
+
+### Git workflow for development goals
+
+A root-level development goal that delivers code changes to the git repository uses a **single shared feature branch** for its entire goal tree:
+
+- The feature branch is named `feature/<root-goal-slug>` (slug = goal ID with the `YYYY-MM-DD-HHMM-` prefix stripped). Sub-goals **do not** create their own branches — they all share the root's branch.
+- The **first code-modifying task** in the goal tree runs `/goal-branch-setup` to create and check out this branch.
+- **Every code-changing task** ends with `/goal-task-commit`, which pushes to `feature/<root-goal-slug>` regardless of how deeply the task is nested under sub-goals.
+- The **final integration task** of the root goal runs `/goal-finalize`, which rebases onto `main`, merges with `--no-ff`, pushes, and then deletes the feature branch locally and on origin.
+- Non-development goals (planning, analysis, research) need no branch — skip the git skills entirely.
