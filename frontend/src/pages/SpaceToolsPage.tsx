@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useMemo } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useSpaces, useSpaceTools } from "../hooks/useSpaces";
 import { cn } from "../utils/cn";
 import { formatRelative } from "../utils/format";
@@ -220,15 +220,44 @@ export function SpaceToolsPage() {
 
   const { data: tools, isLoading: toolsLoading, isError: toolsError } = useSpaceTools(activeSpaceId);
 
-  const [selectedTool, setSelectedTool] = useState<
-    (AiToolEntry & { category: "agent" | "command" | "skill" | "context" }) | null
-  >(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const toolName = searchParams.get("tool");
+  const toolCategory = searchParams.get("category") as "agent" | "command" | "skill" | "context" | null;
+  const toolScope = searchParams.get("scope") as "space" | "global" | null;
+
+  const selectedTool = useMemo(() => {
+    if (!tools || !toolName || !toolCategory || !toolScope) return null;
+    const allTools = [
+      ...tools.agents.map((e) => ({ ...e, category: "agent" as const })),
+      ...tools.commands.map((e) => ({ ...e, category: "command" as const })),
+      ...tools.skills.map((e) => ({ ...e, category: "skill" as const })),
+      ...tools.context_files.map((e) => ({ ...e, category: "context" as const })),
+    ];
+    return allTools.find((e) => e.name === toolName && e.category === toolCategory && e.scope === toolScope) ?? null;
+  }, [tools, toolName, toolCategory, toolScope]);
 
   function handleToolClick(
     entry: AiToolEntry,
     category: "agent" | "command" | "skill" | "context",
   ) {
-    setSelectedTool({ ...entry, category });
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("tool", entry.name);
+      next.set("category", category);
+      next.set("scope", entry.scope);
+      return next;
+    });
+  }
+
+  function handleClose() {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("tool");
+      next.delete("category");
+      next.delete("scope");
+      return next;
+    });
   }
 
   function handleSpaceChange(e: React.ChangeEvent<HTMLSelectElement>) {
@@ -313,7 +342,7 @@ export function SpaceToolsPage() {
         <ToolDetailPanel
           tool={selectedTool}
           spaceId={activeSpaceId}
-          onClose={() => setSelectedTool(null)}
+          onClose={handleClose}
         />
       )}
 
