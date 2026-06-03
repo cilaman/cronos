@@ -17,7 +17,14 @@ from .memory_parser import parse_memory_blocks
 from .memory_store import MemoryStore
 from .models import TaskState
 from .space_storage import SpaceStore
-from .stats import RunStats, _tier_from_real_model, compute_cost, extract_tokens_and_tools
+from .stats import (
+    AdoptedToolRunStats,
+    RunStats,
+    _tier_from_real_model,
+    compute_adopted_tool_uses,
+    compute_cost,
+    extract_tokens_and_tools,
+)
 from .stats_store import StatsStore
 from .storage import InvalidTransition, TaskStore, USER_TRANSITIONS
 from .trace_parser import RunTrace, extract_run_trace
@@ -484,10 +491,10 @@ class Worker:
                   ("CRASHED" if result.exit_code != 0 else "NO_STATUS"))
         )
 
-        # Pre-compute run trace when needed for memory_hit_rate or for saving.
-        # Doing this before RunStats lets us embed memory_hit_rate in the stats record.
+        # Pre-compute run trace when needed for memory_hit_rate, adopted_tool_uses, or saving.
+        # Doing this before RunStats lets us embed derived signals in the stats record.
         computed_trace: RunTrace | None = None
-        if self.trace_store is not None or bool(memory_injected):
+        if self.trace_store is not None or bool(memory_injected) or self.stats_store is not None:
             task = self.store.get(task_id)
             if task is not None:
                 try:
@@ -547,6 +554,11 @@ class Worker:
                             computed_trace.memory_hit_rate
                             if computed_trace is not None and memory_injected
                             else None
+                        ),
+                        adopted_tool_uses=(
+                            compute_adopted_tool_uses(computed_trace.tool_calls, exit_reason)
+                            if computed_trace is not None
+                            else {}
                         ),
                     )
                     await self.stats_store.append_run(

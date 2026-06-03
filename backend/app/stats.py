@@ -5,6 +5,49 @@ from typing import Any
 
 from pydantic import BaseModel, Field, computed_field
 
+
+# ---------------------------------------------------------------------------
+# Per-adopted-tool run statistics
+# ---------------------------------------------------------------------------
+
+class AdoptedToolRunStats(BaseModel):
+    calls: int = 0
+    errors: int = 0
+    kind: str = ""
+    human_rescue: bool = False  # run ended WAIT and this tool was the last non-error call
+
+
+def compute_adopted_tool_uses(
+    tool_calls: list[Any],
+    exit_reason: str,
+) -> dict[str, AdoptedToolRunStats]:
+    """Build per adopted-tool stats from a list of ToolCallTrace-like objects."""
+    tally: dict[str, dict[str, Any]] = {}
+    for tc in tool_calls:
+        tool_id = getattr(tc, "adopted_tool_id", None)
+        if tool_id is None:
+            continue
+        if tool_id not in tally:
+            tally[tool_id] = {
+                "calls": 0,
+                "errors": 0,
+                "kind": getattr(tc, "adopted_tool_kind", None) or "",
+                "human_rescue": False,
+            }
+        tally[tool_id]["calls"] += 1
+        if getattr(tc, "is_error", False):
+            tally[tool_id]["errors"] += 1
+
+    if exit_reason == "WAIT" and tally:
+        for tc in reversed(tool_calls):
+            if not getattr(tc, "is_error", False):
+                tool_id = getattr(tc, "adopted_tool_id", None)
+                if tool_id and tool_id in tally:
+                    tally[tool_id]["human_rescue"] = True
+                break
+
+    return {k: AdoptedToolRunStats(**v) for k, v in tally.items()}
+
 # ---------------------------------------------------------------------------
 # Token pricing table (USD per million tokens, approximate)
 # ---------------------------------------------------------------------------
@@ -140,6 +183,7 @@ class RunStats(BaseModel):
     error_count: int = 0
     had_crash: bool = False
     memory_hit_rate: float | None = None  # None when no memory was injected
+    adopted_tool_uses: dict[str, AdoptedToolRunStats] = Field(default_factory=dict)
 
 
 class TaskStats(BaseModel):

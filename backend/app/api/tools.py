@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import logging
+import re
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel
 
 from ..models import AdoptedToolEntry, AiToolDetail, AiToolEntry, SpaceToolsResponse
 from ..space_storage import SpaceStore
+from ..stats_store import StatsStore
 from ..tools.adoption import _read_manifest
 from ..tools.scanner import (
     _extract_description,
@@ -21,11 +25,33 @@ log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/spaces", tags=["tools"])
 
+
+class ToolTelemetryResponse(BaseModel):
+    kind: str
+    name: str
+    calls: int = 0
+    errors: int = 0
+    avg_success_rate: float = 0.0
+    human_rescue_count: int = 0
+
 GLOBAL_CLAUDE_DIR = Path.home() / ".claude"
 
 
 def _get_space_store(request: Request) -> SpaceStore:
     return request.app.state.space_store
+
+
+def _get_stats_store(request: Request) -> StatsStore | None:
+    return getattr(request.app.state, "stats_store", None)
+
+
+def _parse_window(window: str | None) -> datetime | None:
+    if not window:
+        return None
+    m = re.match(r"^(\d+)d$", window)
+    if not m:
+        raise HTTPException(status_code=422, detail=f"Invalid window '{window}'; expected e.g. '30d'")
+    return datetime.now(tz=timezone.utc) - timedelta(days=int(m.group(1)))
 
 
 def _scan_context(claude_dir: Path, scope: str) -> list[AiToolEntry]:
@@ -200,4 +226,54 @@ async def get_tool_content(
         modified_at=_mtime_iso(resolved),
         category=category,
         content=content,
+    )
+
+
+@router.get("/{space_id}/tools/{kind}/{name}/telemetry", response_model=ToolTelemetryResponse)
+async def get_tool_telemetry(
+    space_id: str,
+    kind: str,
+    name: str,
+    request: Request,
+    window: str | None = None,
+) -> ToolTelemetryResponse:
+    space_store = _get_space_store(request)
+    if space_store.get(space_id) is None:
+        raise HTTPException(status_code=404, detail=f"Space {space_id} not found")
+
+    stats_store = _get_stats_store(request)
+    if stats_store is None:
+        return ToolTelemetryResponse(kind=kind, name=name)
+
+    from_dt = _parse_window(window)
+    all_stats = await stats_store.list_space(space_id)
+
+    total_calls = 0
+    total_errors = 0
+    rescue_count = 0
+
+    for ts in all_stats:
+        for run in ts.runs:
+            if from_dt is not None:
+                run_dt = run.started_at
+                if run_dt.tzinfo is None:
+                    run_dt = run_dt.replace(tzinfo=timezone.utc)
+                if run_dt < from_dt:
+                    continue
+            entry = run.adopted_tool_uses.get(name)
+            if entry is None or entry.kind != kind:
+                continue
+            total_calls += entry.calls
+            total_errors += entry.errors
+            if entry.human_rescue:
+                rescue_count += 1
+
+    avg_success_rate = round(1 - total_errors / total_calls, 4) if total_calls > 0 else 0.0
+    return ToolTelemetryResponse(
+        kind=kind,
+        name=name,
+        calls=total_calls,
+        errors=total_errors,
+        avg_success_rate=avg_success_rate,
+        human_rescue_count=rescue_count,
     )
