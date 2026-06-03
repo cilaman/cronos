@@ -256,3 +256,41 @@ def recompute_local_sha(
         kind, name, space_id, local_sha[:8],
     )
     return updated
+
+
+def finalize_merge(
+    space_id: str,
+    kind: str,
+    name: str,
+    upstream_source_sha: str,
+    *,
+    spaces_dir: Path | None = None,
+) -> AdoptionManifest:
+    """Update manifest after a merge task resolves an upstream advance.
+
+    Sets local_sha = sha256(resolved content), base_sha = local_sha,
+    source_sha = upstream_source_sha, evolved = False.
+
+    Raises NotAdopted if the item is not currently adopted.
+    """
+    _spaces = spaces_dir or SPACES_DIR
+    mpath = _manifest_path(space_id, kind, name, spaces_dir=_spaces)
+    if not mpath.exists():
+        raise NotAdopted(f"{kind}/{name!r} is not adopted in space {space_id!r}")
+
+    adopt_dir = _adopt_dir(space_id, kind, name, spaces_dir=_spaces)
+    local_sha = _compute_sha(adopt_dir)
+    manifest = _read_manifest(mpath)
+
+    updated = manifest.model_copy(update={
+        "source_sha": upstream_source_sha,
+        "base_sha": local_sha,
+        "local_sha": local_sha,
+        "evolved": False,
+    })
+    _write_manifest(mpath, updated)
+    log.info(
+        "Finalized merge for %s/%s in space %s → source_sha=%s",
+        kind, name, space_id, upstream_source_sha[:8],
+    )
+    return updated

@@ -97,6 +97,9 @@ async def discovery_refresh_loop(
     sources_path: Path,
     interval_hours: float,
     stop_event: asyncio.Event,
+    *,
+    task_store: "TaskStore | None" = None,
+    spaces_dir: "Path | None" = None,
 ) -> None:
     from .api.discovery import run_refresh_if_unlocked
 
@@ -108,7 +111,12 @@ async def discovery_refresh_loop(
         if stop_event.is_set():
             break
         try:
-            result = await run_refresh_if_unlocked(db_path, sources_path)
+            result = await run_refresh_if_unlocked(
+                db_path,
+                sources_path,
+                task_store=task_store,
+                spaces_dir=spaces_dir,
+            )
             if result is not None:
                 log.info(
                     "Periodic discovery refresh: %d source(s), %d item(s)",
@@ -272,6 +280,8 @@ async def lifespan(app: FastAPI):
             DISCOVERY_SOURCES_PATH,
             DISCOVERY_INTERVAL_HOURS,
             stop_event,
+            task_store=task_store,
+            spaces_dir=SPACES_DIR,
         ),
         name="discoverer",
     )

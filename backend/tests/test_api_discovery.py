@@ -464,7 +464,7 @@ async def test_discovery_refresh_loop_fires_at_interval(
 
     calls: list[str] = []
 
-    async def fake_run_refresh_if_unlocked(db_path, sources_path):
+    async def fake_run_refresh_if_unlocked(db_path, sources_path, **kwargs):
         calls.append("refresh")
         return {"refreshed": 0, "items": []}
 
@@ -496,7 +496,7 @@ async def test_discovery_refresh_loop_does_not_crash_on_error(
 
     call_count = {"n": 0}
 
-    async def failing_refresh(db_path, sources_path):
+    async def failing_refresh(db_path, sources_path, **kwargs):
         call_count["n"] += 1
         raise RuntimeError("simulated failure")
 
@@ -512,3 +512,294 @@ async def test_discovery_refresh_loop_does_not_crash_on_error(
 
     # Loop survived despite repeated errors
     assert call_count["n"] >= 1
+
+
+# ---------------------------------------------------------------------------
+# _scan_adopted_after_refresh — upstream-advance logic
+# ---------------------------------------------------------------------------
+
+
+def _setup_adopted_agent(spaces_dir: Path, space_id: str, *, source_sha: str = "sha_old") -> Path:
+    """Create a minimal adopted-agent layout under spaces_dir/{space_id}/.cronos/tools/."""
+    import yaml as _yaml
+    from datetime import datetime, timezone
+
+    adopt_dir = spaces_dir / space_id / ".cronos" / "tools" / "agent" / "reviewer"
+    adopt_dir.mkdir(parents=True)
+    (adopt_dir / "reviewer.md").write_text("# Reviewer\nbody", encoding="utf-8")
+
+    from app.tools.adoption import _compute_sha
+    sha = _compute_sha(adopt_dir)
+    manifest = {
+        "source_url": "https://github.com/foo/bar",
+        "source_slug": "github-com-foo-bar",
+        "source_path": ".claude/agents/reviewer.md",
+        "source_sha": source_sha,
+        "adopted_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "base_sha": sha,
+        "local_sha": sha,
+        "evolved": False,
+        "kind": "agent",
+        "name": "reviewer",
+    }
+    (adopt_dir / "manifest.yml").write_text(
+        _yaml.safe_dump(manifest, sort_keys=False), encoding="utf-8"
+    )
+    return adopt_dir
+
+
+def _upstream_item(*, source_sha: str = "sha_new") -> DiscoveredItem:
+    return DiscoveredItem(
+        source_url="https://github.com/foo/bar",
+        source_slug="github-com-foo-bar",
+        kind="agent",
+        name="reviewer",
+        relative_path=".claude/agents/reviewer.md",
+        description="Reviews code",
+        source_sha=source_sha,
+    )
+
+
+async def test_scan_pristine_auto_upgrade(tmp_path, task_store, space_store):
+    """Pristine adopted tool with upstream advance is auto-upgraded silently."""
+    spaces_dir = task_store.spaces_dir
+    adopt_dir = _setup_adopted_agent(spaces_dir, SPACE_ID, source_sha="sha_old")
+
+    # Put new upstream file in discovery_base
+    disc_base = tmp_path / "disc"
+    upstream_file = disc_base / "github-com-foo-bar" / ".claude" / "agents"
+    upstream_file.mkdir(parents=True)
+    (upstream_file / "reviewer.md").write_text("# Reviewer\nUPSTREAM BODY", encoding="utf-8")
+
+    upstream = _upstream_item(source_sha="sha_new")
+
+    await disc._scan_adopted_after_refresh(
+        [upstream], task_store, spaces_dir, disc_base
+    )
+
+    # The local file should be overwritten with upstream content.
+    assert (adopt_dir / "reviewer.md").read_text(encoding="utf-8") == "# Reviewer\nUPSTREAM BODY"
+
+    # Manifest reflects the new source_sha and updated base/local shas.
+    manifest_data = yaml.safe_load((adopt_dir / "manifest.yml").read_text(encoding="utf-8"))
+    assert manifest_data["source_sha"] == "sha_new"
+    assert manifest_data["base_sha"] == manifest_data["local_sha"]
+    assert manifest_data["evolved"] is False
+
+
+async def test_scan_evolved_creates_merge_task(tmp_path, task_store, space_store):
+    """Locally edited tool with upstream advance creates a merge task."""
+    spaces_dir = task_store.spaces_dir
+    adopt_dir = _setup_adopted_agent(spaces_dir, SPACE_ID, source_sha="sha_old")
+
+    # Simulate local edit: change file and recompute sha
+    (adopt_dir / "reviewer.md").write_text("# Reviewer\nLOCAL EDIT", encoding="utf-8")
+    from app.tools.adoption import _compute_sha, _read_manifest, _write_manifest
+    mpath = adopt_dir / "manifest.yml"
+    manifest = _read_manifest(mpath)
+    new_local_sha = _compute_sha(adopt_dir)
+    _write_manifest(mpath, manifest.model_copy(update={
+        "local_sha": new_local_sha,
+        "evolved": True,
+    }))
+
+    # Put upstream file in discovery_base
+    disc_base = tmp_path / "disc"
+    upstream_file = disc_base / "github-com-foo-bar" / ".claude" / "agents"
+    upstream_file.mkdir(parents=True)
+    (upstream_file / "reviewer.md").write_text("# Reviewer\nUPSTREAM BODY", encoding="utf-8")
+
+    upstream = _upstream_item(source_sha="sha_new")
+
+    await disc._scan_adopted_after_refresh(
+        [upstream], task_store, spaces_dir, disc_base
+    )
+
+    # A merge task should exist for the space.
+    tasks = [
+        t for t in task_store.all()
+        if t.space_id == SPACE_ID
+        and t.title == "Merge upstream changes to agent/reviewer"
+    ]
+    assert len(tasks) == 1
+    task = tasks[0]
+    assert task.state.value == "backlog"
+    assert task.agent_mode == "plan"
+    assert "merge-meta" in task.brief
+    assert "sha_new" in task.brief
+
+    # Local file should NOT be overwritten.
+    assert (adopt_dir / "reviewer.md").read_text(encoding="utf-8") == "# Reviewer\nLOCAL EDIT"
+
+
+async def test_scan_duplicate_guard_updates_existing_task(tmp_path, task_store, space_store):
+    """Second scan with a pending merge task updates brief instead of duplicating."""
+    spaces_dir = task_store.spaces_dir
+    adopt_dir = _setup_adopted_agent(spaces_dir, SPACE_ID, source_sha="sha_old")
+
+    # Simulate local edit
+    (adopt_dir / "reviewer.md").write_text("# Reviewer\nLOCAL EDIT", encoding="utf-8")
+    from app.tools.adoption import _compute_sha, _read_manifest, _write_manifest
+    mpath = adopt_dir / "manifest.yml"
+    manifest = _read_manifest(mpath)
+    new_local_sha = _compute_sha(adopt_dir)
+    _write_manifest(mpath, manifest.model_copy(update={
+        "local_sha": new_local_sha,
+        "evolved": True,
+    }))
+
+    disc_base = tmp_path / "disc"
+    upstream_file = disc_base / "github-com-foo-bar" / ".claude" / "agents"
+    upstream_file.mkdir(parents=True)
+    (upstream_file / "reviewer.md").write_text("# Reviewer\nUPSTREAM V1", encoding="utf-8")
+
+    upstream_v1 = _upstream_item(source_sha="sha_v1")
+    await disc._scan_adopted_after_refresh(
+        [upstream_v1], task_store, spaces_dir, disc_base
+    )
+
+    # Second scan with a newer upstream
+    (upstream_file / "reviewer.md").write_text("# Reviewer\nUPSTREAM V2", encoding="utf-8")
+    upstream_v2 = _upstream_item(source_sha="sha_v2")
+    await disc._scan_adopted_after_refresh(
+        [upstream_v2], task_store, spaces_dir, disc_base
+    )
+
+    # Only one merge task should exist, with the updated brief.
+    tasks = [
+        t for t in task_store.all()
+        if t.space_id == SPACE_ID
+        and t.title == "Merge upstream changes to agent/reviewer"
+        and t.state.value not in ("done", "archived")
+    ]
+    assert len(tasks) == 1
+    assert "sha_v2" in tasks[0].brief
+
+
+async def test_scan_no_advance_skipped(tmp_path, task_store, space_store):
+    """When source_sha matches, no task is created."""
+    spaces_dir = task_store.spaces_dir
+    _setup_adopted_agent(spaces_dir, SPACE_ID, source_sha="sha_same")
+
+    disc_base = tmp_path / "disc"
+    upstream = _upstream_item(source_sha="sha_same")
+
+    await disc._scan_adopted_after_refresh(
+        [upstream], task_store, spaces_dir, disc_base
+    )
+
+    tasks = [
+        t for t in task_store.all()
+        if t.title.startswith("Merge upstream changes to")
+    ]
+    assert len(tasks) == 0
+
+
+# ---------------------------------------------------------------------------
+# Worker: _parse_merge_meta and finalize_merge post-DONE hook
+# ---------------------------------------------------------------------------
+
+
+async def test_parse_merge_meta_extracts_fields():
+    """_parse_merge_meta reads the meta block from a merge task brief."""
+    from app.worker import _parse_merge_meta
+
+    brief = (
+        "## Upstream advance\n\n"
+        "<!-- merge-meta\n"
+        "space_id: personal\n"
+        "kind: agent\n"
+        "name: reviewer\n"
+        "upstream_source_sha: abc123def456\n"
+        "-->"
+    )
+    meta = _parse_merge_meta(brief)
+    assert meta is not None
+    assert meta["space_id"] == "personal"
+    assert meta["kind"] == "agent"
+    assert meta["name"] == "reviewer"
+    assert meta["upstream_source_sha"] == "abc123def456"
+
+
+async def test_parse_merge_meta_returns_none_for_normal_task():
+    from app.worker import _parse_merge_meta
+    assert _parse_merge_meta("# Normal task brief\n\nDo something.") is None
+
+
+async def test_worker_finalize_calls_finalize_merge_on_done(
+    tmp_path, task_store, space_store
+):
+    """Worker._finalize calls adoption.finalize_merge when a merge task completes."""
+    import yaml as _yaml
+    from datetime import datetime, timezone
+
+    from app.agent import AgentResult, Status
+    from app.models import TaskState
+    from app.stats_store import StatsStore
+    from app.trace_store import TraceStore
+    from app.worker import Worker
+
+    spaces_dir = task_store.spaces_dir
+
+    # Set up an adopted agent tool
+    adopt_dir = _setup_adopted_agent(spaces_dir, SPACE_ID, source_sha="sha_old")
+    # Mark it as evolved
+    (adopt_dir / "reviewer.md").write_text("# Reviewer\nMERGED", encoding="utf-8")
+    from app.tools.adoption import _compute_sha, _read_manifest, _write_manifest
+    mpath = adopt_dir / "manifest.yml"
+    manifest = _read_manifest(mpath)
+    new_local_sha = _compute_sha(adopt_dir)
+    _write_manifest(mpath, manifest.model_copy(update={
+        "local_sha": new_local_sha,
+        "evolved": True,
+    }))
+
+    upstream_sha = "upstreamshaabc"
+    merge_brief = (
+        "## Merge task\n\n"
+        "<!-- merge-meta\n"
+        f"space_id: {SPACE_ID}\n"
+        "kind: agent\n"
+        "name: reviewer\n"
+        f"upstream_source_sha: {upstream_sha}\n"
+        "-->"
+    )
+
+    # Create the merge task in the store
+    merge_task = await task_store.create(
+        space_id=SPACE_ID,
+        title="Merge upstream changes to agent/reviewer",
+        brief=merge_brief,
+        type="task",
+        agent_mode="plan",
+    )
+    await task_store.transition(
+        merge_task.id,
+        TaskState.ACTIVE,
+        allowed={(TaskState.BACKLOG, TaskState.ACTIVE)},
+    )
+
+    worker = Worker(
+        store=task_store,
+        space_store=None,
+        stats_store=StatsStore(spaces_dir),
+        trace_store=TraceStore(spaces_dir),
+    )
+    result = AgentResult(
+        exit_code=0,
+        session_id="s1",
+        final_text="done",
+        stderr_tail="",
+        status=Status.DONE,
+        context=None,
+        raw_events=[],
+        stopped=False,
+        result_subtype=None,
+    )
+    await worker._finalize(merge_task.id, result)
+
+    # The manifest should now reflect the finalized merge
+    updated = _read_manifest(mpath)
+    assert updated.source_sha == upstream_sha
+    assert updated.evolved is False
+    assert updated.base_sha == updated.local_sha

@@ -22,6 +22,7 @@ from app.tools.adoption import (
     NotAdopted,
     _compute_sha,
     adopt,
+    finalize_merge,
     recompute_local_sha,
     unadopt,
 )
@@ -374,3 +375,69 @@ def test_manifest_model_defaults_evolved_false():
         name="reviewer",
     )
     assert m.evolved is False
+
+
+# ---------------------------------------------------------------------------
+# finalize_merge()
+# ---------------------------------------------------------------------------
+
+
+async def test_finalize_merge_sets_shas_and_clears_evolved(world):
+    # AC-finalize-merge — after manual merge, base_sha = local_sha = resolved sha;
+    # source_sha = upstream; evolved = False.
+    spaces, disc_base, db_path = world
+    item = _flat_agent(disc_base)
+    _setup_db(db_path, [item])
+
+    # Adopt, then simulate a local edit (marks evolved=True)
+    await adopt(
+        SPACE, SLUG, "agent", "reviewer",
+        spaces_dir=spaces, discovery_base=disc_base, db_path=db_path,
+    )
+    dest = _adopt_dir(spaces, "agent", "reviewer")
+    (dest / "reviewer.md").write_text("# Reviewer\nLOCALLY MERGED", encoding="utf-8")
+    recompute_local_sha(SPACE, "agent", "reviewer", spaces_dir=spaces)
+
+    upstream_sha = "newupstream0001"
+    result = finalize_merge(SPACE, "agent", "reviewer", upstream_sha, spaces_dir=spaces)
+
+    resolved_sha = _compute_sha(dest)
+    assert result.local_sha == resolved_sha
+    assert result.base_sha == resolved_sha
+    assert result.source_sha == upstream_sha
+    assert result.evolved is False
+
+    # Verify persisted to disk
+    on_disk = yaml.safe_load((dest / "manifest.yml").read_text(encoding="utf-8"))
+    assert on_disk["source_sha"] == upstream_sha
+    assert on_disk["base_sha"] == on_disk["local_sha"]
+    assert on_disk["evolved"] is False
+
+
+async def test_finalize_merge_not_adopted_raises(world):
+    # AC-finalize-merge-not-adopted
+    spaces, _disc_base, _db_path = world
+    with pytest.raises(NotAdopted):
+        finalize_merge(SPACE, "agent", "ghost", "sha123", spaces_dir=spaces)
+
+
+async def test_finalize_merge_pristine_tool_still_works(world):
+    # AC-finalize-merge-pristine — finalize_merge also works on a pristine tool
+    # (base_sha == local_sha); evolved remains False after.
+    spaces, disc_base, db_path = world
+    item = _flat_agent(disc_base)
+    _setup_db(db_path, [item])
+    await adopt(
+        SPACE, SLUG, "agent", "reviewer",
+        spaces_dir=spaces, discovery_base=disc_base, db_path=db_path,
+    )
+    dest = _adopt_dir(spaces, "agent", "reviewer")
+    upstream_sha = "upstreamsha9999"
+
+    result = finalize_merge(SPACE, "agent", "reviewer", upstream_sha, spaces_dir=spaces)
+
+    local_sha = _compute_sha(dest)
+    assert result.base_sha == local_sha
+    assert result.local_sha == local_sha
+    assert result.source_sha == upstream_sha
+    assert result.evolved is False

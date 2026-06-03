@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 from collections import defaultdict, deque
 from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import UTC, datetime
@@ -29,6 +30,22 @@ if TYPE_CHECKING:
 log = logging.getLogger("cronos.worker")
 
 _CLAUDE_PROJECTS_DIR = Path(os.environ.get("CLAUDE_PROJECTS_DIR", "/root/.claude/projects"))
+
+_MERGE_META_RE = re.compile(
+    r"<!--\s*merge-meta\s*\n"
+    r"space_id:\s*(?P<space_id>\S+)\s*\n"
+    r"kind:\s*(?P<kind>\S+)\s*\n"
+    r"name:\s*(?P<name>\S+)\s*\n"
+    r"upstream_source_sha:\s*(?P<upstream_source_sha>\S+)\s*\n"
+    r"-->",
+    re.MULTILINE,
+)
+
+
+def _parse_merge_meta(brief: str) -> dict | None:
+    """Extract merge metadata from a task brief. Returns None if not a merge task."""
+    m = _MERGE_META_RE.search(brief)
+    return m.groupdict() if m is not None else None
 
 
 def _memory_injected_for_workspace(workspace: Path) -> list[str]:
@@ -429,6 +446,31 @@ class Worker:
                         )
                 except Exception:
                     log.exception("autopilot_pr: post-DONE flow failed for %s", task_id)
+
+        # Post-DONE hook: finalize adopted-tool merge tasks.
+        if new_state == TaskState.DONE:
+            task_for_merge = self.store.get(task_id)
+            if task_for_merge is not None and task_for_merge.title.startswith(
+                "Merge upstream changes to "
+            ):
+                meta = _parse_merge_meta(task_for_merge.brief)
+                if meta is not None:
+                    try:
+                        from .tools.adoption import NotAdopted, finalize_merge
+                        finalize_merge(
+                            meta["space_id"],
+                            meta["kind"],
+                            meta["name"],
+                            meta["upstream_source_sha"],
+                            spaces_dir=self.store.spaces_dir,
+                        )
+                    except NotAdopted:
+                        log.warning(
+                            "finalize_merge: %s/%s not adopted in space %s",
+                            meta["kind"], meta["name"], meta["space_id"],
+                        )
+                    except Exception:
+                        log.exception("finalize_merge failed for task %s", task_id)
 
         # Propagate new state to parent goal when this task is a child run standalone.
         try:
