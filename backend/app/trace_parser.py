@@ -150,6 +150,8 @@ class RunTrace(BaseModel):
     memory_used: list[str] = Field(default_factory=list)
     memory_written: list[str] = Field(default_factory=list)
     memory_hit_rate: float = 0.0
+    # Harness linkage — set when this run was spawned from inside a harness
+    parent_run_id: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -171,6 +173,7 @@ def extract_run_trace(
     had_crash: bool,
     memory_injected: list[str] | None = None,
     adopted_index: dict[str, tuple[str, str]] | None = None,
+    parent_run_id: str | None = None,
 ) -> RunTrace:
     """Parse stream-json events into a structured RunTrace."""
     turns: list[AssistantTurnTrace] = []
@@ -376,4 +379,5 @@ def extract_run_trace(
         memory_used=mem_used,
         memory_written=mem_written,
         memory_hit_rate=min(1.0, len(mem_used) / max(1, len(memory_injected or []))),
+        parent_run_id=parent_run_id,
     )
