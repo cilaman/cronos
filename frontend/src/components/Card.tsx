@@ -520,7 +520,7 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
           </span>
         )}
 
-        <h3 className="text-sm font-semibold leading-snug text-ink">{task.title}</h3>
+        <h3 className="truncate text-sm font-semibold leading-snug text-ink">{task.title}</h3>
         {isGoal && childrenProgress && childrenProgress.total > 0 && (
           <div className="mt-1.5">
             <span className="font-mono text-[10px] text-ink-faint">
