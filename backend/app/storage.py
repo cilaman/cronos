@@ -430,6 +430,22 @@ class TaskStore:
             con.execute(
                 "CREATE INDEX IF NOT EXISTS idx_tasks_space_type ON tasks(space_id, type)"
             )
+            con.execute("""
+                CREATE TABLE IF NOT EXISTS discovered_tools (
+                    source_url TEXT NOT NULL,
+                    source_slug TEXT NOT NULL,
+                    kind TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    relative_path TEXT NOT NULL,
+                    description TEXT,
+                    source_sha TEXT NOT NULL,
+                    last_seen TEXT NOT NULL,
+                    PRIMARY KEY (source_slug, kind, name)
+                )
+            """)
+            con.execute(
+                "CREATE INDEX IF NOT EXISTS idx_discovered_tools_kind ON discovered_tools(kind)"
+            )
             con.commit()
         finally:
             con.close()
