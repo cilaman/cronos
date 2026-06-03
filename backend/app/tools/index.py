@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
 from .discovery import DiscoveredItem
+
+log = logging.getLogger(__name__)
 
 
 def upsert_discovered(db_path: Path, items: list[DiscoveredItem]) -> None:
@@ -90,3 +93,31 @@ def list_discovered(
         )
         for row in rows
     ]
+
+
+def adopted_index_for_space(
+    space_id: str,
+    *,
+    spaces_dir: Path | None = None,
+) -> dict[str, tuple[str, str]]:
+    """Return ``{name: (id, kind)}`` for all adopted tools in the space.
+
+    Reads ``manifest.yml`` files from ``{space}/.cronos/tools/{kind}/{name}/``.
+    Returns an empty dict when no tools are adopted or the tools directory does
+    not exist.
+    """
+    from .adoption import SPACES_DIR as _DEFAULT_SPACES_DIR, _read_manifest
+
+    _spaces = spaces_dir or _DEFAULT_SPACES_DIR
+    tools_dir = _spaces / space_id / ".cronos" / "tools"
+    if not tools_dir.is_dir():
+        return {}
+
+    result: dict[str, tuple[str, str]] = {}
+    for manifest_path in sorted(tools_dir.glob("*/*/manifest.yml")):
+        try:
+            manifest = _read_manifest(manifest_path)
+            result[manifest.name] = (manifest.name, manifest.kind)
+        except Exception:
+            log.debug("adopted_index_for_space: skipping %s", manifest_path)
+    return result

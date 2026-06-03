@@ -6,8 +6,15 @@ from pathlib import Path
 
 import pytest
 
+import yaml
+
 from app.tools.discovery import DiscoveredItem
-from app.tools.index import list_discovered, prune_stale, upsert_discovered
+from app.tools.index import (
+    adopted_index_for_space,
+    list_discovered,
+    prune_stale,
+    upsert_discovered,
+)
 
 # Reproduce the discovered_tools DDL inline so these tests do not depend on
 # TaskStore or _ensure_db_schema (per task setup note).
@@ -293,3 +300,81 @@ def test_prune_stale_scoped_to_source_slug(db: Path) -> None:
 
     assert deleted == 1
     assert [it.name for it in list_discovered(db)] == ["stale-b"]
+
+
+# ---------------------------------------------------------------------------
+# adopted_index_for_space
+# ---------------------------------------------------------------------------
+
+SPACE_ID = "demo-space"
+
+
+def _write_manifest(spaces_dir: Path, kind: str, name: str) -> Path:
+    """Write a full, schema-valid AdoptionManifest YAML at the layout path.
+
+    Returns the manifest path. Uses the real adoption fields so that
+    ``_read_manifest`` (Pydantic validation) accepts it.
+    """
+    manifest_dir = spaces_dir / SPACE_ID / ".cronos" / "tools" / kind / name
+    manifest_dir.mkdir(parents=True, exist_ok=True)
+    data = {
+        "source_url": "https://example.com/repo.git",
+        "source_slug": "repo",
+        "source_path": f"{kind}/{name}",
+        "source_sha": "deadbeef",
+        "adopted_at": "2025-01-01T00:00:00Z",
+        "base_sha": "abc123",
+        "local_sha": "abc123",
+        "evolved": False,
+        "kind": kind,
+        "name": name,
+    }
+    path = manifest_dir / "manifest.yml"
+    path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    return path
+
+
+def test_adopted_index_for_space_no_tools_dir_returns_empty(tmp_path):
+    # Arrange: a spaces dir that has no .cronos/tools directory at all.
+    (tmp_path / SPACE_ID).mkdir()
+
+    # Act
+    result = adopted_index_for_space(SPACE_ID, spaces_dir=tmp_path)
+
+    # Assert
+    assert result == {}
+
+
+def test_adopted_index_for_space_missing_space_returns_empty(tmp_path):
+    # Arrange: spaces_dir exists but the space itself does not.
+    # Act / Assert
+    assert adopted_index_for_space("nonexistent-space", spaces_dir=tmp_path) == {}
+
+
+def test_adopted_index_for_space_two_manifests_skill_and_agent(tmp_path):
+    # Arrange: one skill manifest and one agent manifest.
+    _write_manifest(tmp_path, "skill", "frontend-design")
+    _write_manifest(tmp_path, "agent", "reviewer")
+
+    # Act
+    result = adopted_index_for_space(SPACE_ID, spaces_dir=tmp_path)
+
+    # Assert: keyed by name, value is (id, kind) with id == name.
+    assert result == {
+        "frontend-design": ("frontend-design", "skill"),
+        "reviewer": ("reviewer", "agent"),
+    }
+
+
+def test_adopted_index_for_space_skips_invalid_manifest(tmp_path):
+    # Arrange: one valid manifest plus one malformed (missing required fields).
+    _write_manifest(tmp_path, "skill", "good-skill")
+    bad_dir = tmp_path / SPACE_ID / ".cronos" / "tools" / "skill" / "bad-skill"
+    bad_dir.mkdir(parents=True, exist_ok=True)
+    (bad_dir / "manifest.yml").write_text("kind: skill\n", encoding="utf-8")
+
+    # Act
+    result = adopted_index_for_space(SPACE_ID, spaces_dir=tmp_path)
+
+    # Assert: the malformed entry is dropped, the valid one survives.
+    assert result == {"good-skill": ("good-skill", "skill")}

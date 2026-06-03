@@ -8,6 +8,7 @@ import pytest
 from app.trace_parser import (
     RunTrace,
     ToolCallTrace,
+    _adopted_name_from_tool,
     _is_read_tool,
     _summarize_input,
     _summarize_output,
@@ -522,3 +523,134 @@ async def test_trace_store_delete_task_traces(tmp_spaces_dir):
 async def test_trace_store_delete_nonexistent_is_noop(tmp_spaces_dir):
     store = TraceStore(tmp_spaces_dir)
     await store.delete_task_traces(SPACE_ID, "never-existed")
+
+
+# ---------------------------------------------------------------------------
+# _adopted_name_from_tool
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "name, inp, expected",
+    [
+        pytest.param("Skill", {"skill": "frontend-design"}, "frontend-design",
+                     id="skill-returns-skill-name"),
+        pytest.param("Agent", {"subagent_type": "reviewer"}, "reviewer",
+                     id="agent-returns-subagent-type"),
+        pytest.param("Bash", {"command": "ls -la"}, None,
+                     id="builtin-tool-returns-none"),
+        pytest.param("Skill", "not-a-dict", None,
+                     id="non-dict-input-returns-none"),
+        pytest.param("Skill", {"skill": ""}, None,
+                     id="empty-skill-value-returns-none"),
+        pytest.param("Agent", {}, None,
+                     id="agent-missing-subagent-type-returns-none"),
+    ],
+)
+def test_adopted_name_from_tool(name, inp, expected):
+    assert _adopted_name_from_tool(name, inp) == expected
+
+
+# ---------------------------------------------------------------------------
+# extract_run_trace — adopted_tool tagging
+# ---------------------------------------------------------------------------
+
+_ADOPTED_INDEX = {
+    "frontend-design": ("frontend-design", "skill"),
+    "reviewer": ("reviewer", "agent"),
+}
+
+
+def test_extract_run_trace_skill_call_tagged_with_adopted_id():
+    # Arrange: a Skill tool call whose skill name is in the adopted index.
+    events = [
+        _make_assistant_event(tool_uses=[
+            _tool_use_block("Skill", "tu-1", {"skill": "frontend-design"}),
+        ]),
+    ]
+
+    # Act
+    trace = extract_run_trace(
+        events, adopted_index=_ADOPTED_INDEX, **_base_kwargs()
+    )
+
+    # Assert
+    tc = trace.tool_calls[0]
+    assert tc.adopted_tool_id == "frontend-design"
+    assert tc.adopted_tool_kind == "skill"
+
+
+def test_extract_run_trace_agent_call_tagged_with_adopted_id():
+    # Arrange: an Agent tool call whose subagent_type is in the adopted index.
+    events = [
+        _make_assistant_event(tool_uses=[
+            _tool_use_block("Agent", "tu-1", {"subagent_type": "reviewer"}),
+        ]),
+    ]
+
+    # Act
+    trace = extract_run_trace(
+        events, adopted_index=_ADOPTED_INDEX, **_base_kwargs()
+    )
+
+    # Assert
+    tc = trace.tool_calls[0]
+    assert tc.adopted_tool_id == "reviewer"
+    assert tc.adopted_tool_kind == "agent"
+
+
+def test_extract_run_trace_builtin_tool_not_tagged():
+    # Arrange: built-in tools should never be tagged even with an index present.
+    events = [
+        _make_assistant_event(tool_uses=[
+            _tool_use_block("Read", "tu-1", {"file_path": "a.py"}),
+            _tool_use_block("Edit", "tu-2", {"file_path": "b.py"}),
+            _tool_use_block("Bash", "tu-3", {"command": "ls"}),
+        ]),
+    ]
+
+    # Act
+    trace = extract_run_trace(
+        events, adopted_index=_ADOPTED_INDEX, **_base_kwargs()
+    )
+
+    # Assert: every built-in call has both adopted fields unset.
+    for tc in trace.tool_calls:
+        assert tc.adopted_tool_id is None
+        assert tc.adopted_tool_kind is None
+
+
+def test_extract_run_trace_no_adopted_index_leaves_fields_none():
+    # Arrange: a Skill call but no adopted_index passed (default None).
+    events = [
+        _make_assistant_event(tool_uses=[
+            _tool_use_block("Skill", "tu-1", {"skill": "frontend-design"}),
+        ]),
+    ]
+
+    # Act
+    trace = extract_run_trace(events, **_base_kwargs())
+
+    # Assert
+    tc = trace.tool_calls[0]
+    assert tc.adopted_tool_id is None
+    assert tc.adopted_tool_kind is None
+
+
+def test_extract_run_trace_skill_not_in_index_leaves_fields_none():
+    # Arrange: a Skill call whose name is NOT in the adopted index.
+    events = [
+        _make_assistant_event(tool_uses=[
+            _tool_use_block("Skill", "tu-1", {"skill": "unknown-skill"}),
+        ]),
+    ]
+
+    # Act
+    trace = extract_run_trace(
+        events, adopted_index=_ADOPTED_INDEX, **_base_kwargs()
+    )
+
+    # Assert
+    tc = trace.tool_calls[0]
+    assert tc.adopted_tool_id is None
+    assert tc.adopted_tool_kind is None

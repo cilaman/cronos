@@ -56,6 +56,17 @@ _MEMORY_READ_TOOLS = frozenset({"Read"})
 _MEMORY_WRITE_TOOLS = frozenset({"Write", "Edit"})
 
 
+def _adopted_name_from_tool(name: str, inp: Any) -> str | None:
+    """Return the adopted tool/skill name from a Skill or Agent invocation input."""
+    if not isinstance(inp, dict):
+        return None
+    if name == "Skill":
+        return inp.get("skill") or None
+    if name == "Agent":
+        return inp.get("subagent_type") or None
+    return None
+
+
 def _memory_slug(path: str) -> str | None:
     """Return the filename if path points to a memory file, else None."""
     m = _MEMORY_FILE_RE.search(path)
@@ -94,6 +105,8 @@ class ToolCallTrace(BaseModel):
     is_error: bool = False
     turn_index: int
     elapsed_seconds: float | None = None
+    adopted_tool_id: str | None = None
+    adopted_tool_kind: str | None = None
 
 
 class AssistantTurnTrace(BaseModel):
@@ -157,6 +170,7 @@ def extract_run_trace(
     session_id: str | None,
     had_crash: bool,
     memory_injected: list[str] | None = None,
+    adopted_index: dict[str, tuple[str, str]] | None = None,
 ) -> RunTrace:
     """Parse stream-json events into a structured RunTrace."""
     turns: list[AssistantTurnTrace] = []
@@ -212,12 +226,23 @@ def extract_run_trace(
                             seen_tools.append(name)
                             seen_tools_set.add(name)
 
+                        adopted_tool_id: str | None = None
+                        adopted_tool_kind: str | None = None
+                        if adopted_index:
+                            adopted_name = _adopted_name_from_tool(name, inp)
+                            if adopted_name is not None:
+                                entry = adopted_index.get(adopted_name)
+                                if entry is not None:
+                                    adopted_tool_id, adopted_tool_kind = entry
+
                         tc = ToolCallTrace(
                             tool_call_index=tool_call_index,
                             tool_use_id=tool_use_id,
                             name=name,
                             input_summary=input_summary,
                             turn_index=turn_index,
+                            adopted_tool_id=adopted_tool_id,
+                            adopted_tool_kind=adopted_tool_kind,
                         )
                         id_to_index[tool_use_id] = len(tool_calls)
                         tool_calls.append(tc)

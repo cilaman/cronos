@@ -491,6 +491,10 @@ class Worker:
             task = self.store.get(task_id)
             if task is not None:
                 try:
+                    from .tools.index import adopted_index_for_space
+                    adopted_idx = adopted_index_for_space(
+                        task.space_id, spaces_dir=self.store.spaces_dir
+                    )
                     computed_trace = extract_run_trace(
                         result.raw_events,
                         task_id=task_id,
@@ -504,6 +508,7 @@ class Worker:
                         session_id=result.session_id,
                         had_crash=result.exit_code != 0 and not result.stopped,
                         memory_injected=memory_injected or [],
+                        adopted_index=adopted_idx or None,
                     )
                 except Exception:
                     log.exception("Failed to compute trace for %s", task_id)
