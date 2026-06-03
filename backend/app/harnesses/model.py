@@ -11,6 +11,24 @@ Validation rules enforced here (field/reference checks only):
 Cycle detection (R5) is intentionally NOT done here — it requires full-graph
 traversal and is deferred to the store layer (I3 via the validator module I2)
 where it has full context before persistence.
+
+Node ``data`` dict conventions (informational — enforced by validator.py):
+  Wait nodes (NodeType.wait):
+    - ``mode`` (str, required): ``'human'`` or ``'timed'``
+    - ``duration_seconds`` (float, required when mode='timed'): sleep duration
+    - ``waiting_question`` (str, optional): prompt shown to the human respondent
+    - ``max_wait_seconds`` (float, required when mode='human'): guardrail timeout
+      preventing a harness from parking forever if no reply arrives (R6).
+
+  Aggregator nodes (NodeType.aggregator):
+    - ``mode`` (str, required): ``'all'`` (wait for every predecessor to finish)
+      or ``'any'`` (fire as soon as the first predecessor reaches done).
+
+  Decision nodes (NodeType.decision):
+    - Routing is driven by ``HarnessEdge.condition`` labels evaluated against
+      the predecessor agent's signal; no extra ``data`` fields are required.
+
+  Agent / Trigger nodes have no mandatory ``data`` keys.
 """
 
 from __future__ import annotations

@@ -1,12 +1,15 @@
 """
 backend/app/harnesses/validator — DAG cycle and self-loop validator.
 
-This module provides pure-function cycle detection for a harness graph.
-It is completely independent of storage.py and only imports from the
-harnesses model module.
+This module provides pure-function cycle detection and structural validation
+for a harness graph.  It is completely independent of storage.py and only
+imports from the harnesses model module.
 
 Validation rules enforced here:
   R5: the harness edge graph is a DAG — no cycles and no self-loops.
+  R6: human Wait nodes must supply ``max_wait_seconds`` in their ``data``
+      dict.  A missing field would cause the harness to park in WAITING
+      indefinitely if no reply ever arrives.
 
 The cycle detection algorithm is adapted from storage.py::_dep_cycle_path
 (BFS through depends_on links) but traverses *outbound edges per node*
@@ -18,10 +21,14 @@ from __future__ import annotations
 
 from collections import deque
 
-from app.harnesses.model import Harness, HarnessEdge, HarnessNode
+from app.harnesses.model import Harness, HarnessEdge, HarnessNode, NodeType
 
 
-class HarnessGraphError(Exception):
+class HarnessValidationError(Exception):
+    """Raised when validate_graph detects a structural rule violation (R6, etc.)."""
+
+
+class HarnessGraphError(HarnessValidationError):
     """Raised when validate_graph detects a cycle or self-loop in the edge graph."""
 
 
@@ -107,16 +114,50 @@ def find_cycle(
     return None
 
 
+def _validate_wait_nodes(harness: Harness) -> None:
+    """
+    Enforce R6: every human Wait node must supply ``max_wait_seconds`` in its
+    ``data`` dict.
+
+    Parameters
+    ----------
+    harness:
+        The harness to inspect.
+
+    Raises
+    ------
+    HarnessValidationError
+        If any human Wait node is missing ``max_wait_seconds``.  The error
+        message includes the offending node id and the exact field name so
+        operators can fix the harness definition quickly.
+    """
+    for node in harness.nodes:
+        if node.type is NodeType.wait and node.data.get("mode") == "human":
+            if "max_wait_seconds" not in node.data:
+                raise HarnessValidationError(
+                    f"node '{node.id}': human Wait node requires 'max_wait_seconds'"
+                    " in data (R6 guardrail — prevents indefinite WAITING park)"
+                )
+
+
 def validate_graph(harness: Harness) -> None:
     """
-    Validate that *harness*'s edge graph is a DAG.
+    Validate the structural integrity of *harness*.
+
+    Currently checks:
+      - R5: the edge graph is a DAG (no cycles, no self-loops).
+      - R6: human Wait nodes supply ``max_wait_seconds``.
 
     Raises
     ------
     HarnessGraphError
         If a self-loop or cycle is found.  The error message includes the
         cycle path (node_ids joined by " -> ") for actionable diagnostics.
+    HarnessValidationError
+        If a structural rule other than R5 is violated (e.g. R6 missing
+        ``max_wait_seconds`` on a human Wait node).
     """
+    _validate_wait_nodes(harness)
     cycle = find_cycle(harness.nodes, harness.edges)
     if cycle is not None:
         path_str = " -> ".join(cycle)

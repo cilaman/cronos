@@ -22,6 +22,25 @@ The load() function does NOT automatically convert ``in_progress`` nodes to
     the node done; otherwise re-execute from scratch (treat as pending).
 
 Valid status values: 'pending' | 'in_progress' | 'done' | 'failed' | 'skipped'
+
+Control-flow node status semantics
+------------------------------------
+``in_progress`` is the canonical status for control-flow nodes (Decision, Wait,
+Aggregator) while they are actively evaluating.  It is set by the executor before
+invoking the evaluator and cleared to 'done' or 'failed' on completion.  For human
+Wait nodes specifically, the node remains ``in_progress`` for the entire period the
+harness run goal is parked in TaskState.WAITING — the executor resumes traversal
+from the Wait node's outgoing edges once the reply arrives.
+
+Wait-human resume routing
+--------------------------
+``RunState.waiting_node_id`` is the **single** source of truth for human Wait resume
+routing.  When the executor parks a harness run in TaskState.WAITING it sets
+``waiting_node_id`` to the Wait node's id and persists the RunState.  On resume,
+the executor reads ``waiting_node_id`` to know which node's outgoing edges to
+traverse next.  **No other component may duplicate this routing logic.**  The worker
+(I7) re-enters ``executor.execute()`` unchanged; the executor consults
+``waiting_node_id`` internally.
 """
 
 from __future__ import annotations
@@ -53,6 +72,25 @@ class RunState:
     nodes_executed: dict[str, NodeState] = field(default_factory=dict)
 
     # ------------------------------------------------------------------
+    # Wait-human resume routing
+    # ------------------------------------------------------------------
+
+    waiting_node_id: str | None = None
+    """
+    The id of the Wait(human) node that is currently blocking this run, or None
+    if the run is not parked at a human Wait.
+
+    This is the **single** source of truth for Wait-human resume routing:
+    - Set by the executor (I6) when entering a human Wait node and the run
+      goal is transitioned to TaskState.WAITING.
+    - Cleared (set back to None) by the executor when traversal resumes from
+      the Wait node's outgoing edges.
+    - Read by the executor on re-entry to determine where to resume.
+    - Must NOT be set or read by the worker (I7) — the worker calls
+      executor.execute() unchanged and the executor handles routing internally.
+    """
+
+    # ------------------------------------------------------------------
     # Serialisation helpers
     # ------------------------------------------------------------------
 
@@ -79,6 +117,7 @@ class RunState:
             harness_id=data["harness_id"],
             goal_task_id=data["goal_task_id"],
             nodes_executed=nodes,
+            waiting_node_id=data.get("waiting_node_id"),
         )
 
 

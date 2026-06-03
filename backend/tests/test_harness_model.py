@@ -3,8 +3,8 @@ Tests for backend/app/harnesses/model.py (I1).
 
 Covers: valid harness construction, NodeType enum values, duplicate node/edge
 IDs (R1/R2), edge references to non-existent nodes (R3) and ports (R4),
-Pydantic v2 default_factory patterns, tz-aware UTC timestamps, and package
-re-exports.
+Pydantic v2 default_factory patterns, tz-aware UTC timestamps, package
+re-exports, and ``data`` dict conventions for Wait / Aggregator nodes.
 """
 
 import pytest
@@ -233,3 +233,111 @@ class TestPackageReExports:
         import app.harnesses as pkg
         for name in ("Harness", "HarnessEdge", "HarnessNode", "NodeRef", "NodeType", "Position"):
             assert hasattr(pkg, name), f"{name} missing from app.harnesses"
+
+
+# ---------------------------------------------------------------------------
+# Wait node data conventions (documented in model.py module docstring)
+# ---------------------------------------------------------------------------
+
+def _wait_node(node_id: str, data: dict | None = None) -> HarnessNode:
+    """Build a minimal Wait HarnessNode with the given id and optional data."""
+    return HarnessNode(
+        id=node_id,
+        type=NodeType.wait,
+        position=Position(x=0.0, y=0.0),
+        data=data or {},
+    )
+
+
+class TestWaitNodeDataConventions:
+    """Model-level tests for Wait node ``data`` dict.
+
+    The model itself does not enforce field presence (that is validator.py's
+    job); these tests confirm that valid data dicts are accepted and round-trip
+    correctly through Pydantic serialisation.
+    """
+
+    def test_human_wait_with_max_wait_seconds_accepted(self):
+        """A human Wait node with all required fields is accepted."""
+        node = _wait_node(
+            "w1",
+            data={"mode": "human", "max_wait_seconds": 3600, "waiting_question": "Ready?"},
+        )
+        assert node.type is NodeType.wait
+        assert node.data["mode"] == "human"
+        assert node.data["max_wait_seconds"] == 3600
+
+    def test_human_wait_without_max_wait_seconds_accepted_at_model_level(self):
+        """The model layer does NOT reject a human Wait lacking max_wait_seconds.
+
+        Enforcement is in validator.py (R6).  This confirms the model stays
+        open so the validator can produce a clear error message.
+        """
+        node = _wait_node("w2", data={"mode": "human"})
+        assert node.data == {"mode": "human"}
+
+    def test_timed_wait_accepted(self):
+        """A timed Wait node with duration_seconds is accepted."""
+        node = _wait_node("w3", data={"mode": "timed", "duration_seconds": 30.0})
+        assert node.data["mode"] == "timed"
+        assert node.data["duration_seconds"] == 30.0
+
+    def test_timed_wait_without_max_wait_seconds_accepted(self):
+        """Timed Wait nodes do NOT require max_wait_seconds."""
+        node = _wait_node("w4", data={"mode": "timed", "duration_seconds": 10.0})
+        assert "max_wait_seconds" not in node.data
+
+    def test_wait_data_isolated_across_instances(self):
+        """data dict uses default_factory — instances don't share state."""
+        n1, n2 = _wait_node("w5"), _wait_node("w6")
+        n1.data["x"] = 1
+        assert "x" not in n2.data
+
+    def test_wait_node_in_harness_accepted(self):
+        """A Wait node with human mode and max_wait_seconds fits in a Harness."""
+        w = _wait_node("w1", data={"mode": "human", "max_wait_seconds": 60})
+        h = Harness(name="wh", nodes=[w])
+        assert h.nodes[0].type is NodeType.wait
+
+
+# ---------------------------------------------------------------------------
+# Aggregator node data conventions (documented in model.py module docstring)
+# ---------------------------------------------------------------------------
+
+def _aggregator_node(node_id: str, data: dict | None = None) -> HarnessNode:
+    """Build a minimal Aggregator HarnessNode."""
+    return HarnessNode(
+        id=node_id,
+        type=NodeType.aggregator,
+        position=Position(x=0.0, y=0.0),
+        data=data or {},
+    )
+
+
+class TestAggregatorNodeDataConventions:
+    """Model-level tests for Aggregator node ``data`` dict."""
+
+    def test_aggregator_mode_all_accepted(self):
+        """An Aggregator with mode='all' is accepted."""
+        node = _aggregator_node("agg1", data={"mode": "all"})
+        assert node.type is NodeType.aggregator
+        assert node.data["mode"] == "all"
+
+    def test_aggregator_mode_any_accepted(self):
+        """An Aggregator with mode='any' is accepted."""
+        node = _aggregator_node("agg2", data={"mode": "any"})
+        assert node.data["mode"] == "any"
+
+    def test_aggregator_no_data_accepted_at_model_level(self):
+        """The model layer does NOT reject Aggregators without mode.
+
+        Enforcement is validator.py's responsibility.
+        """
+        node = _aggregator_node("agg3")
+        assert node.data == {}
+
+    def test_aggregator_node_in_harness_accepted(self):
+        """An Aggregator node fits in a Harness."""
+        agg = _aggregator_node("agg1", data={"mode": "all"})
+        h = Harness(name="ah", nodes=[agg])
+        assert h.nodes[0].type is NodeType.aggregator

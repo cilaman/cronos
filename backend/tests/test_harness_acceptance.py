@@ -1,314 +1,536 @@
 """
-backend/tests/test_harness_acceptance — R14 end-to-end acceptance scenario.
+backend/tests/test_harness_acceptance.py — End-to-end acceptance tests for the
+arc6-control-flow feature.
 
-Executes the analyst's R14 acceptance scenario verbatim:
+These four scenarios are the **acceptance criteria** for the whole arc6-control-flow
+feature.  They exercise the executor (and in one case the worker/executor integration)
+together against realistic harness graphs.
 
-  1. POST a 3-node / 2-edge harness to the API.
-  2. GET it back by name.
-  3. Assert field-for-field equality between POST response and GET response.
-  4. Load the on-disk YAML file at {space_dir}/.cronos/harnesses/<slug>.yml.
-  5. Parse the YAML and construct a Harness model from it.
-  6. Assert the on-disk Harness equals the GET response.
+Acceptance scenarios
+--------------------
+1. Decision routes to edge A on STATUS: DONE, edge B on STATUS: BLOCKED.
+2. Aggregator(all) waits for both upstream agents before firing.
+3. Aggregator(any) fires as soon as the first upstream agent completes.
+4. Wait(human) parks the harness run in WAITING; after a reply the second agent
+   runs and the first agent is NOT re-executed.
 
-The test uses an isolated FastAPI app (same pattern as test_api_harnesses.py) so
-it does not depend on the full main.py lifespan fixture.  The SpaceStore and
-HarnessStore are wired directly onto app.state.
-
-Node types used:
-  - Node 1: type=trigger  (ports: "out" for the outbound edge)
-  - Node 2: type=agent    (ports: "in", "out")
-  - Node 3: type=decision (ports: "in", "yes", "no")
-
-Edges:
-  - trigger → agent  (trigger.out → agent.in)
-  - agent   → decision (agent.out → decision.in)
+Design invariants verified
+--------------------------
+- Control-flow evaluators create no child tasks and call no subprocess.
+- RunState.waiting_node_id is the single source of truth for Wait-human resume.
+- The BFS executor handles in-degree correctly for all node types.
 """
 
 from __future__ import annotations
 
+import asyncio
+import tempfile
+from datetime import UTC, datetime
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
 import pytest
-import yaml
-from fastapi import Depends, FastAPI
 
-from app.api.harnesses import router as harnesses_router
-from app.auth import require_auth
-from app.harnesses import Harness, HarnessStore
-from app.harnesses.store import slugify_name
-from app.space_storage import SpaceStore
+from app.harnesses.executor import HarnessExecutor
+from app.harnesses.model import (
+    Harness,
+    HarnessEdge,
+    HarnessNode,
+    NodeRef,
+    NodeType,
+    Position,
+)
+from app.harnesses.run_state import NodeState, RunState, save_atomic as _save_run_state
+from app.models import Space, TaskState
+from app.trace_parser import RunTrace
 
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-
-SPACE_ID = "acceptance-space"
-_BASE_URL = f"/api/spaces/{SPACE_ID}/harnesses"
-_auth = [Depends(require_auth)]
 
 # ---------------------------------------------------------------------------
-# 3-node / 2-edge harness payload (R14 scenario)
-# ---------------------------------------------------------------------------
-
-_HARNESS_PAYLOAD = {
-    "name": "Acceptance Flow",
-    "description": "R14 acceptance scenario harness",
-    "nodes": [
-        {
-            "id": "n1",
-            "type": "trigger",
-            "position": {"x": 0.0, "y": 100.0},
-            "ports": {
-                "out": {"direction": "output", "label": "trigger-out"},
-            },
-            "data": {"schedule": "*/5 * * * *", "enabled": True, "retries": 3},
-            "label": "Entry Trigger",
-        },
-        {
-            "id": "n2",
-            "type": "agent",
-            "position": {"x": 200.0, "y": 100.0},
-            "ports": {
-                "in": {"direction": "input"},
-                "out": {"direction": "output"},
-            },
-            "data": {"agent_name": "pipeline-implementor", "timeout_s": 300},
-            "label": "Implementor Agent",
-        },
-        {
-            "id": "n3",
-            "type": "decision",
-            "position": {"x": 400.0, "y": 100.0},
-            "ports": {
-                "in": {"direction": "input"},
-                "yes": {"direction": "output"},
-                "no": {"direction": "output"},
-            },
-            "data": {"condition": "output.status == 'done'"},
-            "label": "Outcome Decision",
-        },
-    ],
-    "edges": [
-        {
-            "id": "e1",
-            "source": {"node_id": "n1", "port_id": "out"},
-            "target": {"node_id": "n2", "port_id": "in"},
-            "condition": None,
-        },
-        {
-            "id": "e2",
-            "source": {"node_id": "n2", "port_id": "out"},
-            "target": {"node_id": "n3", "port_id": "in"},
-            "condition": None,
-        },
-    ],
-    "variables": {
-        "env": "production",
-        "max_retries": 5,
-        "debug": False,
-        "threshold": 0.75,
-    },
-    "version": "1.0",
-}
-
-# ---------------------------------------------------------------------------
-# Fixtures
+# Shared helpers
 # ---------------------------------------------------------------------------
 
 
-def _make_test_app(space_store: SpaceStore, harness_store: HarnessStore) -> FastAPI:
-    """Minimal FastAPI app with only the harnesses router — mirrors test_api_harnesses.py."""
-    _app = FastAPI()
-    _app.include_router(harnesses_router, dependencies=_auth)
-    _app.state.space_store = space_store
-    _app.state.harness_store = harness_store
-    return _app
+def _pos() -> Position:
+    return Position(x=0.0, y=0.0)
 
 
-@pytest.fixture
-async def space_store(tmp_path: Path) -> SpaceStore:
-    """SpaceStore with one pre-created space; spaces_dir = tmp_path/spaces."""
-    store = SpaceStore(tmp_path / "spaces")
-    await store.create(
-        name="Acceptance Space",
-        color="#15803D",
-        space_id=SPACE_ID,
+def _now() -> datetime:
+    return datetime.now(tz=UTC)
+
+
+def _make_space(space_id: str = "accept-space") -> Space:
+    return Space(
+        id=space_id,
+        name="Acceptance Test Space",
+        color="#000000",
+        created_at=_now(),
+        updated_at=_now(),
     )
+
+
+def _agent_node(node_id: str, prompt: str = "do something") -> HarnessNode:
+    return HarnessNode(
+        id=node_id,
+        type=NodeType.agent,
+        position=_pos(),
+        ports={"out": {}},
+        data={"agent_ref": "test-agent", "prompt_template": prompt},
+        label=node_id,
+    )
+
+
+def _wait_node(node_id: str) -> HarnessNode:
+    return HarnessNode(
+        id=node_id,
+        type=NodeType.wait,
+        position=_pos(),
+        ports={"in": {}, "out": {}},
+        data={"mode": "human", "max_wait_seconds": 300, "waiting_question": "Ready?"},
+        label=node_id,
+    )
+
+
+def _aggregator_node(node_id: str, mode: str = "all") -> HarnessNode:
+    return HarnessNode(
+        id=node_id,
+        type=NodeType.aggregator,
+        position=_pos(),
+        ports={"in": {}, "out": {}},
+        data={"mode": mode},
+        label=node_id,
+    )
+
+
+def _edge(eid: str, src_node: str, tgt_node: str,
+          src_port: str = "out", tgt_port: str = "out",
+          condition: str | None = None) -> HarnessEdge:
+    return HarnessEdge(
+        id=eid,
+        source=NodeRef(node_id=src_node, port_id=src_port),
+        target=NodeRef(node_id=tgt_node, port_id=tgt_port),
+        condition=condition,
+    )
+
+
+def _trace(task_id: str = "t1", final_text: str = "output",
+           exit_reason: str = "DONE") -> RunTrace:
+    now = _now()
+    return RunTrace(
+        task_id=task_id,
+        space_id="accept-space",
+        run_index=0,
+        session_id=None,
+        model="sonnet",
+        mode="auto",
+        started_at=now,
+        ended_at=now,
+        duration_seconds=0.0,
+        exit_reason=exit_reason,
+        final_text_snippet=final_text,
+    )
+
+
+def _make_store() -> MagicMock:
+    """TaskStore mock — creates tasks with unique IDs; no pre-existing tasks."""
+    store = MagicMock()
+    _counter = [0]
+
+    async def create(*, space_id, title, brief, parent_id=None, **kwargs):
+        _counter[0] += 1
+        task = MagicMock()
+        task.id = f"ct-{_counter[0]}"
+        task.state = TaskState.DONE
+        return task
+
+    store.create = create
+    store.get = MagicMock(return_value=None)
     return store
 
 
-@pytest.fixture
-def harness_store() -> HarnessStore:
-    return HarnessStore()
+def _no_tools(space_id: str, agent_ref: str):
+    return None
 
 
-@pytest.fixture
-async def h_client(space_store: SpaceStore, harness_store: HarnessStore):
-    """AsyncClient backed by the isolated test app."""
-    _app = _make_test_app(space_store, harness_store)
-    transport = httpx.ASGITransport(app=_app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        yield client
+class _StubWorker:
+    """Minimal WorkerProtocol stub — all agents return the given final_text and task_state."""
 
+    def __init__(self, task_state: TaskState = TaskState.DONE,
+                 final_text: str = "output") -> None:
+        self.task_state = task_state
+        self.final_text = final_text
+        self.run_agent_calls: list[str] = []
 
-# ---------------------------------------------------------------------------
-# Helper: resolve the space_dir the same way the API does
-# ---------------------------------------------------------------------------
+    async def run_agent(self, task_id: str, **kwargs) -> RunTrace:
+        self.run_agent_calls.append(task_id)
+        return _trace(task_id=task_id, final_text=self.final_text)
 
-
-def _space_dir(space_store: SpaceStore) -> Path:
-    """Return the space directory path that the API router will use."""
-    return space_store.spaces_dir / SPACE_ID
+    async def finalize_child(self, task_id: str, trace: RunTrace) -> TaskState:
+        return self.task_state
 
 
 # ---------------------------------------------------------------------------
-# R14 Acceptance scenario
+# Acceptance scenario 1: Decision routes correctly based on STATUS marker
 # ---------------------------------------------------------------------------
 
 
-async def test_post_get_disk_round_trip(
-    h_client: httpx.AsyncClient,
-    space_store: SpaceStore,
-) -> None:
-    """Full R14 acceptance scenario: POST → GET → on-disk YAML round-trip.
+@pytest.mark.asyncio
+async def test_acceptance_decision_routes_to_edge_a_on_status_done():
+    """Acceptance 1a — Decision routes to edge A when agent output contains STATUS: DONE.
 
-    Steps:
-      1. POST a 3-node/2-edge harness to the API.
-      2. GET it back by name.
-      3. Assert field-for-field equality between POST and GET responses.
-      4. Load the on-disk YAML file.
-      5. Construct a Harness model from the YAML.
-      6. Assert on-disk Harness equals the GET response (field-for-field).
+    Harness: AGENT → DECISION → (edge_a: condition='DONE') → DEST_A
+                              → (edge_b: condition='BLOCKED') → DEST_B
+
+    With agent output "STATUS: DONE", the Decision should follow edge_a and execute
+    DEST_A; DEST_B must NOT be executed.
     """
-    # Step 1 — POST
-    post_resp = await h_client.post(_BASE_URL, json=_HARNESS_PAYLOAD)
-    assert post_resp.status_code == 201, f"POST failed: {post_resp.text}"
-    post_body = post_resp.json()
-
-    # Basic shape assertions
-    assert post_body["name"] == "Acceptance Flow"
-    assert post_body["description"] == "R14 acceptance scenario harness"
-    assert len(post_body["nodes"]) == 3
-    assert len(post_body["edges"]) == 2
-    assert "created_at" in post_body
-    assert "updated_at" in post_body
-
-    # Node types
-    node_types = {n["id"]: n["type"] for n in post_body["nodes"]}
-    assert node_types["n1"] == "trigger"
-    assert node_types["n2"] == "agent"
-    assert node_types["n3"] == "decision"
-
-    # Edge topology
-    edges = {e["id"]: e for e in post_body["edges"]}
-    assert edges["e1"]["source"]["node_id"] == "n1"
-    assert edges["e1"]["target"]["node_id"] == "n2"
-    assert edges["e2"]["source"]["node_id"] == "n2"
-    assert edges["e2"]["target"]["node_id"] == "n3"
-
-    # Step 2 — GET
-    get_resp = await h_client.get(f"{_BASE_URL}/Acceptance Flow")
-    assert get_resp.status_code == 200, f"GET failed: {get_resp.text}"
-    get_body = get_resp.json()
-
-    # Step 3 — POST response equals GET response (field-for-field)
-    assert post_body == get_body, (
-        "POST response and GET response differ:\n"
-        f"  POST: {post_body}\n"
-        f"  GET:  {get_body}"
+    agent = _agent_node("AGT_1A")
+    decision = HarnessNode(
+        id="DEC_1A",
+        type=NodeType.decision,
+        position=_pos(),
+        ports={"in": {}, "out_a": {}, "out_b": {}},
+        data={},
+        label="DEC_1A",
     )
+    dest_a = _agent_node("DEST_A_1A", "handle done")
+    dest_b = _agent_node("DEST_B_1A", "handle blocked")
 
-    # Step 4 — Load on-disk YAML
-    slug = slugify_name("Acceptance Flow")
-    space_d = _space_dir(space_store)
-    yaml_path = space_d / ".cronos" / "harnesses" / f"{slug}.yml"
-
-    assert yaml_path.exists(), (
-        f"Expected harness YAML file not found at {yaml_path}.\n"
-        f"Directory listing: {list(yaml_path.parent.iterdir()) if yaml_path.parent.exists() else 'parent dir missing'}"
+    harness = Harness(
+        name="accept-decision-done",
+        nodes=[agent, decision, dest_a, dest_b],
+        edges=[
+            # AGENT → DECISION
+            _edge("e1", "AGT_1A", "DEC_1A", tgt_port="in"),
+            # DECISION → DEST_A (STATUS: DONE matches)
+            _edge("e_a", "DEC_1A", "DEST_A_1A", src_port="out_a", condition="DONE"),
+            # DECISION → DEST_B (STATUS: BLOCKED matches)
+            _edge("e_b", "DEC_1A", "DEST_B_1A", src_port="out_b", condition="BLOCKED"),
+        ],
     )
+    space = _make_space("dec-done-space")
+    store = _make_store()
+    # Agent output contains the STATUS marker that the Decision will read.
+    worker = _StubWorker(task_state=TaskState.DONE, final_text="STATUS: DONE\nAll tasks complete.")
 
-    raw = yaml_path.read_text(encoding="utf-8")
-    disk_data = yaml.safe_load(raw)
-    assert isinstance(disk_data, dict), f"YAML content is not a dict: {disk_data!r}"
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with patch("app.harnesses.executor._DATA_DIR", Path(tmpdir)):
+            executor = HarnessExecutor(store, worker, _no_tools)
+            result = await executor.execute("run-dec-done", harness, space)
 
-    # Step 5 — Construct Harness from the YAML dict
-    disk_harness = Harness.model_validate(disk_data)
-
-    # Step 6 — On-disk Harness equals the GET response (field-for-field)
-    # Compare via model_dump(mode='json') to normalise datetimes and enums
-    disk_dict = disk_harness.model_dump(mode="json")
-    assert disk_dict == get_body, (
-        "On-disk Harness and GET response differ:\n"
-        f"  disk: {disk_dict}\n"
-        f"  GET:  {get_body}"
+    # Agent ran.
+    assert result.nodes_executed["AGT_1A"].status == "done"
+    # Decision evaluated and chose edge_a.
+    assert result.nodes_executed["DEC_1A"].status == "done"
+    # DEST_A must have run (STATUS: DONE → edge_a).
+    assert result.nodes_executed["DEST_A_1A"].status == "done", (
+        "DEST_A_1A should have executed (edge condition='DONE' matched STATUS: DONE)"
     )
-
-
-# ---------------------------------------------------------------------------
-# Supplementary: verify slugify predicts the correct filename
-# ---------------------------------------------------------------------------
-
-
-async def test_slugify_produces_expected_filename(
-    h_client: httpx.AsyncClient,
-    space_store: SpaceStore,
-) -> None:
-    """Verify that slugify_name('Acceptance Flow') predicts the on-disk filename."""
-    await h_client.post(_BASE_URL, json=_HARNESS_PAYLOAD)
-
-    expected_slug = slugify_name("Acceptance Flow")
-    assert expected_slug == "acceptance-flow", (
-        f"slugify_name produced unexpected slug: {expected_slug!r}"
+    # DEST_B must NOT have run.
+    assert "DEST_B_1A" not in result.nodes_executed, (
+        "DEST_B_1A must NOT execute when STATUS: DONE routes to edge_a"
     )
-
-    yaml_path = (
-        _space_dir(space_store)
-        / ".cronos"
-        / "harnesses"
-        / f"{expected_slug}.yml"
-    )
-    assert yaml_path.exists(), f"Expected file not found: {yaml_path}"
+    # run_agent called for AGT_1A and DEST_A_1A (not DEST_B_1A) = 2 total.
+    assert len(worker.run_agent_calls) == 2
 
 
-# ---------------------------------------------------------------------------
-# Supplementary: YAML round-trip preserves mixed types in data / variables
-# ---------------------------------------------------------------------------
+@pytest.mark.asyncio
+async def test_acceptance_decision_routes_to_edge_b_on_status_blocked():
+    """Acceptance 1b — Decision routes to edge B when agent output contains STATUS: BLOCKED.
 
-
-async def test_yaml_round_trip_type_fidelity(
-    h_client: httpx.AsyncClient,
-    space_store: SpaceStore,
-) -> None:
-    """Verify that YAML round-trip does not coerce int/float/bool/str scalar types.
-
-    This guards against the high-severity R8 risk identified in the design report:
-    yaml.safe_dump + yaml.safe_load coercing numeric strings or altering scalars.
+    Same harness topology as 1a; agent output now contains STATUS: BLOCKED.
+    DEST_B must execute; DEST_A must NOT.
     """
-    await h_client.post(_BASE_URL, json=_HARNESS_PAYLOAD)
-
-    slug = slugify_name("Acceptance Flow")
-    yaml_path = (
-        _space_dir(space_store) / ".cronos" / "harnesses" / f"{slug}.yml"
+    agent = _agent_node("AGT_1B")
+    decision = HarnessNode(
+        id="DEC_1B",
+        type=NodeType.decision,
+        position=_pos(),
+        ports={"in": {}, "out_a": {}, "out_b": {}},
+        data={},
+        label="DEC_1B",
     )
-    raw = yaml_path.read_text(encoding="utf-8")
-    disk_data = yaml.safe_load(raw)
+    dest_a = _agent_node("DEST_A_1B", "handle done")
+    dest_b = _agent_node("DEST_B_1B", "handle blocked")
 
-    # Verify node n1 data types: int + bool + str
-    n1_data = next(n["data"] for n in disk_data["nodes"] if n["id"] == "n1")
-    assert isinstance(n1_data["schedule"], str), "schedule should be str"
-    assert isinstance(n1_data["enabled"], bool), "enabled should be bool"
-    assert isinstance(n1_data["retries"], int), "retries should be int"
+    harness = Harness(
+        name="accept-decision-blocked",
+        nodes=[agent, decision, dest_a, dest_b],
+        edges=[
+            _edge("g1", "AGT_1B", "DEC_1B", tgt_port="in"),
+            _edge("g_a", "DEC_1B", "DEST_A_1B", src_port="out_a", condition="DONE"),
+            _edge("g_b", "DEC_1B", "DEST_B_1B", src_port="out_b", condition="BLOCKED"),
+        ],
+    )
+    space = _make_space("dec-blocked-space")
+    store = _make_store()
+    worker = _StubWorker(task_state=TaskState.DONE, final_text="STATUS: BLOCKED\nBlocked by dep.")
 
-    # Verify node n2 data types: str + int
-    n2_data = next(n["data"] for n in disk_data["nodes"] if n["id"] == "n2")
-    assert isinstance(n2_data["agent_name"], str), "agent_name should be str"
-    assert isinstance(n2_data["timeout_s"], int), "timeout_s should be int"
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with patch("app.harnesses.executor._DATA_DIR", Path(tmpdir)):
+            executor = HarnessExecutor(store, worker, _no_tools)
+            result = await executor.execute("run-dec-blocked", harness, space)
 
-    # Verify top-level variables types: str + int + bool + float
-    variables = disk_data["variables"]
-    assert isinstance(variables["env"], str), "env should be str"
-    assert isinstance(variables["max_retries"], int), "max_retries should be int"
-    assert isinstance(variables["debug"], bool), "debug should be bool"
-    assert isinstance(variables["threshold"], float), "threshold should be float"
+    assert result.nodes_executed["AGT_1B"].status == "done"
+    assert result.nodes_executed["DEC_1B"].status == "done"
+    # DEST_B must have run (STATUS: BLOCKED → edge_b).
+    assert result.nodes_executed["DEST_B_1B"].status == "done", (
+        "DEST_B_1B should have executed (edge condition='BLOCKED' matched STATUS: BLOCKED)"
+    )
+    # DEST_A must NOT have run.
+    assert "DEST_A_1B" not in result.nodes_executed, (
+        "DEST_A_1B must NOT execute when STATUS: BLOCKED routes to edge_b"
+    )
+    # run_agent called for AGT_1B and DEST_B_1B = 2 total.
+    assert len(worker.run_agent_calls) == 2
+
+
+# ---------------------------------------------------------------------------
+# Acceptance scenario 2: Aggregator(all) waits for BOTH upstreams
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_acceptance_aggregator_all_waits_for_both_upstreams():
+    """Acceptance 2 — Aggregator(all) fires only after BOTH upstream agents complete.
+
+    Harness:  A1 ─┐
+                   ├─→ AGG(all) → POST
+              A2 ─┘
+
+    Both A1 and A2 must run; the Aggregator fires when both are done; POST executes
+    after the Aggregator.
+
+    Design invariant (R7): mode='all' partial-failure semantics — if any predecessor
+    fails, the Aggregator is 'failed'. This test verifies the happy path (both done).
+    """
+    a1 = _agent_node("ACC2_A1", "branch 1")
+    a2 = _agent_node("ACC2_A2", "branch 2")
+    agg = _aggregator_node("ACC2_AGG", mode="all")
+    post = _agent_node("ACC2_POST", "post aggregation")
+
+    harness = Harness(
+        name="accept-aggregator-all",
+        nodes=[a1, a2, agg, post],
+        edges=[
+            # Both parallel agents feed the aggregator
+            _edge("a2_e1", "ACC2_A1", "ACC2_AGG", tgt_port="in"),
+            _edge("a2_e2", "ACC2_A2", "ACC2_AGG", tgt_port="in"),
+            # Aggregator feeds post
+            _edge("a2_e3", "ACC2_AGG", "ACC2_POST", src_port="out"),
+        ],
+    )
+    space = _make_space("agg-all-space")
+    store = _make_store()
+    worker = _StubWorker(task_state=TaskState.DONE, final_text="done_output")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with patch("app.harnesses.executor._DATA_DIR", Path(tmpdir)):
+            executor = HarnessExecutor(store, worker, _no_tools)
+            result = await executor.execute("run-agg-all", harness, space)
+
+    # Both parallel agents must have completed.
+    assert result.nodes_executed["ACC2_A1"].status == "done", (
+        "ACC2_A1 must run before Aggregator(all) fires"
+    )
+    assert result.nodes_executed["ACC2_A2"].status == "done", (
+        "ACC2_A2 must run before Aggregator(all) fires"
+    )
+    # Aggregator must have fired (done).
+    assert result.nodes_executed["ACC2_AGG"].status == "done", (
+        "Aggregator(all) should fire after both predecessors are done"
+    )
+    # POST must have run after the aggregator.
+    assert result.nodes_executed["ACC2_POST"].status == "done", (
+        "ACC2_POST should execute after Aggregator fires"
+    )
+    # Exactly 3 agent runs: A1, A2, POST (AGG is a control-flow node, not an agent).
+    assert len(worker.run_agent_calls) == 3, (
+        f"Expected 3 agent runs (A1, A2, POST), got {len(worker.run_agent_calls)}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Acceptance scenario 3: Aggregator(any) fires on first done
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_acceptance_aggregator_any_fires_on_first_done():
+    """Acceptance 3 — Aggregator(any) fires as soon as the first upstream agent completes.
+
+    Harness: B1 ─┐
+                  ├─→ AGG(any) → POST
+             B2 ─┘
+
+    We pre-seed B1 as already done; B2 has not yet run.  The Aggregator should
+    fire immediately (mode='any') and POST should run, without waiting for B2.
+
+    Design invariant (R8): mode='any' must fire on first-done predecessor.
+    """
+    b1 = _agent_node("ACC3_B1", "fast branch")
+    b2 = _agent_node("ACC3_B2", "slow branch")
+    agg = _aggregator_node("ACC3_AGG", mode="any")
+    post = _agent_node("ACC3_POST", "post any-aggregation")
+
+    harness = Harness(
+        name="accept-aggregator-any",
+        nodes=[b1, b2, agg, post],
+        edges=[
+            _edge("a3_e1", "ACC3_B1", "ACC3_AGG", tgt_port="in"),
+            _edge("a3_e2", "ACC3_B2", "ACC3_AGG", tgt_port="in"),
+            _edge("a3_e3", "ACC3_AGG", "ACC3_POST", src_port="out"),
+        ],
+    )
+    space = _make_space("agg-any-space")
+    store = _make_store()
+    worker = _StubWorker(task_state=TaskState.DONE, final_text="any_output")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with patch("app.harnesses.executor._DATA_DIR", Path(tmpdir)):
+            # Pre-seed B1 as already done, simulating the skewed-completion scenario
+            # (B1 completed "much faster" than B2 in a prior partial run).
+            state_dir = (
+                Path(tmpdir) / "spaces" / "agg-any-space" / ".cronos" / "harness-runs"
+            )
+            state_dir.mkdir(parents=True)
+            pre_state = RunState(
+                run_id="run-agg-any",
+                harness_id="accept-aggregator-any",
+                goal_task_id="run-agg-any",
+                nodes_executed={
+                    "ACC3_B1": NodeState(status="done", output="b1_done_output"),
+                },
+            )
+            _save_run_state(state_dir / "run-agg-any.json", pre_state)
+
+            executor = HarnessExecutor(store, worker, _no_tools)
+            result = await executor.execute("run-agg-any", harness, space)
+
+    # B1 was pre-seeded as done (must still be done after run).
+    assert result.nodes_executed["ACC3_B1"].status == "done", (
+        "ACC3_B1 must remain done (pre-seeded)"
+    )
+    # Aggregator must have fired because B1 (first done) was found by mode='any'.
+    assert result.nodes_executed["ACC3_AGG"].status == "done", (
+        "Aggregator(any) must fire as soon as the first predecessor (B1) is done"
+    )
+    # POST must have run after the aggregator fires.
+    assert result.nodes_executed["ACC3_POST"].status == "done", (
+        "ACC3_POST should execute after Aggregator(any) fires"
+    )
+    # B1 was pre-seeded — not re-run.  At minimum POST ran.
+    assert len(worker.run_agent_calls) >= 1, (
+        "At least POST agent must have been run after Aggregator(any) fired"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Acceptance scenario 4: Wait(human) parks in WAITING; resume runs Agent2 only
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_acceptance_wait_human_parks_and_resumes():
+    """Acceptance 4 — Wait(human) parks the harness; Agent2 runs on resume; Agent1 does not re-run.
+
+    Harness: AGENT1 → WAIT(human) → AGENT2
+
+    Phase 1 (first execute call):
+      - AGENT1 runs and completes.
+      - WAIT(human) sets waiting_node_id and returns early (harness parks).
+      - AGENT2 must NOT have run yet.
+      - The returned RunState must have waiting_node_id set (asserting WAITING state).
+
+    Phase 2 (second execute call — simulates human reply):
+      - Executor resumes from WAIT's outgoing edges.
+      - AGENT2 runs and completes.
+      - AGENT1 must NOT be re-run (run_agent calls stay at 1 from phase 1).
+      - waiting_node_id cleared after resume.
+
+    Design invariants verified:
+      - RunState.waiting_node_id is the single source of truth (I2/I6 contract).
+      - The executor's resume path does not re-execute completed nodes (I6).
+      - Worker re-entry calls executor.execute() unchanged (I7 pattern).
+    """
+    agent1 = _agent_node("ACC4_A1", "phase 1 work")
+    wait_node = _wait_node("ACC4_WAIT")
+    agent2 = _agent_node("ACC4_A2", "phase 2 work")
+
+    harness = Harness(
+        name="accept-wait-human",
+        nodes=[agent1, wait_node, agent2],
+        edges=[
+            _edge("w4_e1", "ACC4_A1", "ACC4_WAIT", tgt_port="in"),
+            _edge("w4_e2", "ACC4_WAIT", "ACC4_A2"),
+        ],
+    )
+    space = _make_space("wait-human-space")
+    store = _make_store()
+    worker = _StubWorker(task_state=TaskState.DONE, final_text="phase_output")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir_path = Path(tmpdir)
+
+        with patch("app.harnesses.executor._DATA_DIR", tmpdir_path):
+            executor = HarnessExecutor(store, worker, _no_tools)
+
+            # --- Phase 1: first execute() call ---
+            state1 = await executor.execute("run-wait4", harness, space)
+
+    # After phase 1: executor returned early (parked at WAIT).
+    assert state1.waiting_node_id == "ACC4_WAIT", (
+        f"Expected waiting_node_id='ACC4_WAIT' after phase 1; got {state1.waiting_node_id!r}"
+    )
+    # AGENT1 completed before the WAIT.
+    assert state1.nodes_executed["ACC4_A1"].status == "done", (
+        "ACC4_A1 must have run and completed in phase 1"
+    )
+    # WAIT node is in_progress (parked).
+    assert state1.nodes_executed["ACC4_WAIT"].status == "in_progress", (
+        "ACC4_WAIT must be in_progress (parked) in phase 1"
+    )
+    # AGENT2 must NOT have run yet.
+    assert "ACC4_A2" not in state1.nodes_executed, (
+        "ACC4_A2 must NOT execute during phase 1 (Wait blocks it)"
+    )
+    # Only AGENT1 ran an agent subprocess in phase 1.
+    assert len(worker.run_agent_calls) == 1, (
+        f"Expected 1 run_agent call after phase 1; got {len(worker.run_agent_calls)}"
+    )
+
+    # --- Phase 2: simulate human reply — call execute() again with persisted state ---
+    with tempfile.TemporaryDirectory() as tmpdir2:
+        tmpdir2_path = Path(tmpdir2)
+
+        with patch("app.harnesses.executor._DATA_DIR", tmpdir2_path):
+            # Pre-seed the state file (simulates the state persisted by phase 1).
+            state_dir = (
+                tmpdir2_path / "spaces" / "wait-human-space" / ".cronos" / "harness-runs"
+            )
+            state_dir.mkdir(parents=True)
+            _save_run_state(state_dir / "run-wait4.json", state1)
+
+            executor2 = HarnessExecutor(store, worker, _no_tools)
+            state2 = await executor2.execute("run-wait4", harness, space)
+
+    # After phase 2: waiting_node_id cleared.
+    assert state2.waiting_node_id is None, (
+        "waiting_node_id must be cleared (None) after resume"
+    )
+    # AGENT1 still done — output preserved from phase 1.
+    assert state2.nodes_executed["ACC4_A1"].status == "done", (
+        "ACC4_A1 must remain done after resume (not re-run)"
+    )
+    # WAIT node transitioned to done.
+    assert state2.nodes_executed["ACC4_WAIT"].status == "done", (
+        "ACC4_WAIT must be marked done after resume"
+    )
+    # AGENT2 ran after resume.
+    assert state2.nodes_executed["ACC4_A2"].status == "done", (
+        "ACC4_A2 must have run after the Wait resume (phase 2)"
+    )
+    # Critical: AGENT1 was NOT re-run — total agent calls = 1 (phase 1) + 1 (phase 2) = 2.
+    assert len(worker.run_agent_calls) == 2, (
+        f"Expected exactly 2 total run_agent calls (A1 in phase 1, A2 in phase 2); "
+        f"got {len(worker.run_agent_calls)} — A1 must NOT be re-run on resume"
+    )

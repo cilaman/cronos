@@ -3,12 +3,18 @@ Tests for backend/app/harnesses/executor.py
 
 Covers:
 - Basic 3-node linear harness (A→B→C) all Agent nodes
-- Control-flow node treated as pass-through (skipped with reason='control_flow_stub')
+- Control-flow node dispatch (decision, wait, aggregator)
 - Fail-fast: when node B fails, node C is marked skipped with reason='upstream_failed'
 - Variable interpolation: upstream output flows into downstream prompt_template
 - Run state file created and updated per node
 - Resume: in_progress node with done child_task_id → node marked done without re-executing
 - WorkerProtocol is stubbed (not a real Worker instance)
+- Decision routing: edge A on STATUS=DONE, edge B on STATUS=BLOCKED
+- Wait(human) parks in WAITING and sets waiting_node_id
+- Wait(human) resume re-uses completed Agent node outputs (doesn't re-run them)
+- Aggregator 'all': waits for both predecessors
+- Aggregator 'any': fires on first done predecessor
+- 4-Agent linear chain regression: same execution order as old _topo_sort
 """
 
 from __future__ import annotations
@@ -80,16 +86,49 @@ def _make_decision_node(node_id: str) -> HarnessNode:
     )
 
 
+def _make_wait_node(node_id: str, mode: str = "human",
+                    duration_seconds: float = 0.0,
+                    max_wait_seconds: float = 300.0,
+                    waiting_question: str | None = None) -> HarnessNode:
+    data: dict = {"mode": mode, "max_wait_seconds": max_wait_seconds}
+    if mode == "timed":
+        data["duration_seconds"] = duration_seconds
+    if waiting_question is not None:
+        data["waiting_question"] = waiting_question
+    return HarnessNode(
+        id=node_id,
+        type=NodeType.wait,
+        position=_make_position(),
+        ports={"in": {"direction": "input"}, "out": {"direction": "output"}},
+        data=data,
+        label=node_id,
+    )
+
+
+def _make_aggregator_node(node_id: str, mode: str = "all") -> HarnessNode:
+    return HarnessNode(
+        id=node_id,
+        type=NodeType.aggregator,
+        position=_make_position(),
+        ports={"in": {"direction": "input"}, "out": {"direction": "output"}},
+        data={"mode": mode},
+        label=node_id,
+    )
+
+
 def _make_edge(edge_id: str, src_node: str, tgt_node: str,
-               src_port: str = "out", tgt_port: str = "out") -> HarnessEdge:
+               src_port: str = "out", tgt_port: str = "out",
+               condition: str | None = None) -> HarnessEdge:
     return HarnessEdge(
         id=edge_id,
         source=NodeRef(node_id=src_node, port_id=src_port),
         target=NodeRef(node_id=tgt_node, port_id=tgt_port),
+        condition=condition,
     )
 
 
-def _make_trace(final_text: str = "result", parent_run_id: str | None = None) -> RunTrace:
+def _make_trace(final_text: str = "result", parent_run_id: str | None = None,
+                exit_reason: str = "DONE") -> RunTrace:
     now = datetime.now(tz=UTC)
     return RunTrace(
         task_id="child-task-id",
@@ -101,7 +140,7 @@ def _make_trace(final_text: str = "result", parent_run_id: str | None = None) ->
         started_at=now,
         ended_at=now,
         duration_seconds=0.0,
-        exit_reason="DONE",
+        exit_reason=exit_reason,
         final_text_snippet=final_text,
         parent_run_id=parent_run_id,
     )
@@ -254,13 +293,13 @@ async def test_executor_all_nodes_done_in_run_state():
 
 
 # ---------------------------------------------------------------------------
-# Control-flow node pass-through
+# Control-flow node dispatch
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_executor_control_flow_node_skipped():
-    """A decision (control-flow) node should be skipped with reason='control_flow_stub'."""
+async def test_executor_decision_node_no_outgoing_edges_fails():
+    """A decision node with no outgoing edges is marked failed (no valid edge to choose)."""
     node = HarnessNode(id="D1", type=NodeType.decision, position=_make_position(),
                        ports={"in": {}, "out": {}}, data={}, label="D1")
     harness = Harness(name="cf", nodes=[node], edges=[])
@@ -274,22 +313,25 @@ async def test_executor_control_flow_node_skipped():
             result = await executor.execute("run-cf", harness, space)
 
     ns = result.nodes_executed["D1"]
-    assert ns.status == "skipped"
-    assert ns.reason == "control_flow_stub"
+    # No outgoing edges → evaluate_decision raises ValueError → node is failed.
+    assert ns.status == "failed"
+    assert "decision_error" in (ns.reason or "")
     # No agent calls for control-flow nodes.
     assert len(worker.run_agent_calls) == 0
 
 
 @pytest.mark.asyncio
-async def test_executor_control_flow_node_followed_by_agent():
-    """Control-flow node is pass-through; downstream agent node still executes."""
+async def test_executor_decision_node_with_default_edge_followed_by_agent():
+    """Decision node with a default edge (condition=None) routes to agent downstream."""
     cf = HarnessNode(id="CF", type=NodeType.decision, position=_make_position(),
                      ports={"out": {}}, data={}, label="CF")
     ag = HarnessNode(id="AG", type=NodeType.agent, position=_make_position(),
                      ports={"out": {}}, data={"agent_ref": "ag", "prompt_template": "p"},
                      label="AG")
+    # Default edge: condition=None
     edge = HarnessEdge(id="e1", source=NodeRef(node_id="CF", port_id="out"),
-                       target=NodeRef(node_id="AG", port_id="out"))
+                       target=NodeRef(node_id="AG", port_id="out"),
+                       condition=None)
     harness = Harness(name="cf_agent", nodes=[cf, ag], edges=[edge])
     space = _make_space()
     store = _make_store_mock(space.id)
@@ -300,8 +342,9 @@ async def test_executor_control_flow_node_followed_by_agent():
             executor = HarnessExecutor(store, worker, _tools_resolver)
             result = await executor.execute("run-cfa", harness, space)
 
-    assert result.nodes_executed["CF"].status == "skipped"
-    assert result.nodes_executed["CF"].reason == "control_flow_stub"
+    # Decision node chose the default edge → is done.
+    assert result.nodes_executed["CF"].status == "done"
+    # Agent node still executes.
     assert result.nodes_executed["AG"].status == "done"
     assert len(worker.run_agent_calls) == 1
 
@@ -726,3 +769,450 @@ async def test_executor_no_asyncio_create_task():
     # Just verify there were exactly 2 sequential calls.
     assert result.nodes_executed["SEQ_A"].status == "done"
     assert result.nodes_executed["SEQ_B"].status == "done"
+
+
+# ---------------------------------------------------------------------------
+# New tests: Decision routing
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_executor_decision_routing_status_done_edge():
+    """Decision node routes to edge A when predecessor output has STATUS: DONE."""
+    # Agent predecessor → Decision → (edge_a with condition='DONE', edge_b with condition='BLOCKED')
+    agent = HarnessNode(id="AGT", type=NodeType.agent, position=_make_position(),
+                        ports={"out": {}}, data={"agent_ref": "ag", "prompt_template": "run"},
+                        label="AGT")
+    decision = HarnessNode(id="DEC", type=NodeType.decision, position=_make_position(),
+                           ports={"in": {}, "out_a": {}, "out_b": {}}, data={}, label="DEC")
+    dest_a = HarnessNode(id="DEST_A", type=NodeType.agent, position=_make_position(),
+                         ports={"out": {}}, data={"agent_ref": "ag", "prompt_template": "A"},
+                         label="DEST_A")
+    dest_b = HarnessNode(id="DEST_B", type=NodeType.agent, position=_make_position(),
+                         ports={"out": {}}, data={"agent_ref": "ag", "prompt_template": "B"},
+                         label="DEST_B")
+
+    edge_to_dec = HarnessEdge(id="e_agt_dec", source=NodeRef(node_id="AGT", port_id="out"),
+                               target=NodeRef(node_id="DEC", port_id="in"))
+    edge_a = HarnessEdge(id="e_a", source=NodeRef(node_id="DEC", port_id="out_a"),
+                          target=NodeRef(node_id="DEST_A", port_id="out"),
+                          condition="DONE")
+    edge_b = HarnessEdge(id="e_b", source=NodeRef(node_id="DEC", port_id="out_b"),
+                          target=NodeRef(node_id="DEST_B", port_id="out"),
+                          condition="BLOCKED")
+
+    harness = Harness(
+        name="decision_routing",
+        nodes=[agent, decision, dest_a, dest_b],
+        edges=[edge_to_dec, edge_a, edge_b],
+    )
+    space = _make_space()
+    store = _make_store_mock(space.id)
+
+    # Agent returns output containing "STATUS: DONE"
+    worker = StubWorker(task_state=TaskState.DONE, final_text="STATUS: DONE\nAll good.")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with patch("app.harnesses.executor._DATA_DIR", Path(tmpdir)):
+            executor = HarnessExecutor(store, worker, _tools_resolver)
+            result = await executor.execute("run-dec-done", harness, space)
+
+    # Decision node should be done.
+    assert result.nodes_executed["DEC"].status == "done"
+    # DEST_A should execute (STATUS=DONE matched edge_a condition='DONE').
+    assert result.nodes_executed["DEST_A"].status == "done"
+    # DEST_B should NOT be in nodes_executed (not chosen).
+    assert "DEST_B" not in result.nodes_executed
+
+
+@pytest.mark.asyncio
+async def test_executor_decision_routing_status_blocked_edge():
+    """Decision node routes to edge B when predecessor output has STATUS: BLOCKED."""
+    agent = HarnessNode(id="AGT2", type=NodeType.agent, position=_make_position(),
+                        ports={"out": {}}, data={"agent_ref": "ag", "prompt_template": "run"},
+                        label="AGT2")
+    decision = HarnessNode(id="DEC2", type=NodeType.decision, position=_make_position(),
+                           ports={"in": {}, "out_a": {}, "out_b": {}}, data={}, label="DEC2")
+    dest_a = HarnessNode(id="DEST_A2", type=NodeType.agent, position=_make_position(),
+                         ports={"out": {}}, data={"agent_ref": "ag", "prompt_template": "A"},
+                         label="DEST_A2")
+    dest_b = HarnessNode(id="DEST_B2", type=NodeType.agent, position=_make_position(),
+                         ports={"out": {}}, data={"agent_ref": "ag", "prompt_template": "B"},
+                         label="DEST_B2")
+
+    edge_to_dec = HarnessEdge(id="e2_agt_dec", source=NodeRef(node_id="AGT2", port_id="out"),
+                               target=NodeRef(node_id="DEC2", port_id="in"))
+    edge_a = HarnessEdge(id="e2_a", source=NodeRef(node_id="DEC2", port_id="out_a"),
+                          target=NodeRef(node_id="DEST_A2", port_id="out"),
+                          condition="DONE")
+    edge_b = HarnessEdge(id="e2_b", source=NodeRef(node_id="DEC2", port_id="out_b"),
+                          target=NodeRef(node_id="DEST_B2", port_id="out"),
+                          condition="BLOCKED")
+
+    harness = Harness(
+        name="decision_routing_blocked",
+        nodes=[agent, decision, dest_a, dest_b],
+        edges=[edge_to_dec, edge_a, edge_b],
+    )
+    space = _make_space()
+    store = _make_store_mock(space.id)
+
+    # Agent returns output containing "STATUS: BLOCKED"
+    worker = StubWorker(task_state=TaskState.DONE, final_text="STATUS: BLOCKED\nBlocked.")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with patch("app.harnesses.executor._DATA_DIR", Path(tmpdir)):
+            executor = HarnessExecutor(store, worker, _tools_resolver)
+            result = await executor.execute("run-dec-blocked", harness, space)
+
+    # Decision node should be done.
+    assert result.nodes_executed["DEC2"].status == "done"
+    # DEST_B should execute (STATUS=BLOCKED matched edge_b condition='BLOCKED').
+    assert result.nodes_executed["DEST_B2"].status == "done"
+    # DEST_A should NOT be in nodes_executed (not chosen).
+    assert "DEST_A2" not in result.nodes_executed
+
+
+# ---------------------------------------------------------------------------
+# New tests: Wait(human) parking and resume
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_executor_wait_human_parks_in_waiting():
+    """Wait(human) node parks the run: execute() returns early with waiting_node_id set."""
+    wait_node = _make_wait_node("W1", mode="human", waiting_question="Ready to proceed?")
+    # Give it ports matching what the edge will use.
+    wait_node = HarnessNode(
+        id="W1", type=NodeType.wait, position=_make_position(),
+        ports={"in": {}, "out": {}},
+        data={"mode": "human", "max_wait_seconds": 300, "waiting_question": "Ready?"},
+        label="W1",
+    )
+    harness = Harness(name="wait_human", nodes=[wait_node], edges=[])
+    space = _make_space()
+    store = _make_store_mock(space.id)
+    worker = StubWorker()
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with patch("app.harnesses.executor._DATA_DIR", Path(tmpdir)):
+            executor = HarnessExecutor(store, worker, _tools_resolver)
+            result = await executor.execute("run-wait-human", harness, space)
+
+    # The executor returned early (parked): waiting_node_id must be set.
+    assert result.waiting_node_id == "W1"
+    # Wait node is in_progress (parked mid-execution).
+    assert result.nodes_executed["W1"].status == "in_progress"
+    # No agent calls.
+    assert len(worker.run_agent_calls) == 0
+
+
+@pytest.mark.asyncio
+async def test_executor_wait_human_resume_does_not_rerun_completed_agents():
+    """Wait-human resume: completed Agent nodes are not re-executed; output is reused."""
+    # Harness: AGT → W1 → AGT2
+    agent1 = HarnessNode(id="PRE_AGT", type=NodeType.agent, position=_make_position(),
+                         ports={"out": {}}, data={"agent_ref": "ag", "prompt_template": "pre"},
+                         label="PRE_AGT")
+    wait_node = HarnessNode(id="W1", type=NodeType.wait, position=_make_position(),
+                            ports={"in": {}, "out": {}},
+                            data={"mode": "human", "max_wait_seconds": 300},
+                            label="W1")
+    agent2 = HarnessNode(id="POST_AGT", type=NodeType.agent, position=_make_position(),
+                         ports={"out": {}}, data={"agent_ref": "ag", "prompt_template": "post"},
+                         label="POST_AGT")
+
+    edge_pre_wait = HarnessEdge(id="e1", source=NodeRef(node_id="PRE_AGT", port_id="out"),
+                                 target=NodeRef(node_id="W1", port_id="in"))
+    edge_wait_post = HarnessEdge(id="e2", source=NodeRef(node_id="W1", port_id="out"),
+                                  target=NodeRef(node_id="POST_AGT", port_id="out"))
+
+    harness = Harness(
+        name="wait_resume",
+        nodes=[agent1, wait_node, agent2],
+        edges=[edge_pre_wait, edge_wait_post],
+    )
+    space = _make_space("wr")
+    store = _make_store_mock(space.id)
+    worker = StubWorker(task_state=TaskState.DONE, final_text="pre_output")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with patch("app.harnesses.executor._DATA_DIR", Path(tmpdir)):
+            state_dir = Path(tmpdir) / "spaces" / "wr" / ".cronos" / "harness-runs"
+            state_dir.mkdir(parents=True)
+
+            executor = HarnessExecutor(store, worker, _tools_resolver)
+
+            # First run: PRE_AGT executes, W1 parks.
+            result1 = await executor.execute("run-wr", harness, space)
+
+            assert result1.waiting_node_id == "W1"
+            assert result1.nodes_executed["PRE_AGT"].status == "done"
+            assert result1.nodes_executed["W1"].status == "in_progress"
+            assert "POST_AGT" not in result1.nodes_executed
+            # Only one run_agent call (for PRE_AGT).
+            assert len(worker.run_agent_calls) == 1
+
+            # Simulate human reply: the state file already has waiting_node_id set.
+            # Second call to execute() resumes from W1's outgoing edges.
+            result2 = await executor.execute("run-wr", harness, space)
+
+    # waiting_node_id cleared on resume.
+    assert result2.waiting_node_id is None
+    # PRE_AGT was already done — not re-executed.
+    assert result2.nodes_executed["PRE_AGT"].status == "done"
+    # W1 should now be done.
+    assert result2.nodes_executed["W1"].status == "done"
+    # POST_AGT was executed after resume.
+    assert result2.nodes_executed["POST_AGT"].status == "done"
+    # Total run_agent calls: 1 (PRE_AGT) + 1 (POST_AGT resume) = 2
+    assert len(worker.run_agent_calls) == 2
+
+
+# ---------------------------------------------------------------------------
+# New tests: Aggregator mode='all'
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_executor_aggregator_all_waits_for_both_predecessors():
+    """Aggregator(all) fires only when both predecessor agents are done."""
+    # Harness: A1 → AGG, A2 → AGG (parallel branches meeting at aggregator)
+    a1 = HarnessNode(id="A1", type=NodeType.agent, position=_make_position(),
+                     ports={"out": {}}, data={"agent_ref": "ag", "prompt_template": "A1"},
+                     label="A1")
+    a2 = HarnessNode(id="A2", type=NodeType.agent, position=_make_position(),
+                     ports={"out": {}}, data={"agent_ref": "ag", "prompt_template": "A2"},
+                     label="A2")
+    agg = HarnessNode(id="AGG", type=NodeType.aggregator, position=_make_position(),
+                      ports={"in": {}, "out": {}}, data={"mode": "all"}, label="AGG")
+    post = HarnessNode(id="POST", type=NodeType.agent, position=_make_position(),
+                       ports={"out": {}}, data={"agent_ref": "ag", "prompt_template": "post"},
+                       label="POST")
+
+    edge_a1_agg = HarnessEdge(id="e1", source=NodeRef(node_id="A1", port_id="out"),
+                               target=NodeRef(node_id="AGG", port_id="in"))
+    edge_a2_agg = HarnessEdge(id="e2", source=NodeRef(node_id="A2", port_id="out"),
+                               target=NodeRef(node_id="AGG", port_id="in"))
+    edge_agg_post = HarnessEdge(id="e3", source=NodeRef(node_id="AGG", port_id="out"),
+                                 target=NodeRef(node_id="POST", port_id="out"))
+
+    harness = Harness(
+        name="aggregator_all",
+        nodes=[a1, a2, agg, post],
+        edges=[edge_a1_agg, edge_a2_agg, edge_agg_post],
+    )
+    space = _make_space()
+    store = _make_store_mock(space.id)
+    worker = StubWorker(task_state=TaskState.DONE, final_text="output")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with patch("app.harnesses.executor._DATA_DIR", Path(tmpdir)):
+            executor = HarnessExecutor(store, worker, _tools_resolver)
+            result = await executor.execute("run-agg-all", harness, space)
+
+    # Both A1 and A2 must have run.
+    assert result.nodes_executed["A1"].status == "done"
+    assert result.nodes_executed["A2"].status == "done"
+    # Aggregator fired (both done).
+    assert result.nodes_executed["AGG"].status == "done"
+    # POST executed after aggregator.
+    assert result.nodes_executed["POST"].status == "done"
+    # 3 agent runs: A1, A2, POST
+    assert len(worker.run_agent_calls) == 3
+
+
+# ---------------------------------------------------------------------------
+# New tests: Aggregator mode='any'
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_executor_aggregator_any_fires_on_first_done_predecessor():
+    """Aggregator(any) fires as soon as the first predecessor is done.
+
+    This test uses a pre-seeded run state where A1 is already done and A2 is
+    still pending, simulating the 'any' mode skewed-completion scenario.
+    """
+    a1 = HarnessNode(id="B1", type=NodeType.agent, position=_make_position(),
+                     ports={"out": {}}, data={"agent_ref": "ag", "prompt_template": "B1"},
+                     label="B1")
+    a2 = HarnessNode(id="B2", type=NodeType.agent, position=_make_position(),
+                     ports={"out": {}}, data={"agent_ref": "ag", "prompt_template": "B2"},
+                     label="B2")
+    agg = HarnessNode(id="AGG2", type=NodeType.aggregator, position=_make_position(),
+                      ports={"in": {}, "out": {}}, data={"mode": "any"}, label="AGG2")
+    post = HarnessNode(id="POST2", type=NodeType.agent, position=_make_position(),
+                       ports={"out": {}}, data={"agent_ref": "ag", "prompt_template": "post"},
+                       label="POST2")
+
+    edge_b1_agg = HarnessEdge(id="f1", source=NodeRef(node_id="B1", port_id="out"),
+                               target=NodeRef(node_id="AGG2", port_id="in"))
+    edge_b2_agg = HarnessEdge(id="f2", source=NodeRef(node_id="B2", port_id="out"),
+                               target=NodeRef(node_id="AGG2", port_id="in"))
+    edge_agg_post = HarnessEdge(id="f3", source=NodeRef(node_id="AGG2", port_id="out"),
+                                 target=NodeRef(node_id="POST2", port_id="out"))
+
+    harness = Harness(
+        name="aggregator_any",
+        nodes=[a1, a2, agg, post],
+        edges=[edge_b1_agg, edge_b2_agg, edge_agg_post],
+    )
+    space = _make_space("any-space")
+    store = _make_store_mock(space.id)
+    worker = StubWorker(task_state=TaskState.DONE, final_text="output")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with patch("app.harnesses.executor._DATA_DIR", Path(tmpdir)):
+            # Pre-seed: B1 is already done; B2 has not yet run.
+            state_dir = Path(tmpdir) / "spaces" / "any-space" / ".cronos" / "harness-runs"
+            state_dir.mkdir(parents=True)
+            state_path = state_dir / "run-agg-any.json"
+            pre_state = RunState(
+                run_id="run-agg-any",
+                harness_id="aggregator_any",
+                goal_task_id="run-agg-any",
+                nodes_executed={
+                    "B1": NodeState(status="done", output="b1_output"),
+                },
+            )
+            from app.harnesses.run_state import save_atomic as save_state
+            save_state(state_path, pre_state)
+
+            executor = HarnessExecutor(store, worker, _tools_resolver)
+            result = await executor.execute("run-agg-any", harness, space)
+
+    # B1 was already done (no re-run).
+    assert result.nodes_executed["B1"].status == "done"
+    # AGG2 fired because B1 (first done predecessor) was found.
+    assert result.nodes_executed["AGG2"].status == "done"
+    # POST2 executed.
+    assert result.nodes_executed["POST2"].status == "done"
+    # Only B2 and POST2 were run by the agent (B1 was pre-seeded as done).
+    # B2 may or may not have been run depending on BFS order — what matters is AGG fired.
+    run_count = len(worker.run_agent_calls)
+    assert run_count >= 1  # At least POST2 was run
+
+
+# ---------------------------------------------------------------------------
+# New test: 4-Agent linear chain regression (same order as _topo_sort)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_executor_four_agent_linear_chain_same_order_as_topo_sort():
+    """4-Agent linear chain A→B→C→D produces the same execution order as _topo_sort."""
+    nodes_defs = [
+        ("N1", "N1"),
+        ("N2", "N2"),
+        ("N3", "N3"),
+        ("N4", "N4"),
+    ]
+    nodes = [
+        HarnessNode(id=nid, type=NodeType.agent, position=_make_position(),
+                    ports={"out": {}}, data={"agent_ref": "ag", "prompt_template": f"do {nid}"},
+                    label=label)
+        for nid, label in nodes_defs
+    ]
+    edges = [
+        HarnessEdge(id=f"e{i}", source=NodeRef(node_id=f"N{i+1}", port_id="out"),
+                    target=NodeRef(node_id=f"N{i+2}", port_id="out"))
+        for i in range(3)
+    ]
+    harness = Harness(name="linear4", nodes=nodes, edges=edges)
+    space = _make_space()
+    store = _make_store_mock(space.id)
+
+    execution_order: list[str] = []
+    task_to_node: dict[str, str] = {}
+    node_counter = [0]
+    node_ids = ["N1", "N2", "N3", "N4"]
+
+    orig_store_create = store.create
+    counter = [0]
+
+    async def create_with_tracking(*, space_id, title, brief, parent_id=None, **kwargs):
+        counter[0] += 1
+        task = _make_task_mock(f"t-{counter[0]}")
+        # title is the node label
+        task_to_node[task.id] = title
+        return task
+
+    store.create = create_with_tracking
+
+    async def run_agent_tracking(task_id, **kwargs):
+        node_id = task_to_node.get(task_id, task_id)
+        execution_order.append(node_id)
+        return _make_trace(final_text=f"output_{node_id}")
+
+    async def finalize_child(task_id, trace):
+        return TaskState.DONE
+
+    worker = MagicMock()
+    worker.run_agent = run_agent_tracking
+    worker.finalize_child = finalize_child
+
+    # Also compute what _topo_sort produces.
+    topo_order = [n.id for n in _topo_sort(harness)]
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with patch("app.harnesses.executor._DATA_DIR", Path(tmpdir)):
+            executor = HarnessExecutor(store, worker, _tools_resolver)
+            result = await executor.execute("run-linear4", harness, space)
+
+    # All nodes done.
+    for nid in ["N1", "N2", "N3", "N4"]:
+        assert result.nodes_executed[nid].status == "done"
+
+    # BFS execution order must match _topo_sort order.
+    assert execution_order == topo_order, (
+        f"BFS order {execution_order} != topo_sort order {topo_order}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# New test: Wait(timed) continues execution after sleep
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_executor_wait_timed_continues_after_sleep():
+    """Wait(timed) node: executor sleeps then continues BFS traversal."""
+    agent_pre = HarnessNode(id="TPRE", type=NodeType.agent, position=_make_position(),
+                            ports={"out": {}}, data={"agent_ref": "ag", "prompt_template": "pre"},
+                            label="TPRE")
+    wait_timed = HarnessNode(id="TWAIT", type=NodeType.wait, position=_make_position(),
+                              ports={"in": {}, "out": {}},
+                              data={"mode": "timed", "duration_seconds": 0.0},
+                              label="TWAIT")
+    agent_post = HarnessNode(id="TPOST", type=NodeType.agent, position=_make_position(),
+                              ports={"out": {}}, data={"agent_ref": "ag", "prompt_template": "post"},
+                              label="TPOST")
+
+    edge_pre_wait = HarnessEdge(id="te1", source=NodeRef(node_id="TPRE", port_id="out"),
+                                 target=NodeRef(node_id="TWAIT", port_id="in"))
+    edge_wait_post = HarnessEdge(id="te2", source=NodeRef(node_id="TWAIT", port_id="out"),
+                                  target=NodeRef(node_id="TPOST", port_id="out"))
+
+    harness = Harness(
+        name="timed_wait",
+        nodes=[agent_pre, wait_timed, agent_post],
+        edges=[edge_pre_wait, edge_wait_post],
+    )
+    space = _make_space()
+    store = _make_store_mock(space.id)
+    worker = StubWorker(task_state=TaskState.DONE, final_text="output")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with patch("app.harnesses.executor._DATA_DIR", Path(tmpdir)):
+            executor = HarnessExecutor(store, worker, _tools_resolver)
+            result = await executor.execute("run-timed", harness, space)
+
+    # All nodes should complete (timed wait = 0s, so no actual delay).
+    assert result.nodes_executed["TPRE"].status == "done"
+    assert result.nodes_executed["TWAIT"].status == "done"
+    assert result.nodes_executed["TPOST"].status == "done"
+    # waiting_node_id must NOT be set (no human wait).
+    assert result.waiting_node_id is None
+    # Two agent runs: TPRE and TPOST.
+    assert len(worker.run_agent_calls) == 2

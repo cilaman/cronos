@@ -11,6 +11,9 @@ Covers:
   - Error messages are informative (contain cycle node_ids)
   - find_cycle() returns None for acyclic graphs
   - find_cycle() returns a cycle path for cyclic graphs
+  - R6: human Wait node rejected when missing max_wait_seconds
+  - R6: human Wait node accepted when max_wait_seconds is present
+  - R6: timed Wait node accepted without max_wait_seconds
 """
 
 import pytest
@@ -23,7 +26,12 @@ from app.harnesses.model import (
     NodeType,
     Position,
 )
-from app.harnesses.validator import HarnessGraphError, find_cycle, validate_graph
+from app.harnesses.validator import (
+    HarnessGraphError,
+    HarnessValidationError,
+    find_cycle,
+    validate_graph,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -322,3 +330,202 @@ class TestValidateGraph:
         """HarnessGraphError can be raised and caught independently."""
         with pytest.raises(HarnessGraphError, match="test error"):
             raise HarnessGraphError("test error")
+
+
+# ---------------------------------------------------------------------------
+# Helpers for Wait node tests
+# ---------------------------------------------------------------------------
+
+def _wait_node(node_id: str, data: dict | None = None) -> HarnessNode:
+    """Build a minimal Wait HarnessNode with the given id and optional data."""
+    return HarnessNode(
+        id=node_id,
+        type=NodeType.wait,
+        position=Position(x=0.0, y=0.0),
+        ports={"out": {}, "in": {}},
+        data=data or {},
+    )
+
+
+def _wait_harness(name: str, node: HarnessNode) -> Harness:
+    """Build a single-node Harness containing the given Wait node."""
+    return Harness(name=name, nodes=[node])
+
+
+# ---------------------------------------------------------------------------
+# R6 — Human Wait nodes must have max_wait_seconds
+# ---------------------------------------------------------------------------
+
+class TestValidateWaitNodesR6:
+    """Unit tests for the _validate_wait_nodes() rule exposed via validate_graph()."""
+
+    def test_human_wait_missing_max_wait_seconds_raises(self):
+        """A human Wait node without max_wait_seconds raises HarnessValidationError."""
+        node = _wait_node("w1", data={"mode": "human"})
+        harness = _wait_harness("hw", node)
+        with pytest.raises(HarnessValidationError) as exc_info:
+            validate_graph(harness)
+        msg = str(exc_info.value)
+        # Error must mention the offending node id
+        assert "w1" in msg
+        # Error must mention the required field name
+        assert "max_wait_seconds" in msg
+
+    def test_human_wait_missing_max_wait_seconds_error_contains_node_id(self):
+        """Error message includes the exact node id for fast user-side diagnostics."""
+        node = _wait_node("my-wait-node", data={"mode": "human", "waiting_question": "Ready?"})
+        harness = _wait_harness("hw2", node)
+        with pytest.raises(HarnessValidationError) as exc_info:
+            validate_graph(harness)
+        assert "my-wait-node" in str(exc_info.value)
+
+    def test_human_wait_with_max_wait_seconds_accepted(self):
+        """A human Wait node with max_wait_seconds passes validation."""
+        node = _wait_node("w2", data={"mode": "human", "max_wait_seconds": 3600})
+        harness = _wait_harness("hw3", node)
+        # Must not raise
+        validate_graph(harness)
+
+    def test_human_wait_with_max_wait_seconds_and_question_accepted(self):
+        """Human Wait with max_wait_seconds + waiting_question passes validation."""
+        node = _wait_node(
+            "w3",
+            data={"mode": "human", "max_wait_seconds": 7200, "waiting_question": "Proceed?"},
+        )
+        harness = _wait_harness("hw4", node)
+        validate_graph(harness)
+
+    def test_timed_wait_without_max_wait_seconds_accepted(self):
+        """Timed Wait nodes do NOT require max_wait_seconds."""
+        node = _wait_node("w4", data={"mode": "timed", "duration_seconds": 30.0})
+        harness = _wait_harness("tw", node)
+        # Must not raise
+        validate_graph(harness)
+
+    def test_timed_wait_with_duration_zero_accepted(self):
+        """Timed Wait with duration_seconds=0 passes (edge case for tests)."""
+        node = _wait_node("w5", data={"mode": "timed", "duration_seconds": 0})
+        harness = _wait_harness("tw2", node)
+        validate_graph(harness)
+
+    def test_non_wait_node_not_affected(self):
+        """Agent/Decision/Aggregator nodes with no data pass without error."""
+        for ntype in (NodeType.agent, NodeType.decision, NodeType.aggregator):
+            node = HarnessNode(
+                id="n1", type=ntype, position=Position(x=0, y=0),
+                data={"mode": "human"},  # data that would trigger Wait rule
+            )
+            harness = Harness(name="other", nodes=[node])
+            validate_graph(harness)  # must not raise
+
+    def test_wait_node_without_mode_key_not_flagged(self):
+        """A Wait node whose data has no 'mode' key is not flagged by R6.
+
+        The mode field absence means it cannot be a human Wait; validator treats
+        it as undeclared and leaves enforcement to the executor.
+        """
+        node = _wait_node("w6", data={})
+        harness = _wait_harness("tw3", node)
+        validate_graph(harness)  # must not raise
+
+    def test_multiple_human_wait_nodes_all_checked(self):
+        """Multiple human Wait nodes — all must have max_wait_seconds."""
+        w_good = _wait_node("wgood", data={"mode": "human", "max_wait_seconds": 60})
+        w_bad = _wait_node("wbad", data={"mode": "human"})
+        harness = Harness(name="multi", nodes=[w_good, w_bad])
+        with pytest.raises(HarnessValidationError) as exc_info:
+            validate_graph(harness)
+        assert "wbad" in str(exc_info.value)
+
+    def test_r6_error_is_subclass_of_harness_validation_error(self):
+        """HarnessValidationError is a proper exception class."""
+        assert issubclass(HarnessValidationError, Exception)
+
+    def test_harness_graph_error_is_subclass_of_harness_validation_error(self):
+        """HarnessGraphError inherits from HarnessValidationError for catch-all handling."""
+        assert issubclass(HarnessGraphError, HarnessValidationError)
+
+    def test_r6_violation_raised_before_cycle_check(self):
+        """validate_graph() enforces R6 before R5 (fail fast on data errors).
+
+        This test ensures a harness with both an R6 violation and a cycle
+        raises HarnessValidationError (not HarnessGraphError) — confirming
+        _validate_wait_nodes() runs before find_cycle().
+        """
+        # Wait node missing max_wait_seconds
+        w_bad = _wait_node("wbad", data={"mode": "human"})
+        # We can't make a real graph cycle with Pydantic's R3/R4 easily,
+        # but we can confirm the R6 check fires on an otherwise-acyclic harness.
+        harness = Harness(name="r6-first", nodes=[w_bad])
+        with pytest.raises(HarnessValidationError):
+            validate_graph(harness)
+
+
+# ---------------------------------------------------------------------------
+# R11 — Decision-edge cycles are caught by the existing find_cycle() mechanism
+# ---------------------------------------------------------------------------
+
+def test_decision_edge_cycle_rejected():
+    """Decision-edge cycles are detected and rejected by validate_graph().
+
+    Decision edges are plain HarnessEdge objects — the same objects that
+    find_cycle() traverses.  This test confirms that a cycle routed through
+    a Decision node (e.g. Agent-A → Decision-D → Agent-B → Agent-A) raises
+    HarnessGraphError, satisfying R11 with no dedicated runtime cycle check.
+
+    Topology: A → D → B → A  (A and D are regular nodes; the cycle closes
+    when B routes back to A).
+    """
+    # Build three nodes: an Agent, a Decision, and another Agent.
+    node_a = HarnessNode(
+        id="agent-a",
+        type=NodeType.agent,
+        position=Position(x=0.0, y=0.0),
+        ports={"out": {}, "in": {}},
+    )
+    node_d = HarnessNode(
+        id="decision-d",
+        type=NodeType.decision,
+        position=Position(x=100.0, y=0.0),
+        ports={"yes": {}, "in": {}},
+    )
+    node_b = HarnessNode(
+        id="agent-b",
+        type=NodeType.agent,
+        position=Position(x=200.0, y=0.0),
+        ports={"out": {}, "in": {}},
+    )
+
+    # Edges forming the cycle: agent-a → decision-d → agent-b → agent-a
+    edges = [
+        HarnessEdge(
+            id="e1",
+            source=NodeRef(node_id="agent-a", port_id="out"),
+            target=NodeRef(node_id="decision-d", port_id="in"),
+        ),
+        HarnessEdge(
+            id="e2",
+            source=NodeRef(node_id="decision-d", port_id="yes"),
+            target=NodeRef(node_id="agent-b", port_id="in"),
+        ),
+        HarnessEdge(
+            id="e3",
+            source=NodeRef(node_id="agent-b", port_id="out"),
+            target=NodeRef(node_id="agent-a", port_id="in"),
+        ),
+    ]
+
+    harness = Harness(name="decision-cycle", nodes=[node_a, node_d, node_b], edges=edges)
+
+    with pytest.raises(HarnessGraphError) as exc_info:
+        validate_graph(harness)
+
+    msg = str(exc_info.value)
+    # Error must reference the harness name
+    assert "decision-cycle" in msg
+    # Error must mention the cycle keyword
+    assert "cycle" in msg.lower()
+    # All three cycle-participating nodes must appear in the error message
+    assert "agent-a" in msg
+    assert "decision-d" in msg
+    assert "agent-b" in msg

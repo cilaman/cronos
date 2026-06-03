@@ -1,9 +1,11 @@
 """
 backend/app/harnesses/executor — HarnessExecutor: DAG-based harness node runner.
 
-The HarnessExecutor walks the harness graph in topological order (Kahn's
-algorithm over Harness.edges), executes each node sequentially via ``await``,
-and persists execution state atomically after each node completes.
+The HarnessExecutor walks the harness graph using a **runtime-gated BFS**
+(replacing the earlier static Kahn's algorithm + linear loop).  Nodes whose
+in-degree has reached zero (i.e. all predecessors are ``done``) are enqueued
+in sorted-node-id order for determinism, matching the tie-break used by the
+now-internal ``_topo_sort`` helper.
 
 Key design decisions
 --------------------
@@ -20,9 +22,15 @@ Key design decisions
 * No new worker lane — nodes are awaited sequentially inside execute(); no
   asyncio.create_task() is used.
 
-* Control-flow nodes — any non-agent NodeType is treated as a pass-through
-  stub for now: recorded as ``status='skipped'`` with
-  ``reason='control_flow_stub'`` and all outgoing edges are followed.
+* Control-flow dispatch table — non-agent node types are dispatched to their
+  dedicated evaluators:
+  - ``type='decision'`` → ``decision.evaluate_decision()``
+  - ``type='wait'`` (human mode) → ``wait.enter_wait()`` → returns
+    ``WaitOutcome``; executor parks harness goal in WAITING state and returns.
+  - ``type='wait'`` (timed mode) → ``await wait.await_timed_wait()``; then
+    continue BFS traversal.
+  - ``type='aggregator'`` → ``aggregator.aggregator_ready()``; verdict drives
+    whether to proceed or remain pending.
 
 * Variable scope — root vars are merged first; upstream node outputs override
   on key collision (per interpolate.py precedence rule).
@@ -31,6 +39,11 @@ Key design decisions
   ``status='in_progress'``, the executor queries the TaskStore for the
   recorded ``child_task_id``; if that task exists and is DONE, the node is
   accepted as done without re-execution.
+
+* Wait-human resume — when ``RunState.waiting_node_id`` is set on entry,
+  the executor resumes traversal from that node's outgoing edges.  Already-
+  completed nodes (in ``run_state.nodes_executed``) are not re-executed.
+  ``waiting_node_id`` is cleared on resume.
 """
 
 from __future__ import annotations
@@ -45,10 +58,13 @@ import os
 from ..models import Space, TaskState
 from ..storage import TaskStore
 from ..trace_parser import RunTrace
+from .aggregator import AggregatorVerdict, aggregator_ready, compose_output
 from .brief_composer import compose_brief
+from .decision import evaluate_decision
 from .interpolate import interpolate
-from .model import Harness, HarnessNode, NodeType
+from .model import Harness, HarnessEdge, HarnessNode, NodeType
 from .run_state import NodeState, RunState, load, save_atomic
+from .wait import WaitAction, enter_wait, await_timed_wait
 
 _DATA_DIR = Path(os.environ.get("CRONOS_DATA_DIR", "/data"))
 
@@ -87,7 +103,7 @@ class WorkerProtocol(Protocol):
 
 
 # ---------------------------------------------------------------------------
-# Topo-sort helpers
+# Topo-sort helpers (kept for internal use and backward-compat imports)
 # ---------------------------------------------------------------------------
 
 
@@ -136,12 +152,72 @@ def _topo_sort(harness: Harness) -> list[HarnessNode]:
 
 
 # ---------------------------------------------------------------------------
+# BFS graph helpers
+# ---------------------------------------------------------------------------
+
+
+def _build_graph(harness: Harness) -> tuple[
+    dict[str, HarnessNode],
+    dict[str, int],
+    dict[str, list[str]],
+    dict[str, list[HarnessEdge]],
+]:
+    """Build adjacency structures for BFS traversal.
+
+    Returns
+    -------
+    node_by_id:
+        Mapping node_id → HarnessNode.
+    in_degree:
+        Mapping node_id → number of incoming edges (predecessor count).
+    successors:
+        Mapping node_id → list of successor node_ids.
+    outgoing_edges:
+        Mapping node_id → list of outgoing HarnessEdge objects (preserves order
+        from harness.edges; used by the decision evaluator).
+    """
+    node_by_id: dict[str, HarnessNode] = {n.id: n for n in harness.nodes}
+    in_degree: dict[str, int] = {n.id: 0 for n in harness.nodes}
+    successors: dict[str, list[str]] = {n.id: [] for n in harness.nodes}
+    outgoing_edges: dict[str, list[HarnessEdge]] = {n.id: [] for n in harness.nodes}
+
+    for edge in harness.edges:
+        src = edge.source.node_id
+        tgt = edge.target.node_id
+        successors[src].append(tgt)
+        outgoing_edges[src].append(edge)
+        in_degree[tgt] += 1
+
+    return node_by_id, in_degree, successors, outgoing_edges
+
+
+def _get_predecessors_state(
+    node_id: str,
+    harness: Harness,
+    state: RunState,
+) -> dict[str, NodeState]:
+    """Return predecessor NodeState mapping for *node_id*.
+
+    Uses reverse edge traversal to find predecessors.  Predecessors not yet
+    in ``state.nodes_executed`` are represented as ``NodeState(status='pending')``.
+    """
+    pred_state: dict[str, NodeState] = {}
+    for edge in harness.edges:
+        if edge.target.node_id == node_id:
+            pred_id = edge.source.node_id
+            pred_state[pred_id] = state.nodes_executed.get(
+                pred_id, NodeState(status="pending")
+            )
+    return pred_state
+
+
+# ---------------------------------------------------------------------------
 # HarnessExecutor
 # ---------------------------------------------------------------------------
 
 
 class HarnessExecutor:
-    """Execute a Harness graph node by node in topological order.
+    """Execute a Harness graph node by node using a runtime-gated BFS.
 
     Parameters
     ----------
@@ -176,7 +252,7 @@ class HarnessExecutor:
         harness: Harness,
         space: Space,
     ) -> RunState:
-        """Execute *harness* sequentially, persisting state after each node.
+        """Execute *harness* via runtime-gated BFS, persisting state after each node.
 
         Parameters
         ----------
@@ -219,7 +295,10 @@ class HarnessExecutor:
         )
 
         # ------------------------------------------------------------------
-        # Reconcile in_progress nodes before execution begins
+        # Reconcile in_progress Agent nodes before execution begins.
+        # Control-flow in_progress nodes (decision/wait/aggregator) that
+        # survived a restart are left as-is; the BFS will skip them since
+        # they appear in nodes_executed.
         # ------------------------------------------------------------------
         for node_id, ns in list(state.nodes_executed.items()):
             if ns.status == "in_progress" and ns.child_task_id:
@@ -248,21 +327,89 @@ class HarnessExecutor:
         # scope accumulates variable values; upstream node outputs override.
         scope: dict[str, str] = dict(harness.variables)
 
+        # Restore scope from already-completed nodes (resume path).
+        for node_id, ns in state.nodes_executed.items():
+            if ns.status == "done" and ns.output is not None:
+                scope[node_id] = ns.output
+
         # ------------------------------------------------------------------
-        # Topological execution
+        # Build BFS graph structures
         # ------------------------------------------------------------------
-        ordered_nodes = _topo_sort(harness)
+        node_by_id, in_degree, successors, outgoing_edges_map = _build_graph(harness)
+
+        # ------------------------------------------------------------------
+        # Adjust in_degree for already-completed nodes (resume path).
+        # For every node already in state.nodes_executed with a terminal status
+        # (done, failed, skipped), decrement the in_degree of its successors.
+        # This lets the BFS correctly compute which nodes are "ready" when we
+        # resume from a partially-completed run.
+        # ------------------------------------------------------------------
+        for completed_node_id, ns in state.nodes_executed.items():
+            if ns.status in ("done", "failed", "skipped"):
+                for succ_id in successors.get(completed_node_id, []):
+                    in_degree[succ_id] = max(0, in_degree[succ_id] - 1)
+
+        # ------------------------------------------------------------------
+        # Determine BFS starting point
+        # ------------------------------------------------------------------
+        # Case 1: Wait-human resume — start from the waiting node's successors.
+        if state.waiting_node_id is not None:
+            waiting_id = state.waiting_node_id
+            log.info(
+                "Resume: detected waiting_node_id=%r — resuming from its outgoing edges.",
+                waiting_id,
+            )
+            # Clear the waiting_node_id (resume in progress).
+            state.waiting_node_id = None
+            # Mark the wait node as done (it was in_progress during the wait).
+            if state.nodes_executed.get(waiting_id, NodeState(status="pending")).status == "in_progress":
+                state.nodes_executed[waiting_id] = NodeState(status="done")
+                # Also decrement successors' in_degree for the now-done wait node.
+                for succ_id in successors.get(waiting_id, []):
+                    in_degree[succ_id] = max(0, in_degree[succ_id] - 1)
+            # Seed the BFS ready queue with the wait node's successors
+            # whose in-degree has reached 0 after the adjustment above.
+            ready_queue: deque[str] = deque(
+                sorted(
+                    succ_id
+                    for succ_id in successors.get(waiting_id, [])
+                    if in_degree.get(succ_id, 0) == 0
+                    and succ_id not in state.nodes_executed
+                )
+            )
+        else:
+            # Case 2: Normal start — nodes whose in-degree is 0 (no predecessors),
+            # excluding nodes already completed.
+            ready_queue = deque(
+                sorted(
+                    nid
+                    for nid, deg in in_degree.items()
+                    if deg == 0 and nid not in state.nodes_executed
+                )
+            )
+
+        # Track which nodes are currently in the ready queue (avoid duplicate enqueues).
+        in_queue: set[str] = set(ready_queue)
+
+        # ------------------------------------------------------------------
+        # Runtime-gated BFS execution loop
+        # ------------------------------------------------------------------
         upstream_failed = False
 
-        for node in ordered_nodes:
-            node_id = node.id
+        while ready_queue:
+            node_id = ready_queue.popleft()
+            in_queue.discard(node_id)
 
             # Skip nodes already completed from a prior run.
             existing_ns = state.nodes_executed.get(node_id)
             if existing_ns is not None and existing_ns.status in ("done", "skipped", "failed"):
                 # Restore output to scope so downstream nodes can use it.
-                if existing_ns.output and existing_ns.status == "done":
+                if existing_ns.output is not None and existing_ns.status == "done":
                     scope[node_id] = existing_ns.output
+                # Decrement successors' effective in-degree and enqueue ready ones.
+                self._enqueue_successors(
+                    node_id, successors, state, in_degree, in_queue, ready_queue
+                )
                 continue
 
             # Fail-fast: upstream failure marks remaining nodes as skipped.
@@ -272,134 +419,427 @@ class HarnessExecutor:
                     reason="upstream_failed",
                 )
                 _maybe_save(state, run_state_path)
+                # Enqueue successors so they can also be skipped.
+                self._enqueue_successors(
+                    node_id, successors, state, in_degree, in_queue, ready_queue
+                )
                 continue
 
+            node = node_by_id[node_id]
+
             # ------------------------------------------------------------------
-            # Control-flow nodes — stub pass-through
+            # Dispatch by node type
             # ------------------------------------------------------------------
-            if node.type != NodeType.agent:
-                log.debug("Node %s is control-flow (%s) — stub pass-through.", node_id, node.type)
+            if node.type == NodeType.agent:
+                done, output, child_task_id = await self._execute_agent_node(
+                    node, node_id, run_goal_id, harness, space, scope, state, run_state_path
+                )
+                if done:
+                    if output is not None:
+                        scope[node_id] = output
+                    self._enqueue_successors(
+                        node_id, successors, state, in_degree, in_queue, ready_queue
+                    )
+                else:
+                    upstream_failed = True
+                    # Enqueue successors so they can be skipped.
+                    self._enqueue_successors(
+                        node_id, successors, state, in_degree, in_queue, ready_queue
+                    )
+
+            elif node.type == NodeType.decision:
+                chosen_edge_id = await self._execute_decision_node(
+                    node, node_id, harness, scope, state, run_state_path,
+                    outgoing_edges_map[node_id]
+                )
+                if chosen_edge_id is not None:
+                    # Only enqueue the chosen edge's target.
+                    chosen_edge = next(
+                        (e for e in outgoing_edges_map[node_id] if e.id == chosen_edge_id),
+                        None
+                    )
+                    if chosen_edge is not None:
+                        tgt = chosen_edge.target.node_id
+                        if tgt not in state.nodes_executed and tgt not in in_queue:
+                            ready_queue.append(tgt)
+                            in_queue.add(tgt)
+                else:
+                    # Decision evaluation failed.
+                    upstream_failed = True
+                    self._enqueue_successors(
+                        node_id, successors, state, in_degree, in_queue, ready_queue
+                    )
+
+            elif node.type == NodeType.wait:
+                park = await self._execute_wait_node(
+                    node, node_id, state, run_state_path, space
+                )
+                if park:
+                    # Human wait: executor parks and returns immediately.
+                    _maybe_save(state, run_state_path)
+                    return state
+                else:
+                    # Timed wait completed: continue BFS.
+                    self._enqueue_successors(
+                        node_id, successors, state, in_degree, in_queue, ready_queue
+                    )
+
+            elif node.type == NodeType.aggregator:
+                ready, failed = await self._execute_aggregator_node(
+                    node, node_id, harness, state, run_state_path
+                )
+                if ready:
+                    self._enqueue_successors(
+                        node_id, successors, state, in_degree, in_queue, ready_queue
+                    )
+                elif failed:
+                    upstream_failed = True
+                    self._enqueue_successors(
+                        node_id, successors, state, in_degree, in_queue, ready_queue
+                    )
+                # else: pending — do not enqueue successors; aggregator stays out of queue
+
+            else:
+                # Unknown node type — log and skip.
+                log.warning("Node %s has unknown type %r; skipping.", node_id, node.type)
                 state.nodes_executed[node_id] = NodeState(
                     status="skipped",
-                    reason="control_flow_stub",
+                    reason=f"unknown_node_type:{node.type}",
                 )
                 _maybe_save(state, run_state_path)
-                continue
-
-            # ------------------------------------------------------------------
-            # Agent node execution
-            # ------------------------------------------------------------------
-            # 1. Interpolate prompt
-            prompt_template: str = node.data.get("prompt_template", "")
-            interpolated_prompt, unresolved = interpolate(
-                prompt_template,
-                root_vars=dict(harness.variables),
-                upstream_outputs={k: v for k, v in scope.items() if k not in harness.variables},
-            )
-            if unresolved:
-                log.warning(
-                    "Node %s has unresolved placeholders: %s",
-                    node_id, unresolved,
-                )
-
-            # 2. Resolve agent entry via tools_resolver
-            agent_ref: str = node.data.get("agent_ref", "") or ""
-            agent_entry = None
-            if agent_ref:
-                try:
-                    agent_entry = self.tools_resolver(space.id, agent_ref)
-                except Exception:
-                    log.exception("tools_resolver failed for agent_ref=%r", agent_ref)
-
-            # 3. Compose brief
-            brief = compose_brief(node, interpolated_prompt, agent_entry)
-
-            # 4. Create child Task
-            try:
-                child_task = await self.store.create(
-                    space_id=space.id,
-                    title=node.label or node.id,
-                    brief=brief,
-                    parent_id=run_goal_id,
-                )
-            except Exception as exc:
-                log.exception("Failed to create child task for node %s", node_id)
-                state.nodes_executed[node_id] = NodeState(
-                    status="failed",
-                    reason=f"child_task_create_error: {exc}",
-                )
-                _maybe_save(state, run_state_path)
-                upstream_failed = True
-                continue
-
-            child_task_id = child_task.id
-
-            # 5. Mark node in_progress and persist before running agent
-            state.nodes_executed[node_id] = NodeState(
-                status="in_progress",
-                child_task_id=child_task_id,
-            )
-            _maybe_save(state, run_state_path)
-
-            # 6. Run agent via WorkerProtocol
-            trace: RunTrace | None = None
-            try:
-                trace = await self.worker.run_agent(
-                    child_task_id,
-                    parent_run_id=run_goal_id,
-                )
-            except Exception as exc:
-                log.exception("run_agent failed for node %s (child %s)", node_id, child_task_id)
-                # Attempt to finalize the child with a failed trace if possible.
-                state.nodes_executed[node_id] = NodeState(
-                    status="failed",
-                    child_task_id=child_task_id,
-                    reason=f"run_agent_error: {exc}",
-                )
-                _maybe_save(state, run_state_path)
-                upstream_failed = True
-                continue
-
-            # 7. Finalize child via WorkerProtocol
-            try:
-                new_state = await self.worker.finalize_child(child_task_id, trace)
-            except Exception as exc:
-                log.exception("finalize_child failed for node %s", node_id)
-                state.nodes_executed[node_id] = NodeState(
-                    status="failed",
-                    child_task_id=child_task_id,
-                    reason=f"finalize_child_error: {exc}",
-                )
-                _maybe_save(state, run_state_path)
-                upstream_failed = True
-                continue
-
-            # 8. Determine node outcome
-            if new_state == TaskState.DONE:
-                output_value = trace.final_text_snippet if trace else ""
-                scope[node_id] = output_value
-                state.nodes_executed[node_id] = NodeState(
-                    status="done",
-                    child_task_id=child_task_id,
-                    output=output_value,
-                )
-                _maybe_save(state, run_state_path)
-                log.info("Node %s completed successfully.", node_id)
-            else:
-                # Node did not reach DONE — fail-fast.
-                state.nodes_executed[node_id] = NodeState(
-                    status="failed",
-                    child_task_id=child_task_id,
-                    reason=f"child_task_ended_in_{new_state.value}",
-                )
-                _maybe_save(state, run_state_path)
-                upstream_failed = True
-                log.warning(
-                    "Node %s failed (child %s ended in %s); activating fail-fast.",
-                    node_id, child_task_id, new_state.value,
+                self._enqueue_successors(
+                    node_id, successors, state, in_degree, in_queue, ready_queue
                 )
 
         return state
+
+    # ------------------------------------------------------------------
+    # BFS helper — enqueue successors whose runtime in-degree reaches 0
+    # ------------------------------------------------------------------
+
+    def _enqueue_successors(
+        self,
+        node_id: str,
+        successors: dict[str, list[str]],
+        state: RunState,
+        in_degree: dict[str, int],
+        in_queue: set[str],
+        ready_queue: deque[str],
+    ) -> None:
+        """Decrement runtime in-degree for each successor of *node_id*.
+
+        When a successor's effective in-degree reaches 0 (all predecessors
+        have reached a terminal state) and it is not already in the queue or
+        completed, it is appended to the ready queue.
+
+        Sorted insertion is used to preserve deterministic tie-breaking
+        (matching ``_topo_sort``'s sorted-by-node-id order).
+        """
+        newly_ready: list[str] = []
+        for succ_id in successors.get(node_id, []):
+            if succ_id in state.nodes_executed or succ_id in in_queue:
+                continue
+            # Decrement runtime in-degree counter.
+            in_degree[succ_id] = max(0, in_degree[succ_id] - 1)
+            if in_degree[succ_id] == 0:
+                newly_ready.append(succ_id)
+
+        # Append in sorted order for determinism.
+        for succ_id in sorted(newly_ready):
+            if succ_id not in in_queue:
+                ready_queue.append(succ_id)
+                in_queue.add(succ_id)
+
+    # ------------------------------------------------------------------
+    # Agent node execution
+    # ------------------------------------------------------------------
+
+    async def _execute_agent_node(
+        self,
+        node: HarnessNode,
+        node_id: str,
+        run_goal_id: str,
+        harness: Harness,
+        space: Space,
+        scope: dict[str, str],
+        state: RunState,
+        run_state_path: "Path | None",
+    ) -> tuple[bool, "str | None", "str | None"]:
+        """Execute an Agent node.
+
+        Returns
+        -------
+        (done, output, child_task_id)
+            done: True if the node completed successfully.
+            output: the node's output string (or None on failure).
+            child_task_id: the child task's id (or None on creation failure).
+        """
+        # 1. Interpolate prompt
+        prompt_template: str = node.data.get("prompt_template", "")
+        interpolated_prompt, unresolved = interpolate(
+            prompt_template,
+            root_vars=dict(harness.variables),
+            upstream_outputs={k: v for k, v in scope.items() if k not in harness.variables},
+        )
+        if unresolved:
+            log.warning(
+                "Node %s has unresolved placeholders: %s",
+                node_id, unresolved,
+            )
+
+        # 2. Resolve agent entry via tools_resolver
+        agent_ref: str = node.data.get("agent_ref", "") or ""
+        agent_entry = None
+        if agent_ref:
+            try:
+                agent_entry = self.tools_resolver(space.id, agent_ref)
+            except Exception:
+                log.exception("tools_resolver failed for agent_ref=%r", agent_ref)
+
+        # 3. Compose brief
+        brief = compose_brief(node, interpolated_prompt, agent_entry)
+
+        # 4. Create child Task
+        try:
+            child_task = await self.store.create(
+                space_id=space.id,
+                title=node.label or node.id,
+                brief=brief,
+                parent_id=run_goal_id,
+            )
+        except Exception as exc:
+            log.exception("Failed to create child task for node %s", node_id)
+            state.nodes_executed[node_id] = NodeState(
+                status="failed",
+                reason=f"child_task_create_error: {exc}",
+            )
+            _maybe_save(state, run_state_path)
+            return False, None, None
+
+        child_task_id = child_task.id
+
+        # 5. Mark node in_progress and persist before running agent
+        state.nodes_executed[node_id] = NodeState(
+            status="in_progress",
+            child_task_id=child_task_id,
+        )
+        _maybe_save(state, run_state_path)
+
+        # 6. Run agent via WorkerProtocol
+        trace: RunTrace | None = None
+        try:
+            trace = await self.worker.run_agent(
+                child_task_id,
+                parent_run_id=run_goal_id,
+            )
+        except Exception as exc:
+            log.exception("run_agent failed for node %s (child %s)", node_id, child_task_id)
+            state.nodes_executed[node_id] = NodeState(
+                status="failed",
+                child_task_id=child_task_id,
+                reason=f"run_agent_error: {exc}",
+            )
+            _maybe_save(state, run_state_path)
+            return False, None, child_task_id
+
+        # 7. Finalize child via WorkerProtocol
+        try:
+            new_state = await self.worker.finalize_child(child_task_id, trace)
+        except Exception as exc:
+            log.exception("finalize_child failed for node %s", node_id)
+            state.nodes_executed[node_id] = NodeState(
+                status="failed",
+                child_task_id=child_task_id,
+                reason=f"finalize_child_error: {exc}",
+            )
+            _maybe_save(state, run_state_path)
+            return False, None, child_task_id
+
+        # 8. Determine node outcome
+        if new_state == TaskState.DONE:
+            output_value = trace.final_text_snippet if trace else ""
+            scope[node_id] = output_value
+            state.nodes_executed[node_id] = NodeState(
+                status="done",
+                child_task_id=child_task_id,
+                output=output_value,
+            )
+            _maybe_save(state, run_state_path)
+            log.info("Node %s completed successfully.", node_id)
+            return True, output_value, child_task_id
+        else:
+            # Node did not reach DONE — fail-fast.
+            state.nodes_executed[node_id] = NodeState(
+                status="failed",
+                child_task_id=child_task_id,
+                reason=f"child_task_ended_in_{new_state.value}",
+            )
+            _maybe_save(state, run_state_path)
+            log.warning(
+                "Node %s failed (child %s ended in %s); activating fail-fast.",
+                node_id, child_task_id, new_state.value,
+            )
+            return False, None, child_task_id
+
+    # ------------------------------------------------------------------
+    # Decision node execution
+    # ------------------------------------------------------------------
+
+    async def _execute_decision_node(
+        self,
+        node: HarnessNode,
+        node_id: str,
+        harness: Harness,
+        scope: dict[str, str],
+        state: RunState,
+        run_state_path: "Path | None",
+        edges: list[HarnessEdge],
+    ) -> "str | None":
+        """Evaluate a Decision node and return the chosen edge id, or None on failure."""
+        state.nodes_executed[node_id] = NodeState(status="in_progress")
+        _maybe_save(state, run_state_path)
+
+        predecessors_state = _get_predecessors_state(node_id, harness, state)
+
+        # Find the most-recent predecessor's run trace from scope (not available
+        # directly — pass None and let decision layer use exit_reason/text layers).
+        # The executor does not cache RunTrace objects; the decision evaluator will
+        # fall through to the regex / variable layers.
+        run_trace: RunTrace | None = None
+
+        try:
+            chosen_edge_id = evaluate_decision(
+                node=node,
+                predecessors_state=predecessors_state,
+                scope=scope,
+                run_trace=run_trace,
+                outgoing_edges=edges,
+            )
+        except ValueError as exc:
+            log.warning(
+                "Decision node %r evaluation failed: %s; marking failed.",
+                node_id, exc,
+            )
+            state.nodes_executed[node_id] = NodeState(
+                status="failed",
+                reason=f"decision_error: {exc}",
+            )
+            _maybe_save(state, run_state_path)
+            return None
+
+        log.info("Decision node %r chose edge %r.", node_id, chosen_edge_id)
+        state.nodes_executed[node_id] = NodeState(
+            status="done",
+            output=chosen_edge_id,
+        )
+        _maybe_save(state, run_state_path)
+        return chosen_edge_id
+
+    # ------------------------------------------------------------------
+    # Wait node execution
+    # ------------------------------------------------------------------
+
+    async def _execute_wait_node(
+        self,
+        node: HarnessNode,
+        node_id: str,
+        state: RunState,
+        run_state_path: "Path | None",
+        space: Space,
+    ) -> bool:
+        """Evaluate a Wait node.
+
+        Returns
+        -------
+        bool
+            True if the executor should park (human mode); False if traversal
+            should continue (timed mode completed).
+        """
+        mode = node.data.get("mode", "human")
+        state.nodes_executed[node_id] = NodeState(status="in_progress")
+        _maybe_save(state, run_state_path)
+
+        if mode == "human":
+            outcome = enter_wait(node, state)
+            # waiting_node_id is now set on state by enter_wait().
+            log.info(
+                "Wait node %r (human): parking run %r. waiting_question=%r",
+                node_id, state.run_id, outcome.waiting_question,
+            )
+            # Persist the updated state (with waiting_node_id set) before returning.
+            _maybe_save(state, run_state_path)
+            # Return True to signal the executor to stop and return.
+            return True
+        else:
+            # Timed mode.
+            log.info("Wait node %r (timed): sleeping.", node_id)
+            await await_timed_wait(node)
+            state.nodes_executed[node_id] = NodeState(status="done")
+            _maybe_save(state, run_state_path)
+            log.info("Wait node %r (timed): sleep complete.", node_id)
+            return False
+
+    # ------------------------------------------------------------------
+    # Aggregator node execution
+    # ------------------------------------------------------------------
+
+    async def _execute_aggregator_node(
+        self,
+        node: HarnessNode,
+        node_id: str,
+        harness: Harness,
+        state: RunState,
+        run_state_path: "Path | None",
+    ) -> tuple[bool, bool]:
+        """Evaluate an Aggregator node.
+
+        Returns
+        -------
+        (ready, failed)
+            ready: True if the aggregator has fired (done verdict).
+            failed: True if the aggregator has failed verdict.
+            (False, False) means verdict is still pending.
+        """
+        mode = node.data.get("mode", "all")
+        predecessors_state = _get_predecessors_state(node_id, harness, state)
+
+        if not predecessors_state:
+            # No predecessors — vacuously done for mode='all', pending for mode='any'.
+            if mode == "any":
+                log.warning(
+                    "Aggregator node %r (any) has no predecessors; marking done.", node_id
+                )
+            state.nodes_executed[node_id] = NodeState(
+                status="in_progress",
+            )
+
+        verdict = aggregator_ready(node, predecessors_state)
+        log.debug("Aggregator node %r: verdict=%r mode=%r", node_id, verdict, mode)
+
+        if verdict == AggregatorVerdict.done:
+            output = compose_output(verdict, predecessors_state, mode)
+            state.nodes_executed[node_id] = NodeState(
+                status="done",
+                output=str(output),
+            )
+            _maybe_save(state, run_state_path)
+            log.info("Aggregator node %r fired (done).", node_id)
+            return True, False
+
+        elif verdict == AggregatorVerdict.failed:
+            output = compose_output(verdict, predecessors_state, mode)
+            state.nodes_executed[node_id] = NodeState(
+                status="failed",
+                reason=f"aggregator_failed: {output}",
+            )
+            _maybe_save(state, run_state_path)
+            log.warning("Aggregator node %r failed.", node_id)
+            return False, True
+
+        else:
+            # pending — do not persist a state change; aggregator is not ready.
+            log.debug("Aggregator node %r is pending; not enqueuing successors.", node_id)
+            return False, False
 
 
 # ---------------------------------------------------------------------------

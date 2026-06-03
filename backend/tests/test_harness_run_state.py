@@ -337,3 +337,173 @@ def test_run_state_to_dict_and_from_dict(tmp_path: Path) -> None:
         assert rest_ns.child_task_id == orig_ns.child_task_id
         assert rest_ns.output == orig_ns.output
         assert rest_ns.reason == orig_ns.reason
+
+
+# ---------------------------------------------------------------------------
+# waiting_node_id — default, set, clear, serialisation
+# ---------------------------------------------------------------------------
+
+
+def test_waiting_node_id_defaults_to_none() -> None:
+    """RunState.waiting_node_id must default to None when not provided."""
+    state = RunState(
+        run_id="r1",
+        harness_id="h1",
+        goal_task_id="g1",
+    )
+    assert state.waiting_node_id is None
+
+
+def test_waiting_node_id_set_and_retrieve() -> None:
+    """Setting waiting_node_id to a node id is reflected on the instance."""
+    state = RunState(
+        run_id="r1",
+        harness_id="h1",
+        goal_task_id="g1",
+    )
+    state.waiting_node_id = "wait-node-42"
+    assert state.waiting_node_id == "wait-node-42"
+
+
+def test_waiting_node_id_clear() -> None:
+    """Clearing waiting_node_id (setting back to None) works correctly."""
+    state = RunState(
+        run_id="r1",
+        harness_id="h1",
+        goal_task_id="g1",
+        waiting_node_id="wait-node-42",
+    )
+    assert state.waiting_node_id == "wait-node-42"
+    state.waiting_node_id = None
+    assert state.waiting_node_id is None
+
+
+def test_waiting_node_id_serialisation_round_trip(tmp_path: Path) -> None:
+    """waiting_node_id survives a save_atomic + load round-trip."""
+    state = RunState(
+        run_id="r-wait",
+        harness_id="h-wait",
+        goal_task_id="g-wait",
+        waiting_node_id="wait-node-99",
+    )
+    target = tmp_path / "wait_state.json"
+    save_atomic(target, state)
+    loaded = load(target)
+
+    assert loaded is not None
+    assert loaded.waiting_node_id == "wait-node-99"
+
+
+def test_waiting_node_id_none_serialisation_round_trip(tmp_path: Path) -> None:
+    """waiting_node_id=None survives a save_atomic + load round-trip."""
+    state = RunState(
+        run_id="r-no-wait",
+        harness_id="h-no-wait",
+        goal_task_id="g-no-wait",
+        waiting_node_id=None,
+    )
+    target = tmp_path / "no_wait_state.json"
+    save_atomic(target, state)
+    loaded = load(target)
+
+    assert loaded is not None
+    assert loaded.waiting_node_id is None
+
+
+def test_waiting_node_id_to_dict_and_from_dict() -> None:
+    """to_dict/from_dict round-trip preserves waiting_node_id."""
+    state = RunState(
+        run_id="r1",
+        harness_id="h1",
+        goal_task_id="g1",
+        waiting_node_id="wait-abc",
+    )
+    d = state.to_dict()
+    assert d["waiting_node_id"] == "wait-abc"
+
+    restored = RunState.from_dict(d)
+    assert restored.waiting_node_id == "wait-abc"
+
+
+def test_waiting_node_id_from_dict_missing_key() -> None:
+    """from_dict gracefully handles older payloads that lack waiting_node_id."""
+    data = {
+        "run_id": "old-run",
+        "harness_id": "h1",
+        "goal_task_id": "g1",
+        "nodes_executed": {},
+        # no "waiting_node_id" key — simulates a pre-I2 persisted file
+    }
+    restored = RunState.from_dict(data)
+    assert restored.waiting_node_id is None
+
+
+def test_waiting_node_id_cleared_after_set_serialises_as_none(tmp_path: Path) -> None:
+    """After clearing waiting_node_id, the persisted file reflects None."""
+    state = RunState(
+        run_id="r-clear",
+        harness_id="h1",
+        goal_task_id="g1",
+        waiting_node_id="wait-node-77",
+    )
+    target = tmp_path / "clear_test.json"
+    save_atomic(target, state)
+
+    # Simulate executor clearing waiting_node_id on resume
+    state.waiting_node_id = None
+    save_atomic(target, state)
+
+    loaded = load(target)
+    assert loaded is not None
+    assert loaded.waiting_node_id is None
+
+
+# ---------------------------------------------------------------------------
+# NodeState status='in_progress' validity for control-flow nodes
+# ---------------------------------------------------------------------------
+
+
+def test_node_state_in_progress_is_valid() -> None:
+    """NodeState accepts status='in_progress' (valid for control-flow nodes)."""
+    ns = NodeState(status="in_progress")
+    assert ns.status == "in_progress"
+
+
+def test_node_state_in_progress_in_run_state() -> None:
+    """RunState can hold a control-flow node with status='in_progress'."""
+    state = RunState(
+        run_id="r-cf",
+        harness_id="h1",
+        goal_task_id="g1",
+        nodes_executed={
+            "decision-1": NodeState(status="in_progress"),
+        },
+    )
+    assert state.nodes_executed["decision-1"].status == "in_progress"
+
+
+def test_node_state_in_progress_round_trip(tmp_path: Path) -> None:
+    """
+    A control-flow node with status='in_progress' survives a save/load cycle
+    unchanged — the executor is responsible for reconciling it, not load().
+    """
+    state = RunState(
+        run_id="r-cf-rt",
+        harness_id="h1",
+        goal_task_id="g1",
+        nodes_executed={
+            "wait-1": NodeState(
+                status="in_progress",
+                child_task_id=None,
+                reason=None,
+            ),
+        },
+        waiting_node_id="wait-1",
+    )
+    target = tmp_path / "cf_state.json"
+    save_atomic(target, state)
+    loaded = load(target)
+
+    assert loaded is not None
+    assert loaded.nodes_executed["wait-1"].status == "in_progress"
+    assert loaded.waiting_node_id == "wait-1"
