@@ -11,6 +11,7 @@ from fastapi import Depends, FastAPI, Request, Response
 from watchfiles import awatch
 
 from .api.activity import router as activity_router
+from .api.discovery import router as discovery_router
 from .api.memory import router as memory_router
 from .api.spaces import router as spaces_router
 from .api.stats import router as stats_router
@@ -40,6 +41,9 @@ LEGACY_TASKS_DIR = DATA_DIR / "tasks"
 LEGACY_WORKSPACES_DIR = DATA_DIR / "workspaces"
 ARCHIVE_AFTER_DAYS = int(os.environ.get("CRONOS_ARCHIVE_AFTER_DAYS", "7"))
 MEMORY_PRUNE_INTERVAL = int(os.environ.get("CRONOS_MEMORY_PRUNE_INTERVAL", "3600"))
+DISCOVERY_INTERVAL_HOURS = float(os.environ.get("CRONOS_DISCOVERY_INTERVAL_HOURS", "6"))
+DISCOVERY_DB_PATH = DATA_DIR / "cronos-index.db"
+DISCOVERY_SOURCES_PATH = DATA_DIR / "tool_sources.yml"
 
 
 def _path_is_reserved(path: Path, root: Path) -> bool:
@@ -85,6 +89,35 @@ async def memory_prune_loop(
             await asyncio.wait_for(stop_event.wait(), timeout=float(MEMORY_PRUNE_INTERVAL))
         except asyncio.TimeoutError:
             pass
+
+
+async def discovery_refresh_loop(
+    db_path: Path,
+    sources_path: Path,
+    interval_hours: float,
+    stop_event: asyncio.Event,
+) -> None:
+    from .api.discovery import run_refresh_if_unlocked
+
+    while not stop_event.is_set():
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=interval_hours * 3600)
+        except asyncio.TimeoutError:
+            pass
+        if stop_event.is_set():
+            break
+        try:
+            result = await run_refresh_if_unlocked(db_path, sources_path)
+            if result is not None:
+                log.info(
+                    "Periodic discovery refresh: %d source(s), %d item(s)",
+                    result["refreshed"],
+                    len(result["items"]),
+                )
+            else:
+                log.debug("Periodic discovery refresh: skipped (locked or recent)")
+        except Exception:
+            log.exception("Error during periodic discovery refresh; will retry next cycle")
 
 
 async def watch_spaces_dir(
@@ -186,6 +219,9 @@ async def lifespan(app: FastAPI):
     memory_store = MemoryStore(DATA_DIR, SPACES_DIR)
     app.state.memory_store = memory_store
 
+    app.state.discovery_db_path = DISCOVERY_DB_PATH
+    app.state.discovery_sources_path = DISCOVERY_SOURCES_PATH
+
     worker_pool = WorkerPool(task_store, space_store, stats_store=stats_store, trace_store=trace_store, memory_store=memory_store)
     for space in space_store.list_all():
         await worker_pool.start_for_space(space.id)
@@ -203,6 +239,15 @@ async def lifespan(app: FastAPI):
     memory_pruner = asyncio.create_task(
         memory_prune_loop(memory_store, space_store, stop_event),
         name="memory_pruner",
+    )
+    discoverer = asyncio.create_task(
+        discovery_refresh_loop(
+            DISCOVERY_DB_PATH,
+            DISCOVERY_SOURCES_PATH,
+            DISCOVERY_INTERVAL_HOURS,
+            stop_event,
+        ),
+        name="discoverer",
     )
 
     # Recover in-flight runs: any task left in ACTIVE on startup gets
@@ -225,7 +270,7 @@ async def lifespan(app: FastAPI):
     finally:
         stop_event.set()
         await worker_pool.stop_all()
-        for bg_task in (watcher, archiver, memory_pruner):
+        for bg_task in (watcher, archiver, memory_pruner, discoverer):
             try:
                 await asyncio.wait_for(bg_task, timeout=5.0)
             except asyncio.TimeoutError:
@@ -244,6 +289,7 @@ app.include_router(stats_router, dependencies=_auth)
 app.include_router(traces_router, dependencies=_auth)
 app.include_router(test_reports_router, dependencies=_auth)
 app.include_router(memory_router, dependencies=_auth)
+app.include_router(discovery_router, dependencies=_auth)
 
 
 @app.get("/api/info")
