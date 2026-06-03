@@ -1,5 +1,39 @@
 # Test Coverage — cronos-development
 
+## Recent changes (2026-06-03 — tool-sources YAML loader + schema)
+
+**Overall backend**: 82.31% | **Passed**: 1340 | **Failed**: 0 | **Total**: 1340
+**Tester rounds this session**: 1 (new tests green on first run; full suite green)
+
+New module `backend/app/tools/sources.py` (`ToolSource` model + `load_sources`)
+covered to **100%** (37/37 statements) by a new file
+`backend/tests/test_tools_sources.py` (20 tests). No regressions; no module
+lost coverage.
+
+### Tests added in `backend/tests/test_tools_sources.py` (+20, NEW)
+
+- **AC1 — valid parse (6 tests)**: full multi-entry parse with all fields;
+  field defaults (`branch`/`label`=None, `enabled`=True); `enabled: false`
+  round-trips (not dropped); `sources:` null → `[]`; missing `sources` key
+  → `[]`; empty file (yaml→None) → `[]`.
+- **AC2 — invalid URL (6 tests)**: parametrized bad URLs (empty, contains
+  space, space-in-host, shell metachar `;rm -rf /`, command-subst
+  `$(whoami)`, >2048 chars) each raise `ToolSourceError`; constructor-level
+  validation; one-bad-URL-aborts-the-whole-load (no partial list); non-mapping
+  entry wraps the pydantic error with "Invalid tool source entry"; missing
+  required `url` field raises.
+- **AC3 — missing file (1 test)**: nonexistent path → `[]`.
+- **AC4 — env override (3 tests)**: `CRONOS_TOOL_SOURCES_PATH` wins over the
+  `path` argument; override pointing at a missing file → `[]` (override still
+  wins); empty-string env var is falsy and falls back to the `path` argument.
+
+An autouse fixture clears `CRONOS_TOOL_SOURCES_PATH` so only the AC4 tests
+exercise the override branch (no cross-test env leakage).
+
+---
+
+# Test Coverage — cronos-development (prior sessions)
+
 **Updated**: 2026-05-26T14:19:00Z
 **Backend (pytest)**: 862 passed, 2 failed (+9 vs prev 853 passed; 2 failed are
   pre-existing auth/health failures unrelated to this session's changes)
