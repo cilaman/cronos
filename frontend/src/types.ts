@@ -323,6 +323,35 @@ export interface PermissionEntry {
   scope: "space" | "global";
 }
 
+export type AdoptedToolStatus = "pristine" | "edited" | "evolved";
+
+export interface AdoptedTool {
+  source_url: string;
+  source_slug: string;
+  source_path: string;
+  source_sha: string;
+  adopted_at: string;
+  base_sha: string;
+  local_sha: string;
+  evolved: boolean;
+  kind: string;
+  name: string;
+  status: AdoptedToolStatus;
+}
+
+export interface AdoptionManifest {
+  source_url: string;
+  source_slug: string;
+  source_path: string;
+  source_sha: string;
+  adopted_at: string;
+  base_sha: string;
+  local_sha: string;
+  evolved: boolean;
+  kind: string;
+  name: string;
+}
+
 export interface SpaceToolsResponse {
   space_id: string;
   agents: AiToolEntry[];
@@ -332,6 +361,7 @@ export interface SpaceToolsResponse {
   hooks: HookEntry[];
   permissions: PermissionEntry[];
   has_claude_md: boolean;
+  adopted: AdoptedTool[];
 }
 
 export interface AiToolDetail extends AiToolEntry {

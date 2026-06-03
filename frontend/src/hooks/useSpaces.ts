@@ -145,6 +145,33 @@ export function useDiscoveryRefresh() {
   });
 }
 
+export function useAdoptTool(spaceId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { source_slug: string; kind: string; name: string }) => {
+      if (!spaceId) throw new Error("No space selected");
+      return api.adoptTool(spaceId, body);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["space-tools", spaceId] });
+      qc.invalidateQueries({ queryKey: ["discovery", "tools"] });
+    },
+  });
+}
+
+export function useUnadoptTool(spaceId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ kind, name }: { kind: string; name: string }) => {
+      if (!spaceId) throw new Error("No space selected");
+      return api.unadoptTool(spaceId, kind, name);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["space-tools", spaceId] });
+    },
+  });
+}
+
 export function useImportSpace() {
   const qc = useQueryClient();
   return useMutation({

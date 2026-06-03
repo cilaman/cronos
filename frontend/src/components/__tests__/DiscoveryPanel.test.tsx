@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { DiscoveredTool, ToolSource } from "../../types";
 
@@ -11,9 +11,11 @@ let mockSources: ToolSource[] = [];
 let mockTools: DiscoveredTool[] = [];
 let sourcesLoading = false;
 let toolsLoading = false;
-const mockMutate = vi.fn();
-let mockIsPending = false;
-let mockIsError = false;
+const mockRefreshMutate = vi.fn();
+let mockRefreshIsPending = false;
+let mockRefreshIsError = false;
+const mockAdoptMutate = vi.fn();
+let mockAdoptIsPending = false;
 
 vi.mock("../../hooks/useSpaces", () => ({
   useDiscoverySources: () => ({
@@ -25,10 +27,14 @@ vi.mock("../../hooks/useSpaces", () => ({
     isLoading: toolsLoading,
   }),
   useDiscoveryRefresh: () => ({
-    mutate: mockMutate,
-    isPending: mockIsPending,
-    isError: mockIsError,
-    error: mockIsError ? new Error("Network error") : null,
+    mutate: mockRefreshMutate,
+    isPending: mockRefreshIsPending,
+    isError: mockRefreshIsError,
+    error: mockRefreshIsError ? new Error("Network error") : null,
+  }),
+  useAdoptTool: () => ({
+    mutate: mockAdoptMutate,
+    isPending: mockAdoptIsPending,
   }),
 }));
 
@@ -62,8 +68,8 @@ function makeTool(overrides: Partial<DiscoveredTool> = {}): DiscoveredTool {
   };
 }
 
-function renderPanel() {
-  return render(<DiscoveryPanel />);
+function renderPanel(props: { spaceId?: string | null; adoptedKeys?: Set<string> } = {}) {
+  return render(<DiscoveryPanel {...props} />);
 }
 
 // ---------------------------------------------------------------------------
@@ -76,9 +82,10 @@ describe("DiscoveryPanel — empty state (no sources)", () => {
     mockTools = [];
     sourcesLoading = false;
     toolsLoading = false;
-    mockIsPending = false;
-    mockIsError = false;
-    mockMutate.mockReset();
+    mockRefreshIsPending = false;
+    mockRefreshIsError = false;
+    mockRefreshMutate.mockReset();
+    mockAdoptMutate.mockReset();
   });
 
   it("renders empty state when no sources configured", () => {
@@ -103,9 +110,10 @@ describe("DiscoveryPanel — sources list", () => {
     mockTools = [];
     sourcesLoading = false;
     toolsLoading = false;
-    mockIsPending = false;
-    mockIsError = false;
-    mockMutate.mockReset();
+    mockRefreshIsPending = false;
+    mockRefreshIsError = false;
+    mockRefreshMutate.mockReset();
+    mockAdoptMutate.mockReset();
   });
 
   it("renders source labels", () => {
@@ -134,11 +142,11 @@ describe("DiscoveryPanel — sources list", () => {
     renderPanel();
     const [btn] = screen.getAllByRole("button", { name: /refresh/i });
     await userEvent.click(btn);
-    expect(mockMutate).toHaveBeenCalledTimes(1);
+    expect(mockRefreshMutate).toHaveBeenCalledTimes(1);
   });
 
   it("disables all Refresh buttons while refreshing", () => {
-    mockIsPending = true;
+    mockRefreshIsPending = true;
     renderPanel();
     const buttons = screen.getAllByRole("button", { name: /refreshing/i });
     buttons.forEach((btn) => expect(btn).toBeDisabled());
@@ -156,9 +164,10 @@ describe("DiscoveryPanel — grouped tools", () => {
     ];
     sourcesLoading = false;
     toolsLoading = false;
-    mockIsPending = false;
-    mockIsError = false;
-    mockMutate.mockReset();
+    mockRefreshIsPending = false;
+    mockRefreshIsError = false;
+    mockRefreshMutate.mockReset();
+    mockAdoptMutate.mockReset();
   });
 
   it("renders all tools", () => {
@@ -209,8 +218,8 @@ describe("DiscoveryPanel — filter by kind", () => {
     ];
     sourcesLoading = false;
     toolsLoading = false;
-    mockIsPending = false;
-    mockIsError = false;
+    mockRefreshIsPending = false;
+    mockRefreshIsError = false;
   });
 
   it("shows all tools when kind is 'all'", () => {
@@ -255,8 +264,8 @@ describe("DiscoveryPanel — free-text search", () => {
     ];
     sourcesLoading = false;
     toolsLoading = false;
-    mockIsPending = false;
-    mockIsError = false;
+    mockRefreshIsPending = false;
+    mockRefreshIsError = false;
   });
 
   it("narrows results by name match", async () => {
@@ -298,8 +307,8 @@ describe("DiscoveryPanel — no tools discovered yet", () => {
     mockTools = [];
     sourcesLoading = false;
     toolsLoading = false;
-    mockIsPending = false;
-    mockIsError = false;
+    mockRefreshIsPending = false;
+    mockRefreshIsError = false;
   });
 
   it("shows 'no tools discovered' message when index is empty", () => {
@@ -314,15 +323,87 @@ describe("DiscoveryPanel — refresh mutation", () => {
     mockTools = [];
     sourcesLoading = false;
     toolsLoading = false;
-    mockIsPending = false;
-    mockIsError = false;
-    mockMutate.mockReset();
+    mockRefreshIsPending = false;
+    mockRefreshIsError = false;
+    mockRefreshMutate.mockReset();
+    mockAdoptMutate.mockReset();
   });
 
   it("shows error message when refresh fails", () => {
-    mockIsError = true;
+    mockRefreshIsError = true;
     renderPanel();
     expect(screen.getByText(/Refresh failed/i)).toBeInTheDocument();
     expect(screen.getByText(/Network error/i)).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Adopt button behaviour
+// ---------------------------------------------------------------------------
+
+describe("DiscoveryPanel — Adopt button", () => {
+  beforeEach(() => {
+    mockSources = [makeSource()];
+    mockTools = [
+      makeTool({ kind: "agent", name: "my-agent" }),
+      makeTool({ kind: "skill", name: "my-skill" }),
+    ];
+    sourcesLoading = false;
+    toolsLoading = false;
+    mockRefreshIsPending = false;
+    mockRefreshIsError = false;
+    mockRefreshMutate.mockReset();
+    mockAdoptMutate.mockReset();
+    mockAdoptIsPending = false;
+  });
+
+  it("renders Adopt button on each tool card", () => {
+    renderPanel({ spaceId: "space-1" });
+    const adoptBtns = screen.getAllByRole("button", { name: /adopt/i });
+    // 2 adopt buttons (one per tool)
+    expect(adoptBtns.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("Adopt button is disabled when no spaceId provided", () => {
+    renderPanel({ spaceId: null });
+    const adoptBtns = screen.getAllByRole("button", { name: /adopt my-agent/i });
+    expect(adoptBtns[0]).toBeDisabled();
+  });
+
+  it("Adopt button shows 'Adopted' and is disabled when tool is already adopted", () => {
+    renderPanel({
+      spaceId: "space-1",
+      adoptedKeys: new Set(["agent:my-agent"]),
+    });
+    const adoptedBtn = screen.getByRole("button", { name: /my-agent already adopted/i });
+    expect(adoptedBtn).toBeDisabled();
+    expect(adoptedBtn).toHaveTextContent("Adopted");
+  });
+
+  it("Adopt button is enabled for non-adopted tool when spaceId is set", () => {
+    renderPanel({ spaceId: "space-1", adoptedKeys: new Set(["agent:my-agent"]) });
+    // my-skill is NOT adopted — button should be enabled
+    const skillBtn = screen.getByRole("button", { name: /adopt my-skill/i });
+    expect(skillBtn).not.toBeDisabled();
+  });
+
+  it("calls adopt mutation with correct args when Adopt clicked", async () => {
+    renderPanel({ spaceId: "space-1" });
+    const btn = screen.getByRole("button", { name: /adopt my-agent/i });
+    await userEvent.click(btn);
+    expect(mockAdoptMutate).toHaveBeenCalledWith(
+      { source_slug: "github.com-example-repo", kind: "agent", name: "my-agent" },
+      expect.any(Object),
+    );
+  });
+
+  it("shows hint banner when no space is selected", () => {
+    renderPanel({ spaceId: null });
+    expect(screen.getByText(/Select a space.*to enable Adopt/i)).toBeInTheDocument();
+  });
+
+  it("does not show hint banner when space is selected", () => {
+    renderPanel({ spaceId: "space-1" });
+    expect(screen.queryByText(/Select a space.*to enable Adopt/i)).not.toBeInTheDocument();
   });
 });

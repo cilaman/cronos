@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useDiscoverySources, useDiscoveryTools, useDiscoveryRefresh } from "../hooks/useSpaces";
+import { useDiscoverySources, useDiscoveryTools, useDiscoveryRefresh, useAdoptTool } from "../hooks/useSpaces";
 import { cn } from "../utils/cn";
 import type { DiscoveredTool, ToolSource } from "../types";
 
@@ -80,8 +80,22 @@ function SourceRow({
   );
 }
 
-function DiscoveredToolCard({ tool }: { tool: DiscoveredTool }) {
+function DiscoveredToolCard({
+  tool,
+  spaceId,
+  isAdopted,
+  onAdopt,
+  isAdopting,
+}: {
+  tool: DiscoveredTool;
+  spaceId: string | null;
+  isAdopted: boolean;
+  onAdopt: () => void;
+  isAdopting: boolean;
+}) {
   const icon = KIND_ICON[tool.kind] ?? "📄";
+  const noSpace = !spaceId;
+
   return (
     <div className="rounded-md border border-hairline bg-surface-1 p-4 shadow-inset-hairline transition hover:-translate-y-px hover:border-hairline-strong hover:shadow-lift">
       <div className="mb-2 flex items-start justify-between gap-2">
@@ -100,14 +114,47 @@ function DiscoveredToolCard({ tool }: { tool: DiscoveredTool }) {
           <span className="italic text-ink-faint">No description</span>
         )}
       </p>
-      <div className="mt-3 truncate font-mono text-[10px] text-ink-faint">
-        {tool.relative_path}
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <span className="truncate font-mono text-[10px] text-ink-faint">
+          {tool.relative_path}
+        </span>
+        <button
+          type="button"
+          onClick={onAdopt}
+          disabled={isAdopted || isAdopting || noSpace}
+          title={noSpace ? "Select a space to adopt into" : isAdopted ? "Already adopted" : `Adopt into selected space`}
+          aria-label={isAdopted ? `${tool.name} already adopted` : `Adopt ${tool.name}`}
+          className={cn(
+            "shrink-0 rounded border px-2 py-0.5 font-display text-[10px] font-medium uppercase tracking-[0.1em] transition",
+            isAdopted
+              ? "border-accent/20 bg-accent/10 text-accent-bright cursor-default"
+              : noSpace || isAdopting
+                ? "border-hairline bg-surface-2 text-ink-faint cursor-not-allowed"
+                : "border-accent/30 bg-accent/10 text-accent-bright hover:bg-accent/20",
+          )}
+        >
+          {isAdopting ? "Adopting…" : isAdopted ? "Adopted" : "Adopt"}
+        </button>
       </div>
     </div>
   );
 }
 
-function KindGroup({ kind, tools }: { kind: string; tools: DiscoveredTool[] }) {
+function KindGroup({
+  kind,
+  tools,
+  spaceId,
+  adoptedKeys,
+  onAdopt,
+  adoptingKey,
+}: {
+  kind: string;
+  tools: DiscoveredTool[];
+  spaceId: string | null;
+  adoptedKeys: Set<string>;
+  onAdopt: (tool: DiscoveredTool) => void;
+  adoptingKey: string | null;
+}) {
   return (
     <section>
       <div className="mb-3 flex items-baseline gap-2">
@@ -119,9 +166,19 @@ function KindGroup({ kind, tools }: { kind: string; tools: DiscoveredTool[] }) {
         </span>
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {tools.map((t) => (
-          <DiscoveredToolCard key={`${t.source_slug}:${t.kind}:${t.name}`} tool={t} />
-        ))}
+        {tools.map((t) => {
+          const key = `${t.kind}:${t.name}`;
+          return (
+            <DiscoveredToolCard
+              key={`${t.source_slug}:${t.kind}:${t.name}`}
+              tool={t}
+              spaceId={spaceId}
+              isAdopted={adoptedKeys.has(key)}
+              onAdopt={() => onAdopt(t)}
+              isAdopting={adoptingKey === key}
+            />
+          );
+        })}
       </div>
     </section>
   );
@@ -131,18 +188,35 @@ function KindGroup({ kind, tools }: { kind: string; tools: DiscoveredTool[] }) {
 // Panel
 // ---------------------------------------------------------------------------
 
-export function DiscoveryPanel() {
+export function DiscoveryPanel({
+  spaceId = null,
+  adoptedKeys = new Set(),
+}: {
+  spaceId?: string | null;
+  adoptedKeys?: Set<string>;
+}) {
   const [kindFilter, setKindFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
+  const [adoptingKey, setAdoptingKey] = useState<string | null>(null);
 
   const { data: sources = [], isLoading: sourcesLoading } = useDiscoverySources();
   const { data: allTools = [], isLoading: toolsLoading } = useDiscoveryTools();
   const refreshMutation = useDiscoveryRefresh();
+  const adoptMutation = useAdoptTool(spaceId);
 
   const isRefreshing = refreshMutation.isPending;
 
   function handleRefresh() {
     refreshMutation.mutate();
+  }
+
+  function handleAdopt(tool: DiscoveredTool) {
+    const key = `${tool.kind}:${tool.name}`;
+    setAdoptingKey(key);
+    adoptMutation.mutate(
+      { source_slug: tool.source_slug, kind: tool.kind, name: tool.name },
+      { onSettled: () => setAdoptingKey(null) },
+    );
   }
 
   // Derived state
@@ -187,6 +261,13 @@ export function DiscoveryPanel() {
 
   return (
     <div className="space-y-6">
+      {/* Space context hint */}
+      {!spaceId && (
+        <div className="rounded-md border border-hairline bg-surface-1/60 px-4 py-2.5 text-[12px] text-ink-muted">
+          Select a space on the Installed tab to enable Adopt buttons.
+        </div>
+      )}
+
       {/* Sources */}
       <section>
         <div className="mb-3 flex items-baseline gap-2">
@@ -273,7 +354,15 @@ export function DiscoveryPanel() {
       ) : (
         <div className="space-y-8">
           {grouped.map(({ kind, tools }) => (
-            <KindGroup key={kind} kind={kind} tools={tools} />
+            <KindGroup
+              key={kind}
+              kind={kind}
+              tools={tools}
+              spaceId={spaceId}
+              adoptedKeys={adoptedKeys}
+              onAdopt={handleAdopt}
+              adoptingKey={adoptingKey}
+            />
           ))}
         </div>
       )}

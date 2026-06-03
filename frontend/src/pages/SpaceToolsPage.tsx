@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { useSpaces, useSpaceTools } from "../hooks/useSpaces";
+import { useSpaces, useSpaceTools, useUnadoptTool } from "../hooks/useSpaces";
 import { cn } from "../utils/cn";
 import { formatRelative } from "../utils/format";
-import type { AiToolEntry, HookEntry, PermissionEntry } from "../types";
+import type { AdoptedTool, AiToolEntry, HookEntry, PermissionEntry } from "../types";
 import { ToolDetailPanel } from "../components/ToolDetailPanel";
 import { DiscoveryPanel } from "../components/DiscoveryPanel";
 
@@ -16,6 +16,13 @@ const CATEGORY_ICON: Record<string, string> = {
   command: "⌘",
   skill: "⚡",
   context: "📖",
+};
+
+const KIND_ICON: Record<string, string> = {
+  agent: "🤖",
+  skill: "⚡",
+  command: "⌘",
+  hook: "🪝",
 };
 
 // ---------------------------------------------------------------------------
@@ -207,6 +214,137 @@ function PermissionsPanel({ permissions }: { permissions: PermissionEntry[] }) {
 }
 
 // ---------------------------------------------------------------------------
+// Adopted section
+// ---------------------------------------------------------------------------
+
+function StatusPill({ status }: { status: AdoptedTool["status"] }) {
+  return (
+    <span
+      className={cn(
+        "shrink-0 rounded border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.14em]",
+        status === "pristine" && "border-hairline bg-surface-2 text-ink-muted",
+        status === "edited" && "border-amber-400/30 bg-amber-400/10 text-amber-600 dark:text-amber-400",
+        status === "evolved" && "border-orange-400/30 bg-orange-400/10 text-orange-600 dark:text-orange-400",
+      )}
+      data-testid={`status-pill-${status}`}
+    >
+      {status}
+    </span>
+  );
+}
+
+function sourceLink(sourceUrl: string, sourceSha: string, sourcePath: string): string {
+  const base = sourceUrl.replace(/\.git$/, "");
+  return `${base}/tree/${sourceSha}/${sourcePath}`;
+}
+
+function AdoptedSection({
+  adopted,
+  spaceId,
+}: {
+  adopted: AdoptedTool[];
+  spaceId: string;
+}) {
+  const [confirmKey, setConfirmKey] = useState<string | null>(null);
+  const unadoptMutation = useUnadoptTool(spaceId);
+
+  function handleUnadoptClick(tool: AdoptedTool) {
+    setConfirmKey(`${tool.kind}:${tool.name}`);
+  }
+
+  function handleConfirm(tool: AdoptedTool) {
+    unadoptMutation.mutate(
+      { kind: tool.kind, name: tool.name },
+      { onSettled: () => setConfirmKey(null) },
+    );
+  }
+
+  function handleCancel() {
+    setConfirmKey(null);
+  }
+
+  return (
+    <section>
+      <SectionHeader label="Adopted" count={adopted.length} />
+      <div className="overflow-hidden rounded-md border border-hairline bg-surface-1 shadow-inset-hairline">
+        {adopted.map((tool) => {
+          const key = `${tool.kind}:${tool.name}`;
+          const isConfirming = confirmKey === key;
+          const isRemoving = unadoptMutation.isPending && confirmKey === key;
+          const icon = KIND_ICON[tool.kind] ?? "📄";
+          const link = sourceLink(tool.source_url, tool.source_sha, tool.source_path);
+
+          return (
+            <div
+              key={key}
+              className="flex items-center gap-3 border-b border-hairline px-4 py-3 last:border-b-0 hover:bg-surface-2/40"
+            >
+              <span className="shrink-0 text-[16px] leading-none" aria-hidden>
+                {icon}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-display text-[13px] font-semibold tracking-[0.04em] text-ink">
+                    {tool.name}
+                  </span>
+                  <StatusPill status={tool.status} />
+                  <span className="rounded border border-hairline bg-surface-2 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.1em] text-ink-faint">
+                    {tool.kind}
+                  </span>
+                </div>
+                <div className="mt-1 flex items-center gap-2">
+                  <span className="font-mono text-[10px] text-ink-faint">{tool.source_slug}</span>
+                  <a
+                    href={link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono text-[10px] text-accent-bright hover:underline"
+                    title={`View at ${tool.source_sha.slice(0, 7)}`}
+                  >
+                    {tool.source_sha.slice(0, 7)}
+                  </a>
+                </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                {isConfirming ? (
+                  <>
+                    <span className="font-display text-[11px] text-ink-muted">Remove?</span>
+                    <button
+                      type="button"
+                      onClick={() => handleConfirm(tool)}
+                      disabled={isRemoving}
+                      className="rounded border border-danger/30 bg-danger/10 px-2.5 py-1 font-display text-[11px] font-medium text-danger transition hover:bg-danger/20 disabled:opacity-60"
+                    >
+                      {isRemoving ? "Removing…" : "Yes, remove"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCancel}
+                      className="rounded border border-hairline px-2.5 py-1 font-display text-[11px] font-medium text-ink-muted transition hover:text-ink"
+                    >
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleUnadoptClick(tool)}
+                    aria-label={`Unadopt ${tool.name}`}
+                    className="rounded border border-hairline px-2.5 py-1 font-display text-[11px] font-medium text-ink-muted transition hover:border-danger/30 hover:bg-danger/5 hover:text-danger"
+                  >
+                    Unadopt
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -245,6 +383,13 @@ export function SpaceToolsPage() {
     ];
     return allTools.find((e) => e.name === toolName && e.category === toolCategory && e.scope === toolScope) ?? null;
   }, [tools, toolName, toolCategory, toolScope]);
+
+  // Set of adopted tool keys for the DiscoveryPanel
+  const adoptedKeys = useMemo(() => {
+    const s = new Set<string>();
+    (tools?.adopted ?? []).forEach((a) => s.add(`${a.kind}:${a.name}`));
+    return s;
+  }, [tools?.adopted]);
 
   function handleToolClick(
     entry: AiToolEntry,
@@ -351,7 +496,9 @@ export function SpaceToolsPage() {
       )}
 
       {/* Discover tab */}
-      {activeTab === "discover" && <DiscoveryPanel />}
+      {activeTab === "discover" && (
+        <DiscoveryPanel spaceId={activeSpaceId} adoptedKeys={adoptedKeys} />
+      )}
 
       {/* Installed tab */}
       {activeTab === "installed" && (
@@ -418,6 +565,11 @@ export function SpaceToolsPage() {
                   </div>
                 )}
               </div>
+
+              {/* Adopted section — above the regular tool grids */}
+              {tools.adopted.length > 0 && (
+                <AdoptedSection adopted={tools.adopted} spaceId={activeSpaceId} />
+              )}
 
               {/* Artifact sections */}
               <ToolGrid

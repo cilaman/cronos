@@ -1,5 +1,6 @@
 import type {
   Activity,
+  AdoptionManifest,
   AgentMode,
   AgentModel,
   AiToolDetail,
@@ -221,6 +222,20 @@ export const api = {
     request<SpaceToolsResponse>(`/api/spaces/${spaceId}/tools`),
   toolContent: (spaceId: string, path: string, scope: string) =>
     request<AiToolDetail>(`/api/spaces/${spaceId}/tool-content?path=${encodeURIComponent(path)}&scope=${scope}`),
+
+  // --- adoption ---
+  adoptTool: (
+    spaceId: string,
+    body: { source_slug: string; kind: string; name: string },
+  ) =>
+    request<AdoptionManifest>(`/api/spaces/${spaceId}/adopt`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  unadoptTool: (spaceId: string, kind: string, name: string) =>
+    request<void>(`/api/spaces/${spaceId}/adopt/${kind}/${name}`, {
+      method: "DELETE",
+    }),
 
   // --- discovery ---
   discoverySources: () => request<ToolSource[]>("/api/discovery/sources"),
