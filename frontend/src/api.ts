@@ -26,6 +26,42 @@ import type {
   View,
 } from "./types";
 
+// --- harness run types ---
+
+export interface RunSummary {
+  run_id: string;
+  harness_id: string;
+  status: "running" | "done" | "failed" | "cancelled";
+  triggered_at: string; // ISO-8601
+  finished_at: string | null;
+}
+
+export interface NodeState {
+  status: "pending" | "in_progress" | "done" | "failed" | "skipped";
+  child_task_id: string | null;
+  output: string | null;
+  reason: string | null;
+  started_at: string | null;
+  ended_at: string | null;
+}
+
+export interface HarnessRunState {
+  run_id: string;
+  harness_id: string;
+  goal_task_id: string;
+  status: "running" | "done" | "failed" | "cancelled";
+  nodes_executed: Record<string, NodeState>;
+  waiting_node_id: string | null;
+}
+
+export interface TriggerRunResponse {
+  run_id: string;
+  harness_id: string;
+  triggered_at: string;
+}
+
+// --- end harness run types ---
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     headers:
@@ -63,6 +99,10 @@ export function taskFileUrl(taskId: string, filePath: string, download = false):
 
 // Future mirror for space-level file manager:
 // export function spaceFileUrl(spaceId: string, filePath: string, download = false): string { ... }
+
+export function harnessRunStreamUrl(runId: string): string {
+  return `/api/harness-runs/${encodeURIComponent(runId)}/stream`;
+}
 
 export const api = {
   board: (spaceId: string | null = null, viewId: string | null = null) =>
@@ -316,4 +356,20 @@ export const api = {
     request<TestReportSummary[]>(`/api/tasks/${taskId}/test-reports`),
   taskTestReportLatest: (taskId: string) =>
     request<TestReport>(`/api/tasks/${taskId}/test-reports/latest`),
+
+  // --- harness runs ---
+  triggerHarnessRun: (spaceId: string, name: string): Promise<TriggerRunResponse> =>
+    request<TriggerRunResponse>(`/api/spaces/${spaceId}/harnesses/${encodeURIComponent(name)}/run`, {
+      method: "POST",
+      body: "{}",
+    }),
+  listHarnessRuns: (spaceId: string, name: string): Promise<RunSummary[]> =>
+    request<RunSummary[]>(`/api/spaces/${spaceId}/harnesses/${encodeURIComponent(name)}/runs`),
+  getHarnessRun: (runId: string): Promise<HarnessRunState> =>
+    request<HarnessRunState>(`/api/harness-runs/${encodeURIComponent(runId)}`),
+  cancelHarnessRun: (runId: string): Promise<{ run_id: string; status: string }> =>
+    request<{ run_id: string; status: string }>(`/api/harness-runs/${encodeURIComponent(runId)}/cancel`, {
+      method: "POST",
+      body: "{}",
+    }),
 };

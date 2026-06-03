@@ -238,6 +238,62 @@ class Worker:
         # Space-level subscribers receive run_start/run_end for all tasks in
         # this worker's space (used by the space SSE stream).
         self._space_subscribers: list[asyncio.Queue[dict]] = []
+        # Reverse-lookup cache: run_id → space_id.  Populated at startup by
+        # _rebuild_run_id_cache() and kept current via register_run().  Used by
+        # the /api/harness-runs/{run_id} endpoints (I5/I6) to resolve the space
+        # without scanning every space's harness-runs index files per request.
+        self._run_id_to_space_id: dict[str, str] = {}
+        self._rebuild_run_id_cache()
+
+    # ---- run_id cache ----
+
+    def _rebuild_run_id_cache(self) -> None:
+        """Populate _run_id_to_space_id by scanning known spaces' harness-run index files.
+
+        Called once at Worker construction time.  Safe to call again to refresh.
+        Each space stores per-harness index files at::
+
+            {DATA_DIR}/spaces/{space_id}/.cronos/harness-runs/{harness_id}-index.json
+
+        The index files are JSON arrays of RunSummary objects, each with a ``run_id``
+        field.  This method scans all ``*-index.json`` files under every space directory
+        to pre-populate the reverse-lookup cache used by GET /api/harness-runs/{run_id}.
+        Missing or malformed files are silently skipped.
+        """
+        spaces_root = DATA_DIR / "spaces"
+        if not spaces_root.is_dir():
+            return
+        import json as _json
+        for space_dir in spaces_root.iterdir():
+            if not space_dir.is_dir():
+                continue
+            space_id = space_dir.name
+            index_dir = space_dir / ".cronos" / "harness-runs"
+            if not index_dir.is_dir():
+                continue
+            for index_file in index_dir.glob("*-index.json"):
+                try:
+                    with index_file.open("r", encoding="utf-8") as fh:
+                        entries: list[dict] = _json.load(fh)
+                    for entry in entries:
+                        run_id = entry.get("run_id")
+                        if run_id:
+                            self._run_id_to_space_id[run_id] = space_id
+                except Exception:
+                    log.debug("_rebuild_run_id_cache: skipping %s (read error)", index_file)
+
+    def register_run(self, run_id: str, space_id: str) -> None:
+        """Register a new harness run in the reverse-lookup cache.
+
+        Called by the POST /run API endpoint (I5) immediately after creating the
+        index entry so that subsequent GET /api/harness-runs/{run_id} requests
+        resolve the space in O(1) without re-scanning the filesystem.
+        """
+        self._run_id_to_space_id[run_id] = space_id
+
+    def lookup_space_id(self, run_id: str) -> str | None:
+        """Return the space_id for *run_id*, or None if not in the cache."""
+        return self._run_id_to_space_id.get(run_id)
 
     # ---- public api ----
 
@@ -1171,6 +1227,12 @@ class Worker:
                 pass
 
     async def _publish(self, task_id: str, event: dict) -> None:
+        # Event ``type`` values that appear in _run_buffer:
+        #   Legacy task events: "run_start", "run_end", "run_error",
+        #     "goal_child_start", "goal_child_end", "goal_child_skipped", "pr_opened"
+        #   Harness events (added by I3): "node_transition", "edge_chosen", "run_status"
+        # Harness events are discriminated by their ``type`` field so that existing
+        # SSE consumers that only recognise legacy event names silently ignore them.
         buf = self._run_buffer.setdefault(task_id, [])
         buf.append(event)
         if len(buf) > _RUN_BUFFER_CAP:

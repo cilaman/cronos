@@ -14,6 +14,7 @@ from .api.activity import router as activity_router
 from .api.adoption import router as adoption_router
 from .api.discovery import router as discovery_router
 from .api.harnesses import router as harnesses_router
+from .api.harness_runs import harness_runs_router
 from .api.memory import router as memory_router
 from .api.spaces import router as spaces_router
 from .api.stats import router as stats_router
@@ -378,6 +379,7 @@ app.include_router(test_reports_router, dependencies=_auth)
 app.include_router(memory_router, dependencies=_auth)
 app.include_router(discovery_router, dependencies=_auth)
 app.include_router(harnesses_router, dependencies=_auth)
+app.include_router(harness_runs_router, dependencies=_auth)
 
 
 @app.get("/api/info")

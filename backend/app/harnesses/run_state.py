@@ -60,6 +60,8 @@ class NodeState:
     child_task_id: str | None = None
     output: str | None = None
     reason: str | None = None  # populated for 'skipped' and 'failed' nodes
+    started_at: str | None = None  # ISO-8601 UTC; set when node transitions to 'in_progress'
+    ended_at: str | None = None  # ISO-8601 UTC; set when node transitions to 'done'/'failed'/'skipped'
 
 
 @dataclass
@@ -70,6 +72,19 @@ class RunState:
     harness_id: str
     goal_task_id: str
     nodes_executed: dict[str, NodeState] = field(default_factory=dict)
+
+    # ------------------------------------------------------------------
+    # Run-level lifecycle status
+    # ------------------------------------------------------------------
+
+    status: str = "running"
+    """
+    Run-level lifecycle status. Values: 'running' | 'done' | 'failed' | 'cancelled'
+
+    The executor (I3) checks this before each BFS iteration and aborts if 'cancelled'.
+    Default is 'running' so legacy JSON files without this field load cleanly via
+    from_dict()'s .get("status", "running").
+    """
 
     # ------------------------------------------------------------------
     # Wait-human resume routing
@@ -109,6 +124,8 @@ class RunState:
                 child_task_id=ns.get("child_task_id"),
                 output=ns.get("output"),
                 reason=ns.get("reason"),
+                started_at=ns.get("started_at"),
+                ended_at=ns.get("ended_at"),
             )
             for node_id, ns in nodes_raw.items()
         }
@@ -118,6 +135,7 @@ class RunState:
             goal_task_id=data["goal_task_id"],
             nodes_executed=nodes,
             waiting_node_id=data.get("waiting_node_id"),
+            status=data.get("status", "running"),
         )
 
 

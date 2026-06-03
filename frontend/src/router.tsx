@@ -10,6 +10,7 @@ import { SpaceSettingsPage } from "./pages/SpaceSettingsPage";
 import { SpaceToolsPage } from "./pages/SpaceToolsPage";
 import { StatsPage } from "./pages/StatsPage";
 import { TreePage } from "./pages/TreePage";
+import { HarnessRunsPage } from "./pages/HarnessRunsPage";
 
 export function AppRoutes() {
   return (
@@ -26,6 +27,7 @@ export function AppRoutes() {
         <Route path="spaces/:spaceId/tree" element={<TreePage />} />
         <Route path="spaces/:spaceId/settings" element={<SpaceSettingsPage />} />
         <Route path="spaces/:spaceId/tools" element={<SpaceToolsPage />} />
+        <Route path="spaces/:spaceId/harnesses/:name/runs" element={<HarnessRunsPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

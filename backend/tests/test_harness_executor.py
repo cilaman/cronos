@@ -172,6 +172,10 @@ class StubWorker:
         self.finalize_calls.append((task_id, trace))
         return self.task_state
 
+    def _publish(self, task_id: str, event: dict) -> None:
+        """No-op publish for compatibility with WorkerProtocol."""
+        pass
+
 
 class FailingWorker(StubWorker):
     """Worker that fails all runs."""
@@ -1216,3 +1220,254 @@ async def test_executor_wait_timed_continues_after_sleep():
     assert result.waiting_node_id is None
     # Two agent runs: TPRE and TPOST.
     assert len(worker.run_agent_calls) == 2
+
+
+# ---------------------------------------------------------------------------
+# I3 new tests: WorkerProtocol _publish, timing, cancel guard, run_status
+# ---------------------------------------------------------------------------
+
+
+class PublishingStubWorker(StubWorker):
+    """Worker stub that also records _publish() calls for SSE event testing."""
+
+    def __init__(self, task_state: TaskState = TaskState.DONE,
+                 final_text: str = "output"):
+        super().__init__(task_state=task_state, final_text=final_text)
+        self.published_events: list[tuple[str, dict]] = []
+
+    def _publish(self, task_id: str, event: dict) -> None:
+        self.published_events.append((task_id, event))
+
+
+@pytest.mark.asyncio
+async def test_executor_publishes_node_transition_events():
+    """Executor publishes node_transition events for each agent node transition."""
+    node = HarnessNode(id="EVT1", type=NodeType.agent, position=_make_position(),
+                       ports={"out": {}}, data={"agent_ref": "ag", "prompt_template": "p"},
+                       label="EVT1")
+    harness = Harness(name="event_test", nodes=[node], edges=[])
+    space = _make_space()
+    store = _make_store_mock(space.id)
+    worker = PublishingStubWorker(task_state=TaskState.DONE, final_text="result")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with patch("app.harnesses.executor._DATA_DIR", Path(tmpdir)):
+            executor = HarnessExecutor(store, worker, _tools_resolver, event_worker=worker)
+            result = await executor.execute("run-evt", harness, space)
+
+    assert result.nodes_executed["EVT1"].status == "done"
+
+    # Collect node_transition events.
+    node_transitions = [
+        e for _, e in worker.published_events
+        if e.get("type") == "node_transition"
+    ]
+    assert len(node_transitions) >= 2, (
+        f"Expected at least 2 node_transition events (pending→in_progress, in_progress→done), "
+        f"got {len(node_transitions)}: {node_transitions}"
+    )
+
+    # First transition: pending → in_progress
+    first = next(e for e in node_transitions if e["to_status"] == "in_progress")
+    assert first["node_id"] == "EVT1"
+    assert first["from_status"] == "pending"
+    assert "timestamp" in first
+
+    # Second transition: in_progress → done
+    second = next(e for e in node_transitions if e["to_status"] == "done")
+    assert second["node_id"] == "EVT1"
+    assert second["from_status"] == "in_progress"
+    assert "timestamp" in second
+
+
+@pytest.mark.asyncio
+async def test_executor_timing_started_at_ended_at_set():
+    """After a node completes, started_at and ended_at are set as ISO-8601 strings."""
+    node = HarnessNode(id="TIM1", type=NodeType.agent, position=_make_position(),
+                       ports={"out": {}}, data={"agent_ref": "ag", "prompt_template": "p"},
+                       label="TIM1")
+    harness = Harness(name="timing_test", nodes=[node], edges=[])
+    space = _make_space()
+    store = _make_store_mock(space.id)
+    worker = StubWorker(task_state=TaskState.DONE, final_text="result")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with patch("app.harnesses.executor._DATA_DIR", Path(tmpdir)):
+            executor = HarnessExecutor(store, worker, _tools_resolver)
+            result = await executor.execute("run-timing", harness, space)
+
+    ns = result.nodes_executed["TIM1"]
+    assert ns.status == "done"
+    assert ns.started_at is not None, "started_at should be set after node completes"
+    assert ns.ended_at is not None, "ended_at should be set after node completes"
+
+    # Both should look like ISO-8601 strings ending in 'Z'.
+    assert ns.started_at.endswith("Z"), f"started_at should end with 'Z': {ns.started_at}"
+    assert ns.ended_at.endswith("Z"), f"ended_at should end with 'Z': {ns.ended_at}"
+
+    # Basic format check: starts with a year.
+    assert ns.started_at.startswith("20"), f"started_at should start with year: {ns.started_at}"
+    assert ns.ended_at.startswith("20"), f"ended_at should start with year: {ns.ended_at}"
+
+
+@pytest.mark.asyncio
+async def test_executor_cancel_guard_stops_bfs():
+    """If RunState.status is set to 'cancelled' on disk between nodes, executor stops."""
+    # Two-node linear harness: A → B.
+    a = HarnessNode(id="CA", type=NodeType.agent, position=_make_position(),
+                    ports={"out": {}}, data={"agent_ref": "ag", "prompt_template": "A"},
+                    label="CA")
+    b = HarnessNode(id="CB", type=NodeType.agent, position=_make_position(),
+                    ports={"out": {}}, data={"agent_ref": "ag", "prompt_template": "B"},
+                    label="CB")
+    edge = HarnessEdge(id="e1", source=NodeRef(node_id="CA", port_id="out"),
+                       target=NodeRef(node_id="CB", port_id="out"))
+    harness = Harness(name="cancel_test", nodes=[a, b], edges=[edge])
+    space = _make_space("cancel-space")
+    store = _make_store_mock(space.id)
+
+    # After node CA completes, we simulate a cancel write by patching the
+    # finalize_child method to write 'cancelled' status to the state file.
+    state_path_holder: list[Path] = []
+    orig_finalize_calls = [0]
+
+    class CancellingWorker(StubWorker):
+        """After first finalize, writes 'cancelled' to the run-state file."""
+        def _publish(self, task_id: str, event: dict) -> None:
+            pass  # silence
+
+        async def finalize_child(self, task_id: str, trace: RunTrace) -> TaskState:
+            orig_finalize_calls[0] += 1
+            result = await super().finalize_child(task_id, trace)
+            # After node CA finishes (first finalize call), inject a cancel.
+            if orig_finalize_calls[0] == 1 and state_path_holder:
+                state_path = state_path_holder[0]
+                if state_path.exists():
+                    import json as _json
+                    with state_path.open("r") as fh:
+                        d = _json.load(fh)
+                    d["status"] = "cancelled"
+                    import tempfile as _tmp
+                    import os as _os
+                    fd, tmp = _tmp.mkstemp(dir=state_path.parent)
+                    try:
+                        with _os.fdopen(fd, "w") as fh:
+                            fh.write(_json.dumps(d))
+                        _os.replace(tmp, state_path)
+                    except Exception:
+                        _os.unlink(tmp)
+            return result
+
+    worker = CancellingWorker(task_state=TaskState.DONE, final_text="output")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        state_dir = Path(tmpdir) / "spaces" / "cancel-space" / ".cronos" / "harness-runs"
+        state_dir.mkdir(parents=True)
+        # Capture the state path before execution.
+        state_path_holder.append(state_dir / "run-cancel.json")
+
+        with patch("app.harnesses.executor._DATA_DIR", Path(tmpdir)):
+            executor = HarnessExecutor(store, worker, _tools_resolver, event_worker=worker)
+            result = await executor.execute("run-cancel", harness, space)
+
+    # The run should be stopped; status is 'cancelled' (or the executor returned
+    # the reloaded cancelled state — either way, CB must NOT have been executed).
+    assert "CB" not in result.nodes_executed, (
+        f"Node CB should not have been executed after cancel; "
+        f"result.nodes_executed = {result.nodes_executed}"
+    )
+    # Only one finalize call — only CA ran.
+    assert orig_finalize_calls[0] == 1
+
+
+@pytest.mark.asyncio
+async def test_executor_publishes_run_status_done_on_success():
+    """Executor publishes a run_status event with status='done' on successful completion."""
+    node = HarnessNode(id="RS_N1", type=NodeType.agent, position=_make_position(),
+                       ports={"out": {}}, data={"agent_ref": "ag", "prompt_template": "p"},
+                       label="RS_N1")
+    harness = Harness(name="run_status_test", nodes=[node], edges=[])
+    space = _make_space()
+    store = _make_store_mock(space.id)
+    worker = PublishingStubWorker(task_state=TaskState.DONE, final_text="result")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with patch("app.harnesses.executor._DATA_DIR", Path(tmpdir)):
+            executor = HarnessExecutor(store, worker, _tools_resolver, event_worker=worker)
+            result = await executor.execute("run-rs-done", harness, space)
+
+    assert result.nodes_executed["RS_N1"].status == "done"
+
+    run_status_events = [
+        e for _, e in worker.published_events
+        if e.get("type") == "run_status"
+    ]
+    assert len(run_status_events) >= 1, (
+        f"Expected at least one run_status event; got {run_status_events}"
+    )
+
+    # The final run_status event must have status='done'.
+    final_run_status = run_status_events[-1]
+    assert final_run_status["status"] == "done", (
+        f"Expected final run_status to be 'done'; got {final_run_status}"
+    )
+    assert final_run_status["run_id"] == "run-rs-done"
+
+
+@pytest.mark.asyncio
+async def test_executor_worker_none_no_error():
+    """Passing no event_worker (None) does not raise AttributeError during execution."""
+    node = HarnessNode(id="NW1", type=NodeType.agent, position=_make_position(),
+                       ports={"out": {}}, data={"agent_ref": "ag", "prompt_template": "p"},
+                       label="NW1")
+    harness = Harness(name="no_worker_test", nodes=[node], edges=[])
+    space = _make_space()
+    store = _make_store_mock(space.id)
+    # Use StubWorker (not publishing) as the execution worker; no event_worker.
+    worker = StubWorker(task_state=TaskState.DONE, final_text="output")
+
+    # Should not raise even though event_worker=None (default).
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with patch("app.harnesses.executor._DATA_DIR", Path(tmpdir)):
+            executor = HarnessExecutor(store, worker, _tools_resolver)
+            result = await executor.execute("run-no-worker", harness, space)
+
+    assert result.nodes_executed["NW1"].status == "done"
+
+
+@pytest.mark.asyncio
+async def test_executor_run_status_done_updates_run_index():
+    """On successful run completion, run_index.update_run_status is called with 'done'."""
+    node = HarnessNode(id="IDX1", type=NodeType.agent, position=_make_position(),
+                       ports={"out": {}}, data={"agent_ref": "ag", "prompt_template": "p"},
+                       label="IDX1")
+    harness = Harness(name="index_test", nodes=[node], edges=[])
+    space = _make_space("idx-space")
+    store = _make_store_mock(space.id)
+    worker = StubWorker(task_state=TaskState.DONE, final_text="result")
+
+    update_calls: list[dict] = []
+
+    async def fake_update_run_status(space_dir, harness_id, run_id, status, finished_at=None):
+        update_calls.append({
+            "space_dir": space_dir,
+            "harness_id": harness_id,
+            "run_id": run_id,
+            "status": status,
+            "finished_at": finished_at,
+        })
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with patch("app.harnesses.executor._DATA_DIR", Path(tmpdir)):
+            with patch("app.harnesses.executor._run_index.update_run_status",
+                       side_effect=fake_update_run_status):
+                executor = HarnessExecutor(store, worker, _tools_resolver)
+                result = await executor.execute("run-idx", harness, space)
+
+    assert result.nodes_executed["IDX1"].status == "done"
+    assert len(update_calls) == 1, (
+        f"Expected exactly one update_run_status call; got {update_calls}"
+    )
+    assert update_calls[0]["run_id"] == "run-idx"
+    assert update_calls[0]["status"] == "done"
+    assert update_calls[0]["finished_at"] is not None

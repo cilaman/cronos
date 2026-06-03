@@ -543,3 +543,104 @@ async def test_e2e_fail_fast_halts_remaining_nodes():
     assert raw["nodes_executed"]["NB"]["status"] == "failed"
     assert raw["nodes_executed"]["NC"]["status"] == "skipped"
     assert raw["nodes_executed"]["NC"]["reason"] == "upstream_failed"
+
+
+# ---------------------------------------------------------------------------
+# Worker run_id → space_id cache tests (I4)
+# ---------------------------------------------------------------------------
+
+
+def _make_minimal_worker(tmpdir: Path) -> object:
+    """Build a minimal Worker instance using a MagicMock TaskStore and SpaceStore.
+
+    DATA_DIR is patched to *tmpdir* so _rebuild_run_id_cache() scans a clean dir.
+    """
+    from unittest.mock import MagicMock, patch
+    from app.worker import Worker
+
+    mock_store = MagicMock()
+    mock_store.spaces_dir = tmpdir / "spaces"
+
+    with patch("app.worker.DATA_DIR", tmpdir):
+        worker = Worker(store=mock_store)
+    return worker
+
+
+def test_worker_register_and_lookup_run_id(tmp_path: Path):
+    """register_run() followed by lookup_space_id() returns the registered space_id."""
+    from unittest.mock import MagicMock, patch
+    from app.worker import Worker
+
+    mock_store = MagicMock()
+    with patch("app.worker.DATA_DIR", tmp_path):
+        worker = Worker(store=mock_store)
+
+    worker.register_run("run-1", "space-abc")
+    assert worker.lookup_space_id("run-1") == "space-abc"
+
+
+def test_worker_lookup_unknown_run_id_returns_none(tmp_path: Path):
+    """lookup_space_id() returns None for a run_id never registered."""
+    from unittest.mock import MagicMock, patch
+    from app.worker import Worker
+
+    mock_store = MagicMock()
+    with patch("app.worker.DATA_DIR", tmp_path):
+        worker = Worker(store=mock_store)
+
+    assert worker.lookup_space_id("unknown-run-xyz") is None
+
+
+def test_worker_rebuild_cache_empty_when_no_index_files(tmp_path: Path):
+    """_rebuild_run_id_cache() does not raise when no harness-run index files exist."""
+    from unittest.mock import MagicMock, patch
+    from app.worker import Worker
+
+    # Create the spaces root but no harness-runs sub-dirs
+    (tmp_path / "spaces").mkdir(parents=True)
+
+    mock_store = MagicMock()
+    with patch("app.worker.DATA_DIR", tmp_path):
+        worker = Worker(store=mock_store)
+
+    # Explicit re-invocation must also be safe
+    worker._rebuild_run_id_cache()
+    assert worker.lookup_space_id("any-run") is None
+
+
+@pytest.mark.asyncio
+async def test_worker_rebuild_cache_from_index_files(tmp_path: Path):
+    """_rebuild_run_id_cache() populates the cache from existing *-index.json files.
+
+    Uses run_index.append_run() to write a realistic index file, then constructs a
+    new Worker (which calls _rebuild_run_id_cache() in __init__) and asserts that
+    lookup_space_id() finds the run_id that was written.
+    """
+    from unittest.mock import MagicMock, patch
+    from app.worker import Worker
+    from app.harnesses.run_index import RunSummary, append_run
+
+    space_id = "rebuild-test-space"
+    harness_id = "my-harness"
+    run_id = "rebuild-run-001"
+    triggered_at = "2026-06-03T00:00:00Z"
+
+    space_dir = tmp_path / "spaces" / space_id
+    space_dir.mkdir(parents=True)
+
+    summary = RunSummary(
+        run_id=run_id,
+        harness_id=harness_id,
+        status="running",
+        triggered_at=triggered_at,
+    )
+    await append_run(space_dir, harness_id, summary)
+
+    mock_store = MagicMock()
+    with patch("app.worker.DATA_DIR", tmp_path):
+        worker = Worker(store=mock_store)
+
+    assert worker.lookup_space_id(run_id) == space_id, (
+        f"Expected space_id={space_id!r} for run_id={run_id!r}; "
+        f"cache contains: {worker._run_id_to_space_id}"
+    )

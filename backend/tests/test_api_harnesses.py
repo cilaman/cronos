@@ -11,11 +11,16 @@ Endpoints tested:
   GET    /api/spaces/{space_id}/harnesses/{name}
   PUT    /api/spaces/{space_id}/harnesses/{name}
   DELETE /api/spaces/{space_id}/harnesses/{name}
+  POST   /api/spaces/{space_id}/harnesses/{name}/run
+  GET    /api/spaces/{space_id}/harnesses/{name}/runs
 
 Error cases: 404, 409, 422 (cycle, dangling edge), 401 (auth).
 """
 
 from __future__ import annotations
+
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
@@ -24,7 +29,9 @@ from fastapi import Depends, FastAPI
 from app.api.harnesses import router as harnesses_router
 from app.auth import require_auth
 from app.harnesses import HarnessStore
+from app.harnesses.run_index import RunSummary
 from app.space_storage import SpaceStore
+from app.storage import TaskStore
 
 # ---------------------------------------------------------------------------
 # Isolated test app — does NOT touch main.py (that is I5's scope)
@@ -36,12 +43,21 @@ SPACE_ID = "test-space"
 _BASE_URL = f"/api/spaces/{SPACE_ID}/harnesses"
 
 
-def _make_test_app(space_store: SpaceStore, harness_store: HarnessStore) -> FastAPI:
+def _make_test_app(
+    space_store: SpaceStore,
+    harness_store: HarnessStore,
+    task_store: "TaskStore | None" = None,
+    worker_pool: "object | None" = None,
+) -> FastAPI:
     """Create a minimal FastAPI app with only the harnesses router registered."""
     _app = FastAPI()
     _app.include_router(harnesses_router, dependencies=_auth)
     _app.state.space_store = space_store
     _app.state.harness_store = harness_store
+    if task_store is not None:
+        _app.state.store = task_store
+    if worker_pool is not None:
+        _app.state.worker_pool = worker_pool
     return _app
 
 
@@ -313,3 +329,151 @@ async def test_unauthenticated_returns_401(space_store, harness_store, monkeypat
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         resp = await client.get(_BASE_URL)
     assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# POST /{name}/run — manual trigger
+# ---------------------------------------------------------------------------
+
+
+async def test_trigger_harness_run_returns_202(space_store, harness_store, tmp_path):
+    """POST /run returns 202 with run_id and harness_id."""
+    from unittest.mock import AsyncMock, MagicMock
+    from app.models import Task, TaskState
+    from datetime import UTC, datetime
+
+    # Build a minimal mock task.
+    fake_task = MagicMock(spec=Task)
+    fake_task.id = "run-task-123"
+
+    # Mock TaskStore.create and TaskStore.transition.
+    task_store = MagicMock()
+    task_store.create = AsyncMock(return_value=fake_task)
+    task_store.transition = AsyncMock(return_value=fake_task)
+
+    # Mock worker.
+    mock_worker = MagicMock()
+    mock_worker.register_run = MagicMock()
+    mock_worker.enqueue = AsyncMock()
+    mock_worker.lookup_space_id = MagicMock(return_value=None)
+
+    # Mock WorkerPool.
+    mock_pool = MagicMock()
+    mock_pool.get = MagicMock(return_value=mock_worker)
+
+    _app = _make_test_app(space_store, harness_store, task_store=task_store, worker_pool=mock_pool)
+
+    # Create a harness first so the endpoint finds it.
+    with patch("app.api.harnesses.run_index.append_run", new_callable=AsyncMock):
+        transport = httpx.ASGITransport(app=_app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            # Create harness
+            create_resp = await client.post(_BASE_URL, json=_HARNESS_PAYLOAD)
+            assert create_resp.status_code == 201
+
+            # Trigger run
+            run_resp = await client.post(f"{_BASE_URL}/My Flow/run")
+
+    assert run_resp.status_code == 202
+    body = run_resp.json()
+    assert body["run_id"] == "run-task-123"
+    assert body["harness_id"] == "My Flow"
+    assert "triggered_at" in body
+
+
+# ---------------------------------------------------------------------------
+# GET /{name}/runs — run history list
+# ---------------------------------------------------------------------------
+
+
+async def test_list_harness_runs_empty(space_store, harness_store):
+    """GET /runs returns [] when no runs exist."""
+    _app = _make_test_app(space_store, harness_store)
+    transport = httpx.ASGITransport(app=_app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        # Create harness first
+        await client.post(_BASE_URL, json=_HARNESS_PAYLOAD)
+        resp = await client.get(f"{_BASE_URL}/My Flow/runs")
+
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+
+async def test_list_harness_runs_after_trigger(space_store, harness_store, tmp_path):
+    """GET /runs returns the triggered run summary."""
+    from unittest.mock import AsyncMock, MagicMock
+    from app.models import Task, TaskState
+
+    fake_task = MagicMock(spec=Task)
+    fake_task.id = "run-abc"
+
+    task_store = MagicMock()
+    task_store.create = AsyncMock(return_value=fake_task)
+    task_store.transition = AsyncMock(return_value=fake_task)
+
+    mock_worker = MagicMock()
+    mock_worker.register_run = MagicMock()
+    mock_worker.enqueue = AsyncMock()
+    mock_worker.lookup_space_id = MagicMock(return_value=None)
+
+    mock_pool = MagicMock()
+    mock_pool.get = MagicMock(return_value=mock_worker)
+
+    _app = _make_test_app(space_store, harness_store, task_store=task_store, worker_pool=mock_pool)
+
+    transport = httpx.ASGITransport(app=_app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        await client.post(_BASE_URL, json=_HARNESS_PAYLOAD)
+        # Trigger a real run (with real run_index writing to tmp space_dir).
+        await client.post(f"{_BASE_URL}/My Flow/run")
+        resp = await client.get(f"{_BASE_URL}/My Flow/runs")
+
+    assert resp.status_code == 200
+    runs = resp.json()
+    assert len(runs) == 1
+    assert runs[0]["run_id"] == "run-abc"
+    assert runs[0]["harness_id"] == "My Flow"
+    assert runs[0]["status"] == "running"
+
+
+# ---------------------------------------------------------------------------
+# DELETE — active run guard
+# ---------------------------------------------------------------------------
+
+
+async def test_delete_harness_with_no_runs(space_store, harness_store):
+    """DELETE proceeds when read_index returns [] (no index file yet)."""
+    _app = _make_test_app(space_store, harness_store)
+    transport = httpx.ASGITransport(app=_app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        await client.post(_BASE_URL, json=_HARNESS_PAYLOAD)
+        resp = await client.delete(f"{_BASE_URL}/My Flow")
+
+    # Should succeed because read_index returns [] when file absent.
+    assert resp.status_code == 204
+
+
+async def test_delete_harness_blocked_when_run_active(space_store, harness_store):
+    """DELETE returns 409 when a run is currently running."""
+    _app = _make_test_app(space_store, harness_store)
+
+    # Seed a running run in the index.
+    from app.harnesses import run_index as ri
+    space_dir = space_store.spaces_dir / SPACE_ID
+    summary = RunSummary(
+        run_id="active-run-1",
+        harness_id="My Flow",
+        status="running",
+        triggered_at="2026-01-01T00:00:00Z",
+    )
+    await ri.append_run(space_dir, "My Flow", summary)
+
+    transport = httpx.ASGITransport(app=_app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        await client.post(_BASE_URL, json=_HARNESS_PAYLOAD)
+        resp = await client.delete(f"{_BASE_URL}/My Flow")
+
+    assert resp.status_code == 409
+    body = resp.json()
+    assert "active_run_ids" in body["detail"]
+    assert "active-run-1" in body["detail"]["active_run_ids"]

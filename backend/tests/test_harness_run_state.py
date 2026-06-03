@@ -507,3 +507,165 @@ def test_node_state_in_progress_round_trip(tmp_path: Path) -> None:
     assert loaded is not None
     assert loaded.nodes_executed["wait-1"].status == "in_progress"
     assert loaded.waiting_node_id == "wait-1"
+
+
+# ---------------------------------------------------------------------------
+# NodeState.started_at / ended_at — new timing fields (I1)
+# ---------------------------------------------------------------------------
+
+
+def test_node_state_started_at_ended_at_defaults() -> None:
+    """New NodeState instances have started_at=None and ended_at=None by default."""
+    ns = NodeState(status="pending")
+    assert ns.started_at is None
+    assert ns.ended_at is None
+
+
+def test_node_state_started_at_ended_at_round_trip(tmp_path: Path) -> None:
+    """started_at and ended_at values survive a save_atomic + load round-trip."""
+    state = RunState(
+        run_id="r-timing",
+        harness_id="h1",
+        goal_task_id="g1",
+        nodes_executed={
+            "node-timed": NodeState(
+                status="done",
+                started_at="2026-06-01T10:00:00Z",
+                ended_at="2026-06-01T10:05:30Z",
+            ),
+        },
+    )
+    target = tmp_path / "timing_state.json"
+    save_atomic(target, state)
+    loaded = load(target)
+
+    assert loaded is not None
+    ns = loaded.nodes_executed["node-timed"]
+    assert ns.started_at == "2026-06-01T10:00:00Z"
+    assert ns.ended_at == "2026-06-01T10:05:30Z"
+
+
+def test_node_state_timing_backwards_compat() -> None:
+    """from_dict on legacy JSON (no started_at/ended_at keys) gives None defaults."""
+    legacy_node_data = {
+        "status": "done",
+        "child_task_id": "ct-legacy",
+        "output": "legacy output",
+        "reason": None,
+        # no started_at, no ended_at — simulates pre-I1 persisted file
+    }
+    legacy_data = {
+        "run_id": "legacy-run",
+        "harness_id": "h-legacy",
+        "goal_task_id": "g-legacy",
+        "nodes_executed": {"n1": legacy_node_data},
+    }
+    restored = RunState.from_dict(legacy_data)
+    ns = restored.nodes_executed["n1"]
+    assert ns.started_at is None
+    assert ns.ended_at is None
+
+
+# ---------------------------------------------------------------------------
+# RunState.status — new run-level lifecycle field (I1)
+# ---------------------------------------------------------------------------
+
+
+def test_run_state_status_defaults_to_running() -> None:
+    """New RunState instances have status='running' by default."""
+    state = RunState(
+        run_id="r-status",
+        harness_id="h1",
+        goal_task_id="g1",
+    )
+    assert state.status == "running"
+
+
+def test_run_state_status_round_trip(tmp_path: Path) -> None:
+    """status='cancelled' survives a save_atomic + load round-trip."""
+    state = RunState(
+        run_id="r-cancelled",
+        harness_id="h1",
+        goal_task_id="g1",
+        status="cancelled",
+    )
+    target = tmp_path / "cancelled_state.json"
+    save_atomic(target, state)
+    loaded = load(target)
+
+    assert loaded is not None
+    assert loaded.status == "cancelled"
+
+
+def test_run_state_status_backwards_compat() -> None:
+    """from_dict on legacy JSON (no 'status' key) gives status='running'."""
+    legacy_data = {
+        "run_id": "old-run",
+        "harness_id": "h1",
+        "goal_task_id": "g1",
+        "nodes_executed": {},
+        # no "status" key — simulates a pre-I1 persisted file
+    }
+    restored = RunState.from_dict(legacy_data)
+    assert restored.status == "running"
+
+
+# ---------------------------------------------------------------------------
+# Full round-trip with all new fields (I1)
+# ---------------------------------------------------------------------------
+
+
+def test_full_run_state_with_timing_and_status(tmp_path: Path) -> None:
+    """Full round-trip with started_at, ended_at, and run-level status all set."""
+    state = RunState(
+        run_id="r-full-new",
+        harness_id="h-full",
+        goal_task_id="g-full",
+        status="done",
+        nodes_executed={
+            "node-a": NodeState(
+                status="done",
+                child_task_id="ct-a",
+                output="result a",
+                started_at="2026-06-01T09:00:00Z",
+                ended_at="2026-06-01T09:02:00Z",
+            ),
+            "node-b": NodeState(
+                status="failed",
+                child_task_id="ct-b",
+                reason="timeout",
+                started_at="2026-06-01T09:02:05Z",
+                ended_at="2026-06-01T09:03:00Z",
+            ),
+            "node-c": NodeState(
+                status="skipped",
+                reason="upstream_failed",
+            ),
+        },
+        waiting_node_id=None,
+    )
+    target = tmp_path / "full_new_state.json"
+    save_atomic(target, state)
+    loaded = load(target)
+
+    assert loaded is not None
+    assert loaded.run_id == "r-full-new"
+    assert loaded.status == "done"
+
+    na = loaded.nodes_executed["node-a"]
+    assert na.status == "done"
+    assert na.child_task_id == "ct-a"
+    assert na.output == "result a"
+    assert na.started_at == "2026-06-01T09:00:00Z"
+    assert na.ended_at == "2026-06-01T09:02:00Z"
+
+    nb = loaded.nodes_executed["node-b"]
+    assert nb.status == "failed"
+    assert nb.reason == "timeout"
+    assert nb.started_at == "2026-06-01T09:02:05Z"
+    assert nb.ended_at == "2026-06-01T09:03:00Z"
+
+    nc = loaded.nodes_executed["node-c"]
+    assert nc.status == "skipped"
+    assert nc.started_at is None
+    assert nc.ended_at is None

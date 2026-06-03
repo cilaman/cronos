@@ -50,6 +50,7 @@ from __future__ import annotations
 
 import logging
 from collections import deque
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Protocol, runtime_checkable
 
@@ -63,10 +64,16 @@ from .brief_composer import compose_brief
 from .decision import evaluate_decision
 from .interpolate import interpolate
 from .model import Harness, HarnessEdge, HarnessNode, NodeType
+from . import run_index as _run_index
 from .run_state import NodeState, RunState, load, save_atomic
 from .wait import WaitAction, enter_wait, await_timed_wait
 
 _DATA_DIR = Path(os.environ.get("CRONOS_DATA_DIR", "/data"))
+
+
+def _utcnow_iso() -> str:
+    """Return the current UTC time as an ISO-8601 string with trailing 'Z'."""
+    return datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z"
 
 log = logging.getLogger(__name__)
 
@@ -98,6 +105,21 @@ class WorkerProtocol(Protocol):
 
         The executor uses the returned state to decide whether to continue
         (DONE) or halt with fail-fast (any other state).
+        """
+        ...
+
+    def _publish(self, task_id: str, event: dict) -> None:
+        """Publish an event dict to all SSE subscribers for *task_id*.
+
+        Event types used by the executor:
+        - ``{"type": "node_transition", "node_id": ..., "from_status": ...,
+                "to_status": ..., "timestamp": ...}``
+        - ``{"type": "edge_chosen", "from_node": ..., "to_node": ...,
+                "timestamp": ...}``
+        - ``{"type": "run_status", "run_id": ..., "status": ...,
+                "timestamp": ...}``
+
+        If the worker is None (unit-test mode), the executor skips the call.
         """
         ...
 
@@ -230,6 +252,11 @@ class HarnessExecutor:
     tools_resolver:
         Callable ``(space_id: str, agent_ref: str) -> AiToolEntry | None``
         used to resolve agent/skill references to their AiToolEntry.
+    event_worker:
+        Optional object that provides ``_publish(task_id, event)`` for
+        broadcasting SSE events.  Defaults to None (silent mode for tests
+        and legacy callers that have not been wired to the Worker yet).
+        When None, all ``_publish`` calls are silently skipped.
     """
 
     def __init__(
@@ -237,10 +264,12 @@ class HarnessExecutor:
         store: TaskStore,
         worker_protocol: WorkerProtocol,
         tools_resolver: Callable,
+        event_worker: "WorkerProtocol | None" = None,
     ) -> None:
         self.store = store
         self.worker = worker_protocol
         self.tools_resolver = tools_resolver
+        self._worker = event_worker  # may be None; used only for _publish()
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -275,6 +304,7 @@ class HarnessExecutor:
         run_state_path: Path | None = (
             _DATA_DIR / "spaces" / space.id / ".cronos" / "harness-runs" / f"{run_goal_id}.json"
         )
+        space_dir = _DATA_DIR / "spaces" / space.id
 
         # ------------------------------------------------------------------
         # Load or initialise run state (resume support)
@@ -293,6 +323,14 @@ class HarnessExecutor:
             harness_id=harness_id,
             goal_task_id=run_goal_id,
         )
+
+        # Publish run_status=running event to signal execution start.
+        self._publish_event(run_goal_id, {
+            "type": "run_status",
+            "run_id": run_goal_id,
+            "status": "running",
+            "timestamp": _utcnow_iso(),
+        })
 
         # ------------------------------------------------------------------
         # Reconcile in_progress Agent nodes before execution begins.
@@ -400,6 +438,33 @@ class HarnessExecutor:
             node_id = ready_queue.popleft()
             in_queue.discard(node_id)
 
+            # ------------------------------------------------------------------
+            # Cancel-race guard: reload RunState from disk and check for
+            # cancellation before processing each node.  This prevents the
+            # executor from overwriting a 'cancelled' status set by the cancel
+            # handler (I6) between two node executions.
+            # ------------------------------------------------------------------
+            if run_state_path is not None:
+                try:
+                    reloaded = load(run_state_path)
+                    if reloaded is not None and reloaded.status == "cancelled":
+                        log.info(
+                            "Run %r is cancelled (detected at BFS boundary); stopping.",
+                            run_goal_id,
+                        )
+                        self._publish_event(run_goal_id, {
+                            "type": "run_status",
+                            "run_id": run_goal_id,
+                            "status": "cancelled",
+                            "timestamp": _utcnow_iso(),
+                        })
+                        return reloaded
+                except (ValueError, OSError) as exc:
+                    log.warning(
+                        "Could not reload run state for cancel check (%s); continuing.",
+                        exc,
+                    )
+
             # Skip nodes already completed from a prior run.
             existing_ns = state.nodes_executed.get(node_id)
             if existing_ns is not None and existing_ns.status in ("done", "skipped", "failed"):
@@ -414,10 +479,19 @@ class HarnessExecutor:
 
             # Fail-fast: upstream failure marks remaining nodes as skipped.
             if upstream_failed:
+                now = _utcnow_iso()
                 state.nodes_executed[node_id] = NodeState(
                     status="skipped",
                     reason="upstream_failed",
+                    ended_at=now,
                 )
+                self._publish_event(run_goal_id, {
+                    "type": "node_transition",
+                    "node_id": node_id,
+                    "from_status": "pending",
+                    "to_status": "skipped",
+                    "timestamp": now,
+                })
                 _maybe_save(state, run_state_path)
                 # Enqueue successors so they can also be skipped.
                 self._enqueue_successors(
@@ -460,6 +534,13 @@ class HarnessExecutor:
                     )
                     if chosen_edge is not None:
                         tgt = chosen_edge.target.node_id
+                        # Publish edge_chosen event.
+                        self._publish_event(run_goal_id, {
+                            "type": "edge_chosen",
+                            "from_node": node_id,
+                            "to_node": tgt,
+                            "timestamp": _utcnow_iso(),
+                        })
                         if tgt not in state.nodes_executed and tgt not in in_queue:
                             ready_queue.append(tgt)
                             in_queue.add(tgt)
@@ -502,16 +583,93 @@ class HarnessExecutor:
             else:
                 # Unknown node type — log and skip.
                 log.warning("Node %s has unknown type %r; skipping.", node_id, node.type)
+                now = _utcnow_iso()
                 state.nodes_executed[node_id] = NodeState(
                     status="skipped",
                     reason=f"unknown_node_type:{node.type}",
+                    ended_at=now,
                 )
+                self._publish_event(run_goal_id, {
+                    "type": "node_transition",
+                    "node_id": node_id,
+                    "from_status": "pending",
+                    "to_status": "skipped",
+                    "timestamp": now,
+                })
                 _maybe_save(state, run_state_path)
                 self._enqueue_successors(
                     node_id, successors, state, in_degree, in_queue, ready_queue
                 )
 
+        # ------------------------------------------------------------------
+        # Terminal run state: determine done vs failed and update index.
+        # ------------------------------------------------------------------
+        final_status = "failed" if upstream_failed else "done"
+        now = _utcnow_iso()
+
+        # Load-merge-save: reload from disk to avoid overwriting a concurrent
+        # 'cancelled' write before setting the terminal run-level status.
+        if run_state_path is not None:
+            try:
+                reloaded_final = load(run_state_path)
+                if reloaded_final is not None:
+                    if reloaded_final.status == "cancelled":
+                        log.info(
+                            "Run %r was cancelled during final BFS drain; not overwriting.",
+                            run_goal_id,
+                        )
+                        self._publish_event(run_goal_id, {
+                            "type": "run_status",
+                            "run_id": run_goal_id,
+                            "status": "cancelled",
+                            "timestamp": now,
+                        })
+                        return reloaded_final
+                    # Merge node results into the reloaded state.
+                    for nid, ns in state.nodes_executed.items():
+                        reloaded_final.nodes_executed[nid] = ns
+                    reloaded_final.status = final_status
+                    reloaded_final.waiting_node_id = state.waiting_node_id
+                    state = reloaded_final
+            except (ValueError, OSError) as exc:
+                log.warning(
+                    "Could not reload run state for terminal merge (%s); using in-memory state.",
+                    exc,
+                )
+
+        state.status = final_status
+        _maybe_save(state, run_state_path)
+
+        # Update the run index with the terminal status.
+        try:
+            await _run_index.update_run_status(
+                space_dir, harness_id, run_goal_id,
+                status=final_status, finished_at=now,
+            )
+        except Exception:
+            log.exception(
+                "Failed to update run index for %s (status=%s); continuing.",
+                run_goal_id, final_status,
+            )
+
+        # Publish terminal run_status event.
+        self._publish_event(run_goal_id, {
+            "type": "run_status",
+            "run_id": run_goal_id,
+            "status": final_status,
+            "timestamp": now,
+        })
+
         return state
+
+    # ------------------------------------------------------------------
+    # Event publishing helper
+    # ------------------------------------------------------------------
+
+    def _publish_event(self, run_id: str, event: dict) -> None:
+        """Publish *event* via the event worker's _publish(), if one is set."""
+        if self._worker is not None:
+            self._worker._publish(run_id, event)
 
     # ------------------------------------------------------------------
     # BFS helper — enqueue successors whose runtime in-degree reaches 0
@@ -609,20 +767,38 @@ class HarnessExecutor:
             )
         except Exception as exc:
             log.exception("Failed to create child task for node %s", node_id)
+            now = _utcnow_iso()
             state.nodes_executed[node_id] = NodeState(
                 status="failed",
                 reason=f"child_task_create_error: {exc}",
+                ended_at=now,
             )
+            self._publish_event(run_goal_id, {
+                "type": "node_transition",
+                "node_id": node_id,
+                "from_status": "pending",
+                "to_status": "failed",
+                "timestamp": now,
+            })
             _maybe_save(state, run_state_path)
             return False, None, None
 
         child_task_id = child_task.id
 
         # 5. Mark node in_progress and persist before running agent
+        started_at = _utcnow_iso()
         state.nodes_executed[node_id] = NodeState(
             status="in_progress",
             child_task_id=child_task_id,
+            started_at=started_at,
         )
+        self._publish_event(run_goal_id, {
+            "type": "node_transition",
+            "node_id": node_id,
+            "from_status": "pending",
+            "to_status": "in_progress",
+            "timestamp": started_at,
+        })
         _maybe_save(state, run_state_path)
 
         # 6. Run agent via WorkerProtocol
@@ -634,11 +810,33 @@ class HarnessExecutor:
             )
         except Exception as exc:
             log.exception("run_agent failed for node %s (child %s)", node_id, child_task_id)
+            ended_at = _utcnow_iso()
+            # Load-merge-save to avoid overwriting a concurrent cancel.
+            if run_state_path is not None:
+                try:
+                    reloaded = load(run_state_path)
+                    if reloaded is not None and reloaded.status == "cancelled":
+                        return False, None, child_task_id
+                    if reloaded is not None:
+                        state.nodes_executed = reloaded.nodes_executed
+                        if reloaded.status not in ("done", "failed", "cancelled"):
+                            state.status = reloaded.status
+                except (ValueError, OSError):
+                    pass
             state.nodes_executed[node_id] = NodeState(
                 status="failed",
                 child_task_id=child_task_id,
                 reason=f"run_agent_error: {exc}",
+                started_at=started_at,
+                ended_at=ended_at,
             )
+            self._publish_event(run_goal_id, {
+                "type": "node_transition",
+                "node_id": node_id,
+                "from_status": "in_progress",
+                "to_status": "failed",
+                "timestamp": ended_at,
+            })
             _maybe_save(state, run_state_path)
             return False, None, child_task_id
 
@@ -647,15 +845,58 @@ class HarnessExecutor:
             new_state = await self.worker.finalize_child(child_task_id, trace)
         except Exception as exc:
             log.exception("finalize_child failed for node %s", node_id)
+            ended_at = _utcnow_iso()
+            if run_state_path is not None:
+                try:
+                    reloaded = load(run_state_path)
+                    if reloaded is not None and reloaded.status == "cancelled":
+                        return False, None, child_task_id
+                    if reloaded is not None:
+                        state.nodes_executed = reloaded.nodes_executed
+                        if reloaded.status not in ("done", "failed", "cancelled"):
+                            state.status = reloaded.status
+                except (ValueError, OSError):
+                    pass
             state.nodes_executed[node_id] = NodeState(
                 status="failed",
                 child_task_id=child_task_id,
                 reason=f"finalize_child_error: {exc}",
+                started_at=started_at,
+                ended_at=ended_at,
             )
+            self._publish_event(run_goal_id, {
+                "type": "node_transition",
+                "node_id": node_id,
+                "from_status": "in_progress",
+                "to_status": "failed",
+                "timestamp": ended_at,
+            })
             _maybe_save(state, run_state_path)
             return False, None, child_task_id
 
         # 8. Determine node outcome
+        ended_at = _utcnow_iso()
+        # Load-merge-save discipline: reload before writing terminal node state.
+        if run_state_path is not None:
+            try:
+                reloaded = load(run_state_path)
+                if reloaded is not None and reloaded.status == "cancelled":
+                    log.info(
+                        "Run %r cancelled after node %r completed; not persisting result.",
+                        run_goal_id, node_id,
+                    )
+                    return False, None, child_task_id
+                if reloaded is not None:
+                    # Preserve any concurrent writes to other nodes.
+                    state.nodes_executed = reloaded.nodes_executed
+                    if reloaded.status not in ("done", "failed", "cancelled"):
+                        state.status = reloaded.status
+            except (ValueError, OSError) as exc:
+                log.warning(
+                    "Could not reload run state post-node (%s); continuing with in-memory state.",
+                    exc,
+                )
+
         if new_state == TaskState.DONE:
             output_value = trace.final_text_snippet if trace else ""
             scope[node_id] = output_value
@@ -663,7 +904,16 @@ class HarnessExecutor:
                 status="done",
                 child_task_id=child_task_id,
                 output=output_value,
+                started_at=started_at,
+                ended_at=ended_at,
             )
+            self._publish_event(run_goal_id, {
+                "type": "node_transition",
+                "node_id": node_id,
+                "from_status": "in_progress",
+                "to_status": "done",
+                "timestamp": ended_at,
+            })
             _maybe_save(state, run_state_path)
             log.info("Node %s completed successfully.", node_id)
             return True, output_value, child_task_id
@@ -673,7 +923,16 @@ class HarnessExecutor:
                 status="failed",
                 child_task_id=child_task_id,
                 reason=f"child_task_ended_in_{new_state.value}",
+                started_at=started_at,
+                ended_at=ended_at,
             )
+            self._publish_event(run_goal_id, {
+                "type": "node_transition",
+                "node_id": node_id,
+                "from_status": "in_progress",
+                "to_status": "failed",
+                "timestamp": ended_at,
+            })
             _maybe_save(state, run_state_path)
             log.warning(
                 "Node %s failed (child %s ended in %s); activating fail-fast.",
