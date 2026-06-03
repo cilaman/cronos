@@ -160,7 +160,7 @@ function ChildRow({
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onOpenTask?.(child.id); }}
-          className="flex flex-1 items-center gap-2 rounded px-1 py-1.5 text-left transition hover:bg-surface-3 focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+          className="flex min-w-0 flex-1 items-center gap-2 rounded px-1 py-1.5 text-left transition hover:bg-surface-3 focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
         >
           <span
             className={cn(
