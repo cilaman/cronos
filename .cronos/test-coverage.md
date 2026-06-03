@@ -1,5 +1,49 @@
 # Test Coverage — cronos-development
 
+**Updated**: 2026-06-03T11:42:48Z
+**Overall**: 82.52%  (+0.35% vs previous run 2026-06-03 tool-sources)
+**Passed**: 1361 | **Failed**: 0 | **Errors**: 0 | **Total**: 1361
+**Tester rounds this session**: 1 (new tests green first run; full suite green, no regressions)
+
+## Recent changes (2026-06-03 — A2 Discovery module: clone + walk + parse)
+
+Task A2 of Arc 5. New module `backend/app/tools/discovery.py` (clone/refresh/walk +
+`DiscoveredItem`, `_make_slug`) and refactor of the scanner helpers out of
+`api/tools.py` into the shared `backend/app/tools/scanner.py`.
+
+- `app/tools/discovery.py`: **100%** (79/79 statements)
+- `app/tools/scanner.py`: **94%** (shared single source of truth)
+- `app/api/tools.py`: 84% (now imports scanner helpers; no duplicate impls)
+- No module lost coverage; full suite green.
+
+### Tests added in `backend/tests/test_tools_discovery.py` (+18 funcs / 21 cases, NEW)
+
+- **`_make_slug` (3 funcs / 6 cases)**: https/http/ssh-scp form → safe slug;
+  `.git` suffix stripped; collapses unsafe-char runs and trims dashes;
+  every output char is filesystem-safe.
+- **`clone_source` (3)**: shallow `clone --depth 1` invoked with dest as last
+  arg; `--branch` passed when `source.branch` set; existing `.git` short-circuits
+  (no re-clone).
+- **`refresh_source` (3)**: existing clone → `fetch` then `reset --hard FETCH_HEAD`
+  (never `clone`); no-branch falls back to `HEAD`; missing clone delegates to clone.
+- **`walk_source` (7)**: returns all four kinds {agent, skill, command, hook};
+  agent/skill/hook metadata (name, description, relative_path, source_url/slug/sha);
+  dir-based skill uses directory name; no `.claude/` → empty without touching git;
+  git-unavailable fallback (slug=dir name, sha=""); hook command truncated to 200,
+  wildcard matcher → `Event:*`.
+- **Single-source-of-truth guard (1)**: asserts `api_tools._scan_category` etc.
+  are the *same objects* as `scanner.*` — catches re-introduced duplicate impls.
+- **DiscoveredItem (1)**: dataclass fields/defaults.
+
+Boundaries mocked: `app.tools.discovery._run` / `_run_or_raise` / `_auth_env`
+(git subprocess boundary); `DISCOVERY_BASE` monkeypatched to `tmp_path`. `walk_source`
+exercises real `.claude/` fixture dirs (tmp_path) so scanner parsing is real I/O.
+
+## Suspected flakes
+- none this session
+
+---
+
 ## Recent changes (2026-06-03 — tool-sources YAML loader + schema)
 
 **Overall backend**: 82.31% | **Passed**: 1340 | **Failed**: 0 | **Total**: 1340
