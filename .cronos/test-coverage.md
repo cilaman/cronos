@@ -1,9 +1,36 @@
 # Test Coverage — cronos-development
 
-**Updated**: 2026-06-03T09:08:00Z
-**Overall**: 82.62%  (+0.10% vs previous run 2026-06-03 A2-discovery)
-**Passed**: 1372 | **Failed**: 0 | **Errors**: 0 | **Skipped**: 0 | **Total**: 1372
-**Tester rounds this session**: 1 (new tests green first run; full suite green, no regressions)
+**Updated**: 2026-06-03T12:44:54Z
+**Overall**: 82.87%  (+0.25% vs previous run 2026-06-03 A3-index)
+**Passed**: 1417 | **Failed**: 0 | **Errors**: 0 | **Skipped**: 0 | **Total**: 1417
+**Tester rounds this session**: 2 (1 wrong-assertion fix; full suite green, no regressions)
+
+## Recent changes (2026-06-03 — B2 Adopt/Unadopt/List-Adopted API)
+
+Task B2 of Arc 5. New file `backend/app/api/adoption.py` (POST adopt / DELETE
+unadopt) plus the `adopted` branch of `GET /api/spaces/{id}/tools` in
+`api/tools.py` (`_scan_adopted` + `_derive_status`), backed by `AdoptedToolEntry`
+in `models.py`.
+
+- `app/api/adoption.py`: **100%** (35/35 statements) — new test file
+  `backend/tests/test_api_adoption.py`, 12 tests.
+- `app/api/tools.py`: 83% (adopted branch fully covered; remaining misses are the
+  unrelated `tool-content` endpoint).
+- adopt/unadopt endpoints tested by monkeypatching `app.api.adoption.adopt` /
+  `unadopt` (the API-module boundary); tools/adopted tests use real manifest.yml
+  round-trips + `recompute_local_sha` in the tmp space dir.
+
+### Behavior finding (status derivation)
+`recompute_local_sha` couples `evolved` to drift: it sets
+`evolved = (local_sha != base_sha)`. Because `_derive_status` checks `evolved`
+first, an edited tool surfaces as status=**"evolved"** after recompute, never
+"edited". The "edited" status branch (`local_sha != base_sha` AND `evolved is
+False`) is only reachable for a manifest written with that exact state and is
+not produced by `recompute_local_sha`. Both paths are now pinned by tests
+(`test_tools_local_drift_without_evolved_shows_edited` and
+`test_tools_recompute_after_edit_marks_evolved`). If the product intent is that
+a plain local edit should read as "edited" (not "evolved"), this coupling in
+`recompute_local_sha`/`_derive_status` is a likely bug to revisit.
 
 ## Recent changes (2026-06-03 — A3 discovered_tools SQLite index/upsert)
 

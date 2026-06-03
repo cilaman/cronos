@@ -6,8 +6,9 @@ from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request
 
-from ..models import AiToolDetail, AiToolEntry, SpaceToolsResponse
+from ..models import AdoptedToolEntry, AiToolDetail, AiToolEntry, SpaceToolsResponse
 from ..space_storage import SpaceStore
+from ..tools.adoption import _read_manifest
 from ..tools.scanner import (
     _extract_description,
     _mtime_iso,
@@ -56,6 +57,49 @@ def _scan_context(claude_dir: Path, scope: str) -> list[AiToolEntry]:
     return entries
 
 
+def _derive_status(evolved: bool, local_sha: str, base_sha: str) -> str:
+    if evolved:
+        return "evolved"
+    if local_sha != base_sha:
+        return "edited"
+    return "pristine"
+
+
+def _scan_adopted(space_dir: Path) -> list[AdoptedToolEntry]:
+    tools_dir = space_dir / ".cronos" / "tools"
+    if not tools_dir.is_dir():
+        return []
+    entries: list[AdoptedToolEntry] = []
+    for kind_dir in sorted(tools_dir.iterdir()):
+        if not kind_dir.is_dir() or kind_dir.name.startswith("."):
+            continue
+        for item_dir in sorted(kind_dir.iterdir()):
+            if not item_dir.is_dir():
+                continue
+            manifest_path = item_dir / "manifest.yml"
+            if not manifest_path.is_file():
+                continue
+            try:
+                m = _read_manifest(manifest_path)
+            except Exception:
+                log.warning("Failed to read manifest at %s", manifest_path)
+                continue
+            entries.append(AdoptedToolEntry(
+                source_url=m.source_url,
+                source_slug=m.source_slug,
+                source_path=m.source_path,
+                source_sha=m.source_sha,
+                adopted_at=m.adopted_at,
+                base_sha=m.base_sha,
+                local_sha=m.local_sha,
+                evolved=m.evolved,
+                kind=m.kind,
+                name=m.name,
+                status=_derive_status(m.evolved, m.local_sha, m.base_sha),
+            ))
+    return entries
+
+
 @router.get("/{space_id}/tools", response_model=SpaceToolsResponse)
 async def get_space_tools(space_id: str, request: Request) -> SpaceToolsResponse:
     space_store = _get_space_store(request)
@@ -89,6 +133,7 @@ async def get_space_tools(space_id: str, request: Request) -> SpaceToolsResponse
     g_perms += g_perms2
 
     has_claude_md = (space_dir / "CLAUDE.md").is_file()
+    adopted = _scan_adopted(space_dir)
 
     return SpaceToolsResponse(
         space_id=space_id,
@@ -99,6 +144,7 @@ async def get_space_tools(space_id: str, request: Request) -> SpaceToolsResponse
         hooks=s_hooks + g_hooks,
         permissions=s_perms + g_perms,
         has_claude_md=has_claude_md,
+        adopted=adopted,
     )
 
 

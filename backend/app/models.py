@@ -200,6 +200,20 @@ class PermissionEntry(BaseModel):
     scope: str  # "space" | "global"
 
 
+class AdoptedToolEntry(BaseModel):
+    source_url: str
+    source_slug: str
+    source_path: str
+    source_sha: str
+    adopted_at: datetime
+    base_sha: str
+    local_sha: str
+    evolved: bool
+    kind: str
+    name: str
+    status: Literal["pristine", "edited", "evolved"]
+
+
 class SpaceToolsResponse(BaseModel):
     space_id: str
     agents: list[AiToolEntry] = []
@@ -209,6 +223,7 @@ class SpaceToolsResponse(BaseModel):
     hooks: list[HookEntry] = []
     permissions: list[PermissionEntry] = []
     has_claude_md: bool = False
+    adopted: list[AdoptedToolEntry] = []
 
 
 class AiToolDetail(BaseModel):

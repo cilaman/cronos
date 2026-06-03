@@ -11,6 +11,7 @@ from fastapi import Depends, FastAPI, Request, Response
 from watchfiles import awatch
 
 from .api.activity import router as activity_router
+from .api.adoption import router as adoption_router
 from .api.discovery import router as discovery_router
 from .api.memory import router as memory_router
 from .api.spaces import router as spaces_router
@@ -310,6 +311,7 @@ app.include_router(spaces_router, dependencies=_auth)
 app.include_router(views_router, dependencies=_auth)
 app.include_router(activity_router, dependencies=_auth)
 app.include_router(tools_router, dependencies=_auth)
+app.include_router(adoption_router, dependencies=_auth)
 app.include_router(stats_router, dependencies=_auth)
 app.include_router(traces_router, dependencies=_auth)
 app.include_router(test_reports_router, dependencies=_auth)
