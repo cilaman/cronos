@@ -13,6 +13,7 @@ from watchfiles import awatch
 from .api.activity import router as activity_router
 from .api.adoption import router as adoption_router
 from .api.discovery import router as discovery_router
+from .api.harnesses import router as harnesses_router
 from .api.memory import router as memory_router
 from .api.spaces import router as spaces_router
 from .api.stats import router as stats_router
@@ -22,6 +23,7 @@ from .api.tools import router as tools_router
 from .api.traces import router as traces_router
 from .api.views import router as views_router
 from .auth import require_auth
+from .harnesses import HarnessStore
 from .memory_store import MemoryStore
 from .space_storage import CRONOS_SUBDIR, RESERVED_SPACE_DIRS, SpaceStore
 from .stats_store import StatsStore
@@ -287,6 +289,9 @@ async def lifespan(app: FastAPI):
     memory_store = MemoryStore(DATA_DIR, SPACES_DIR)
     app.state.memory_store = memory_store
 
+    harness_store = HarnessStore()
+    app.state.harness_store = harness_store
+
     app.state.discovery_db_path = DISCOVERY_DB_PATH
     app.state.discovery_sources_path = DISCOVERY_SOURCES_PATH
 
@@ -372,6 +377,7 @@ app.include_router(traces_router, dependencies=_auth)
 app.include_router(test_reports_router, dependencies=_auth)
 app.include_router(memory_router, dependencies=_auth)
 app.include_router(discovery_router, dependencies=_auth)
+app.include_router(harnesses_router, dependencies=_auth)
 
 
 @app.get("/api/info")
