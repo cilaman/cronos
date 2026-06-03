@@ -1,9 +1,21 @@
 # Test Coverage — cronos-development
 
-**Updated**: 2026-06-03T11:42:48Z
-**Overall**: 82.52%  (+0.35% vs previous run 2026-06-03 tool-sources)
-**Passed**: 1361 | **Failed**: 0 | **Errors**: 0 | **Total**: 1361
+**Updated**: 2026-06-03T09:08:00Z
+**Overall**: 82.62%  (+0.10% vs previous run 2026-06-03 A2-discovery)
+**Passed**: 1372 | **Failed**: 0 | **Errors**: 0 | **Skipped**: 0 | **Total**: 1372
 **Tester rounds this session**: 1 (new tests green first run; full suite green, no regressions)
+
+## Recent changes (2026-06-03 — A3 discovered_tools SQLite index/upsert)
+
+Task A3 of Arc 5. New module `backend/app/tools/index.py` (upsert_discovered /
+prune_stale / list_discovered over the `discovered_tools` table) and DDL added to
+`storage.py::_ensure_db_schema()` (table + `idx_discovered_tools_kind`).
+
+- `app/tools/index.py`: **100%** (39/39 statements)
+- New test file `backend/tests/test_tools_index.py` — 12 tests, all 6 acceptance
+  criteria covered: prune-stale-on-rerun, new-SHA-in-place-update, order stability,
+  kind filter, source_slug filter, prune-count + slug scoping.
+- DB fixture reproduces the DDL inline (no TaskStore / _ensure_db_schema dependency).
 
 ## Recent changes (2026-06-03 — A2 Discovery module: clone + walk + parse)
 

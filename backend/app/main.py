@@ -125,7 +125,11 @@ async def watch_spaces_dir(
     space_store: SpaceStore,
     stop_event: asyncio.Event,
 ) -> None:
+    import time
+    from .tools.adoption import NotAdopted, recompute_local_sha
+
     log.info("Watching %s for task & space changes", SPACES_DIR)
+    _sha_throttle: dict[tuple[str, str, str], float] = {}
     async for changes in awatch(SPACES_DIR, stop_event=stop_event):
         for _change, raw_path in changes:
             path = Path(raw_path)
@@ -139,7 +143,28 @@ async def watch_spaces_dir(
                 continue
             if len(rel.parts) < 2 or rel.parts[1] != CRONOS_SUBDIR:
                 continue
-            if path.suffix == ".md":
+            if (
+                len(rel.parts) >= 6
+                and rel.parts[2] == "tools"
+                and path.name != "manifest.yml"
+            ):
+                space_id = rel.parts[0]
+                kind = rel.parts[3]
+                name = rel.parts[4]
+                key = (space_id, kind, name)
+                now = time.monotonic()
+                if now - _sha_throttle.get(key, 0.0) >= 1.0:
+                    _sha_throttle[key] = now
+                    try:
+                        recompute_local_sha(space_id, kind, name)
+                    except NotAdopted:
+                        pass
+                    except Exception:
+                        log.exception(
+                            "Error recomputing local_sha for %s/%s in space %s",
+                            kind, name, space_id,
+                        )
+            elif path.suffix == ".md":
                 await task_store.reindex_path(path)
             elif path.name == "space.yml":
                 await space_store.reindex_path(path)
