@@ -162,6 +162,14 @@ async def update_harness(
     space_dir = _get_space_dir(request, space_id)
     store = _get_store(request)
     now = datetime.now(tz=UTC)
+    # Fetch the existing harness so we can preserve its original created_at.
+    try:
+        existing = await store.get(space_dir, name)
+    except HarnessNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
     try:
         harness = Harness(
             name=body.name,
@@ -170,6 +178,7 @@ async def update_harness(
             edges=body.edges,
             variables=body.variables,
             version=body.version,
+            created_at=existing.created_at,
             updated_at=now,
         )
     except ValidationError as exc:

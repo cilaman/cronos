@@ -219,6 +219,32 @@ async def test_update_harness(h_client):
     assert body["nodes"][0]["label"] == "Updated Node"
 
 
+async def test_update_preserves_created_at(h_client):
+    """PUT must not re-stamp created_at; only updated_at should advance."""
+    await h_client.post(_BASE_URL, json=_HARNESS_PAYLOAD)
+    first_get = (await h_client.get(f"{_BASE_URL}/My Flow")).json()
+    original_created_at = first_get["created_at"]
+    original_updated_at = first_get["updated_at"]
+
+    update = {
+        "name": "My Flow",
+        "description": "Changed description",
+        "nodes": [_NODE],
+        "edges": [],
+    }
+    put_resp = await h_client.put(f"{_BASE_URL}/My Flow", json=update)
+    assert put_resp.status_code == 200
+
+    second_get = (await h_client.get(f"{_BASE_URL}/My Flow")).json()
+    assert second_get["created_at"] == original_created_at, (
+        "created_at must be preserved across PUT"
+    )
+    # updated_at should be >= original (may be equal in fast tests, never earlier)
+    assert second_get["updated_at"] >= original_updated_at, (
+        "updated_at must not regress"
+    )
+
+
 async def test_update_nonexistent_returns_404(h_client):
     resp = await h_client.put(f"{_BASE_URL}/no-such", json={"name": "no-such", "nodes": [], "edges": []})
     assert resp.status_code == 404
