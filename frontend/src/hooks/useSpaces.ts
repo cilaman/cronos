@@ -172,6 +172,20 @@ export function useUnadoptTool(spaceId: string | null) {
   });
 }
 
+export function useToolTelemetry(
+  spaceId: string | null,
+  kind: string | null,
+  name: string | null,
+  window = "30d",
+) {
+  return useQuery({
+    queryKey: ["tool-telemetry", spaceId, kind, name, window],
+    queryFn: () => api.toolTelemetry(spaceId!, kind!, name!, window),
+    enabled: !!spaceId && !!kind && !!name,
+    staleTime: 60_000,
+  });
+}
+
 export function useImportSpace() {
   const qc = useQueryClient();
   return useMutation({

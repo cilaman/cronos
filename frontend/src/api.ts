@@ -15,6 +15,7 @@ import type {
   SpacesResponse,
   SpaceToolsResponse,
   Task,
+  ToolTelemetryResponse,
   TaskFile,
   TaskState,
   TaskStats,
@@ -236,6 +237,10 @@ export const api = {
     request<void>(`/api/spaces/${spaceId}/adopt/${kind}/${name}`, {
       method: "DELETE",
     }),
+  toolTelemetry: (spaceId: string, kind: string, name: string, window?: string) => {
+    const qs = window ? `?window=${encodeURIComponent(window)}` : "";
+    return request<ToolTelemetryResponse>(`/api/spaces/${spaceId}/tools/${kind}/${name}/telemetry${qs}`);
+  },
 
   // --- discovery ---
   discoverySources: () => request<ToolSource[]>("/api/discovery/sources"),

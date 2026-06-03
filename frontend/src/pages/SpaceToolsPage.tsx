@@ -6,6 +6,7 @@ import { formatRelative } from "../utils/format";
 import type { AdoptedTool, AiToolEntry, HookEntry, PermissionEntry } from "../types";
 import { ToolDetailPanel } from "../components/ToolDetailPanel";
 import { DiscoveryPanel } from "../components/DiscoveryPanel";
+import { AdoptedToolTelemetry } from "../components/AdoptedToolTelemetry";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -277,64 +278,76 @@ function AdoptedSection({
           return (
             <div
               key={key}
-              className="flex items-center gap-3 border-b border-hairline px-4 py-3 last:border-b-0 hover:bg-surface-2/40"
+              className="border-b border-hairline px-4 py-3 last:border-b-0 hover:bg-surface-2/40"
             >
-              <span className="shrink-0 text-[16px] leading-none" aria-hidden>
-                {icon}
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-display text-[13px] font-semibold tracking-[0.04em] text-ink">
-                    {tool.name}
-                  </span>
-                  <StatusPill status={tool.status} />
-                  <span className="rounded border border-hairline bg-surface-2 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.1em] text-ink-faint">
-                    {tool.kind}
-                  </span>
+              {/* Top row: icon + name/badges + unadopt */}
+              <div className="flex items-center gap-3">
+                <span className="shrink-0 text-[16px] leading-none" aria-hidden>
+                  {icon}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-display text-[13px] font-semibold tracking-[0.04em] text-ink">
+                      {tool.name}
+                    </span>
+                    <StatusPill status={tool.status} />
+                    <span className="rounded border border-hairline bg-surface-2 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.1em] text-ink-faint">
+                      {tool.kind}
+                    </span>
+                  </div>
+                  <div className="mt-0.5 flex items-center gap-2">
+                    <span className="font-mono text-[10px] text-ink-faint">{tool.source_slug}</span>
+                    <a
+                      href={link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-mono text-[10px] text-accent-bright hover:underline"
+                      title={`View at ${tool.source_sha.slice(0, 7)}`}
+                    >
+                      {tool.source_sha.slice(0, 7)}
+                    </a>
+                  </div>
                 </div>
-                <div className="mt-1 flex items-center gap-2">
-                  <span className="font-mono text-[10px] text-ink-faint">{tool.source_slug}</span>
-                  <a
-                    href={link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-mono text-[10px] text-accent-bright hover:underline"
-                    title={`View at ${tool.source_sha.slice(0, 7)}`}
-                  >
-                    {tool.source_sha.slice(0, 7)}
-                  </a>
+                <div className="flex shrink-0 items-center gap-2">
+                  {isConfirming ? (
+                    <>
+                      <span className="font-display text-[11px] text-ink-muted">Remove?</span>
+                      <button
+                        type="button"
+                        onClick={() => handleConfirm(tool)}
+                        disabled={isRemoving}
+                        className="rounded border border-danger/30 bg-danger/10 px-2.5 py-1 font-display text-[11px] font-medium text-danger transition hover:bg-danger/20 disabled:opacity-60"
+                      >
+                        {isRemoving ? "Removing…" : "Yes, remove"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCancel}
+                        className="rounded border border-hairline px-2.5 py-1 font-display text-[11px] font-medium text-ink-muted transition hover:text-ink"
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleUnadoptClick(tool)}
+                      aria-label={`Unadopt ${tool.name}`}
+                      className="rounded border border-hairline px-2.5 py-1 font-display text-[11px] font-medium text-ink-muted transition hover:border-danger/30 hover:bg-danger/5 hover:text-danger"
+                    >
+                      Unadopt
+                    </button>
+                  )}
                 </div>
               </div>
-              <div className="flex shrink-0 items-center gap-2">
-                {isConfirming ? (
-                  <>
-                    <span className="font-display text-[11px] text-ink-muted">Remove?</span>
-                    <button
-                      type="button"
-                      onClick={() => handleConfirm(tool)}
-                      disabled={isRemoving}
-                      className="rounded border border-danger/30 bg-danger/10 px-2.5 py-1 font-display text-[11px] font-medium text-danger transition hover:bg-danger/20 disabled:opacity-60"
-                    >
-                      {isRemoving ? "Removing…" : "Yes, remove"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleCancel}
-                      className="rounded border border-hairline px-2.5 py-1 font-display text-[11px] font-medium text-ink-muted transition hover:text-ink"
-                    >
-                      Cancel
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => handleUnadoptClick(tool)}
-                    aria-label={`Unadopt ${tool.name}`}
-                    className="rounded border border-hairline px-2.5 py-1 font-display text-[11px] font-medium text-ink-muted transition hover:border-danger/30 hover:bg-danger/5 hover:text-danger"
-                  >
-                    Unadopt
-                  </button>
-                )}
+
+              {/* Telemetry strip (below main row, indented to align with name) */}
+              <div className="mt-1 pl-7">
+                <AdoptedToolTelemetry
+                  spaceId={spaceId}
+                  kind={tool.kind}
+                  name={tool.name}
+                />
               </div>
             </div>
           );

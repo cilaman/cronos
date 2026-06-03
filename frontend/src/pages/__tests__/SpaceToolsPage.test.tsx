@@ -36,6 +36,13 @@ vi.mock("../../components/ToolDetailPanel", () => ({
   ToolDetailPanel: () => <div data-testid="tool-detail-panel">ToolDetailPanel</div>,
 }));
 
+// AdoptedToolTelemetry stub — telemetry is tested separately
+vi.mock("../../components/AdoptedToolTelemetry", () => ({
+  AdoptedToolTelemetry: ({ name }: { name: string }) => (
+    <div data-testid={`telemetry-${name}`}>Telemetry</div>
+  ),
+}));
+
 import { SpaceToolsPage } from "../SpaceToolsPage";
 
 // ---------------------------------------------------------------------------

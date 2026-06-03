@@ -369,6 +369,15 @@ export interface AiToolDetail extends AiToolEntry {
   content: string;
 }
 
+export interface ToolTelemetryResponse {
+  kind: string;
+  name: string;
+  calls: number;
+  errors: number;
+  avg_success_rate: number;
+  human_rescue_count: number;
+}
+
 // --- Discovery ---
 
 export interface DiscoveredTool {
