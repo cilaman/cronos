@@ -24,6 +24,54 @@ class PostDoneResult:
     conflict_message: str = ""
 
 
+async def commit_and_open_pr(
+    worktree: Path,
+    branch: str,
+    title: str,
+    body: str,
+    *,
+    space_dir: Path,
+) -> PostDoneResult:
+    """Commit all changes in *worktree*, push to *branch*, open a PR.
+
+    No rebase step — suitable for fresh branches (e.g. evolve proposals).
+    Returns a ``PostDoneResult`` populated with ``committed``/``pushed``/
+    ``pr_url``/``proposed_pr_path``.
+    """
+    sha = await git_ops.commit_all(worktree, title)
+    if sha is None:
+        log.info("commit_and_open_pr: nothing to commit in %s", worktree)
+        return PostDoneResult()
+
+    result = PostDoneResult(committed=True)
+
+    git_ops.validate_branch(branch)
+    try:
+        await git_ops.push_branch(worktree, branch)
+        result.pushed = True
+    except Exception:
+        log.exception("commit_and_open_pr: push failed for branch %s", branch)
+        return result
+
+    base = await git_ops.detect_default_branch(space_dir)
+    github_repo = await git_ops.detect_github_remote(space_dir)
+    if github_repo:
+        pr_url = await git_ops.gh_pr_create(
+            worktree, title=title, body=body, base=base, head=branch,
+        )
+        if pr_url:
+            result.pr_url = pr_url
+            return result
+
+    # Fallback: write a PROPOSED_PR.md.
+    pr_dir = space_dir / ".cronos" / "pull_requests"
+    pr_dir.mkdir(parents=True, exist_ok=True)
+    pr_file = pr_dir / f"{branch.replace('/', '-')}.md"
+    pr_file.write_text(f"# {title}\n\n{body}\n", encoding="utf-8")
+    result.proposed_pr_path = str(pr_file)
+    return result
+
+
 def _build_message(task: Task, space: Space) -> str:
     brief_preview = (task.brief or "").strip()
     if len(brief_preview) > _BRIEF_PREVIEW_LEN:

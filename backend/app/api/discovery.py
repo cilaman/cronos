@@ -4,7 +4,7 @@ import asyncio
 import logging
 import shutil
 import subprocess
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
@@ -15,6 +15,8 @@ from ..tools.index import list_discovered, upsert_discovered
 from ..tools.sources import load_sources
 
 if TYPE_CHECKING:
+    from ..space_storage import SpaceStore
+    from ..stats_store import StatsStore
     from ..storage import TaskStore
 
 log = logging.getLogger(__name__)
@@ -296,6 +298,106 @@ async def _run_refresh(
             log.exception("Failed to scan adopted manifests after refresh")
 
     return {"refreshed": refreshed, "items": [_item_dict(i) for i in all_items]}
+
+
+async def _schedule_evolve_tasks(
+    task_store: "TaskStore",
+    spaces_dir: Path,
+    *,
+    space_store: "SpaceStore | None" = None,
+    stats_store: "StatsStore | None" = None,
+    window_days: int = 30,
+    min_runs: int = 10,
+) -> int:
+    """Schedule 'Evolve adopted tools' tasks for qualifying spaces.
+
+    Gate conditions (both must pass):
+    1. Space has autopilot enabled (when space_store is provided).
+    2. At least one adopted tool had more than *min_runs* calls in the window
+       (when stats_store is provided; skipped when stats unavailable).
+
+    Duplicate guard: skips spaces that already have a pending evolve task.
+    Returns the count of newly scheduled tasks.
+    """
+    from ..tools.evolve import EVOLVE_TITLE, _scan_adopted_tools, create_evolve_task
+
+    scheduled = 0
+    if not spaces_dir.is_dir():
+        return scheduled
+
+    for space_dir in spaces_dir.iterdir():
+        if not space_dir.is_dir() or space_dir.name.startswith("."):
+            continue
+        space_id = space_dir.name
+
+        # Autopilot gate.
+        if space_store is not None:
+            space = space_store.get(space_id)
+            if space is None or space.autopilot != "enabled":
+                continue
+
+        # Tool existence gate.
+        adopted = _scan_adopted_tools(space_id, spaces_dir=spaces_dir)
+        if not adopted:
+            continue
+
+        # Run-count gate: need at least one adopted tool with >min_runs calls in window.
+        if stats_store is not None:
+            from_dt = datetime.now(tz=timezone.utc) - timedelta(days=window_days)
+            all_stats = await stats_store.list_space(space_id)
+            tool_call_counts: dict[str, int] = {}
+            for ts in all_stats:
+                for run in ts.runs:
+                    run_dt = run.started_at
+                    if run_dt.tzinfo is None:
+                        run_dt = run_dt.replace(tzinfo=timezone.utc)
+                    if run_dt < from_dt:
+                        continue
+                    for tool_name, tool_stats in run.adopted_tool_uses.items():
+                        tool_call_counts[tool_name] = (
+                            tool_call_counts.get(tool_name, 0) + tool_stats.calls
+                        )
+
+            if not any(v > min_runs for v in tool_call_counts.values()):
+                log.debug(
+                    "_schedule_evolve_tasks: space %s has no tool with >%d runs in %dd window",
+                    space_id, min_runs, window_days,
+                )
+                continue
+
+        # Duplicate guard.
+        existing = next(
+            (
+                t for t in task_store.all()
+                if t.space_id == space_id
+                and t.title == EVOLVE_TITLE
+                and t.state.value not in ("done", "archived")
+            ),
+            None,
+        )
+        if existing is not None:
+            log.debug(
+                "_schedule_evolve_tasks: space %s already has pending evolve task %s",
+                space_id, existing.id,
+            )
+            continue
+
+        try:
+            await create_evolve_task(
+                space_id,
+                task_store=task_store,
+                spaces_dir=spaces_dir,
+                stats_store=stats_store,
+                window_days=window_days,
+            )
+            scheduled += 1
+            log.info("_schedule_evolve_tasks: scheduled evolve task for space %s", space_id)
+        except Exception:
+            log.exception(
+                "_schedule_evolve_tasks: failed to schedule task for space %s", space_id
+            )
+
+    return scheduled
 
 
 async def run_refresh_if_unlocked(

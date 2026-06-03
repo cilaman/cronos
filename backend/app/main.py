@@ -45,6 +45,7 @@ MEMORY_PRUNE_INTERVAL = int(os.environ.get("CRONOS_MEMORY_PRUNE_INTERVAL", "3600
 DISCOVERY_INTERVAL_HOURS = float(os.environ.get("CRONOS_DISCOVERY_INTERVAL_HOURS", "6"))
 DISCOVERY_DB_PATH = DATA_DIR / "cronos-index.db"
 DISCOVERY_SOURCES_PATH = DATA_DIR / "tool_sources.yml"
+EVOLVE_TOOLS_INTERVAL_HOURS = float(os.environ.get("CRONOS_EVOLVE_TOOLS_INTERVAL_HOURS", str(7 * 24)))
 
 
 def _path_is_reserved(path: Path, root: Path) -> bool:
@@ -127,6 +128,39 @@ async def discovery_refresh_loop(
                 log.debug("Periodic discovery refresh: skipped (locked or recent)")
         except Exception:
             log.exception("Error during periodic discovery refresh; will retry next cycle")
+
+
+async def evolve_tools_loop(
+    task_store: TaskStore,
+    space_store: SpaceStore,
+    spaces_dir: Path,
+    interval_hours: float,
+    stop_event: asyncio.Event,
+    *,
+    stats_store: StatsStore | None = None,
+) -> None:
+    from .api.discovery import _schedule_evolve_tasks
+
+    while not stop_event.is_set():
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=interval_hours * 3600)
+        except asyncio.TimeoutError:
+            pass
+        if stop_event.is_set():
+            break
+        try:
+            n = await _schedule_evolve_tasks(
+                task_store,
+                spaces_dir,
+                space_store=space_store,
+                stats_store=stats_store,
+            )
+            if n:
+                log.info("Evolve-tools loop: scheduled %d task(s)", n)
+            else:
+                log.debug("Evolve-tools loop: no spaces qualified this cycle")
+        except Exception:
+            log.exception("Error in evolve-tools loop; will retry next cycle")
 
 
 async def watch_spaces_dir(
@@ -285,6 +319,17 @@ async def lifespan(app: FastAPI):
         ),
         name="discoverer",
     )
+    evolve_tools = asyncio.create_task(
+        evolve_tools_loop(
+            task_store,
+            space_store,
+            SPACES_DIR,
+            EVOLVE_TOOLS_INTERVAL_HOURS,
+            stop_event,
+            stats_store=stats_store,
+        ),
+        name="evolve_tools",
+    )
 
     # Recover in-flight runs: any task left in ACTIVE on startup gets
     # re-enqueued on its space's worker. The agent resumes via its stored
@@ -306,7 +351,7 @@ async def lifespan(app: FastAPI):
     finally:
         stop_event.set()
         await worker_pool.stop_all()
-        for bg_task in (watcher, archiver, memory_pruner, discoverer):
+        for bg_task in (watcher, archiver, memory_pruner, discoverer, evolve_tools):
             try:
                 await asyncio.wait_for(bg_task, timeout=5.0)
             except asyncio.TimeoutError:
