@@ -72,6 +72,10 @@ HTTP Basic Auth via Caddy on every request. `/api/health` is public (no auth). C
 | `backend/app/models.py` | Pydantic schemas: TaskState, Task, Space, View, agent modes/models |
 | `backend/app/api/tasks.py` | Task CRUD, state transitions, drag-drop reordering, lane overrides (29 KB) |
 | `backend/app/api/spaces.py` | Space CRUD, repo linking, project settings |
+| `backend/app/api/harnesses.py` | Harness CRUD REST endpoints (GET/POST/PUT/DELETE) with concurrency contract |
+| `backend/app/harnesses/model.py` | Pydantic models with reference integrity validation (HarnessNode, HarnessEdge, Harness) |
+| `backend/app/harnesses/validator.py` | DAG validation (cycle detection, self-loop rejection, reference fidelity checks) |
+| `backend/app/harnesses/store.py` | HarnessStore with atomic YAML I/O to `.cronos/harnesses/<name>.yml` per space |
 | `backend/app/memory_store.py` | Shared context storage |
 | `backend/app/git_ops.py` | `git clone/commit/push` wrappers for repo-linked spaces |
 | `backend/app/goal_sync.py` | Goal state propagation |
