@@ -123,6 +123,124 @@ async def workspace_for(task: Task, space: Space | None = None) -> Path:
     return path
 
 
+def _load_adopted_dirs(space_id: str) -> list[tuple[Path, str]]:
+    """Return (item_dir, kind) for every adopted tool in the space.
+
+    Skips .trash and any directory without a manifest.yml.
+    """
+    tools_dir = space_dir_for(space_id) / CRONOS_SUBDIR / "tools"
+    if not tools_dir.is_dir():
+        return []
+    results: list[tuple[Path, str]] = []
+    for kind_dir in sorted(tools_dir.iterdir()):
+        if not kind_dir.is_dir() or kind_dir.name.startswith("."):
+            continue
+        for item_dir in sorted(kind_dir.iterdir()):
+            if not item_dir.is_dir():
+                continue
+            if not (item_dir / "manifest.yml").is_file():
+                continue
+            results.append((item_dir, kind_dir.name))
+    return results
+
+
+def _read_hook_settings(item_dir: Path) -> dict:
+    """Read settings (permissions/hooks) from an adopted hook directory.
+
+    Tries all non-manifest files for JSON content with permissions/hooks keys.
+    Returns empty dict if nothing parseable is found.
+    """
+    for f in sorted(item_dir.iterdir()):
+        if f.name == "manifest.yml" or not f.is_file():
+            continue
+        try:
+            data = json.loads(f.read_bytes())
+            if isinstance(data, dict) and ("permissions" in data or "hooks" in data):
+                return data
+        except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+            continue
+    return {}
+
+
+def _merge_hook_settings(
+    hook_settings_list: list[dict],
+    workspace_settings: dict,
+) -> dict:
+    """Merge adopted hook settings with workspace settings.
+
+    permissions.allow/deny: union, workspace entries first (no duplication).
+    hooks.Event: workspace entries first per event, then adopted hook entries.
+    Other top-level keys: workspace value wins.
+    """
+    agg_allow: list[str] = []
+    agg_deny: list[str] = []
+    agg_hooks: dict[str, list] = {}
+
+    for s in hook_settings_list:
+        perms = s.get("permissions", {})
+        if isinstance(perms, dict):
+            for p in perms.get("allow", []):
+                if isinstance(p, str):
+                    agg_allow.append(p)
+            for p in perms.get("deny", []):
+                if isinstance(p, str):
+                    agg_deny.append(p)
+        raw_hooks = s.get("hooks", {})
+        if isinstance(raw_hooks, dict):
+            for event, groups in raw_hooks.items():
+                if isinstance(groups, list):
+                    agg_hooks.setdefault(event, []).extend(groups)
+
+    result = dict(workspace_settings)
+
+    ws_perms = workspace_settings.get("permissions", {})
+    ws_allow = list(ws_perms.get("allow", [])) if isinstance(ws_perms, dict) else []
+    ws_deny = list(ws_perms.get("deny", [])) if isinstance(ws_perms, dict) else []
+    merged_allow = ws_allow + [p for p in agg_allow if p not in ws_allow]
+    merged_deny = ws_deny + [p for p in agg_deny if p not in ws_deny]
+    if merged_allow or merged_deny:
+        merged_perms: dict = {}
+        if merged_allow:
+            merged_perms["allow"] = merged_allow
+        if merged_deny:
+            merged_perms["deny"] = merged_deny
+        result["permissions"] = merged_perms
+
+    ws_hooks = workspace_settings.get("hooks", {})
+    if not isinstance(ws_hooks, dict):
+        ws_hooks = {}
+    all_events = set(agg_hooks) | set(ws_hooks)
+    if all_events:
+        merged_hooks: dict = {}
+        for event in sorted(all_events):
+            ws_ev = list(ws_hooks.get(event, []))
+            h_ev = agg_hooks.get(event, [])
+            merged_hooks[event] = ws_ev + h_ev
+        result["hooks"] = merged_hooks
+
+    return result
+
+
+def _read_workspace_settings(workspace: Path) -> dict:
+    """Read workspace/.claude/settings.json, returning {} if absent or invalid."""
+    settings_path = workspace / ".claude" / "settings.json"
+    if not settings_path.is_file():
+        return {}
+    try:
+        return json.loads(settings_path.read_bytes())
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return {}
+
+
+def _write_workspace_settings(workspace: Path, settings: dict) -> None:
+    """Write settings to workspace/.claude/settings.json."""
+    claude_dir = workspace / ".claude"
+    claude_dir.mkdir(parents=True, exist_ok=True)
+    (claude_dir / "settings.json").write_text(
+        json.dumps(settings, indent=2), encoding="utf-8"
+    )
+
+
 PERMISSION_MODE: dict[str, str] = {
     "plan": "acceptEdits",  # "plan" would inject ExitPlanMode instructions that can't be fulfilled
     "auto": "acceptEdits",
@@ -222,6 +340,20 @@ async def run_agent(
     permission_mode = PERMISSION_MODE.get(task.agent_mode, "acceptEdits")
     allowed_tools = PLAN_MODE_TOOLS if task.agent_mode == "plan" else DEFAULT_TOOLS
 
+    # Mount adopted tools; merge hook settings into workspace .claude/settings.json.
+    adopted = _load_adopted_dirs(task.space_id)
+    adopted_dirs: list[Path] = []
+    hook_settings: list[dict] = []
+    for item_dir, kind in adopted:
+        adopted_dirs.append(item_dir)
+        if kind == "hook":
+            s = _read_hook_settings(item_dir)
+            if s:
+                hook_settings.append(s)
+    if hook_settings:
+        ws_settings = _read_workspace_settings(workspace)
+        _write_workspace_settings(workspace, _merge_hook_settings(hook_settings, ws_settings))
+
     cmd = [
         "claude",
         "-p",
@@ -235,6 +367,10 @@ async def run_agent(
         allowed_tools,
         "--add-dir",
         str(workspace),
+    ]
+    for tool_dir in adopted_dirs:
+        cmd += ["--add-dir", str(tool_dir)]
+    cmd += [
         "--append-system-prompt",
         STATUS_CONTRACT,
         "--append-system-prompt",

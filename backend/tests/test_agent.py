@@ -12,7 +12,12 @@ from app.agent import (
     STATUS_CONTRACT,
     Status,
     _extract_assistant_text,
+    _load_adopted_dirs,
+    _merge_hook_settings,
+    _read_hook_settings,
+    _read_workspace_settings,
     _upgrade_instructions,
+    _write_workspace_settings,
     build_prompt,
     parse_status,
     run_agent,
@@ -851,3 +856,367 @@ async def test_run_agent_returns_when_process_exits_without_result(tmp_path):
 
     assert result.status is None
     assert result.exit_code == 1
+
+
+# ---------------------------------------------------------------------------
+# Adopted tools: _load_adopted_dirs
+# ---------------------------------------------------------------------------
+
+
+def test_load_adopted_dirs_empty_when_no_tools_dir(tmp_path):
+    import app.agent as agent_module
+    original = agent_module.DATA_DIR
+    agent_module.DATA_DIR = tmp_path
+    try:
+        (tmp_path / "spaces" / "myspace").mkdir(parents=True)
+        assert _load_adopted_dirs("myspace") == []
+    finally:
+        agent_module.DATA_DIR = original
+
+
+def test_load_adopted_dirs_returns_items(tmp_path):
+    import app.agent as agent_module
+    original = agent_module.DATA_DIR
+    agent_module.DATA_DIR = tmp_path
+    try:
+        skill_dir = tmp_path / "spaces" / "myspace" / ".cronos" / "tools" / "skill" / "my-skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "manifest.yml").write_text("kind: skill\nname: my-skill\n")
+        (skill_dir / "SKILL.md").write_text("# My skill")
+
+        result = _load_adopted_dirs("myspace")
+        assert len(result) == 1
+        assert result[0][0] == skill_dir
+        assert result[0][1] == "skill"
+    finally:
+        agent_module.DATA_DIR = original
+
+
+def test_load_adopted_dirs_skips_trash(tmp_path):
+    import app.agent as agent_module
+    original = agent_module.DATA_DIR
+    agent_module.DATA_DIR = tmp_path
+    try:
+        # Real adopted item
+        skill_dir = tmp_path / "spaces" / "s" / ".cronos" / "tools" / "skill" / "foo"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "manifest.yml").write_text("kind: skill\n")
+
+        # Trash directory (starts with ".")
+        trash = tmp_path / "spaces" / "s" / ".cronos" / "tools" / ".trash" / "skill" / "foo-old"
+        trash.mkdir(parents=True)
+        (trash / "manifest.yml").write_text("kind: skill\n")
+
+        result = _load_adopted_dirs("s")
+        assert len(result) == 1
+        assert result[0][0] == skill_dir
+    finally:
+        agent_module.DATA_DIR = original
+
+
+def test_load_adopted_dirs_skips_dir_without_manifest(tmp_path):
+    import app.agent as agent_module
+    original = agent_module.DATA_DIR
+    agent_module.DATA_DIR = tmp_path
+    try:
+        no_manifest = tmp_path / "spaces" / "s" / ".cronos" / "tools" / "skill" / "orphan"
+        no_manifest.mkdir(parents=True)
+        (no_manifest / "SKILL.md").write_text("# skill without manifest")
+
+        assert _load_adopted_dirs("s") == []
+    finally:
+        agent_module.DATA_DIR = original
+
+
+# ---------------------------------------------------------------------------
+# Adopted tools: _read_hook_settings
+# ---------------------------------------------------------------------------
+
+
+def test_read_hook_settings_empty_when_no_json_file(tmp_path):
+    hook_dir = tmp_path / "hook-item"
+    hook_dir.mkdir()
+    (hook_dir / "manifest.yml").write_text("kind: hook\n")
+    (hook_dir / "myhook.md").write_text("# this is markdown, not JSON")
+    assert _read_hook_settings(hook_dir) == {}
+
+
+def test_read_hook_settings_empty_when_json_has_no_relevant_keys(tmp_path):
+    hook_dir = tmp_path / "hook-item"
+    hook_dir.mkdir()
+    (hook_dir / "manifest.yml").write_text("kind: hook\n")
+    (hook_dir / "settings.md").write_text('{"other_key": "value"}')
+    assert _read_hook_settings(hook_dir) == {}
+
+
+def test_read_hook_settings_finds_permissions(tmp_path):
+    hook_dir = tmp_path / "hook-item"
+    hook_dir.mkdir()
+    (hook_dir / "manifest.yml").write_text("kind: hook\n")
+    settings = {"permissions": {"allow": ["Bash(npm:*)"]}}
+    (hook_dir / "settings.md").write_text(json.dumps(settings))
+    assert _read_hook_settings(hook_dir) == settings
+
+
+def test_read_hook_settings_finds_hooks(tmp_path):
+    hook_dir = tmp_path / "hook-item"
+    hook_dir.mkdir()
+    (hook_dir / "manifest.yml").write_text("kind: hook\n")
+    settings = {"hooks": {"PreToolUse": [{"matcher": "*", "hooks": [{"command": "echo hi"}]}]}}
+    (hook_dir / "settings.md").write_text(json.dumps(settings))
+    assert _read_hook_settings(hook_dir) == settings
+
+
+# ---------------------------------------------------------------------------
+# Adopted tools: _merge_hook_settings
+# ---------------------------------------------------------------------------
+
+
+def test_merge_hook_settings_no_hooks_returns_workspace_unchanged():
+    ws = {"permissions": {"allow": ["Bash(*)"]}}
+    assert _merge_hook_settings([], ws) == ws
+
+
+def test_merge_hook_settings_empty_workspace_returns_hook_settings():
+    hook = {"permissions": {"allow": ["Bash(npm:*)"]}}
+    result = _merge_hook_settings([hook], {})
+    assert result["permissions"]["allow"] == ["Bash(npm:*)"]
+
+
+def test_merge_hook_settings_union_of_allow():
+    ws = {"permissions": {"allow": ["Read(*)"]}}
+    hook = {"permissions": {"allow": ["Bash(npm:*)", "Read(*)"]}}
+    result = _merge_hook_settings([hook], ws)
+    allow = result["permissions"]["allow"]
+    assert "Read(*)" in allow
+    assert "Bash(npm:*)" in allow
+    # No duplicates
+    assert allow.count("Read(*)") == 1
+
+
+def test_merge_hook_settings_workspace_wins_on_duplicate_allow():
+    ws = {"permissions": {"allow": ["Bash(*)", "Read(*)"]}}
+    hook = {"permissions": {"allow": ["Bash(*)", "Write(*)"]}}
+    result = _merge_hook_settings([hook], ws)
+    allow = result["permissions"]["allow"]
+    # Workspace entries appear first
+    assert allow[0] == "Bash(*)"
+    assert allow[1] == "Read(*)"
+    # Hook-only entry appended
+    assert "Write(*)" in allow
+    # No duplicate Bash(*)
+    assert allow.count("Bash(*)") == 1
+
+
+def test_merge_hook_settings_merges_hooks_events():
+    ws_group = {"matcher": "*", "hooks": [{"command": "ws-cmd"}]}
+    hook_group = {"matcher": "Bash", "hooks": [{"command": "hook-cmd"}]}
+    ws = {"hooks": {"PreToolUse": [ws_group]}}
+    hook = {"hooks": {"PreToolUse": [hook_group]}}
+    result = _merge_hook_settings([hook], ws)
+    event_list = result["hooks"]["PreToolUse"]
+    # Workspace entry first
+    assert event_list[0] == ws_group
+    assert event_list[1] == hook_group
+
+
+def test_merge_hook_settings_hook_only_event_included():
+    hook = {"hooks": {"PostToolUse": [{"matcher": "*", "hooks": [{"command": "post-cmd"}]}]}}
+    result = _merge_hook_settings([hook], {})
+    assert "PostToolUse" in result["hooks"]
+
+
+def test_merge_hook_settings_other_keys_workspace_wins():
+    ws = {"model": "claude-opus"}
+    hook = {"model": "claude-haiku", "permissions": {"allow": ["Read(*)"]}}
+    result = _merge_hook_settings([hook], ws)
+    assert result["model"] == "claude-opus"
+
+
+# ---------------------------------------------------------------------------
+# Adopted tools: workspace settings read/write
+# ---------------------------------------------------------------------------
+
+
+def test_read_workspace_settings_absent_returns_empty(tmp_path):
+    ws = tmp_path / "workspace"
+    ws.mkdir()
+    assert _read_workspace_settings(ws) == {}
+
+
+def test_read_workspace_settings_reads_json(tmp_path):
+    ws = tmp_path / "workspace"
+    (ws / ".claude").mkdir(parents=True)
+    settings = {"permissions": {"allow": ["Read(*)"]}}
+    (ws / ".claude" / "settings.json").write_text(json.dumps(settings))
+    assert _read_workspace_settings(ws) == settings
+
+
+def test_write_workspace_settings_creates_file(tmp_path):
+    ws = tmp_path / "workspace"
+    ws.mkdir()
+    settings = {"permissions": {"allow": ["Bash(*)"]}}
+    _write_workspace_settings(ws, settings)
+    content = json.loads((ws / ".claude" / "settings.json").read_text())
+    assert content == settings
+
+
+def test_write_workspace_settings_creates_claude_dir(tmp_path):
+    ws = tmp_path / "workspace"
+    ws.mkdir()
+    _write_workspace_settings(ws, {"hooks": {}})
+    assert (ws / ".claude" / "settings.json").is_file()
+
+
+# ---------------------------------------------------------------------------
+# run_agent: adopted tool --add-dir injection
+# ---------------------------------------------------------------------------
+
+
+async def test_run_agent_adopted_skill_adds_dir_to_cmd(tmp_path):
+    """Adopted skill dir must appear as --add-dir after the workspace dir."""
+    import app.agent as agent_module
+
+    # Create adopted skill directory
+    skill_dir = tmp_path / "spaces" / "space-xyz" / ".cronos" / "tools" / "skill" / "my-skill"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "manifest.yml").write_text("kind: skill\nname: my-skill\n")
+    (skill_dir / "SKILL.md").write_text("# My skill")
+
+    task = _make_task()
+    original = agent_module.DATA_DIR
+    agent_module.DATA_DIR = tmp_path
+
+    captured: list = []
+
+    async def fake_exec(*args, **kwargs):
+        captured.extend(args)
+        return _FakeProc([], exit_code=0)
+
+    async def on_event(e):
+        pass
+
+    try:
+        with patch("app.agent.asyncio.create_subprocess_exec", side_effect=fake_exec):
+            await run_agent(task, user_message=None, on_event=on_event)
+    finally:
+        agent_module.DATA_DIR = original
+
+    assert "--add-dir" in captured
+    assert str(skill_dir) in captured
+
+    # Adopted dir must appear AFTER the workspace --add-dir
+    workspace_path = str(tmp_path / "spaces" / "space-xyz" / ".cronos" / "workspaces" / "task-abc")
+    ws_idx = captured.index(workspace_path)
+    skill_idx = captured.index(str(skill_dir))
+    assert skill_idx > ws_idx
+
+
+async def test_run_agent_no_adopted_tools_no_extra_add_dir(tmp_path):
+    """When no tools dir exists, only the workspace --add-dir must appear."""
+    import app.agent as agent_module
+
+    (tmp_path / "spaces" / "space-xyz").mkdir(parents=True)
+    task = _make_task()
+    original = agent_module.DATA_DIR
+    agent_module.DATA_DIR = tmp_path
+
+    captured: list = []
+
+    async def fake_exec(*args, **kwargs):
+        captured.extend(args)
+        return _FakeProc([], exit_code=0)
+
+    async def on_event(e):
+        pass
+
+    try:
+        with patch("app.agent.asyncio.create_subprocess_exec", side_effect=fake_exec):
+            await run_agent(task, user_message=None, on_event=on_event)
+    finally:
+        agent_module.DATA_DIR = original
+
+    # Only one --add-dir (the workspace)
+    add_dir_count = captured.count("--add-dir")
+    assert add_dir_count == 1
+
+
+async def test_run_agent_hook_writes_settings_json(tmp_path):
+    """Adopted hook must write merged settings.json into workspace/.claude/."""
+    import app.agent as agent_module
+
+    hook_dir = tmp_path / "spaces" / "space-xyz" / ".cronos" / "tools" / "hook" / "pre-tool"
+    hook_dir.mkdir(parents=True)
+    (hook_dir / "manifest.yml").write_text("kind: hook\nname: pre-tool\n")
+    hook_settings = {"permissions": {"allow": ["Bash(npm:*)"]}}
+    (hook_dir / "settings.md").write_text(json.dumps(hook_settings))
+
+    task = _make_task()
+    original = agent_module.DATA_DIR
+    agent_module.DATA_DIR = tmp_path
+
+    async def fake_exec(*args, **kwargs):
+        return _FakeProc([], exit_code=0)
+
+    async def on_event(e):
+        pass
+
+    try:
+        with patch("app.agent.asyncio.create_subprocess_exec", side_effect=fake_exec):
+            await run_agent(task, user_message=None, on_event=on_event)
+    finally:
+        agent_module.DATA_DIR = original
+
+    ws_settings_path = (
+        tmp_path / "spaces" / "space-xyz" / ".cronos" / "workspaces" / "task-abc"
+        / ".claude" / "settings.json"
+    )
+    assert ws_settings_path.is_file()
+    content = json.loads(ws_settings_path.read_text())
+    assert content["permissions"]["allow"] == ["Bash(npm:*)"]
+
+
+async def test_run_agent_workspace_settings_override_hook(tmp_path):
+    """Existing workspace settings.json overrides hook on duplicate allow entries."""
+    import app.agent as agent_module
+
+    # Set up hook
+    hook_dir = tmp_path / "spaces" / "space-xyz" / ".cronos" / "tools" / "hook" / "pre-tool"
+    hook_dir.mkdir(parents=True)
+    (hook_dir / "manifest.yml").write_text("kind: hook\nname: pre-tool\n")
+    hook_settings = {"permissions": {"allow": ["Bash(npm:*)", "Write(*)"]}}
+    (hook_dir / "settings.md").write_text(json.dumps(hook_settings))
+
+    task = _make_task()
+    original = agent_module.DATA_DIR
+    agent_module.DATA_DIR = tmp_path
+
+    # Pre-create workspace with its own settings
+    ws_dir = tmp_path / "spaces" / "space-xyz" / ".cronos" / "workspaces" / "task-abc"
+    ws_dir.mkdir(parents=True)
+    ws_claude = ws_dir / ".claude"
+    ws_claude.mkdir()
+    ws_existing = {"permissions": {"allow": ["Read(*)", "Bash(npm:*)"]}}
+    (ws_claude / "settings.json").write_text(json.dumps(ws_existing))
+
+    async def fake_exec(*args, **kwargs):
+        return _FakeProc([], exit_code=0)
+
+    async def on_event(e):
+        pass
+
+    try:
+        with patch("app.agent.asyncio.create_subprocess_exec", side_effect=fake_exec):
+            await run_agent(task, user_message=None, on_event=on_event)
+    finally:
+        agent_module.DATA_DIR = original
+
+    content = json.loads((ws_claude / "settings.json").read_text())
+    allow = content["permissions"]["allow"]
+    # Workspace entries are first
+    assert allow[0] == "Read(*)"
+    assert allow[1] == "Bash(npm:*)"
+    # Hook-only entry appended (not a dup with workspace)
+    assert "Write(*)" in allow
+    # No duplicate Bash(npm:*)
+    assert allow.count("Bash(npm:*)") == 1
