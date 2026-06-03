@@ -5,6 +5,7 @@ import type {
   AiToolDetail,
   Board,
   BuildInfo,
+  DiscoveredTool,
   GlobalStats,
   MemoryItem,
   ReplyResponse,
@@ -19,6 +20,7 @@ import type {
   TaskSummary,
   TestReport,
   TestReportSummary,
+  ToolSource,
   View,
 } from "./types";
 
@@ -219,6 +221,20 @@ export const api = {
     request<SpaceToolsResponse>(`/api/spaces/${spaceId}/tools`),
   toolContent: (spaceId: string, path: string, scope: string) =>
     request<AiToolDetail>(`/api/spaces/${spaceId}/tool-content?path=${encodeURIComponent(path)}&scope=${scope}`),
+
+  // --- discovery ---
+  discoverySources: () => request<ToolSource[]>("/api/discovery/sources"),
+  discoveryTools: (kind?: string, sourceSlug?: string) => {
+    const params = new URLSearchParams();
+    if (kind) params.set("kind", kind);
+    if (sourceSlug) params.set("source_slug", sourceSlug);
+    const qs = params.toString();
+    return request<DiscoveredTool[]>(`/api/discovery/tools${qs ? `?${qs}` : ""}`);
+  },
+  discoveryRefresh: () =>
+    request<{ refreshed: number; items: DiscoveredTool[] }>("/api/discovery/refresh", {
+      method: "POST",
+    }),
 
   // --- activity ---
   activity: (limit = 50, spaceId: string | null = null) => {

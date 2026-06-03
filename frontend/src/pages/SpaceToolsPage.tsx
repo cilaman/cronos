@@ -1,10 +1,11 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useSpaces, useSpaceTools } from "../hooks/useSpaces";
 import { cn } from "../utils/cn";
 import { formatRelative } from "../utils/format";
 import type { AiToolEntry, HookEntry, PermissionEntry } from "../types";
 import { ToolDetailPanel } from "../components/ToolDetailPanel";
+import { DiscoveryPanel } from "../components/DiscoveryPanel";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -209,9 +210,17 @@ function PermissionsPanel({ permissions }: { permissions: PermissionEntry[] }) {
 // Page
 // ---------------------------------------------------------------------------
 
+type Tab = "installed" | "discover";
+
+const TABS: { id: Tab; label: string }[] = [
+  { id: "installed", label: "Installed" },
+  { id: "discover", label: "Discover" },
+];
+
 export function SpaceToolsPage() {
   const { spaceId: routeSpaceId } = useParams<{ spaceId?: string }>();
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<Tab>("installed");
   const { data: spacesData, isLoading: spacesLoading } = useSpaces();
   const spaces = spacesData?.spaces ?? [];
 
@@ -290,52 +299,47 @@ export function SpaceToolsPage() {
           </h1>
         </div>
 
-        {/* Space selector */}
-        <div className="flex items-center gap-2">
-          {spacesLoading ? (
-            <span className="text-[12px] text-ink-muted">Loading…</span>
-          ) : (
-            <select
-              value={activeSpaceId ?? ""}
-              onChange={handleSpaceChange}
-              className="h-9 rounded border border-hairline-strong bg-surface-1 px-3 text-[12px] text-ink transition hover:border-accent focus:border-accent focus:outline-none"
-            >
-              <option value="">Select a space…</option>
-              {spaces.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.icon ? `${s.icon} ` : ""}{s.name}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
+        {/* Space selector (only relevant for Installed tab) */}
+        {activeTab === "installed" && (
+          <div className="flex items-center gap-2">
+            {spacesLoading ? (
+              <span className="text-[12px] text-ink-muted">Loading…</span>
+            ) : (
+              <select
+                value={activeSpaceId ?? ""}
+                onChange={handleSpaceChange}
+                className="h-9 rounded border border-hairline-strong bg-surface-1 px-3 text-[12px] text-ink transition hover:border-accent focus:border-accent focus:outline-none"
+              >
+                <option value="">Select a space…</option>
+                {spaces.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.icon ? `${s.icon} ` : ""}{s.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        )}
       </header>
 
-      {/* No space selected */}
-      {!activeSpaceId && (
-        <div className="rounded-lg border border-dashed border-hairline-strong bg-surface-1 p-10 shadow-inset-hairline">
-          <div className="mx-auto max-w-sm text-center">
-            <p className="font-display text-[13px] font-semibold uppercase tracking-[0.14em] text-ink">
-              Select a space
-            </p>
-            <p className="mt-2 text-[12px] text-ink-muted">
-              Choose a space above to view its available AI tools — agents, commands, skills, context files, hooks, and permissions.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Loading */}
-      {activeSpaceId && toolsLoading && (
-        <p className="text-[12px] text-ink-muted">Loading tools…</p>
-      )}
-
-      {/* Error */}
-      {activeSpaceId && toolsError && (
-        <div className="rounded-md border border-danger/20 bg-danger/5 px-4 py-3 text-[12px] text-danger">
-          Failed to load tools for this space.
-        </div>
-      )}
+      {/* Tab switcher */}
+      <div className="flex gap-1 rounded-md border border-hairline bg-surface-1 p-1 w-fit shadow-inset-hairline">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+            className={cn(
+              "rounded px-4 py-1.5 font-display text-[12px] font-medium uppercase tracking-[0.1em] transition",
+              activeTab === tab.id
+                ? "bg-accent text-white shadow-sm"
+                : "text-ink-muted hover:text-ink",
+            )}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
       {/* Tool detail panel */}
       {selectedTool && activeSpaceId && (
@@ -346,85 +350,119 @@ export function SpaceToolsPage() {
         />
       )}
 
-      {/* Content */}
-      {activeSpaceId && tools && (
+      {/* Discover tab */}
+      {activeTab === "discover" && <DiscoveryPanel />}
+
+      {/* Installed tab */}
+      {activeTab === "installed" && (
         <>
-          {/* Summary stats bar */}
-          <div className="flex flex-wrap items-center gap-2">
-            {[
-              { label: "Agents", count: tools.agents.length },
-              { label: "Commands", count: tools.commands.length },
-              { label: "Skills", count: tools.skills.length },
-              { label: "Context", count: tools.context_files.length },
-            ].map(({ label, count }) => (
-              <div
-                key={label}
-                className="flex items-center gap-1.5 rounded border border-hairline bg-surface-1 px-3 py-1.5 shadow-inset-hairline"
-              >
-                <span className="font-mono text-[16px] font-semibold tabular-nums text-ink">
-                  {String(count).padStart(2, "0")}
-                </span>
-                <span className="font-display text-[10px] uppercase tracking-[0.18em] text-ink-faint">
-                  {label}
-                </span>
+          {/* No space selected */}
+          {!activeSpaceId && (
+            <div className="rounded-lg border border-dashed border-hairline-strong bg-surface-1 p-10 shadow-inset-hairline">
+              <div className="mx-auto max-w-sm text-center">
+                <p className="font-display text-[13px] font-semibold uppercase tracking-[0.14em] text-ink">
+                  Select a space
+                </p>
+                <p className="mt-2 text-[12px] text-ink-muted">
+                  Choose a space above to view its available AI tools — agents, commands, skills, context files, hooks, and permissions.
+                </p>
               </div>
-            ))}
-            {totalCount === 0 && (
-              <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-faint">
-                No tools found
-              </span>
-            )}
-            {tools.has_claude_md && (
-              <div className="flex items-center gap-1.5 rounded border border-hairline bg-surface-2 px-3 py-1.5">
-                <span className="font-display text-[10px] uppercase tracking-[0.18em] text-ink-muted">
-                  CLAUDE.md ✓
-                </span>
+            </div>
+          )}
+
+          {/* Loading */}
+          {activeSpaceId && toolsLoading && (
+            <p className="text-[12px] text-ink-muted">Loading tools…</p>
+          )}
+
+          {/* Error */}
+          {activeSpaceId && toolsError && (
+            <div className="rounded-md border border-danger/20 bg-danger/5 px-4 py-3 text-[12px] text-danger">
+              Failed to load tools for this space.
+            </div>
+          )}
+
+          {/* Content */}
+          {activeSpaceId && tools && (
+            <>
+              {/* Summary stats bar */}
+              <div className="flex flex-wrap items-center gap-2">
+                {[
+                  { label: "Agents", count: tools.agents.length },
+                  { label: "Commands", count: tools.commands.length },
+                  { label: "Skills", count: tools.skills.length },
+                  { label: "Context", count: tools.context_files.length },
+                ].map(({ label, count }) => (
+                  <div
+                    key={label}
+                    className="flex items-center gap-1.5 rounded border border-hairline bg-surface-1 px-3 py-1.5 shadow-inset-hairline"
+                  >
+                    <span className="font-mono text-[16px] font-semibold tabular-nums text-ink">
+                      {String(count).padStart(2, "0")}
+                    </span>
+                    <span className="font-display text-[10px] uppercase tracking-[0.18em] text-ink-faint">
+                      {label}
+                    </span>
+                  </div>
+                ))}
+                {totalCount === 0 && (
+                  <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-faint">
+                    No tools found
+                  </span>
+                )}
+                {tools.has_claude_md && (
+                  <div className="flex items-center gap-1.5 rounded border border-hairline bg-surface-2 px-3 py-1.5">
+                    <span className="font-display text-[10px] uppercase tracking-[0.18em] text-ink-muted">
+                      CLAUDE.md ✓
+                    </span>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
 
-          {/* Artifact sections */}
-          <ToolGrid
-            entries={tools.agents}
-            category="agent"
-            label="Agents"
-            subfolder="agents"
-            onToolClick={(e) => handleToolClick(e, "agent")}
-          />
-          <ToolGrid
-            entries={tools.commands}
-            category="command"
-            label="Commands"
-            subfolder="commands"
-            onToolClick={(e) => handleToolClick(e, "command")}
-          />
-          <ToolGrid
-            entries={tools.skills}
-            category="skill"
-            label="Skills"
-            subfolder="skills"
-            onToolClick={(e) => handleToolClick(e, "skill")}
-          />
-          <ToolGrid
-            entries={tools.context_files}
-            category="context"
-            label="Context"
-            subfolder="context"
-            onToolClick={(e) => handleToolClick(e, "context")}
-          />
+              {/* Artifact sections */}
+              <ToolGrid
+                entries={tools.agents}
+                category="agent"
+                label="Agents"
+                subfolder="agents"
+                onToolClick={(e) => handleToolClick(e, "agent")}
+              />
+              <ToolGrid
+                entries={tools.commands}
+                category="command"
+                label="Commands"
+                subfolder="commands"
+                onToolClick={(e) => handleToolClick(e, "command")}
+              />
+              <ToolGrid
+                entries={tools.skills}
+                category="skill"
+                label="Skills"
+                subfolder="skills"
+                onToolClick={(e) => handleToolClick(e, "skill")}
+              />
+              <ToolGrid
+                entries={tools.context_files}
+                category="context"
+                label="Context"
+                subfolder="context"
+                onToolClick={(e) => handleToolClick(e, "context")}
+              />
 
-          {/* Settings */}
-          <section>
-            <div className="mb-3 flex items-baseline gap-2">
-              <h2 className="font-display text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
-                Settings
-              </h2>
-            </div>
-            <div className="grid gap-6 md:grid-cols-2">
-              <HooksPanel hooks={tools.hooks} />
-              <PermissionsPanel permissions={tools.permissions} />
-            </div>
-          </section>
+              {/* Settings */}
+              <section>
+                <div className="mb-3 flex items-baseline gap-2">
+                  <h2 className="font-display text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
+                    Settings
+                  </h2>
+                </div>
+                <div className="grid gap-6 md:grid-cols-2">
+                  <HooksPanel hooks={tools.hooks} />
+                  <PermissionsPanel permissions={tools.permissions} />
+                </div>
+              </section>
+            </>
+          )}
         </>
       )}
     </div>

@@ -339,6 +339,25 @@ export interface AiToolDetail extends AiToolEntry {
   content: string;
 }
 
+// --- Discovery ---
+
+export interface DiscoveredTool {
+  source_url: string;
+  source_slug: string;
+  kind: "agent" | "skill" | "command" | "hook";
+  name: string;
+  relative_path: string;
+  description: string | null;
+  source_sha: string;
+}
+
+export interface ToolSource {
+  url: string;
+  branch: string | null;
+  enabled: boolean;
+  label: string | null;
+}
+
 export interface PresetColor {
   name: string;
   value: string;

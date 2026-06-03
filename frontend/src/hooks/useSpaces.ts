@@ -118,6 +118,33 @@ export function useToolContent(spaceId: string | null, path: string | null, scop
   });
 }
 
+export function useDiscoverySources() {
+  return useQuery({
+    queryKey: ["discovery", "sources"],
+    queryFn: () => api.discoverySources(),
+    staleTime: 60_000,
+  });
+}
+
+export function useDiscoveryTools(kind?: string) {
+  return useQuery({
+    queryKey: ["discovery", "tools", { kind }],
+    queryFn: () => api.discoveryTools(kind),
+    staleTime: 60_000,
+  });
+}
+
+export function useDiscoveryRefresh() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.discoveryRefresh(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["discovery", "sources"] });
+      qc.invalidateQueries({ queryKey: ["discovery", "tools"] });
+    },
+  });
+}
+
 export function useImportSpace() {
   const qc = useQueryClient();
   return useMutation({
