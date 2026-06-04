@@ -15,7 +15,8 @@ from pydantic import ValidationError
 
 from dataclasses import dataclass
 
-from .models import AgentMode, AgentModel, Board, Task, TaskState, TaskSummary
+from .models import AgentMode, AgentModel, Board, FeatureState, Task, TaskState, TaskSummary
+from .feature_state import FEATURE_USER_TRANSITIONS, FEATURE_WORKER_TRANSITIONS  # noqa: F401 — used by transition_feature
 
 VALID_AGENT_MODES: tuple[AgentMode, ...] = ("plan", "auto", "ask")
 VALID_AGENT_MODELS: tuple[AgentModel, ...] = ("default", "sonnet", "opus", "haiku", "opus-4-8")
@@ -37,6 +38,25 @@ RESERVED_SPACE_DIRS: frozenset[str] = frozenset({".trash", ".imports"})
 # Subdir inside each space where Cronos state lives. Kept in sync with the
 # constant in space_storage.py (duplicated here to avoid a circular import).
 CRONOS_SUBDIR = ".cronos"
+
+# Ordered column list shared by _db_upsert and the reload_all bulk INSERT.
+# Both call sites MUST consume this constant so column order cannot drift.
+# New columns must be appended here and in the corresponding tuple builders.
+_TASK_INSERT_COLS: tuple[str, ...] = (
+    "id",
+    "space_id",
+    "state",
+    "title",
+    "type",
+    "parent_id",
+    "depends_on_json",
+    "feature_state",
+    "feature_key",
+    "realizes",
+    "issue_number",
+    "issue_url",
+    "proposed_issue_path",
+)
 
 USER_TRANSITIONS: set[tuple[TaskState, TaskState]] = {
     (TaskState.BACKLOG, TaskState.ACTIVE),
@@ -179,6 +199,37 @@ def validate_depends_on(
             raise CycleError(" -> ".join(path))
 
 
+def validate_realizes(
+    item_id: str,
+    feature_id: str | None,
+    space_id: str,
+    by_id: dict[str, Task],
+) -> None:
+    """Raise CycleError if setting item_id.realizes = feature_id is invalid.
+
+    Validates:
+    - No self-reference: item_id != feature_id
+    - Target exists: feature_id must be in by_id
+    - Same space: target.space_id must equal space_id
+    - Target type: target.type must be "feature" or "fix"
+
+    When feature_id is None, returns immediately (clearing is always valid).
+    """
+    if feature_id is None:
+        return
+    if feature_id == item_id:
+        raise CycleError(f"{item_id} cannot realize itself")
+    target = by_id.get(feature_id)
+    if target is None or target.space_id != space_id:
+        raise CycleError(
+            f"Feature {feature_id!r} not found in space {space_id!r}"
+        )
+    if target.type not in ("feature", "fix"):
+        raise CycleError(
+            f"Target {feature_id!r} has type {target.type!r}; realizes must point to a feature or fix"
+        )
+
+
 _TERMINAL_STATES: frozenset[str] = frozenset({"done", "archived"})
 
 
@@ -246,7 +297,8 @@ def parse_file(path: Path, space_id: str) -> Task:
     except (TypeError, ValueError):
         manual_order = 0
     task_type = meta.get("type", "task")
-    if task_type not in ("task", "goal", "issue"):
+    # "feature" and "fix" are valid types; unknown types coerce to "task" (preserve backward compat)
+    if task_type not in ("task", "goal", "issue", "feature", "fix"):
         task_type = "task"
     parent_id = meta.get("parent_id") or None
     raw_depends = meta.get("depends_on") or []
@@ -275,6 +327,12 @@ def parse_file(path: Path, space_id: str) -> Task:
             depends_on=depends_on,
             pr_url=meta.get("pr_url") or None,
             proposed_pr_path=meta.get("proposed_pr_path") or None,
+            feature_state=FeatureState(meta.get("feature_state")) if meta.get("feature_state") else None,
+            feature_key=meta.get("feature_key") or None,
+            realizes=meta.get("realizes") or None,
+            issue_number=meta.get("issue_number") or None,
+            issue_url=meta.get("issue_url") or None,
+            proposed_issue_path=meta.get("proposed_issue_path") or None,
         )
     except (KeyError, ValidationError) as e:
         raise ValueError(f"Invalid task file {path.name}: {e}") from e
@@ -302,6 +360,12 @@ def summarize(task: Task) -> TaskSummary:
         depends_on=list(task.depends_on),
         pr_url=task.pr_url,
         proposed_pr_path=task.proposed_pr_path,
+        feature_state=task.feature_state,
+        feature_key=task.feature_key,
+        realizes=task.realizes,
+        issue_number=task.issue_number,
+        issue_url=task.issue_url,
+        proposed_issue_path=task.proposed_issue_path,
     )
 
 
@@ -333,6 +397,12 @@ def dump_task(task: Task) -> str:
         "depends_on": list(task.depends_on),
         "pr_url": task.pr_url,
         "proposed_pr_path": task.proposed_pr_path,
+        "feature_state": task.feature_state.value if task.feature_state else None,
+        "feature_key": task.feature_key,
+        "realizes": task.realizes,
+        "issue_number": task.issue_number,
+        "issue_url": task.issue_url,
+        "proposed_issue_path": task.proposed_issue_path,
     }
     body_parts = ["# Brief", "", task.brief.strip() or ""]
     if task.history.strip():
@@ -419,6 +489,13 @@ class TaskStore:
                 ("type", "TEXT NOT NULL DEFAULT 'task'"),
                 ("parent_id", "TEXT NULL"),
                 ("depends_on_json", "TEXT NOT NULL DEFAULT '[]'"),
+                # Feature / fix columns — added by featurefix-data-model I2
+                ("feature_state", "TEXT NULL"),
+                ("feature_key", "TEXT NULL"),
+                ("realizes", "TEXT NULL"),
+                ("issue_number", "INTEGER NULL"),
+                ("issue_url", "TEXT NULL"),
+                ("proposed_issue_path", "TEXT NULL"),
             ]:
                 try:
                     con.execute(f"ALTER TABLE tasks ADD COLUMN {col} {defn}")
@@ -429,6 +506,9 @@ class TaskStore:
             )
             con.execute(
                 "CREATE INDEX IF NOT EXISTS idx_tasks_space_type ON tasks(space_id, type)"
+            )
+            con.execute(
+                "CREATE INDEX IF NOT EXISTS idx_tasks_space_realizes ON tasks(space_id, realizes)"
             )
             con.execute("""
                 CREATE TABLE IF NOT EXISTS discovered_tools (
@@ -450,21 +530,62 @@ class TaskStore:
         finally:
             con.close()
 
+    @staticmethod
+    def _task_insert_row(task: Task) -> tuple:
+        """Return an INSERT value tuple in the same order as _TASK_INSERT_COLS.
+
+        Both _db_upsert and reload_all MUST call this helper so column order
+        cannot drift between the two code paths (design risk R7: INSERT tuple
+        drift — a drift would silently NULL-out feature columns after reload_all).
+
+        Column positions (0-indexed, must match _TASK_INSERT_COLS exactly):
+          0  id
+          1  space_id
+          2  state
+          3  title
+          4  type
+          5  parent_id
+          6  depends_on_json
+          7  feature_state   <- feature field 1 of 6
+          8  feature_key     <- feature field 2 of 6
+          9  realizes        <- feature field 3 of 6
+         10  issue_number    <- feature field 4 of 6
+         11  issue_url       <- feature field 5 of 6
+         12  proposed_issue_path  <- feature field 6 of 6
+
+        Adding a new column requires updating both _TASK_INSERT_COLS (constant)
+        and this tuple at the same position.  Never add to one without the other.
+        """
+        row = (
+            task.id,
+            task.space_id,
+            task.state.value,
+            task.title,
+            task.type,
+            task.parent_id,
+            json.dumps(task.depends_on),
+            task.feature_state.value if task.feature_state is not None else None,
+            task.feature_key,
+            task.realizes,
+            task.issue_number,
+            task.issue_url,
+            task.proposed_issue_path,
+        )
+        # I9 persistence invariant: tuple length must equal column list length.
+        assert len(row) == len(_TASK_INSERT_COLS), (
+            f"_task_insert_row length {len(row)} != _TASK_INSERT_COLS length "
+            f"{len(_TASK_INSERT_COLS)} — add new columns to both"
+        )
+        return row
+
     def _db_upsert(self, task: Task) -> None:
+        cols = ", ".join(_TASK_INSERT_COLS)
+        placeholders = ", ".join("?" * len(_TASK_INSERT_COLS))
         con = sqlite3.connect(self._db_path)
         try:
             con.execute(
-                "INSERT OR REPLACE INTO tasks (id, space_id, state, title, type, parent_id, depends_on_json)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (
-                    task.id,
-                    task.space_id,
-                    task.state.value,
-                    task.title,
-                    task.type,
-                    task.parent_id,
-                    json.dumps(task.depends_on),
-                ),
+                f"INSERT OR REPLACE INTO tasks ({cols}) VALUES ({placeholders})",
+                self._task_insert_row(task),
             )
             con.commit()
         finally:
@@ -530,22 +651,15 @@ class TaskStore:
                     self._path_by_id[task.id] = path
             log.info("Loaded %d tasks from %s", len(self._by_id), self.spaces_dir)
             self._ensure_db_schema()
+            cols = ", ".join(_TASK_INSERT_COLS)
+            placeholders = ", ".join("?" * len(_TASK_INSERT_COLS))
             con = sqlite3.connect(self._db_path)
             try:
                 con.execute("DELETE FROM tasks")
                 for task in self._by_id.values():
                     con.execute(
-                        "INSERT INTO tasks (id, space_id, state, title, type, parent_id, depends_on_json)"
-                        " VALUES (?, ?, ?, ?, ?, ?, ?)",
-                        (
-                            task.id,
-                            task.space_id,
-                            task.state.value,
-                            task.title,
-                            task.type,
-                            task.parent_id,
-                            json.dumps(task.depends_on),
-                        ),
+                        f"INSERT INTO tasks ({cols}) VALUES ({placeholders})",
+                        self._task_insert_row(task),
                     )
                 con.commit()
             finally:
@@ -592,6 +706,8 @@ class TaskStore:
     def counts_by_space(self) -> dict[str, dict[TaskState, int]]:
         out: dict[str, dict[TaskState, int]] = {}
         for task in self._by_id.values():
+            if task.type in ("feature", "fix"):
+                continue
             buckets = out.setdefault(task.space_id, {s: 0 for s in TaskState})
             buckets[task.state] = buckets.get(task.state, 0) + 1
         return out
@@ -605,11 +721,16 @@ class TaskStore:
         return out
 
     def board(self, space_id: str | None = None) -> Board:
-        """Return tasks grouped by state. `None` or "all" ⇒ cross-space."""
+        """Return tasks grouped by state. `None` or "all" ⇒ cross-space.
+
+        Feature and fix tasks are excluded — they are surfaced via feature_board() instead.
+        """
         scope = None if space_id in (None, "all", "") else space_id
         lanes: dict[TaskState, list[TaskSummary]] = {s: [] for s in TaskState}
         for task in self._by_id.values():
             if scope is not None and task.space_id != scope:
+                continue
+            if task.type in ("feature", "fix"):
                 continue
             s = summarize(task)
             blockers = unmet_deps(task, self._by_id)
@@ -625,7 +746,135 @@ class TaskStore:
             done=lanes[TaskState.DONE],
         )
 
+    async def feature_board(self, space_id: str) -> dict[FeatureState, list[TaskSummary]]:
+        """Return feature and fix tasks for space_id bucketed by feature_state.
+
+        Only includes tasks with type in ("feature", "fix").
+        Tasks with feature_state=None are excluded (should not exist in practice).
+        """
+        async with self._lock:
+            buckets: dict[FeatureState, list[TaskSummary]] = {fs: [] for fs in FeatureState}
+            for task in self._by_id.values():
+                if task.space_id != space_id:
+                    continue
+                if task.type not in ("feature", "fix"):
+                    continue
+                if task.feature_state is None:
+                    continue
+                summary = summarize(task)
+                buckets[task.feature_state].append(summary)
+            # Sort each bucket by manual_order then created_at
+            for fs in buckets:
+                buckets[fs].sort(key=lambda s: (s.manual_order, s.created_at))
+            return buckets
+
+    # ---- feature helpers ----
+
+    def _next_feature_key(self, space_id: str, task_type: str) -> str:
+        """Return the next sequential FEAT-NNN or FIX-NNN key for the given space and type.
+
+        Caller must hold self._lock.
+
+        Scans self._by_id directly without acquiring any lock — the caller
+        already holds self._lock when this is invoked from create().  Never
+        make this async or re-acquire the lock inside this method (deadlock risk
+        documented in design-report risks[]).
+
+        Args:
+            space_id: The space to scope the counter to (per-space isolation).
+            task_type: ``"feature"`` produces ``FEAT-NNN``; any other value
+                produces ``FIX-NNN``.
+
+        Returns:
+            A zero-padded key string such as ``"FEAT-001"`` or ``"FIX-007"``.
+        """
+        # I6 invariant: FEAT and FIX counters are independent — each prefix is
+        # derived from task_type so "feature" tasks only increment the FEAT-NNN
+        # counter and "fix" tasks only increment the FIX-NNN counter.
+        prefix = "FEAT" if task_type == "feature" else "FIX"
+        max_num = 0
+        for task in self._by_id.values():
+            # I6 invariant: counter is per-space — skip tasks in other spaces.
+            if task.space_id != space_id:
+                continue
+            # I6 invariant: counter is per-type — skip tasks of the wrong type.
+            if task.type != task_type:
+                continue
+            fk = task.feature_key
+            if fk is None or not fk.startswith(prefix + "-"):
+                continue
+            suffix = fk[len(prefix) + 1:]
+            try:
+                num = int(suffix)
+            except ValueError:
+                continue
+            if num > max_num:
+                max_num = num
+        # I6 invariant: non-feature/non-fix tasks never reach this method —
+        # create() only calls _next_feature_key when type in ("feature", "fix").
+        return f"{prefix}-{(max_num + 1):03d}"
+
     # ---- mutations ----
+
+    async def transition_feature(
+        self,
+        task_id: str,
+        new_feature_state: FeatureState,
+        *,
+        allowed: frozenset[tuple[FeatureState, FeatureState]],
+    ) -> Task:
+        """Transition task.feature_state to new_feature_state.
+
+        Modelled on transition() but operates exclusively on feature_state —
+        task.state is NEVER mutated by this method.  FeatureState and TaskState
+        are distinct enums; do not pass a TaskState value here.
+
+        Args:
+            task_id: ID of the task to transition.
+            new_feature_state: The target FeatureState (not TaskState).
+            allowed: Frozenset of (current, new) FeatureState pairs that are
+                permitted; typically FEATURE_USER_TRANSITIONS or
+                FEATURE_WORKER_TRANSITIONS from app.feature_state.
+
+        Returns:
+            The updated Task (task.state is unchanged).
+
+        Raises:
+            TaskNotFound: task_id does not exist.
+            InvalidTransition: task type is not "feature" or "fix", or the
+                (current, new) pair is not in allowed, or feature_state is None.
+        """
+        async with self._lock:
+            task = self._by_id.get(task_id)
+            if task is None:
+                raise TaskNotFound(task_id)
+            if task.type not in ("feature", "fix"):
+                raise InvalidTransition(
+                    f"Task {task_id!r} has type {task.type!r}; "
+                    "transition_feature requires type 'feature' or 'fix'"
+                )
+            if task.feature_state is None:
+                raise InvalidTransition(
+                    f"Task {task_id!r} has no feature_state set"
+                )
+            current_feature_state = task.feature_state
+            if current_feature_state == new_feature_state:
+                return task
+            if (current_feature_state, new_feature_state) not in allowed:
+                raise InvalidTransition(
+                    f"Cannot move feature from {current_feature_state.value!r} "
+                    f"to {new_feature_state.value!r}"
+                )
+            updated = task.model_copy(
+                update={
+                    "feature_state": new_feature_state,
+                    "updated_at": datetime.now(tz=UTC),
+                }
+            )
+            path = self._path_by_id[task_id]
+            atomic_write(path, dump_task(updated))
+            self._reindex_locked(path)
+            return self._by_id[task_id]
 
     async def create(
         self,
@@ -644,7 +893,7 @@ class TaskStore:
             raise StorageError(f"Invalid agent_model: {agent_model}")
         if agent_mode not in VALID_AGENT_MODES:
             raise StorageError(f"Invalid agent_mode: {agent_mode}")
-        if type not in ("task", "goal", "issue"):
+        if type not in ("task", "goal", "issue", "feature", "fix"):
             raise StorageError(f"Invalid type: {type}")
         tasks_dir = self.tasks_dir_for(space_id)
         if not tasks_dir.is_dir():
@@ -652,6 +901,11 @@ class TaskStore:
         now = datetime.now(tz=UTC)
         async with self._lock:
             task_id = generate_task_id(title, now, set(self._by_id.keys()))
+            feature_key: str | None = None
+            initial_feature_state: FeatureState | None = None
+            if type in ("feature", "fix"):
+                feature_key = self._next_feature_key(space_id, type)
+                initial_feature_state = FeatureState.BACKLOG
             task = Task(
                 id=task_id,
                 space_id=space_id,
@@ -668,6 +922,8 @@ class TaskStore:
                 type=type,
                 parent_id=parent_id,
                 depends_on=depends_on or [],
+                feature_key=feature_key,
+                feature_state=initial_feature_state,
             )
             path = tasks_dir / f"{task_id}.md"
             atomic_write(path, dump_task(task))
@@ -692,7 +948,7 @@ class TaskStore:
             raise StorageError(f"Invalid agent_mode: {agent_mode}")
         if agent_model is not None and agent_model not in VALID_AGENT_MODELS:
             raise StorageError(f"Invalid agent_model: {agent_model}")
-        if type is not None and type not in ("task", "goal", "issue"):
+        if type is not None and type not in ("task", "goal", "issue", "feature", "fix"):
             raise StorageError(f"Invalid type: {type}")
         async with self._lock:
             task = self._by_id.get(task_id)
@@ -1022,6 +1278,44 @@ class TaskStore:
             atomic_write(path, dump_task(updated))
             self._reindex_locked(path)
             return self._by_id[task_id]
+
+    async def realizing_items(self, feature_id: str) -> list[TaskSummary]:
+        """Return TaskSummary list of tasks whose realizes field equals feature_id.
+
+        Implemented as an in-memory scan of self._by_id. The SQLite index
+        idx_tasks_space_realizes exists for future query-based variants but is
+        not load-bearing in S1.
+        """
+        async with self._lock:
+            result = []
+            for task in self._by_id.values():
+                if task.realizes == feature_id:
+                    result.append(summarize(task))
+            return result
+
+    async def set_realizes(self, item_id: str, feature_id: str | None) -> Task:
+        """Set or clear the realizes field on a task.
+
+        When feature_id is not None, calls validate_realizes() to enforce:
+        - no self-reference
+        - target exists in the same space
+        - target type is "feature" or "fix"
+
+        When feature_id is None, clears the field with no validation.
+        Mirrors set_parent in structure and persistence pattern.
+        """
+        async with self._lock:
+            task = self._by_id.get(item_id)
+            if task is None:
+                raise TaskNotFound(item_id)
+            validate_realizes(item_id, feature_id, task.space_id, self._by_id)
+            updated = task.model_copy(
+                update={"realizes": feature_id, "updated_at": datetime.now(tz=UTC)}
+            )
+            path = self._path_by_id[item_id]
+            atomic_write(path, dump_task(updated))
+            self._reindex_locked(path)
+            return self._by_id[item_id]
 
     async def set_depends_on(self, task_id: str, depends_on: list[str]) -> Task:
         """Set depends_on list. Calls validate_depends_on; raises CycleError on cycle."""

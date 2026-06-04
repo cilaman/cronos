@@ -17,7 +17,20 @@ class TaskState(str, Enum):
 
 AgentMode = Literal["plan", "auto", "ask"]
 AgentModel = Literal["default", "sonnet", "opus", "haiku", "opus-4-8"]
-TaskType = Literal["task", "goal", "issue"]
+TaskType = Literal["task", "goal", "issue", "feature", "fix"]
+
+
+class FeatureState(str, Enum):
+    """Lifecycle state for feature and fix tasks.
+
+    Distinct from TaskState — never mix the two in typed method signatures.
+    """
+
+    BACKLOG = "backlog"
+    PROCESSING = "processing"
+    PLANNED = "planned"
+    WAITING = "waiting"
+    DONE = "done"
 
 
 class View(BaseModel):
@@ -48,11 +61,18 @@ class Task(BaseModel):
     agent_model: AgentModel = "default"
     priority: int = 3  # 1 (highest) to 5 (lowest)
     manual_order: int = 0  # lower value = higher in lane
-    type: Literal["task", "goal", "issue"] = "task"
+    type: Literal["task", "goal", "issue", "feature", "fix"] = "task"
     parent_id: str | None = None
     depends_on: list[str] = Field(default_factory=list)
     pr_url: str | None = None
     proposed_pr_path: str | None = None
+    # Feature / fix fields — all optional; populated only when type in ("feature", "fix")
+    feature_state: FeatureState | None = None
+    feature_key: str | None = None  # e.g. "FEAT-001" or "FIX-007"
+    realizes: str | None = None  # task_id of the feature/fix this item realizes
+    issue_number: int | None = None
+    issue_url: str | None = None
+    proposed_issue_path: str | None = None
 
 
 class ChildItem(BaseModel):
@@ -61,7 +81,7 @@ class ChildItem(BaseModel):
     state: TaskState
     priority: int
     updated_at: datetime
-    type: Literal["task", "goal", "issue"] = "task"
+    type: Literal["task", "goal", "issue", "feature", "fix"] = "task"
     children_progress: ChildrenProgress | None = None
 
 
@@ -92,13 +112,20 @@ class TaskSummary(BaseModel):
     priority: int = 3
     manual_order: int = 0
     agent_mode: AgentMode = "auto"
-    type: Literal["task", "goal", "issue"] = "task"
+    type: Literal["task", "goal", "issue", "feature", "fix"] = "task"
     parent_id: str | None = None
     depends_on: list[str] = Field(default_factory=list)
     unmet_dependencies: list[str] = []
     pr_url: str | None = None
     proposed_pr_path: str | None = None
     children_progress: ChildrenProgress | None = None
+    # Feature / fix fields — all optional; populated only when type in ("feature", "fix")
+    feature_state: FeatureState | None = None
+    feature_key: str | None = None  # e.g. "FEAT-001" or "FIX-007"
+    realizes: str | None = None  # task_id of the feature/fix this item realizes
+    issue_number: int | None = None
+    issue_url: str | None = None
+    proposed_issue_path: str | None = None
     # True when a worker is actively executing this task right now.
     is_running: bool = False
     # Denormalized space fields so cards can render without a separate join.
