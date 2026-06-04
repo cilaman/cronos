@@ -1067,6 +1067,7 @@ class Worker:
         run_exception: str | None,
         *,
         started_at: datetime,
+        memory_injected: list[str] | None = None,
     ) -> TaskState:
         """Finalize a child task run inside goal orchestration. Returns the new state."""
         ended_at = datetime.now(tz=UTC)
@@ -1141,6 +1142,99 @@ class Worker:
                             )
                         except Exception:
                             log.exception("Failed to save memory block for child %s", child_id)
+
+        if result is not None and (self.trace_store is not None or self.stats_store is not None):
+            child_task = self.store.get(child_id)
+            if child_task is not None:
+                try:
+                    usage = extract_tokens_and_tools(result.raw_events)
+                    real_model = usage["real_model"]
+
+                    run_index = 0
+                    if self.stats_store is not None:
+                        existing = await self.stats_store.load(child_task.space_id, child_id)
+                        run_index = len(existing.runs) if existing else 0
+                    elif self.trace_store is not None:
+                        run_index = await self.trace_store.count_runs(child_task.space_id, child_id)
+
+                    exit_reason = (
+                        "STOPPED" if result.stopped
+                        else (result.status.value if result.status else
+                              ("CRASHED" if result.exit_code != 0 else "NO_STATUS"))
+                    )
+
+                    computed_trace: RunTrace | None = None
+                    try:
+                        from .tools.index import adopted_index_for_space
+                        adopted_idx = adopted_index_for_space(
+                            child_task.space_id, spaces_dir=self.store.spaces_dir
+                        )
+                        computed_trace = extract_run_trace(
+                            result.raw_events,
+                            task_id=child_id,
+                            space_id=child_task.space_id,
+                            run_index=run_index,
+                            model=child_task.agent_model,
+                            mode=child_task.agent_mode,
+                            started_at=started_at,
+                            ended_at=ended_at,
+                            exit_reason=exit_reason,
+                            session_id=result.session_id,
+                            had_crash=result.exit_code != 0 and not result.stopped,
+                            memory_injected=memory_injected or [],
+                            adopted_index=adopted_idx or None,
+                        )
+                    except Exception:
+                        log.exception("Failed to compute trace for child %s", child_id)
+
+                    if self.stats_store is not None and computed_trace is not None:
+                        try:
+                            pricing_tier = _tier_from_real_model(real_model, child_task.agent_model)
+                            run_stats = RunStats(
+                                run_index=run_index,
+                                started_at=started_at,
+                                ended_at=ended_at,
+                                duration_seconds=round((ended_at - started_at).total_seconds(), 2),
+                                model=child_task.agent_model,
+                                real_model=real_model,
+                                mode=child_task.agent_mode,
+                                exit_reason=exit_reason,
+                                input_tokens=usage["input_tokens"],
+                                output_tokens=usage["output_tokens"],
+                                cache_read_tokens=usage["cache_read_tokens"],
+                                cache_creation_tokens=usage["cache_creation_tokens"],
+                                cost_usd=compute_cost(
+                                    pricing_tier,
+                                    usage["input_tokens"],
+                                    usage["output_tokens"],
+                                    usage["cache_read_tokens"],
+                                    usage["cache_creation_tokens"],
+                                ),
+                                tool_uses=usage["tool_uses"],
+                                error_count=usage["error_count"],
+                                had_crash=result.exit_code != 0 and not result.stopped,
+                                memory_hit_rate=(
+                                    computed_trace.memory_hit_rate
+                                    if memory_injected
+                                    else None
+                                ),
+                                adopted_tool_uses=compute_adopted_tool_uses(
+                                    computed_trace.tool_calls, exit_reason
+                                ),
+                            )
+                            await self.stats_store.append_run(
+                                child_task.space_id, child_id, child_task.title, run_stats
+                            )
+                        except Exception:
+                            log.exception("Failed to save stats for child %s", child_id)
+
+                    if self.trace_store is not None and computed_trace is not None:
+                        try:
+                            await self.trace_store.save_run(child_task.space_id, child_id, computed_trace)
+                        except Exception:
+                            log.exception("Failed to save trace for child %s", child_id)
+                except Exception:
+                    log.exception("Failed to record telemetry for child %s", child_id)
 
         return new_state
 
@@ -1257,6 +1351,9 @@ class Worker:
             child_result: AgentResult | None = None
             run_exception: str | None = None
             child_started_at = datetime.now(tz=UTC)
+            child_memory_injected = _memory_injected_for_workspace(
+                DATA_DIR / child.space_id / CRONOS_SUBDIR / "workspaces" / child_id
+            )
             child_memory = None
             if self.memory_store is not None:
                 try:
@@ -1280,7 +1377,8 @@ class Worker:
 
             self._current_child_id = None
             child_new_state = await self._finalize_child(
-                child_id, child_result, run_exception, started_at=child_started_at
+                child_id, child_result, run_exception, started_at=child_started_at,
+                memory_injected=child_memory_injected,
             )
 
             await self._publish(child_id, {
