@@ -64,7 +64,7 @@ HTTP Basic Auth via Caddy on every request. `/api/health` is public (no auth). C
 
 | Path | Purpose |
 |------|---------|
-| `backend/app/main.py` | FastAPI app, router registration, background task startup (cron loop initialization), file watcher |
+| `backend/app/main.py` | FastAPI app, router registration, background task startup (cron loop initialization), file watcher with event-trigger dispatch; task-state-change callback injection |
 | `backend/app/storage.py` | **CORE** — TaskStore, state machine, dependency DAG validation, cycle detection (41 KB) |
 | `backend/app/space_storage.py` | Space persistence, layouts, settings, `.cronos` subdirectory management |
 | `backend/app/agent.py` | Agent spawning, stdout/stderr capture, status tracking |
@@ -73,10 +73,10 @@ HTTP Basic Auth via Caddy on every request. `/api/health` is public (no auth). C
 | `backend/app/trace_parser.py` | Parse `STATUS:` fields from agent stdout, extract RunTrace (result, exit_reason, parent_run_id, memory_hit_rate, etc.) |
 | `backend/app/api/tasks.py` | Task CRUD, state transitions, drag-drop reordering, lane overrides (29 KB) |
 | `backend/app/api/spaces.py` | Space CRUD, repo linking, project settings |
-| `backend/app/api/harnesses.py` | Harness CRUD endpoints and run lifecycle (GET/POST/PUT/DELETE, POST /run, GET /runs) with concurrency contract |
+| `backend/app/api/harnesses.py` | Harness CRUD endpoints and run lifecycle (GET/POST/PUT/DELETE, POST /run, GET /runs, POST /webhook) with concurrency contract; webhook authentication via Bearer token |
 | `backend/app/api/harness_runs.py` | Harness run status and control endpoints (GET /{run_id}, POST /{run_id}/cancel, GET /{run_id}/stream SSE) |
-| `backend/app/harnesses/model.py` | Pydantic models with reference integrity validation (HarnessNode, HarnessEdge, Harness); Wait and Aggregator node data conventions; trigger node cron `data` schema |
-| `backend/app/harnesses/validator.py` | DAG validation (cycle detection, self-loop rejection, reference fidelity checks, human Wait required fields R6) |
+| `backend/app/harnesses/model.py` | Pydantic models with reference integrity validation (HarnessNode, HarnessEdge, Harness); Wait and Aggregator node data conventions; trigger node kinds (`task-state-change`, `webhook`, `file-change`) and their `data` schemas |
+| `backend/app/harnesses/validator.py` | DAG validation (cycle detection, self-loop rejection, reference fidelity checks, human Wait required fields R6); event-trigger validation (kind field, required/optional fields per kind, defaults application) |
 | `backend/app/harnesses/store.py` | HarnessStore with atomic YAML I/O to `.cronos/harnesses/<name>.yml` per space |
 | `backend/app/harnesses/executor.py` | **Harness executor** — runtime-gated BFS DAG interpreter with control-flow dispatch (decision/wait/aggregator nodes), agent invocation, fail-fast on node failure, variable scope propagation, run-state persistence, SSE event publishing (`node_transition`, `edge_chosen`, `run_status`), cancel-race guard |
 | `backend/app/harnesses/decision.py` | Decision node evaluator — four-layer signal precedence (STATUS marker > exit_reason > regex > variable condition) with whitelisted variable grammar (==, !=, in) |
@@ -89,6 +89,7 @@ HTTP Basic Auth via Caddy on every request. `/api/health` is public (no auth). C
 | `backend/app/harnesses/run_trigger.py` | Shared `enqueue_harness_run` helper — task creation, run index append, worker registration; used by POST /run endpoint and cron loop |
 | `backend/app/harnesses/cron.py` | Stateless cron-trigger background loop — `should_fire(expression, timezone, prev_tick, now)`, `has_active_run()`, `cron_loop()` with overlap guard and croniter integration |
 | `backend/app/memory_store.py` | Shared context storage |
+| `backend/app/harnesses/triggers.py` | Event routing core — `EventBusEvent` dataclass, `EventDebouncer` in-memory dedup, `fan_out_to_harnesses()` async dispatcher with pattern matching and harness selection |
 | `backend/app/git_ops.py` | `git clone/commit/push` wrappers for repo-linked spaces |
 | `backend/app/goal_sync.py` | Goal state propagation |
 | `frontend/src/App.tsx` | Root layout — sidebar nav + outlet (responsive mobile drawer) |
