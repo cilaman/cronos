@@ -96,12 +96,13 @@ HTTP Basic Auth via Caddy on every request. `/api/health` is public (no auth). C
 | `frontend/src/pages/BoardPage.tsx` | Kanban board — dnd-kit drag-drop, lanes by TaskState |
 | `frontend/src/pages/TreePage.tsx` | Dependency DAG visualization (dagre) |
 | `frontend/src/pages/HarnessRunsPage.tsx` | Harness run history list with embedded per-run detail panel; trigger button and status badges |
+| `frontend/src/pages/HarnessListPage.tsx` | Harnesses landing page at `/spaces/:spaceId/harnesses` — card grid with harness overview (node/edge/var counts), create/edit/runs/delete actions, with CreateHarnessModal and delete confirmation |
 | `frontend/src/components/HarnessRunPanel.tsx` | Per-run detail panel with node status badges, live SSE indicator, cancel button, buffer-truncated badge |
 | `frontend/src/hooks/useTasks.ts` | React Query hooks for task CRUD |
 | `frontend/src/hooks/useHarnessRuns.ts` | React Query hooks for harness run queries, mutations (trigger, cancel), and SSE stream subscription |
 | `frontend/src/api.ts` | HTTP client; includes harness run types (RunSummary, NodeState, HarnessRunState) and API functions |
 | `frontend/src/pages/HarnessEditor.tsx` | Harness visual editor canvas page — React Flow v12 graph layout with 5 custom node types (Agent/Trigger/Decision/Wait/Aggregator), NodePalette drag source, VariableInspector side panel, Save button (GET-then-PUT); live-execution overlay with RunHistory (left panel), RunOverlay (canvas), and ChildTaskDrawer (right panel) |
-| `frontend/src/hooks/useHarnesses.ts` | React Query hooks for harness CRUD and canvas save (`useHarnesses` list, `useHarness` single fetch, `useSaveHarness` GET-then-PUT mutation enforcing created_at preservation) |
+| `frontend/src/hooks/useHarnesses.ts` | React Query hooks for harness CRUD and canvas save (`useHarnesses` list, `useHarness` single fetch, `useCreateHarness` and `useDeleteHarness` mutations, `useSaveHarness` GET-then-PUT mutation enforcing created_at preservation) |
 | `frontend/src/components/harness/runStatus.ts` | Single source of truth for node run-status styling: `NodeRunStatus` union type, `RunStatusOverlayData` interface (optional fields: runStatus, startedAt, endedAt, childTaskId), and `runStatusClassName()` mapper returning Tailwind class strings per status |
 | `frontend/src/components/harness/harnessMapping.ts` | Round-trip module converting between React Flow flat graph shape (nodes[], edges[]) and backend nested NodeRef payload; `toReactFlow()` and `fromReactFlow()` pure functions |
 | `frontend/src/components/harness/AgentNode.tsx` | Custom React Flow node for Agent task invocation (input/output handles, label, agent_ref display); applies run status styling from `runStatusClassName()` |
