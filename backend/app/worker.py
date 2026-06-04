@@ -150,6 +150,31 @@ class _WorkerProtocolAdapter:
 
         return new_state
 
+    def _publish(self, task_id: str, event: dict) -> None:
+        """Sync bridge to Worker._run_buffer (WorkerProtocol._publish is sync).
+
+        Worker._publish is async def but its body is purely synchronous.
+        This adapter replicates those operations so harness events reach
+        _run_buffer and SSE subscribers without an unawaited coroutine.
+        """
+        worker = self._worker
+        buf = worker._run_buffer.setdefault(task_id, [])
+        buf.append(event)
+        if len(buf) > _RUN_BUFFER_CAP:
+            del buf[: len(buf) - _RUN_BUFFER_CAP]
+        for q in list(worker._subscribers.get(task_id, [])):
+            try:
+                q.put_nowait(event)
+            except asyncio.QueueFull:
+                try:
+                    q.get_nowait()
+                except asyncio.QueueEmpty:
+                    pass
+                try:
+                    q.put_nowait(event)
+                except asyncio.QueueFull:
+                    pass
+
 
 def _topo_children(goal_id: str, store: TaskStore) -> list[str]:
     """Return direct child IDs of goal_id in dependency order (sibling deps only).
@@ -399,80 +424,62 @@ class Worker:
         else:
             await self._run_task(task_id, user_message)
 
-    async def _resume_harness_run(self, task_id: str) -> bool:
-        """Resume a WAITING harness run goal via executor.execute().
+    async def _execute_harness_run(
+        self,
+        task_id: str,
+        harness_id: str,
+        space_id: str,
+        *,
+        initial_run: bool,
+    ) -> bool:
+        """Execute (initial_run=True) or resume (initial_run=False) a harness run.
 
-        Called from _run_task when a pending_messages reply arrives for a task
-        that was parked by the harness executor (i.e., a human Wait node fired
-        and the task was transitioned to TaskState.WAITING).
-
-        Detection: checks for a harness run-state JSON file for task_id that
-        has ``waiting_node_id`` set.  If found, loads the associated harness
-        from harness_store and calls ``executor.execute(task_id, harness, space)``.
-        The executor internally reads ``waiting_node_id`` and resumes traversal
-        from the Wait node's outgoing edges — the worker does NOT read or
-        modify ``waiting_node_id`` directly.
-
-        Returns
-        -------
-        bool
-            True if a harness run state was found and executor.execute() was
-            called (regardless of outcome); False if no harness run state file
-            exists for task_id (caller should proceed with run_agent).
+        Builds HarnessExecutor with event_worker=_WorkerProtocolAdapter(self) so
+        all node_transition/edge_chosen/run_status events land in _run_buffer.
+        Returns True if executor.execute() was called; False on setup error.
         """
         if self.harness_store is None or self.space_store is None:
             return False
 
-        task = self.store.get(task_id)
-        if task is None:
-            return False
-
-        space = self.space_store.get(task.space_id)
+        space = self.space_store.get(space_id)
         if space is None:
+            log.warning(
+                "_execute_harness_run: space %r not found for run %s", space_id, task_id
+            )
             return False
 
-        # Compute the run-state file path (same formula as executor.py).
-        run_state_path = (
-            DATA_DIR / "spaces" / task.space_id / ".cronos" / "harness-runs" / f"{task_id}.json"
-        )
-        if not run_state_path.exists():
-            return False
-
-        # Load the run state to check for a pending human Wait.
-        try:
-            from .harnesses.run_state import load as load_run_state
-            run_state = load_run_state(run_state_path)
-        except Exception:
-            log.exception("Failed to load harness run state for %s", task_id)
-            return False
-
-        if run_state is None or run_state.waiting_node_id is None:
-            # No waiting node — not a harness resume (or harness completed).
-            return False
-
-        # Load the harness by name.
-        harness_id = run_state.harness_id
-        space_dir = str(self.space_store.spaces_dir / task.space_id)
+        space_dir = str(self.space_store.spaces_dir / space_id)
         try:
             harness = await self.harness_store.get(space_dir, harness_id)
         except Exception:
             log.exception(
-                "Failed to load harness %r for task %s; cannot resume harness run.",
-                harness_id, task_id,
+                "Failed to load harness %r for task %s; cannot %s harness run.",
+                harness_id, task_id, "start" if initial_run else "resume",
             )
             return False
 
-        # Build executor with a WorkerProtocol adapter.
+        # F2 fix: event_worker uses the adapter (not Worker directly) because
+        # WorkerProtocol._publish is sync, but Worker._publish is async def.
+        # Passing Worker directly would create un-awaited coroutines and drop
+        # all events. The adapter's sync _publish writes to _run_buffer directly.
         from .harnesses.executor import HarnessExecutor
 
         def _tools_resolver(space_id: str, agent_ref: str):
-            return None  # No tool resolution in this context; agent_ref is advisory.
+            return None
 
-        executor = HarnessExecutor(self.store, _WorkerProtocolAdapter(self), _tools_resolver)
+        _adapter = _WorkerProtocolAdapter(self)
+        executor = HarnessExecutor(
+            self.store,
+            _adapter,
+            _tools_resolver,
+            event_worker=_adapter,
+        )
 
         log.info(
-            "Resuming harness run %r (harness=%r, waiting_node_id=%r) via executor.execute().",
-            task_id, harness_id, run_state.waiting_node_id,
+            "%s harness run %r (harness=%r) via executor.execute().",
+            "Starting" if initial_run else "Resuming",
+            task_id,
+            harness_id,
         )
         try:
             result_state = await executor.execute(task_id, harness, space)
@@ -480,12 +487,12 @@ class Worker:
             log.exception("executor.execute() failed for harness run %s", task_id)
             return True  # Was a harness task — caller should not run run_agent.
 
-        # Transition the task state based on whether execution completed or parked again.
+        # Transition the task state based on whether execution completed or parked.
         timestamp = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         if result_state.waiting_node_id is not None:
-            # Harness parked again at another human Wait node — stay WAITING.
+            # Harness parked at a human Wait node — transition to WAITING.
             log.info(
-                "Harness run %r parked again at waiting_node_id=%r.",
+                "Harness run %r parked at waiting_node_id=%r.",
                 task_id, result_state.waiting_node_id,
             )
             history_entry = (
@@ -519,6 +526,95 @@ class Worker:
 
         return True
 
+    async def _resume_harness_run(self, task_id: str) -> bool:
+        """Resume a WAITING harness run (waiting_node_id is set in run-state).
+
+        Returns True if executor.execute() was called; False if no harness
+        run-state exists for task_id (caller should proceed with run_agent).
+        """
+        if self.harness_store is None or self.space_store is None:
+            return False
+
+        task = self.store.get(task_id)
+        if task is None:
+            return False
+
+        # Compute the run-state file path (same formula as executor.py).
+        run_state_path = (
+            DATA_DIR / "spaces" / task.space_id / ".cronos" / "harness-runs" / f"{task_id}.json"
+        )
+        if not run_state_path.exists():
+            return False
+
+        # Load the run state to check for a pending human Wait.
+        try:
+            from .harnesses.run_state import load as load_run_state
+            run_state = load_run_state(run_state_path)
+        except Exception:
+            log.exception("Failed to load harness run state for %s", task_id)
+            return False
+
+        if run_state is None or run_state.waiting_node_id is None:
+            # No waiting node — not a harness resume (or harness completed).
+            return False
+
+        return await self._execute_harness_run(
+            task_id,
+            run_state.harness_id,
+            task.space_id,
+            initial_run=False,
+        )
+
+    async def _run_initial_harness_run(self, task_id: str) -> bool:
+        """F1 fix: execute a freshly-triggered harness run for the first time.
+
+        Called from _run_task when task_id is in _run_id_to_space_id (set by
+        register_run() on POST /run) but no run-state JSON exists yet.
+        Resolves harness_id from the index file, then delegates to
+        _execute_harness_run(initial_run=True).
+
+        Returns True if executor.execute() was called; False if task_id is
+        not a known harness run (caller should fall through to run_agent).
+        """
+        space_id = self._run_id_to_space_id.get(task_id)
+        if space_id is None:
+            return False  # Not a harness run; fall through to run_agent.
+
+        if self.harness_store is None or self.space_store is None:
+            return False
+
+        # Resolve harness_id from the run-index file (written by POST /run).
+        harness_id: str | None = None
+        index_dir = DATA_DIR / "spaces" / space_id / ".cronos" / "harness-runs"
+        import json as _json
+        if index_dir.is_dir():
+            for index_file in index_dir.glob("*-index.json"):
+                try:
+                    with index_file.open("r", encoding="utf-8") as fh:
+                        entries: list[dict] = _json.load(fh)
+                    for entry in entries:
+                        if entry.get("run_id") == task_id:
+                            harness_id = entry.get("harness_id")
+                            break
+                except Exception:
+                    log.debug("_run_initial_harness_run: skipping %s (read error)", index_file)
+                if harness_id is not None:
+                    break
+
+        if harness_id is None:
+            log.warning(
+                "_run_initial_harness_run: could not find harness_id for run %s in space %s",
+                task_id, space_id,
+            )
+            return False
+
+        return await self._execute_harness_run(
+            task_id,
+            harness_id,
+            space_id,
+            initial_run=True,
+        )
+
     async def _run_task(self, task_id: str, user_message: str | None) -> None:
         task = self.store.get(task_id)
         if task is None:
@@ -531,6 +627,20 @@ class Worker:
         handled = await self._resume_harness_run(task_id)
         if handled:
             log.info("Task %s handled as harness resume; skipping run_agent.", task_id)
+            await self._publish(task_id, {
+                "type": "run_end",
+                "task_id": task_id,
+                "status": None,
+                "new_state": None,
+            })
+            return
+
+        # F1 fix: check for a freshly-triggered harness run (task_id in
+        # _run_id_to_space_id means POST /run registered it).  Without this
+        # branch the worker falls through to run_agent on a task with no agent.
+        handled = await self._run_initial_harness_run(task_id)
+        if handled:
+            log.info("Task %s handled as initial harness run; skipping run_agent.", task_id)
             await self._publish(task_id, {
                 "type": "run_end",
                 "task_id": task_id,

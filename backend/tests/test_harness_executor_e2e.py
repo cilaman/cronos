@@ -644,3 +644,138 @@ async def test_worker_rebuild_cache_from_index_files(tmp_path: Path):
         f"Expected space_id={space_id!r} for run_id={run_id!r}; "
         f"cache contains: {worker._run_id_to_space_id}"
     )
+
+
+# ---------------------------------------------------------------------------
+# F1 + F2 regression tests (I9): worker initial-run path and event_worker wiring
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_worker_initial_run_calls_executor_not_run_agent(tmp_path: Path):
+    """F1 regression: registered harness run must call executor.execute(), NOT run_agent."""
+    from unittest.mock import AsyncMock, MagicMock, patch, call
+    from app.worker import Worker
+    from app.harnesses.run_index import RunSummary, append_run
+    from app.models import TaskState
+
+    space_id = "f1-test-space"
+    harness_id = "simple-harness"
+    run_id = "f1-run-001"
+
+    space_dir = tmp_path / "spaces" / space_id
+    space_dir.mkdir(parents=True)
+    summary = RunSummary(
+        run_id=run_id,
+        harness_id=harness_id,
+        status="running",
+        triggered_at="2026-06-04T00:00:00Z",
+    )
+    await append_run(space_dir, harness_id, summary)
+
+    mock_task = MagicMock()
+    mock_task.id = run_id
+    mock_task.space_id = space_id
+    mock_task.type = "task"
+    mock_store = MagicMock()
+    mock_store.get = MagicMock(return_value=mock_task)
+    mock_store.finalize_run = AsyncMock()
+
+    mock_space = _make_space(space_id)
+    mock_space_store = MagicMock()
+    mock_space_store.get = MagicMock(return_value=mock_space)
+    mock_space_store.spaces_dir = tmp_path / "spaces"
+
+    harness = Harness(name=harness_id, nodes=[_make_agent_node("X")], edges=[])
+    mock_harness_store = MagicMock()
+    mock_harness_store.get = AsyncMock(return_value=harness)
+
+    from app.harnesses.executor import HarnessExecutor
+    from app.harnesses.run_state import RunState
+
+    with patch("app.worker.DATA_DIR", tmp_path):
+        worker = Worker(store=mock_store, space_store=mock_space_store, harness_store=mock_harness_store)
+
+    worker.register_run(run_id, space_id)
+
+    execute_calls: list[str] = []
+
+    async def _fake_execute(self_executor, task_id, harness_arg, space_arg):
+        execute_calls.append(task_id)
+        return RunState(run_id=task_id, harness_id=harness_id, goal_task_id=task_id)
+
+    with patch("app.worker.DATA_DIR", tmp_path):
+        with patch("app.worker.run_agent", side_effect=AssertionError("run_agent must NOT be called for a harness run")):
+            with patch.object(HarnessExecutor, "execute", _fake_execute):
+                with patch("app.harnesses.executor._DATA_DIR", tmp_path):
+                    await worker._run_task(run_id, user_message=None)
+
+    assert execute_calls == [run_id], f"executor.execute() not called: got {execute_calls}"
+    mock_store.finalize_run.assert_called_once()
+    assert mock_store.finalize_run.call_args[1]["new_state"] == TaskState.DONE
+
+
+@pytest.mark.asyncio
+async def test_worker_event_worker_plumbing_reaches_run_buffer(tmp_path: Path):
+    """F2 regression: executor with event_worker wired must put run_status in _run_buffer."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+    from app.worker import Worker
+    from app.harnesses.run_index import RunSummary, append_run
+    from app.models import TaskState
+
+    space_id = "f2-test-space"
+    harness_id = "event-harness"
+    run_id = "f2-run-001"
+
+    space_dir = tmp_path / "spaces" / space_id
+    space_dir.mkdir(parents=True)
+    await append_run(space_dir, harness_id, RunSummary(
+        run_id=run_id, harness_id=harness_id, status="running",
+        triggered_at="2026-06-04T00:00:00Z",
+    ))
+
+    mock_task = MagicMock()
+    mock_task.id = run_id
+    mock_task.space_id = space_id
+    mock_task.type = "task"
+    mock_store = MagicMock()
+    mock_store.get = MagicMock(return_value=mock_task)
+    mock_store.finalize_run = AsyncMock()
+    mock_store.create = AsyncMock(return_value=_make_task_mock("child-1"))
+
+    mock_space = _make_space(space_id)
+    mock_space_store = MagicMock()
+    mock_space_store.get = MagicMock(return_value=mock_space)
+    mock_space_store.spaces_dir = tmp_path / "spaces"
+
+    harness = Harness(name=harness_id, nodes=[_make_agent_node("A")], edges=[])
+    mock_harness_store = MagicMock()
+    mock_harness_store.get = AsyncMock(return_value=harness)
+
+    from app.harnesses.executor import HarnessExecutor
+    from app.worker import _WorkerProtocolAdapter
+
+    with patch("app.worker.DATA_DIR", tmp_path):
+        worker = Worker(store=mock_store, space_store=mock_space_store, harness_store=mock_harness_store)
+
+    worker.register_run(run_id, space_id)
+
+    async def _stub_run_agent(task_id: str, **kwargs):
+        return _make_trace(task_id=task_id, final_text="output_from_A")
+
+    async def _stub_finalize_child(task_id: str, trace) -> TaskState:
+        return TaskState.DONE
+
+    with patch("app.worker.DATA_DIR", tmp_path):
+        with patch.object(_WorkerProtocolAdapter, "run_agent", _stub_run_agent):
+            with patch.object(_WorkerProtocolAdapter, "finalize_child", _stub_finalize_child):
+                with patch("app.harnesses.executor._DATA_DIR", tmp_path):
+                    with patch("app.worker.run_agent", side_effect=AssertionError("run_agent must NOT be called")):
+                        await worker._run_task(run_id, user_message=None)
+
+    buf = worker._run_buffer.get(run_id, [])
+    assert len(buf) > 0, f"_run_buffer[{run_id!r}] empty — event_worker not wired (F2)"
+    event_types = {e.get("type") for e in buf}
+    assert "run_status" in event_types, (
+        f"'run_status' missing from _run_buffer; found: {event_types} (F2 regression)"
+    )
