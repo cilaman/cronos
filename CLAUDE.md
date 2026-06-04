@@ -68,30 +68,35 @@ HTTP Basic Auth via Caddy on every request. `/api/health` is public (no auth). C
 | `backend/app/storage.py` | **CORE** — TaskStore, state machine, dependency DAG validation, cycle detection (41 KB) |
 | `backend/app/space_storage.py` | Space persistence, layouts, settings, `.cronos` subdirectory management |
 | `backend/app/agent.py` | Agent spawning, stdout/stderr capture, status tracking |
-| `backend/app/worker.py` | Background task processor (goals, agent execution, state transitions); harness resume wiring for parked Wait nodes |
+| `backend/app/worker.py` | Background task processor (goals, agent execution, state transitions); harness run lifecycle execution, event publishing for SSE streams |
 | `backend/app/models.py` | Pydantic schemas: TaskState, Task, Space, View, agent modes/models |
 | `backend/app/trace_parser.py` | Parse `STATUS:` fields from agent stdout, extract RunTrace (result, exit_reason, parent_run_id, memory_hit_rate, etc.) |
 | `backend/app/api/tasks.py` | Task CRUD, state transitions, drag-drop reordering, lane overrides (29 KB) |
 | `backend/app/api/spaces.py` | Space CRUD, repo linking, project settings |
-| `backend/app/api/harnesses.py` | Harness CRUD REST endpoints (GET/POST/PUT/DELETE) with concurrency contract |
+| `backend/app/api/harnesses.py` | Harness CRUD endpoints and run lifecycle (GET/POST/PUT/DELETE, POST /run, GET /runs) with concurrency contract |
+| `backend/app/api/harness_runs.py` | Harness run status and control endpoints (GET /{run_id}, POST /{run_id}/cancel, GET /{run_id}/stream SSE) |
 | `backend/app/harnesses/model.py` | Pydantic models with reference integrity validation (HarnessNode, HarnessEdge, Harness); Wait and Aggregator node data conventions |
 | `backend/app/harnesses/validator.py` | DAG validation (cycle detection, self-loop rejection, reference fidelity checks, human Wait required fields R6) |
 | `backend/app/harnesses/store.py` | HarnessStore with atomic YAML I/O to `.cronos/harnesses/<name>.yml` per space |
-| `backend/app/harnesses/executor.py` | **Harness executor** — runtime-gated BFS DAG interpreter with control-flow dispatch (decision/wait/aggregator nodes), agent invocation, fail-fast on node failure, variable scope propagation, run-state persistence, Wait-human resume re-entry |
+| `backend/app/harnesses/executor.py` | **Harness executor** — runtime-gated BFS DAG interpreter with control-flow dispatch (decision/wait/aggregator nodes), agent invocation, fail-fast on node failure, variable scope propagation, run-state persistence, SSE event publishing (`node_transition`, `edge_chosen`, `run_status`), cancel-race guard |
 | `backend/app/harnesses/decision.py` | Decision node evaluator — four-layer signal precedence (STATUS marker > exit_reason > regex > variable condition) with whitelisted variable grammar (==, !=, in) |
 | `backend/app/harnesses/wait.py` | Wait node evaluators — `enter_wait()` parks human-mode harness runs with `waiting_node_id` routing key; `await_timed_wait()` sleeps timed-mode runs (MVP: restart re-sleeps full duration) |
 | `backend/app/harnesses/aggregator.py` | Aggregator node evaluator — `mode='all'` (fires when all predecessors done; any failure fails aggregator) or `mode='any'` (fires when first predecessor done; fails only if all fail); verdict-only semantics |
 | `backend/app/harnesses/interpolate.py` | Variable/data interpolation via `string.Template.safe_substitute` with precedence (root_vars < upstream_outputs) |
 | `backend/app/harnesses/brief_composer.py` | Child-task brief composition for harness executor nodes (agent header, skill prefix, prompt inclusion) |
-| `backend/app/harnesses/run_state.py` | RunState dataclass (includes `waiting_node_id` for human Wait resume routing) and atomic persistence (tempfile + os.replace) for harness DAG execution, reconciliation on resume |
+| `backend/app/harnesses/run_state.py` | RunState dataclass with lifecycle status and timing fields (`started_at`, `ended_at` ISO-8601 UTC per node); atomic persistence (tempfile + os.replace); reconciliation on resume |
+| `backend/app/harnesses/run_index.py` | Append-only per-harness run history index with concurrent-safe locking; `read_index()`, `append_run()`, `update_run_status()` |
 | `backend/app/memory_store.py` | Shared context storage |
 | `backend/app/git_ops.py` | `git clone/commit/push` wrappers for repo-linked spaces |
 | `backend/app/goal_sync.py` | Goal state propagation |
 | `frontend/src/App.tsx` | Root layout — sidebar nav + outlet (responsive mobile drawer) |
 | `frontend/src/pages/BoardPage.tsx` | Kanban board — dnd-kit drag-drop, lanes by TaskState |
 | `frontend/src/pages/TreePage.tsx` | Dependency DAG visualization (dagre) |
+| `frontend/src/pages/HarnessRunsPage.tsx` | Harness run history list with embedded per-run detail panel; trigger button and status badges |
+| `frontend/src/components/HarnessRunPanel.tsx` | Per-run detail panel with node status badges, live SSE indicator, cancel button, buffer-truncated badge |
 | `frontend/src/hooks/useTasks.ts` | React Query hooks for task CRUD |
-| `frontend/src/api.ts` | HTTP client |
+| `frontend/src/hooks/useHarnessRuns.ts` | React Query hooks for harness run queries, mutations (trigger, cancel), and SSE stream subscription |
+| `frontend/src/api.ts` | HTTP client; includes harness run types (RunSummary, NodeState, HarnessRunState) and API functions |
 
 ## Directory layout
 

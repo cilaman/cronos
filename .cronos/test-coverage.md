@@ -1,9 +1,37 @@
 # Test Coverage — cronos-development
 
-**Updated**: 2026-06-03T12:44:54Z
-**Overall**: 82.87%  (+0.25% vs previous run 2026-06-03 A3-index)
+**Updated**: 2026-06-03T14:50:00Z
+**Backend overall**: 82.73%  (1510 passed, 0 failed — unchanged scope, no backend code touched this task)
+**Frontend**: 750 vitest tests passed across 41 files (+7 this session)
+**Tester rounds this session**: 1 (full vitest + full pytest both green on first run, no regressions)
+
+## Recent changes (2026-06-03 — arc-5/C4 Frontend per-tool telemetry panel)
+
+Frontend-only task. New component `frontend/src/components/AdoptedToolTelemetry.tsx`
+(strip + expand/collapse), wired into `SpaceToolsPage` AdoptedSection rows, backed by
+`useToolTelemetry` hook → `api.toolTelemetry` → `GET /api/spaces/{id}/tools/{kind}/{name}/telemetry`
+typed by `ToolTelemetryResponse`. Backend telemetry endpoint shipped in arc-5/C2; no
+backend code changed here.
+
+Added 7 behavior-focused tests to `frontend/src/__tests__/AdoptedToolTelemetry.test.tsx`
+(now 19 tests), covering previously-untested branches:
+- **Loading state** — `loading…` shown while query pending; no call-count/no-calls leak.
+- **Pluralization** — singular "1 call" vs plural "2 calls" (`calls !== 1` branch).
+- **Success-rate color thresholds** — green at the inclusive 0.9 boundary, amber at 0.7,
+  danger below 0.7 (guards `>=` vs `>` regressions in `successColor`/`SuccessBar`).
+- **Error breakdown** — error-rate computation (`errors/calls` rounding), `{n} err` /
+  `{n} ok` legends present when `errors > 0`, and error legend omitted when `errors === 0`.
+- **Accessibility** — `aria-expanded` toggles false→true on strip click.
+
+The pre-existing tests already covered: strip with data, empty-history (calls=0),
+expand/collapse, window-prop passthrough, detail stat cells.
+
+---
+
+## Backend (unchanged this task — prior session figures retained below)
+
+**Prev backend run**: 82.87%  (+0.25% vs previous run 2026-06-03 A3-index)
 **Passed**: 1417 | **Failed**: 0 | **Errors**: 0 | **Skipped**: 0 | **Total**: 1417
-**Tester rounds this session**: 2 (1 wrong-assertion fix; full suite green, no regressions)
 
 ## Recent changes (2026-06-03 — B2 Adopt/Unadopt/List-Adopted API)
 
