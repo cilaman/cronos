@@ -144,6 +144,85 @@ class Board(BaseModel):
     done: list[TaskSummary] = []
 
 
+# ---------------------------------------------------------------------------
+# Feature / fix request + response schemas
+# ---------------------------------------------------------------------------
+
+
+class CreateFeatureBody(BaseModel):
+    """Request body for POST /api/features."""
+
+    space_id: str
+    title: str
+    brief: str = ""
+    type: Literal["feature", "fix"]
+    priority: int = Field(default=3, ge=1, le=5)
+
+
+class PatchFeatureBody(BaseModel):
+    """Request body for PATCH /api/features/{id} (edit title/brief)."""
+
+    title: str | None = None
+    brief: str | None = None
+
+
+class PatchFeatureStateBody(BaseModel):
+    """Request body for PATCH /api/features/{id}/feature-state."""
+
+    feature_state: FeatureState
+
+
+class PatchRealizeBody(BaseModel):
+    """Request body for PATCH /api/features/{id}/realize.
+
+    Set ``feature_id=None`` to unlink the item from any feature.
+    """
+
+    item_id: str
+    feature_id: str | None = None
+
+
+class FeatureBoard(BaseModel):
+    """Features/fixes grouped by FeatureState lane.
+
+    Lane names mirror FeatureState values (lowercased) — five lanes, distinct
+    from the four-lane Board used for ordinary tasks.
+    """
+
+    backlog: list[TaskSummary] = []
+    processing: list[TaskSummary] = []
+    planned: list[TaskSummary] = []
+    waiting: list[TaskSummary] = []
+    done: list[TaskSummary] = []
+
+
+class FeatureRead(BaseModel):
+    """Full feature/fix representation returned by GET /api/features/{id}."""
+
+    id: str
+    space_id: str
+    title: str
+    state: TaskState
+    created_at: datetime
+    updated_at: datetime
+    brief: str = ""
+    priority: int = 3
+    manual_order: int = 0
+    type: Literal["task", "goal", "issue", "feature", "fix"] = "task"
+    parent_id: str | None = None
+    depends_on: list[str] = Field(default_factory=list)
+    pr_url: str | None = None
+    proposed_pr_path: str | None = None
+    feature_state: FeatureState | None = None
+    feature_key: str | None = None
+    realizes: str | None = None
+    issue_number: int | None = None
+    issue_url: str | None = None
+    proposed_issue_path: str | None = None
+    # Realizing items — tasks that link to this feature via task.realizes == self.id
+    realizing_items: list[TaskSummary] = Field(default_factory=list)
+
+
 class Space(BaseModel):
     """A project-like namespace that owns tasks, workspaces, and config.
 

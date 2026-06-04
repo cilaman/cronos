@@ -18,6 +18,7 @@ from .api.harness_runs import harness_runs_router
 from .api.memory import router as memory_router
 from .api.spaces import router as spaces_router
 from .api.stats import router as stats_router
+from .api.features import router as features_router
 from .api.tasks import router as tasks_router
 from .api.test_reports import router as test_reports_router
 from .api.tools import router as tools_router
@@ -524,6 +525,7 @@ _auth = [Depends(require_auth)]
 
 app = FastAPI(title="Cronos", version="0.0.1", lifespan=lifespan)
 app.include_router(tasks_router, dependencies=_auth)
+app.include_router(features_router, dependencies=_auth)
 app.include_router(spaces_router, dependencies=_auth)
 app.include_router(views_router, dependencies=_auth)
 app.include_router(activity_router, dependencies=_auth)
