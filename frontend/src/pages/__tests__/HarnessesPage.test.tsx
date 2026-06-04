@@ -59,6 +59,7 @@ function makeSpace(overrides: Partial<SpaceSummary> = {}): SpaceSummary {
     icon: null,
     autopilot: "disabled",
     task_counts: { backlog: 0, active: 0, waiting: 0, done: 0, archived: 0 },
+    last_activity_at: null,
     ...overrides,
   };
 }
