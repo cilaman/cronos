@@ -1,0 +1,21 @@
+/* Cronos paper/ink overrides — scope to .harness-canvas to avoid polluting global styles */
+.harness-canvas .react-flow__edge-path {
+  stroke: currentColor;
+  stroke-width: 1.5px;
+}
+
+.harness-canvas .react-flow__node {
+  box-shadow: none;
+}
+
+.harness-canvas .react-flow__handle {
+  background: transparent;
+  border: 1px solid currentColor;
+  width: 8px;
+  height: 8px;
+}
+
+.harness-canvas .react-flow__controls button {
+  background: transparent;
+  border-color: currentColor;
+}

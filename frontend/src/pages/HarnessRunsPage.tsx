@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { useHarnessRuns, useTriggerHarnessRun } from "../hooks/useHarnessRuns";
 import type { RunSummary } from "../api";

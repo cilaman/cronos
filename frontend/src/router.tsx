@@ -1,3 +1,4 @@
+import React, { Suspense } from "react";
 import { Route, Routes } from "react-router-dom";
 import App from "./App";
 import { ArchivedPage } from "./pages/ArchivedPage";
@@ -11,6 +12,8 @@ import { SpaceToolsPage } from "./pages/SpaceToolsPage";
 import { StatsPage } from "./pages/StatsPage";
 import { TreePage } from "./pages/TreePage";
 import { HarnessRunsPage } from "./pages/HarnessRunsPage";
+
+const HarnessEditor = React.lazy(() => import("./pages/HarnessEditor").then((m) => ({ default: m.HarnessEditor })));
 
 export function AppRoutes() {
   return (
@@ -28,6 +31,14 @@ export function AppRoutes() {
         <Route path="spaces/:spaceId/settings" element={<SpaceSettingsPage />} />
         <Route path="spaces/:spaceId/tools" element={<SpaceToolsPage />} />
         <Route path="spaces/:spaceId/harnesses/:name/runs" element={<HarnessRunsPage />} />
+        <Route
+          path="spaces/:spaceId/harnesses/:name/edit"
+          element={
+            <Suspense fallback={<div>Loading…</div>}>
+              <HarnessEditor />
+            </Suspense>
+          }
+        />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

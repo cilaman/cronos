@@ -8,6 +8,7 @@ import type {
   BuildInfo,
   DiscoveredTool,
   GlobalStats,
+  Harness,
   MemoryItem,
   ReplyResponse,
   RunTrace,
@@ -371,5 +372,28 @@ export const api = {
     request<{ run_id: string; status: string }>(`/api/harness-runs/${encodeURIComponent(runId)}/cancel`, {
       method: "POST",
       body: "{}",
+    }),
+
+  // --- harness CRUD ---
+  listHarnesses: (spaceId: string): Promise<Harness[]> =>
+    request<Harness[]>(`/api/spaces/${spaceId}/harnesses`),
+  getHarness: (spaceId: string, name: string): Promise<Harness> =>
+    request<Harness>(`/api/spaces/${spaceId}/harnesses/${encodeURIComponent(name)}`),
+  createHarness: (
+    spaceId: string,
+    harness: Omit<Harness, "created_at" | "updated_at" | "version">,
+  ): Promise<Harness> =>
+    request<Harness>(`/api/spaces/${spaceId}/harnesses`, {
+      method: "POST",
+      body: JSON.stringify(harness),
+    }),
+  updateHarness: (spaceId: string, name: string, harness: Harness): Promise<Harness> =>
+    request<Harness>(`/api/spaces/${spaceId}/harnesses/${encodeURIComponent(name)}`, {
+      method: "PUT",
+      body: JSON.stringify(harness),
+    }),
+  deleteHarness: (spaceId: string, name: string): Promise<void> =>
+    request<void>(`/api/spaces/${spaceId}/harnesses/${encodeURIComponent(name)}`, {
+      method: "DELETE",
     }),
 };
