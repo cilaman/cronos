@@ -428,6 +428,166 @@ describe('RunOverlay — onNodeOpen prop', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Tests: F2 regression — run-switch clears stale node.data
+//
+// When the user switches from runA to runB (via RunHistory), the cleanup
+// effect keyed on runId must strip runStatus/startedAt/endedAt/childTaskId
+// from nodes that carried them from the previous run.  The empty-map early-
+// returns in the nodeStatuses/edgeStatuses effects must NOT suppress this.
+// ---------------------------------------------------------------------------
+
+describe('RunOverlay — F2 stale-data cleanup on run switch', () => {
+  it('clears stale runStatus and childTaskId from nodes when switching runs', async () => {
+    const client = makeClient();
+
+    // runA: one node with runStatus and childTaskId populated
+    const runANodeStatuses = new Map<string, RunStatusOverlayData>([
+      [
+        'node-a',
+        {
+          runStatus: 'in_progress',
+          startedAt: '2024-01-01T00:00:00Z',
+          endedAt: undefined,
+          childTaskId: 'task-child-runA',
+        },
+      ],
+    ]);
+
+    mockedUseRunStateOverlay.mockReturnValue({
+      nodeStatuses: runANodeStatuses,
+      edgeStatuses: new Map(),
+      bufferTruncated: false,
+      status: 'live',
+    });
+
+    const { rerender } = render(
+      <RunOverlay runId="runA" mode="live" />,
+      { wrapper: makeWrapper(client) },
+    );
+
+    // Confirm runA applied status
+    expect(mockSetNodes).toHaveBeenCalledTimes(1);
+    mockSetNodes.mockClear();
+    mockSetEdges.mockClear();
+
+    // Switch to runB with an empty node status map (new run has no events yet)
+    mockedUseRunStateOverlay.mockReturnValue({
+      nodeStatuses: new Map(),
+      edgeStatuses: new Map(),
+      bufferTruncated: false,
+      status: 'connecting',
+    });
+
+    act(() => {
+      rerender(<RunOverlay runId="runB" mode="live" />);
+    });
+
+    // The cleanup effect must have fired because runId changed
+    expect(mockSetNodes).toHaveBeenCalledTimes(1);
+
+    // Run the cleanup updater against a node that still carries stale runA data
+    const cleanupUpdater = mockSetNodes.mock.calls[0][0] as (
+      prev: Array<{ id: string; data: Record<string, unknown> }>,
+    ) => Array<{ id: string; data: Record<string, unknown> }>;
+
+    const staleNodes = [
+      {
+        id: 'node-a',
+        data: {
+          label: 'Agent',
+          runStatus: 'in_progress',
+          startedAt: '2024-01-01T00:00:00Z',
+          childTaskId: 'task-child-runA',
+        },
+      },
+      {
+        id: 'node-b',
+        data: { label: 'Other' },
+      },
+    ];
+
+    const cleanedNodes = cleanupUpdater(staleNodes);
+
+    // node-a must have stale overlay fields stripped
+    expect(cleanedNodes[0].data.runStatus).toBeUndefined();
+    expect(cleanedNodes[0].data.childTaskId).toBeUndefined();
+    expect(cleanedNodes[0].data.startedAt).toBeUndefined();
+    // Non-overlay fields must be preserved
+    expect(cleanedNodes[0].data.label).toBe('Agent');
+
+    // node-b had no stale data — must be returned as the same reference
+    expect(cleanedNodes[1]).toBe(staleNodes[1]);
+  });
+
+  it('clears stale edge styling when switching runs', async () => {
+    const client = makeClient();
+
+    // runA: one edge with animated styling
+    mockedUseRunStateOverlay.mockReturnValue({
+      nodeStatuses: new Map(),
+      edgeStatuses: new Map([['edge-a-b', 'done' as const]]),
+      bufferTruncated: false,
+      status: 'ended',
+    });
+
+    const { rerender } = render(
+      <RunOverlay runId="runA" mode="replay" />,
+      { wrapper: makeWrapper(client) },
+    );
+
+    mockSetNodes.mockClear();
+    mockSetEdges.mockClear();
+
+    // Switch to runB with empty edge status map
+    mockedUseRunStateOverlay.mockReturnValue({
+      nodeStatuses: new Map(),
+      edgeStatuses: new Map(),
+      bufferTruncated: false,
+      status: 'connecting',
+    });
+
+    act(() => {
+      rerender(<RunOverlay runId="runB" mode="live" />);
+    });
+
+    // Cleanup edge effect must have fired
+    expect(mockSetEdges).toHaveBeenCalledTimes(1);
+
+    const edgeCleanupUpdater = mockSetEdges.mock.calls[0][0] as (
+      prev: Array<{ id: string; animated?: boolean; style?: Record<string, unknown> }>,
+    ) => Array<{ id: string; animated?: boolean; style?: Record<string, unknown> }>;
+
+    const staleEdges = [
+      { id: 'edge-a-b', animated: true, style: { stroke: '#22c55e' } },
+      { id: 'edge-b-c', animated: false },
+    ];
+
+    const cleanedEdges = edgeCleanupUpdater(staleEdges);
+
+    // edge-a-b must have animated reset and stroke removed
+    expect(cleanedEdges[0].animated).toBe(false);
+    expect((cleanedEdges[0].style as Record<string, unknown> | undefined)?.stroke).toBeUndefined();
+
+    // edge-b-c had no stale styling — must be returned as same reference
+    expect(cleanedEdges[1]).toBe(staleEdges[1]);
+  });
+
+  it('does NOT call setNodes on first mount (no cleanup on initial render)', () => {
+    const client = makeClient();
+
+    // Render with empty nodeStatuses (first mount with runA)
+    render(
+      <RunOverlay runId="runA" mode="live" />,
+      { wrapper: makeWrapper(client) },
+    );
+
+    // The cleanup effect skips first mount; the nodeStatuses effect also skips
+    // because the map is empty. setNodes must not be called at all.
+    expect(mockSetNodes).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Tests: replay mode
 // ---------------------------------------------------------------------------
 

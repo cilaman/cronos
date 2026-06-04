@@ -529,7 +529,7 @@ describe("useRunStateOverlay — mode switch", () => {
         useRunStateOverlay("run-1", mode),
       {
         wrapper: makeWrapper(client),
-        initialProps: { mode: "live" as const },
+        initialProps: { mode: "live" as "live" | "replay" },
       },
     );
 
@@ -537,7 +537,7 @@ describe("useRunStateOverlay — mode switch", () => {
     const liveEs = FakeEventSource.instances[0];
     expect(liveEs.closed).toBe(false);
 
-    rerender({ mode: "replay" as const });
+    rerender({ mode: "replay" });
 
     // After switching to replay, the live EventSource must be closed.
     await waitFor(() => expect(liveEs.closed).toBe(true));
@@ -597,14 +597,14 @@ describe("useRunStateOverlay — mode switch", () => {
         useRunStateOverlay("run-1", mode),
       {
         wrapper: makeWrapper(client),
-        initialProps: { mode: "live" as const },
+        initialProps: { mode: "live" as "live" | "replay" },
       },
     );
 
     // One EventSource created for live mode.
     expect(FakeEventSource.constructorCallCount - initialConstructorCount).toBe(1);
 
-    rerender({ mode: "replay" as const });
+    rerender({ mode: "replay" });
 
     // The live EventSource must have been closed.
     await waitFor(() => {

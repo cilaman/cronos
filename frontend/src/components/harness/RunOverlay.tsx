@@ -14,7 +14,7 @@
  * overlay on the React Flow graph), except for the optional truncated banner.
  */
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useReactFlow } from '@xyflow/react';
 import type { OverlayMode } from '../../hooks/useRunStateOverlay';
 import { useRunStateOverlay } from '../../hooks/useRunStateOverlay';
@@ -42,6 +42,44 @@ export interface RunOverlayProps {
 export function RunOverlay({ runId, mode, onNodeOpen: _onNodeOpen }: RunOverlayProps) {
   const { setNodes, setEdges } = useReactFlow();
   const { nodeStatuses, edgeStatuses, bufferTruncated } = useRunStateOverlay(runId, mode);
+
+  // Cleanup effect: when runId changes (user switches between runs via RunHistory),
+  // strip stale runStatus/startedAt/endedAt/childTaskId from all node.data and
+  // reset edge styling so the prior run's data does not bleed into the new run.
+  // Uses a ref to track the previous runId so we do NOT fire on initial mount.
+  const prevRunIdRef = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    const prevRunId = prevRunIdRef.current;
+    prevRunIdRef.current = runId;
+    // Skip the very first render (prevRunId is the sentinel undefined)
+    if (prevRunId === undefined) return;
+    // Skip if the runId has not actually changed
+    if (prevRunId === runId) return;
+    // runId changed — clear stale overlay data from all nodes
+    setNodes((prevNodes) =>
+      prevNodes.map((node) => {
+        const { runStatus, startedAt, endedAt, childTaskId, ...rest } = node.data as Record<string, unknown> & {
+          runStatus?: unknown;
+          startedAt?: unknown;
+          endedAt?: unknown;
+          childTaskId?: unknown;
+        };
+        // Only rebuild the node object when stale fields were actually present
+        if (runStatus === undefined && startedAt === undefined && endedAt === undefined && childTaskId === undefined) {
+          return node;
+        }
+        return { ...node, data: rest };
+      }),
+    );
+    // Reset edge styling to pristine state
+    setEdges((prevEdges) =>
+      prevEdges.map((edge) => {
+        if (!edge.animated && edge.style?.stroke === undefined) return edge;
+        const { stroke: _stroke, ...restStyle } = (edge.style ?? {}) as Record<string, unknown> & { stroke?: unknown };
+        return { ...edge, animated: false, style: restStyle };
+      }),
+    );
+  }, [runId, setNodes, setEdges]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Apply node run-status data into the React Flow graph.
   // When nodeStatuses changes (after each rAF flush), update every node whose

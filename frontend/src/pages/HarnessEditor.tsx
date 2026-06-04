@@ -46,11 +46,25 @@ function HarnessEditorInner() {
     [setEdges],
   );
 
+  // Declare handleNodeOpen before onNodeClick so it is in scope when
+  // onNodeClick's dependency array is evaluated (avoids TDZ error).
+  const handleNodeOpen = useCallback((childTaskId: string) => {
+    setSelectedChildTaskId(childTaskId);
+  }, []);
+
   const onNodeClick = useCallback((_: React.MouseEvent, node: { id: string }) => {
     if (!harness) return;
     const found = harness.nodes.find(n => n.id === node.id) ?? null;
     setSelectedNode(found);
-  }, [harness]);
+    // Read childTaskId from the React Flow node's runtime data (populated by
+    // RunOverlay's setNodes effect) and open ChildTaskDrawer when present.
+    // This wires R3 AC-1: clicking a node with a child_task_id opens the drawer.
+    const rfNode = nodes.find(n => n.id === node.id);
+    const childTaskId = (rfNode?.data as Record<string, unknown> | undefined)?.childTaskId as string | undefined;
+    if (childTaskId) {
+      handleNodeOpen(childTaskId);
+    }
+  }, [harness, nodes, handleNodeOpen]);
 
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -98,10 +112,6 @@ function HarnessEditorInner() {
     setCurrentRunId(runId);
     setOverlayMode(mode);
     setSelectedChildTaskId(null);
-  }, []);
-
-  const handleNodeOpen = useCallback((childTaskId: string) => {
-    setSelectedChildTaskId(childTaskId);
   }, []);
 
   const handleCloseDrawer = useCallback(() => {

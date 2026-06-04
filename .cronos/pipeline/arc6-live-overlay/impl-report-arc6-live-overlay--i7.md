@@ -4,63 +4,61 @@ agent: pipeline-implementor
 slug: arc6-live-overlay--i7
 phase: impl
 status: done
-confidence: 0.93
+confidence: 0.95
 inputs_used:
-  - memory:project_pipeline_implementor_agent
   - memory:project_arc6_visual_editor_impl
+  - memory:project_pipeline_implementor_agent
   - .cronos/pipeline/arc6-live-overlay/design-report-arc6-live-overlay.md
-  - .cronos/pipeline/arc6-live-overlay/impl-report-arc6-live-overlay--i4.md
-  - .cronos/pipeline/arc6-live-overlay/impl-report-arc6-live-overlay--i5.md
-  - .cronos/pipeline/arc6-live-overlay/impl-report-arc6-live-overlay--i6.md
+  - .cronos/pipeline/arc6-live-overlay/impl-report-arc6-live-overlay--i7.md
+  - .cronos/pipeline/arc6-live-overlay/review-report-arc6-live-overlay--attempt1.md
   - frontend/src/pages/HarnessEditor.tsx
-  - frontend/src/hooks/useHarnessRuns.ts
+  - frontend/src/pages/__tests__/HarnessEditor.runOverlay.test.tsx
   - frontend/src/components/harness/RunOverlay.tsx
-  - frontend/src/components/harness/RunHistory.tsx
-  - frontend/src/components/harness/ChildTaskDrawer.tsx
-  - frontend/src/pages/__tests__/HarnessEditor.test.tsx
-  - frontend/src/pages/__tests__/HarnessEditor.acceptance.test.tsx
-  - frontend/src/components/harness/__tests__/RunOverlay.test.tsx
-  - frontend/src/components/harness/__tests__/RunHistory.test.tsx
+  - frontend/src/components/harness/harnessMapping.ts
 iteration_id: I7
 files_changed:
   - frontend/src/pages/HarnessEditor.tsx
   - frontend/src/pages/__tests__/HarnessEditor.runOverlay.test.tsx
 validation_command_passed: true
-out_of_scope_findings: []
+out_of_scope_findings:
+  - location: frontend/src/components/harness/RunOverlay.tsx:50
+    severity: low
+    description: setNodes/setEdges effects early-return on empty maps, leaving stale runStatus/childTaskId on node.data after a run switch.
+    suggested_iteration: I4
+    source: review-report-arc6-live-overlay--attempt1.md (F2)
 outputs_produced:
   - .cronos/pipeline/arc6-live-overlay/impl-report-arc6-live-overlay--i7.md
 blockers: []
 next_consumer: test
 metrics:
-  tool_calls: 22
-  files_read: 15
+  tool_calls: 18
+  files_read: 9
   memory_hits: 2
-  diff_lines_added: 670
-  diff_lines_removed: 0
+  diff_lines_added: 78
+  diff_lines_removed: 5
 ---
 
 ## Summary
 
-I7 wires the run-overlay subsystem into `HarnessEditor.tsx`: `RunHistory` (left panel), `RunOverlay` (canvas overlay, conditionally mounted), and `ChildTaskDrawer` (right panel) are all integrated with appropriate state (`currentRunId`, `overlayMode`, `selectedChildTaskId`). A `Run` button in the header calls `useTriggerHarnessRun`, sets `currentRunId` and `mode='live'` on success. Switching runs via `RunHistory.onSelectRun` updates `currentRunId`+`mode`. Clicking a node with a `childTaskId` via `RunOverlay.onNodeOpen` shows `ChildTaskDrawer`; closing it via the drawer's `onClose` clears `selectedChildTaskId`. All 12 vitest tests pass (exit 0); existing 7 HarnessEditor.test.tsx tests also continue to pass.
+This revision fixes F1 from `review-report-arc6-live-overlay--attempt1.md`: `HarnessEditor.onNodeClick` now reads `node.data.childTaskId` from the clicked React Flow node (looked up from the `nodes` state array) and calls `handleNodeOpen(childTaskId)` when defined, wiring R3 AC-1 end-to-end. A TDZ issue was also resolved by moving `handleNodeOpen` before `onNodeClick` in the component body so it is in scope when the `useCallback` dependency array is evaluated. A new Test 13 (`HarnessEditor.runOverlay.test.tsx`) simulates the real click path — injects `childTaskId` via the captured `setNodes`, fires a click on a `data-nodeid` element inside the mocked ReactFlow canvas, and asserts `ChildTaskDrawer` becomes visible with the correct task id. All 13 tests pass (exit 0); diff is 78 lines added / 5 removed, well within the 400-line budget. F2 (`RunOverlay.tsx` stale-data on empty-map early-return) is out of I7 scope and recorded in `out_of_scope_findings`.
 
 ## Files changed
 
 | File | Action | Lines +/- | Purpose |
 |------|--------|-----------|---------|
-| frontend/src/pages/HarnessEditor.tsx | modified | +72 / 0 | Add RunHistory/RunOverlay/ChildTaskDrawer layout slots, currentRunId+mode+selectedChildTaskId state, triggerHarnessRun wiring, handleSelectRun/handleNodeOpen/handleCloseDrawer/handleTriggerRun callbacks |
-| frontend/src/pages/__tests__/HarnessEditor.runOverlay.test.tsx | created | +598 / 0 | 12 vitest tests: RunHistory props, RunOverlay mount/unmount, ChildTaskDrawer open/close, Run button trigger, mode threading, EventSource close tracking |
+| frontend/src/pages/HarnessEditor.tsx | modified | +15 / -5 | Move `handleNodeOpen` before `onNodeClick`; add `nodes.find` + `childTaskId` read in `onNodeClick`; call `handleNodeOpen` when defined (R3 AC-1) |
+| frontend/src/pages/__tests__/HarnessEditor.runOverlay.test.tsx | modified | +63 / 0 | Capture `setNodes` at module level in `useNodesState` mock; add `capturedSetNodes = null` in `beforeEach`; add Test 13 simulating real node-click → drawer-open flow |
 
 ## Out-of-scope findings
 
-- None.
+- `frontend/src/components/harness/RunOverlay.tsx:50` (low) — `setNodes`/`setEdges` effects early-return when their respective Maps are empty (`if (nodeStatuses.size === 0) return`). Combined with `useRunStateOverlay`'s behavior of resetting `nodeStatuses` to a fresh empty Map on `currentKey` change, nodes that carried `runStatus`/`childTaskId`/`startedAt`/`endedAt` from a prior run keep stale data on `node.data` after a run switch until the next overlay tick. Suggested fix: drop the early-return guards or add a cleanup `useEffect` keyed on `runId`. This belongs to I4's scope (`RunOverlay.tsx` is not in I7's `scope_files`). Source: `review-report-arc6-live-overlay--attempt1.md` (F2).
 
 ## Assumptions
 
-- The `RunOverlay` component (I4) does not bind `onNodeClick` internally — it accepts `onNodeOpen` as a prop but the actual React Flow `onNodeClick` binding that reads `node.data.childTaskId` and calls `onNodeOpen` was deferred to I7 per I4's "Next consumer brief". Currently `HarnessEditor.onNodeClick` handles canvas node clicks for the `VariableInspector`; a full child-task-open flow would require reading `node.data.childTaskId` in `onNodeClick` and calling `handleNodeOpen`. Since I4 exports `onNodeOpen` on `RunOverlay` and both are wired, the test validates the prop-threading path via mocked `RunOverlay`. The live click → drawer-open path is a follow-on wiring task noted as out-of-scope to keep I7 within `max_diff_lines=400`.
-- `OverlayMode` type is imported from `useRunStateOverlay.ts` (already exported there); no new type exports needed.
-- The `TriggerRunResponse` from `useHarnessRuns.ts` includes `run_id: string`; this is confirmed by the hook's `useTriggerHarnessRun` mutation typing.
-- `RunHistory` panel is placed to the left of `NodePalette` in the flex row; canvas stays visible and no modal overlay (R6 preserved).
-- Existing HarnessEditor tests do not mock `RunHistory`, `RunOverlay`, `ChildTaskDrawer`, or `useTriggerHarnessRun`, so they would fail if those new imports had module resolution issues. The fact they still pass (7/7) confirms the imports resolve correctly.
+- The `handleNodeOpen` callback must be declared before `onNodeClick` in component scope to avoid the JavaScript temporal dead zone (`const` declarations are not hoisted). This reordering does not change runtime behavior — React guarantees `useCallback` callbacks are stable references across renders.
+- `node.data` on a React Flow node is typed as `Record<string, unknown>` at runtime; the cast `(rfNode?.data as Record<string, unknown> | undefined)?.childTaskId as string | undefined` is safe and handles the absence of `childTaskId` on nodes not yet overlaid by a run.
+- `capturedSetNodes` in the test is captured inside the `useNodesState` mock on each render cycle. The test waits inside `act()` for the state update to flush before firing the click, which ensures the `nodes` array seen by `onNodeClick` contains the injected `childTaskId`.
+- F2 is explicitly not fixed in this iteration because `RunOverlay.tsx` is in I4's `scope_files`, not I7's. Modifying it here would be a scope escape that breaks the orchestrator's gate check.
 - Scope files read before editing: all listed individually in `inputs_used[]`.
 
 ## Open questions
@@ -71,12 +69,10 @@ I7 wires the run-overlay subsystem into `HarnessEditor.tsx`: `RunHistory` (left 
 
 Validation command to rerun: `cd frontend && npm test -- src/pages/__tests__/HarnessEditor.runOverlay.test.tsx`
 
-All 12 tests pass on first run (exit 0). No edge cases discovered beyond what the design specified.
+All 13 tests pass on exit 0 (3.95 s). Key notes for the test agent:
 
-Key notes for the test agent:
+1. **Test 13 (new — R3 AC-1 regression)** — simulates a real node click through the mocked ReactFlow canvas. It relies on `capturedSetNodes` (injected from `useNodesState` mock) to put `childTaskId: 'task-from-click'` onto node `n2`, then fires a `fireEvent.click` on a child element with `data-nodeid="n2"`. The `ChildTaskDrawer` mock returns non-null when `child_task_id` is non-null, so `findByTestId('child-task-drawer')` is the gate assertion. This test would fail if `onNodeClick` does not read `node.data.childTaskId`.
 
-1. **EventSource close test (Test 9)** — this test stubs `globalThis.EventSource` and tracks created/closed counts. It verifies `netOpen <= 1` after switching from live to replay mode. The test is defensive: it wraps the spy in try/finally and restores the original. In the current integration both `RunOverlay` and `useRunStateOverlay` (I3) handle cleanup; the mock `RunOverlay` does not actually open an EventSource, so `netOpen` will be 0 — the test correctly passes because 0 ≤ 1.
+2. **F2 out-of-scope** — `RunOverlay.tsx:50` early-return guards (stale node.data after run switch) are recorded in `out_of_scope_findings` for priority review in the next cycle. The suggested fix is to remove the `if (nodeStatuses.size === 0) return` guards and add a cleanup effect keyed on `runId`. This should be routed to an I4 revision.
 
-2. **onNodeOpen wiring** — currently `handleNodeOpen` in `HarnessEditor` is passed to `RunOverlay.onNodeOpen`. The live click-to-drawer flow requires `HarnessEditor.onNodeClick` to also read `node.data.childTaskId` and call `handleNodeOpen`. This is an extension point not covered in I7 scope; it would be a small follow-on change to `onNodeClick`. The current implementation satisfies R6 and the design's stated scope for I7.
-
-3. **No regressions** — `HarnessEditor.test.tsx` (7 tests) and `HarnessEditor.acceptance.test.tsx` (5 tests) continue to pass after the changes; no mock additions to those files were needed.
+3. **No regressions expected** in `HarnessEditor.test.tsx` (7 tests) and `HarnessEditor.acceptance.test.tsx` (5 tests) — the only behavioral change is that `onNodeClick` now also calls `handleNodeOpen` when `childTaskId` is present; those tests don't set `childTaskId` on nodes, so the new branch is never taken.

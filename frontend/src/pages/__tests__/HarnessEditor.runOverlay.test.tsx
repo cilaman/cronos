@@ -22,6 +22,9 @@ import type { Harness } from '../../types';
 // Mock @xyflow/react — hoisted before imports of module under test
 // ---------------------------------------------------------------------------
 
+// Capture setNodes from useNodesState so tests can inject node.data overrides
+let capturedSetNodes: React.Dispatch<React.SetStateAction<any[]>> | null = null;
+
 vi.mock('@xyflow/react', () => ({
   ReactFlow: ({ onNodeClick, onDragOver, onDrop, children }: any) => (
     <div
@@ -42,6 +45,7 @@ vi.mock('@xyflow/react', () => ({
   ReactFlowProvider: ({ children }: any) => <>{children}</>,
   useNodesState: (init: any[]) => {
     const [nodes, setNodes] = React.useState(init);
+    capturedSetNodes = setNodes;
     const onNodesChange = vi.fn();
     return [nodes, setNodes, onNodesChange];
   },
@@ -216,6 +220,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   capturedOnSelectRun = null;
   capturedOnNodeOpen = null;
+  capturedSetNodes = null;
   mockSaveMutation.mutate = mockMutate;
   mockSaveMutation.isPending = false;
   mockSaveMutation.isError = false;
@@ -501,9 +506,6 @@ describe('HarnessEditor — run overlay integration', () => {
       expect(screen.getByTestId('run-overlay')).toBeInTheDocument();
       expect(screen.getByTestId('run-overlay').getAttribute('data-mode')).toBe('live');
 
-      // The live mode SSE connection may have been opened (EventSource created)
-      const liveCreatedCount = createdInstances.length;
-
       // Step B: switch to a past (replay) run
       await act(async () => {
         capturedOnSelectRun!('run-replay-past', 'replay');
@@ -594,5 +596,63 @@ describe('HarnessEditor — run overlay integration', () => {
     });
 
     expect(screen.getByTestId('run-overlay').getAttribute('data-run-id')).toBe('run-second');
+  });
+
+  // -------------------------------------------------------------------------
+  // Test 13: clicking a ReactFlow node with childTaskId in node.data opens
+  // ChildTaskDrawer — regression test for R3 AC-1 (F1 fix)
+  //
+  // Simulates the real click path:
+  //  1. A node element with data-nodeid is clicked inside the mocked ReactFlow.
+  //  2. The mock calls onNodeClick(e, { id: nodeId }).
+  //  3. HarnessEditor.onNodeClick reads nodes.find(n => n.id === node.id) and
+  //     reads node.data.childTaskId from the React Flow node state.
+  //  4. handleNodeOpen(childTaskId) is called → ChildTaskDrawer becomes visible.
+  // -------------------------------------------------------------------------
+
+  it('clicking a node whose React Flow data has childTaskId opens ChildTaskDrawer (R3 AC-1)', async () => {
+    vi.mocked(useHarness).mockReturnValue({
+      data: mockHarness,
+      isLoading: false,
+      isError: false,
+    } as any);
+
+    capturedSetNodes = null;
+
+    await act(async () => {
+      renderEditor();
+    });
+
+    // Verify drawer is not visible initially
+    expect(screen.queryByTestId('child-task-drawer')).toBeNull();
+
+    // Inject a childTaskId onto node 'n2' via the captured setNodes — this simulates
+    // what RunOverlay.setNodes does after receiving a run event for that node.
+    expect(capturedSetNodes).not.toBeNull();
+    await act(async () => {
+      capturedSetNodes!((prev: any[]) =>
+        prev.map((n: any) =>
+          n.id === 'n2'
+            ? { ...n, data: { ...n.data, childTaskId: 'task-from-click' } }
+            : n,
+        ),
+      );
+    });
+
+    // Simulate a click on node 'n2' via the mocked ReactFlow canvas.
+    // The mock reads data-nodeid from the clicked target and calls onNodeClick.
+    const reactFlowEl = screen.getByTestId('react-flow');
+    await act(async () => {
+      const clickTarget = document.createElement('div');
+      clickTarget.dataset.nodeid = 'n2';
+      reactFlowEl.appendChild(clickTarget);
+      fireEvent.click(clickTarget);
+      reactFlowEl.removeChild(clickTarget);
+    });
+
+    // ChildTaskDrawer must now be visible with the correct task id
+    const drawer = await screen.findByTestId('child-task-drawer');
+    expect(drawer).toBeInTheDocument();
+    expect(drawer.getAttribute('data-task-id')).toBe('task-from-click');
   });
 });

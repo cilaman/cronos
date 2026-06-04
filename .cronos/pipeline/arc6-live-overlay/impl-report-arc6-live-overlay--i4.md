@@ -4,19 +4,16 @@ agent: pipeline-implementor
 slug: arc6-live-overlay--i4
 phase: impl
 status: done
-confidence: 0.93
+confidence: 0.95
 inputs_used:
-  - memory:project_pipeline_implementor_agent
   - memory:project_arc6_visual_editor_impl
+  - memory:project_pipeline_implementor_agent
   - .cronos/pipeline/arc6-live-overlay/design-report-arc6-live-overlay.md
-  - .cronos/pipeline/arc6-live-overlay/impl-report-arc6-live-overlay--i2.md
-  - .cronos/pipeline/arc6-live-overlay/impl-report-arc6-live-overlay--i3.md
-  - frontend/src/components/harness/runStatus.ts
-  - frontend/src/hooks/useRunStateOverlay.ts
-  - frontend/src/pages/HarnessEditor.tsx
-  - frontend/src/hooks/useHarnessRuns.ts
-  - frontend/src/components/harness/__tests__/nodeRunStatusStyling.test.tsx
-  - frontend/src/components/harness/AgentNode.tsx
+  - .cronos/pipeline/arc6-live-overlay/impl-report-arc6-live-overlay--i4.md
+  - .cronos/pipeline/arc6-live-overlay/review-report-arc6-live-overlay--attempt1.md
+  - .cronos/pipeline/arc6-live-overlay/review-report-arc6-live-overlay--attempt2.md
+  - frontend/src/components/harness/RunOverlay.tsx
+  - frontend/src/components/harness/__tests__/RunOverlay.test.tsx
 iteration_id: I4
 files_changed:
   - frontend/src/components/harness/RunOverlay.tsx
@@ -28,23 +25,23 @@ outputs_produced:
 blockers: []
 next_consumer: test
 metrics:
-  tool_calls: 25
-  files_read: 11
+  tool_calls: 18
+  files_read: 8
   memory_hits: 2
-  diff_lines_added: 588
-  diff_lines_removed: 0
+  diff_lines_added: 199
+  diff_lines_removed: 1
 ---
 
 ## Summary
 
-I4 implements `RunOverlay.tsx` — the top-level overlay component that drives the React Flow graph with per-node run-status data from `useRunStateOverlay` (I3). The component uses `useReactFlow()` to get `setNodes`/`setEdges` and applies two `useEffect` hooks: one mapping `nodeStatuses` onto `node.data` fields (runStatus, startedAt, endedAt, childTaskId), the other applying edge animation when `edgeStatuses` is populated. A `data-testid="buffer-truncated-banner"` alert element with the a11y label "Some events were dropped before this view connected." is rendered when `bufferTruncated=true` (R1 AC-2 mitigation). The component returns `null` in all other cases. The `onNodeOpen` callback is accepted as a prop for future I7 wiring. All 18 vitest tests pass.
+This revision fixes F2 (non-blocking, low severity) from review attempts 1 and 2: stale `runStatus`/`childTaskId`/`startedAt`/`endedAt` on `node.data` after switching runs via RunHistory. The approach adds a separate cleanup `useEffect` keyed on `runId` in `RunOverlay.tsx` that strips the four overlay fields from all nodes and resets animated-edge styling whenever `runId` changes — but skips initial mount (using a `prevRunIdRef` sentinel) to avoid spurious calls. The existing empty-map early-return guards in the `nodeStatuses` and `edgeStatuses` effects are preserved unchanged, so all 18 original tests pass without modification. Three new regression tests cover the stale-node cleanup, stale-edge cleanup, and the no-cleanup-on-first-mount invariant. All 21 RunOverlay tests pass. The HarnessEditor.runOverlay tests (I7 scope) also pass unchanged (13/13).
 
 ## Files changed
 
 | File | Action | Lines +/- | Purpose |
 |------|--------|-----------|---------|
-| frontend/src/components/harness/RunOverlay.tsx | created | +100 / 0 | RunOverlay component: useReactFlow + useRunStateOverlay, setNodes/setEdges effects, buffer-truncated banner |
-| frontend/src/components/harness/__tests__/RunOverlay.test.tsx | created | +488 / 0 | 18 vitest tests: null/inactive, setNodes mutation, setEdges mutation, banner visibility and a11y, R7 non-stutter (at most 2 setNodes calls), R8 invariant, onNodeOpen prop, replay mode |
+| frontend/src/components/harness/RunOverlay.tsx | modified | +40 / -1 | Add `useRef` import; add cleanup `useEffect` keyed on `runId` that strips stale overlay fields from nodes and resets edge styling on run switch |
+| frontend/src/components/harness/__tests__/RunOverlay.test.tsx | modified | +159 / 0 | Add 3 F2 regression tests: stale-node cleanup, stale-edge cleanup, no-cleanup-on-first-mount |
 
 ## Out-of-scope findings
 
@@ -52,10 +49,11 @@ I4 implements `RunOverlay.tsx` — the top-level overlay component that drives t
 
 ## Assumptions
 
-- `useReactFlow()` is available because `RunOverlay` is always mounted inside `ReactFlowProvider` (which `HarnessEditor` provides via the outer `HarnessEditorInner`/`HarnessEditor` wrapper). The component has no internal `ReactFlowProvider` guard.
-- The R7 non-stutter test is validated at the mock boundary (mocked `useRunStateOverlay` returns a single Map reference with 20 nodes after one React re-render) rather than through a full integration with the live rAF path — this is consistent with the design spec's wording "dispatching 20 synthetic node_transition events in a single act() and verifying setNodes is invoked at most twice". The full rAF coalescing behavior is already exhaustively tested in I3's `useRunStateOverlay.test.tsx`.
-- `onNodeOpen` is wired as a prop but not yet connected to React Flow's `onNodeClick` handler — that integration belongs to I7 (`HarnessEditor.tsx`), which will mount `RunOverlay` and thread the callback into the harness canvas.
+- The cleanup effect approach (separate `useEffect` keyed on `runId`) was chosen over removing the empty-map early-returns because: (a) three existing tests assert `setNodes`/`setEdges` are NOT called when maps are empty — removing the guards would break those tests without a deeper rewrite; (b) the cleanup effect more precisely targets the actual problem (run switch, not every empty-map tick); and (c) the review report's suggested alternative ("add a separate cleanup useEffect keyed on runId") matches this choice exactly.
+- The `prevRunIdRef` is initialized to `undefined` (not `null`) to distinguish "never rendered" from "rendered with runId=null". This ensures the cleanup does not fire on the very first mount cycle, which is necessary to preserve the "no setNodes call on first mount" invariant tested by the new third test.
+- Nodes that carry none of the four overlay fields are returned as the same object reference by the cleanup updater — this preserves the React Flow identity check and avoids unnecessary node remounts for non-overlay nodes.
 - Scope files read before editing: all listed individually in inputs_used[].
+- The eslint-disable comment on the cleanup effect's dependency array is intentional: the `prevRunIdRef` ref write inside the effect is not a dependency (refs do not trigger re-renders) and should not be in the array.
 
 ## Open questions
 
@@ -65,12 +63,10 @@ I4 implements `RunOverlay.tsx` — the top-level overlay component that drives t
 
 Validation command to rerun: `cd frontend && npm test -- src/components/harness/__tests__/RunOverlay.test.tsx`
 
-Key notes for the test agent and downstream I7 implementor:
+Companion check that should also be confirmed green: `cd frontend && npm test -- src/pages/__tests__/HarnessEditor.runOverlay.test.tsx` (13 tests, all pass — confirmed during this revision).
 
-1. **onNodeOpen not yet wired to React Flow events** — the prop is accepted and type-safe, but the actual `onNodeClick` binding that reads `node.data.childTaskId` and calls `onNodeOpen` will be threaded in I7 (`HarnessEditor.tsx`). If I7 tests expect node-click → drawer open, they must wire `RunOverlay`'s `onNodeOpen` into `HarnessEditor`'s `onNodeClick`.
-
-2. **R7 test approach** — the stutter test validates the mocked-hook boundary. For full rAF coalescing coverage, the I3 test (`useRunStateOverlay.test.tsx`) already asserts `rafQueue.length === 1` for 20 synchronous events; I4 validates that `setNodes` is called ≤2 times when the Map update propagates as a single React render cycle.
-
-3. **Banner placement** — the banner uses `absolute left-1/2 top-2 z-50 -translate-x-1/2` so it floats above the canvas. I7 must ensure the `.harness-canvas` parent div has `relative position` (it already does per HarnessEditor.tsx line 104: `className="harness-canvas relative flex-1"`).
-
-4. **No edge cases uncovered beyond the design** — the implementation matches the design spec exactly; no scope gaps found.
+Key notes for the test agent:
+1. **3 new F2 regression tests added** (tests 19–21 in the suite): "clears stale runStatus and childTaskId from nodes when switching runs", "clears stale edge styling when switching runs", and "does NOT call setNodes on first mount". These cover the run-switch stale-data path that was absent in the original 18 tests.
+2. **All 18 original tests preserved unchanged** — R7 rAF batching contract, R8 legacy-invariant, R1 buffer_truncated banner, and all other behaviors are unmodified.
+3. **No edge cases beyond the design** — the `prevRunIdRef` sentinel pattern is standard React and does not introduce any async or timing subtlety; the cleanup fires synchronously within the same render cycle as the `runId` prop change.
+4. **I7 HarnessEditor.runOverlay tests unaffected** — confirmed 13/13 green; the cleanup effect in RunOverlay is invisible to the I7 test because the mocked RunOverlay in HarnessEditor tests never exercises the real cleanup path.
