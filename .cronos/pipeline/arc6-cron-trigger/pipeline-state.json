@@ -3,7 +3,7 @@
   "goal_slug": "arc6-cron-trigger",
   "status": "running",
   "created_at": "2026-06-03T11:04:55.835183+00:00",
-  "updated_at": "2026-06-04T05:33:51.038875+00:00",
+  "updated_at": "2026-06-04T05:53:39.470367+00:00",
   "request_text": "Add a cron scheduler: one `asyncio.create_task(cron_loop, …)` in main.py `lifespan`\nalongside the existing `watcher`/`archiver`/`memory_pruner` loops.\n\n- Re-read the canonical harness list each tick (no per-harness timers; no\n  double-registration on `watch_spaces_dir` reload). A `cron` Trigger carries its\n  expression in `data`.\n- **Overlap guard:** skip a tick if the harness already has an `active` run (a set check;\n  single-process asyncio, no lock).\n- Parse cron expr + timezone correctly. Missed ticks across restart are not back-filled —\n  document this.\n\nAcceptance: a cron Trigger fires at the scheduled time (shortened interval in tests);\na tick during an active run is skipped.\n",
   "phases": {
     "research": {
@@ -121,6 +121,90 @@
         "memory_hits": 0
       },
       "header_summary": {}
+    },
+    "test": {
+      "phase": "test",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "tester",
+      "task_id": "2026-06-03-1104-tester-6-5-cron-trigger",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/arc6-cron-trigger/test-report-arc6-cron-trigger.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "review": {
+      "phase": "review",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-reviewer",
+      "task_id": "2026-06-03-1104-pipeline-reviewer-6-5-cron-trigger",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/arc6-cron-trigger/review-report-arc6-cron-trigger--attempt1.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "doc": {
+      "phase": "doc",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-doc-sync",
+      "task_id": "2026-06-03-1104-pipeline-doc-sync-6-5-cron-trigger",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/arc6-cron-trigger/doc-report-arc6-cron-trigger.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
     }
   },
   "telemetry": {
@@ -129,7 +213,7 @@
     "total_tool_calls": 0,
     "total_files_read": 0,
     "total_memory_hits": 0,
-    "phases_completed": 4,
+    "phases_completed": 7,
     "phases_escalated": 0,
     "phases_retried": 0,
     "phases_failed": 0

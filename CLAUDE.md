@@ -64,7 +64,7 @@ HTTP Basic Auth via Caddy on every request. `/api/health` is public (no auth). C
 
 | Path | Purpose |
 |------|---------|
-| `backend/app/main.py` | FastAPI app, router registration, background task startup, file watcher |
+| `backend/app/main.py` | FastAPI app, router registration, background task startup (cron loop initialization), file watcher |
 | `backend/app/storage.py` | **CORE** — TaskStore, state machine, dependency DAG validation, cycle detection (41 KB) |
 | `backend/app/space_storage.py` | Space persistence, layouts, settings, `.cronos` subdirectory management |
 | `backend/app/agent.py` | Agent spawning, stdout/stderr capture, status tracking |
@@ -75,7 +75,7 @@ HTTP Basic Auth via Caddy on every request. `/api/health` is public (no auth). C
 | `backend/app/api/spaces.py` | Space CRUD, repo linking, project settings |
 | `backend/app/api/harnesses.py` | Harness CRUD endpoints and run lifecycle (GET/POST/PUT/DELETE, POST /run, GET /runs) with concurrency contract |
 | `backend/app/api/harness_runs.py` | Harness run status and control endpoints (GET /{run_id}, POST /{run_id}/cancel, GET /{run_id}/stream SSE) |
-| `backend/app/harnesses/model.py` | Pydantic models with reference integrity validation (HarnessNode, HarnessEdge, Harness); Wait and Aggregator node data conventions |
+| `backend/app/harnesses/model.py` | Pydantic models with reference integrity validation (HarnessNode, HarnessEdge, Harness); Wait and Aggregator node data conventions; trigger node cron `data` schema |
 | `backend/app/harnesses/validator.py` | DAG validation (cycle detection, self-loop rejection, reference fidelity checks, human Wait required fields R6) |
 | `backend/app/harnesses/store.py` | HarnessStore with atomic YAML I/O to `.cronos/harnesses/<name>.yml` per space |
 | `backend/app/harnesses/executor.py` | **Harness executor** — runtime-gated BFS DAG interpreter with control-flow dispatch (decision/wait/aggregator nodes), agent invocation, fail-fast on node failure, variable scope propagation, run-state persistence, SSE event publishing (`node_transition`, `edge_chosen`, `run_status`), cancel-race guard |
@@ -86,6 +86,8 @@ HTTP Basic Auth via Caddy on every request. `/api/health` is public (no auth). C
 | `backend/app/harnesses/brief_composer.py` | Child-task brief composition for harness executor nodes (agent header, skill prefix, prompt inclusion) |
 | `backend/app/harnesses/run_state.py` | RunState dataclass with lifecycle status and timing fields (`started_at`, `ended_at` ISO-8601 UTC per node); atomic persistence (tempfile + os.replace); reconciliation on resume |
 | `backend/app/harnesses/run_index.py` | Append-only per-harness run history index with concurrent-safe locking; `read_index()`, `append_run()`, `update_run_status()` |
+| `backend/app/harnesses/run_trigger.py` | Shared `enqueue_harness_run` helper — task creation, run index append, worker registration; used by POST /run endpoint and cron loop |
+| `backend/app/harnesses/cron.py` | Stateless cron-trigger background loop — `should_fire(expression, timezone, prev_tick, now)`, `has_active_run()`, `cron_loop()` with overlap guard and croniter integration |
 | `backend/app/memory_store.py` | Shared context storage |
 | `backend/app/git_ops.py` | `git clone/commit/push` wrappers for repo-linked spaces |
 | `backend/app/goal_sync.py` | Goal state propagation |

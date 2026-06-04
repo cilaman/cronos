@@ -1,9 +1,53 @@
 # Test Coverage — cronos-development
 
-**Updated**: 2026-06-03T14:50:00Z
-**Backend overall**: 82.73%  (1510 passed, 0 failed — unchanged scope, no backend code touched this task)
-**Frontend**: 750 vitest tests passed across 41 files (+7 this session)
-**Tester rounds this session**: 1 (full vitest + full pytest both green on first run, no regressions)
+**Updated**: 2026-06-04T06:00:00Z
+**Backend overall**: 83.85%  (1962 passed, 0 failed, 0 errors, 0 skipped — +452 tests vs prior 1510; unchanged vs last full report which was also 83.85%)
+**Frontend**: 781 vitest tests passed across 44 files, 0 failed (+31 vs prior 750)
+**Tester rounds this session**: 1 (full pytest + full vitest both green on first run, no regressions)
+
+## Verification run (2026-06-04 — arc6-cron-trigger doc-sync + cron-trigger impl)
+
+Post-doc-sync verification for the `feature/arc-6-harnesses` branch after the
+arc6-cron-trigger pipeline completed its documentation phase (doc-sync commit
+`a6ba69b` touched docs only; CLAUDE.md + pipeline reports). The latest code
+commit `b3bbbd0` ("6.5 Cron trigger") shipped its own tests alongside the
+implementation. Full backend + frontend suites confirmed green with zero
+regressions.
+
+**Cron-trigger code coverage (all newly-shipped, well covered):**
+- `app/harnesses/run_trigger.py`: **100%** (23/23)
+- `app/harnesses/cron.py`: **85%** (92 stmts; misses are error/edge branches
+  90,164,188-189,206-208,235-239,256-257,319-320)
+- `app/harnesses/model.py`: **100%**, `interpolate.py`/`validator.py`/`wait.py`/
+  `brief_composer.py`: **100%**
+- `app/api/harnesses.py`: **93%**
+- `app/main.py`: **58%** (cron loop added here; main.py lifespan/watcher remain
+  the long-standing low-coverage area — pre-existing gap, not introduced by this task)
+
+New test files shipped with the implementation (already present, all passing):
+`tests/test_cron_eval.py`, `tests/test_cron_loop.py`,
+`tests/test_harness_run_trigger.py`, `tests/test_main_lifespan.py`.
+
+**No module lost coverage. No new tests written this session** — this was a
+verification-only pass confirming the docs change did not break the suite.
+
+## Lowest-coverage modules (priority queue for next session)
+
+| Module | Coverage | Notes |
+|--------|----------|-------|
+| app/main.py | 58% | lifespan/watcher/cron-loop wiring — hard to cover without integration harness |
+| app/git_ops.py | 59% | user git state — security-sensitive, slow climb |
+| app/worker.py | 66% | core scheduler — large module, many branches |
+| app/worker_pool.py | 70% | pool lifecycle |
+| app/api/test_reports.py | 70% | small module — easy wins |
+| app/space_storage.py | 72% | space lifecycle ops |
+
+## Suspected flakes
+- none this session
+
+---
+
+## Prior session
 
 ## Recent changes (2026-06-03 — arc-5/C4 Frontend per-tool telemetry panel)
 
