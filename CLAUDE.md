@@ -100,6 +100,17 @@ HTTP Basic Auth via Caddy on every request. `/api/health` is public (no auth). C
 | `frontend/src/hooks/useTasks.ts` | React Query hooks for task CRUD |
 | `frontend/src/hooks/useHarnessRuns.ts` | React Query hooks for harness run queries, mutations (trigger, cancel), and SSE stream subscription |
 | `frontend/src/api.ts` | HTTP client; includes harness run types (RunSummary, NodeState, HarnessRunState) and API functions |
+| `frontend/src/pages/HarnessEditor.tsx` | Harness visual editor canvas page — React Flow v12 graph layout with 5 custom node types (Agent/Trigger/Decision/Wait/Aggregator), NodePalette drag source, VariableInspector side panel, and Save button (GET-then-PUT via useSaveHarness hook) |
+| `frontend/src/hooks/useHarnesses.ts` | React Query hooks for harness CRUD and canvas save (`useHarnesses` list, `useHarness` single fetch, `useSaveHarness` GET-then-PUT mutation enforcing created_at preservation) |
+| `frontend/src/components/harness/harnessMapping.ts` | Round-trip module converting between React Flow flat graph shape (nodes[], edges[]) and backend nested NodeRef payload; `toReactFlow()` and `fromReactFlow()` pure functions |
+| `frontend/src/components/harness/AgentNode.tsx` | Custom React Flow node for Agent task invocation (input/output handles, label, agent_ref display) |
+| `frontend/src/components/harness/TriggerNode.tsx` | React Flow node for harness triggers (output-only handle; Trigger/Webhook/FileChange kinds determined via harness data) |
+| `frontend/src/components/harness/DecisionNode.tsx` | React Flow node for conditional branching (input/output handles with yes/no ids) |
+| `frontend/src/components/harness/WaitNode.tsx` | React Flow node for human-wait synchronization points (input/output handles) |
+| `frontend/src/components/harness/AggregatorNode.tsx` | React Flow node for collecting multiple upstream branches (N input handles, single output; mode=all/any determined via harness data) |
+| `frontend/src/components/harness/NodePalette.tsx` | Right-side draggable palette of 5 node types with React Flow dataTransfer semantics (effectAllowed=move) |
+| `frontend/src/components/harness/VariableInspector.tsx` | Right-side inspector panel — edits agent-specific config (agent_ref, prompt) when AgentNode selected, generic key/value config for other nodes, harness-level variables when no node selected |
+| `frontend/src/types.ts` | Harness visual editor type definitions (NodeType, Position, NodePort, HarnessNode, NodeRef, HarnessEdge, Harness interfaces mirroring backend Pydantic v2 models) |
 
 ## Directory layout
 
