@@ -12,6 +12,9 @@ Mirror funnel: all ``mirror_feature_to_github`` calls go through
 
 from __future__ import annotations
 
+import asyncio
+import logging
+
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
@@ -30,6 +33,8 @@ from ..models import (
     TaskSummary,
 )
 from ..storage import CycleError, StorageError, TaskNotFound, UnknownSpace
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/features", tags=["features"])
 
@@ -52,7 +57,7 @@ def _get_space_store(request: Request):
 # ---------------------------------------------------------------------------
 
 
-async def _fire_mirror(
+def _fire_mirror(
     task: Task,
     space: Space,
     reason: str,
@@ -61,8 +66,26 @@ async def _fire_mirror(
 
     Concentrating the call here ensures exactly one mirror fire per
     mutating endpoint and makes the call_count easy to assert in tests.
+
+    Fire-and-forget: schedules mirror_feature_to_github as a background
+    asyncio task so the response is not blocked on the gh subprocess
+    (design risk #6 mitigation).  Any exception raised by the mirror
+    coroutine is caught by the done-callback and logged at ERROR level.
     """
-    await mirror_feature_to_github(task, space=space, reason=reason)  # type: ignore[arg-type]
+    def _log_mirror_error(fut: asyncio.Future) -> None:
+        exc = fut.exception()
+        if exc is not None:
+            log.error(
+                "mirror_feature_to_github background task failed for task=%s reason=%s: %s",
+                task.id,
+                reason,
+                exc,
+                exc_info=exc,
+            )
+
+    coro = mirror_feature_to_github(task, space=space, reason=reason)  # type: ignore[arg-type]
+    bg_task = asyncio.create_task(coro)
+    bg_task.add_done_callback(_log_mirror_error)
 
 
 def _build_feature_read(task: Task, realizing_items: list[TaskSummary] | None = None) -> FeatureRead:
@@ -117,7 +140,7 @@ async def create_feature(body: CreateFeatureBody, request: Request) -> FeatureRe
     except StorageError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from None
 
-    await _fire_mirror(task, space, "create")
+    _fire_mirror(task, space, "create")
 
     return _build_feature_read(task)
 
@@ -212,7 +235,7 @@ async def patch_feature_state(
     except StorageError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from None
 
-    await _fire_mirror(updated_task, space, "state_change")
+    _fire_mirror(updated_task, space, "state_change")
     return _build_feature_read(updated_task)
 
 
@@ -253,7 +276,7 @@ async def patch_feature(
     except StorageError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from None
 
-    await _fire_mirror(updated_task, space, "edit")
+    _fire_mirror(updated_task, space, "edit")
     return _build_feature_read(updated_task)
 
 
@@ -339,7 +362,7 @@ async def process_feature(feature_id: str, request: Request) -> FeatureRead:
     except StorageError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from None
 
-    await _fire_mirror(updated_task, space, "state_change")
+    _fire_mirror(updated_task, space, "state_change")
     await enqueue_feature_decomposition(updated_task)
 
     return _build_feature_read(updated_task)

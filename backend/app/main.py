@@ -34,6 +34,7 @@ from .stats_store import StatsStore
 from .storage import TaskStore
 from .test_report_store import TestReportStore
 from .trace_store import TraceStore
+from . import feature_hooks
 from .worker_pool import WorkerPool
 
 logging.basicConfig(
@@ -374,6 +375,7 @@ async def lifespan(app: FastAPI):
     task_store = TaskStore(SPACES_DIR)
     await task_store.reload_all()
     app.state.store = task_store
+    feature_hooks.configure_store(task_store)
 
     stats_store = StatsStore(SPACES_DIR)
     app.state.stats_store = stats_store

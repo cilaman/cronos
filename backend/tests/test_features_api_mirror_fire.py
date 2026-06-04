@@ -1,4 +1,4 @@
-"""End-to-end tests for _fire_mirror call sites in api/features.py (I4 / R10).
+"""End-to-end tests for _fire_mirror call sites in api/features.py (I4/I5 / R10).
 
 Design assertion: all four mutating endpoints call mirror_feature_to_github
 exactly once through the _fire_mirror funnel, with the correct reason string.
@@ -9,13 +9,11 @@ Call sites covered:
   3. PATCH  /api/features/{id}          → reason="edit"
   4. POST   /api/features/{id}/process  → reason="state_change"
 
-Fire-and-forget vs. await (R10 risk mitigation):
-  _fire_mirror in api/features.py calls:
-      await mirror_feature_to_github(task, space=space, reason=reason)
-  This is a direct await (not asyncio.create_task).  The response is therefore
-  blocked by the mirror call duration.  The response-time test asserts that a
-  monkeypatched no-op completes quickly (well under 1s), confirming the mock
-  replaced the real gh subprocess and no latency leak occurred.
+Fire-and-forget behaviour (I5 / F2 fix):
+  _fire_mirror in api/features.py schedules mirror_feature_to_github as an
+  asyncio background task (asyncio.create_task) so the response is NOT blocked
+  on the gh subprocess (design risk #6 mitigation).  A slow mirror mock (0.2s
+  sleep) must NOT delay the API response.
 """
 
 from __future__ import annotations
@@ -26,6 +24,7 @@ import time
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -514,17 +513,16 @@ def test_all_four_call_sites_use_single_funnel():
 
 
 # ---------------------------------------------------------------------------
-# R10 risk: response time — mirror is awaited directly (not fire-and-forget)
+# F2 fix (I5): fire-and-forget — response must NOT be blocked by mirror
 # ---------------------------------------------------------------------------
 
 
-def test_mirror_is_awaited_directly_not_fire_and_forget(app_client, mock_store_create):
-    """Verify that _fire_mirror awaits the mirror call directly.
+def test_fire_and_forget_does_not_block_response(app_client, mock_store_create):
+    """With fire-and-forget _fire_mirror, response returns even with a slow mock.
 
-    Since _fire_mirror uses 'await mirror_feature_to_github(...)' (not
-    asyncio.create_task), the endpoint response time is bounded by the mock's
-    return time.  A fast no-op AsyncMock completes well under 500ms even with
-    TestClient overhead.
+    asyncio.create_task schedules the mirror coroutine as a background task;
+    the endpoint returns the response without awaiting it.  A no-op AsyncMock
+    completes quickly and the response round-trip is well under 2s.
     """
     app_client.app.state.store = mock_store_create
     app_client.app.state.space_store.get.return_value = _make_space()
@@ -543,7 +541,7 @@ def test_mirror_is_awaited_directly_not_fire_and_forget(app_client, mock_store_c
         elapsed = time.monotonic() - start
 
     assert response.status_code == 201, response.text
-    assert mock_mirror.call_count == 1, "mirror must be called once (direct await)"
+    assert mock_mirror.call_count == 1, "mirror must be called once (background task)"
     # With a no-op mock, round-trip should be well under 2s including test overhead.
     assert elapsed < 2.0, (
         f"Expected fast response with mocked mirror, got {elapsed:.3f}s. "
@@ -551,12 +549,12 @@ def test_mirror_is_awaited_directly_not_fire_and_forget(app_client, mock_store_c
     )
 
 
-def test_mirror_slow_mock_blocks_response(app_client, mock_store_create):
-    """When mirror sleeps 0.2s, the POST response also takes ≥0.2s.
+def test_mirror_non_blocking_response_with_slow_mock(app_client, mock_store_create):
+    """When mirror sleeps 0.2s, the POST response returns in <100ms.
 
-    This confirms the direct-await behaviour: the response time is coupled to
-    the mirror duration.  (For fire-and-forget the response would return
-    immediately regardless of mirror sleep duration.)
+    This confirms fire-and-forget behaviour: asyncio.create_task schedules the
+    mirror coroutine as a background task and the endpoint returns immediately
+    without awaiting it.  The slow mock must NOT delay the response.
     """
     app_client.app.state.store = mock_store_create
     app_client.app.state.space_store.get.return_value = _make_space()
@@ -577,11 +575,63 @@ def test_mirror_slow_mock_blocks_response(app_client, mock_store_create):
         elapsed = time.monotonic() - start
 
     assert response.status_code == 201, response.text
-    # Direct await means the response is delayed by the mock sleep.
-    # Use a loose lower bound to avoid flakiness on slow CI machines.
-    assert elapsed >= 0.1, (
-        f"Expected response to be delayed by mirror sleep (direct await), "
-        f"but completed in {elapsed:.3f}s — mirror may not be awaited."
+    # Fire-and-forget: response returns before mirror completes.
+    # Use a generous upper bound to avoid flakiness on slow CI machines.
+    assert elapsed < 0.15, (
+        f"Expected response in <150ms with fire-and-forget (mirror sleeps 0.2s), "
+        f"but response took {elapsed:.3f}s — mirror may be awaited directly."
+    )
+
+
+@pytest.mark.asyncio
+async def test_mirror_background_task_observably_executes(monkeypatch, tmp_path):
+    """Background task observably executes: mock sets asyncio.Event before returning.
+
+    Uses httpx.AsyncClient in the same async event loop so that
+    asyncio.create_task background tasks run before the assertion.
+    After the response, we yield to the event loop (asyncio.sleep(0)) and
+    confirm the mock has been called.
+    """
+    monkeypatch.setenv("CRONOS_BASIC_AUTH_USER", TEST_USER)
+    monkeypatch.setenv("CRONOS_BASIC_AUTH_PASSWORD", TEST_PASS)
+    monkeypatch.setenv("CRONOS_DATA_DIR", str(tmp_path))
+
+    from app.main import app
+
+    executed_event = asyncio.Event()
+
+    async def _tracked_mirror(*args, **kwargs):
+        executed_event.set()
+
+    task = _make_task()
+    mock_store = MagicMock()
+    mock_store.create = AsyncMock(return_value=task)
+
+    app.state.store = mock_store
+    app.state.space_store = MagicMock()
+    app.state.space_store.get.return_value = _make_space()
+    app.state.worker_pool = MagicMock()
+    app.state.harness_store = MagicMock()
+    app.state.memory_store = MagicMock()
+    app.state.stats_store = MagicMock()
+    app.state.trace_store = MagicMock()
+    app.state.test_report_store = MagicMock()
+
+    with patch("app.api.features.mirror_feature_to_github", side_effect=_tracked_mirror):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post(
+                "/api/features/",
+                json={"space_id": "space-1", "title": "My Feature", "type": "feature"},
+                headers=AUTH_HEADER,
+            )
+            # Yield to the event loop so the background task can run
+            await asyncio.sleep(0)
+
+    assert response.status_code == 201, response.text
+    assert executed_event.is_set(), (
+        "mirror_feature_to_github background task must have executed after the response. "
+        "If asyncio.Event is not set, asyncio.create_task may not have been used correctly."
     )
 
 
