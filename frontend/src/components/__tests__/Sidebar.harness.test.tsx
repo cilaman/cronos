@@ -84,17 +84,17 @@ describe("Sidebar — harnesses nav entry", () => {
     expect(link).toBeInTheDocument();
   });
 
-  it("Harnesses link href points to /spaces/{spaceId}/harnesses", () => {
+  it("Harnesses link href points to top-level /harnesses route", () => {
     renderInsideSpaceRoute("my-space");
 
     const link = screen.getByRole("link", { name: /harnesses/i });
-    expect(link).toHaveAttribute("href", "/spaces/my-space/harnesses");
+    expect(link).toHaveAttribute("href", "/harnesses");
   });
 
-  it("does NOT show Harnesses link on a non-space route (spaceId undefined)", () => {
+  it("shows Harnesses link on a non-space route (top-level nav item)", () => {
     renderOutsideSpaceRoute();
 
-    expect(screen.queryByRole("link", { name: /harnesses/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /harnesses/i })).toBeInTheDocument();
   });
 
   it("Harnesses link renders alongside existing nav entries (Stats still present)", () => {
@@ -105,12 +105,11 @@ describe("Sidebar — harnesses nav entry", () => {
     expect(screen.getByRole("link", { name: /harnesses/i })).toBeInTheDocument();
   });
 
-  it("Stats link is present even without a spaceId (non-space route)", () => {
+  it("Stats and Harnesses links are both present on non-space routes", () => {
     renderOutsideSpaceRoute();
 
-    // Ensure standard nav entries still render on non-space routes.
+    // Harnesses is a top-level nav item — always visible regardless of spaceId.
     expect(screen.getByRole("link", { name: /stats/i })).toBeInTheDocument();
-    // But no harnesses link.
-    expect(screen.queryByRole("link", { name: /harnesses/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /harnesses/i })).toBeInTheDocument();
   });
 });
