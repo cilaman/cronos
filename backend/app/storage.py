@@ -1079,6 +1079,32 @@ class TaskStore:
             self._reindex_locked(path)
             return self._by_id[task_id]
 
+    async def set_issue_refs(
+        self,
+        task_id: str,
+        *,
+        issue_number: int | None,
+        issue_url: str | None,
+        proposed_issue_path: str | None,
+    ) -> Task:
+        """Persist issue number, URL and/or proposed issue path on a task."""
+        async with self._lock:
+            task = self._by_id.get(task_id)
+            if task is None:
+                raise TaskNotFound(task_id)
+            updated = task.model_copy(
+                update={
+                    "issue_number": issue_number,
+                    "issue_url": issue_url,
+                    "proposed_issue_path": proposed_issue_path,
+                    "updated_at": datetime.now(tz=UTC),
+                }
+            )
+            path = self._path_by_id[task_id]
+            atomic_write(path, dump_task(updated))
+            self._reindex_locked(path)
+            return self._by_id[task_id]
+
     async def autopilot_conflict(self, task_id: str, waiting_question: str) -> Task:
         """Move a DONE task to WAITING with a conflict message (autopilot rebase failure)."""
         async with self._lock:
