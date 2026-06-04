@@ -496,6 +496,32 @@ print(f"  state file    : {pdir / 'pipeline-state.json'}")
 __PY__
 ```
 
+## Multi-SG arc usage (calling this skill multiple times)
+
+When a feature arc has multiple sequential pipeline subgoals (e.g. `data-model` → `api` → `board-ui`), call this skill once per subgoal — each call produces one goal + 7 phase tasks. After all subgoals are created, **wire sibling `depends_on`** between the subgoal goals so `_topo_children` runs them in the correct order.
+
+```bash
+python3 -c "
+import urllib.request, json
+
+def patch_deps(tid, deps):
+    data = json.dumps({'depends_on': deps}).encode()
+    req = urllib.request.Request(
+        'http://backend:8000/api/tasks/' + tid + '/depends_on',
+        data=data, method='PATCH',
+        headers={'Content-Type': 'application/json'},
+    )
+    return json.loads(urllib.request.urlopen(req).read())
+
+# Example: S1 → S2 → S3 (replace with actual goal ids returned by each scaffold call)
+patch_deps('<s2_goal_id>', ['<s1_goal_id>'])
+patch_deps('<s3_goal_id>', ['<s2_goal_id>'])
+print('Sibling deps wired.')
+"
+```
+
+**Why this is required:** `_topo_children` sorts sibling children by `(manual_order, id)`. With `manual_order=0` for all subgoals and no sibling `depends_on`, they sort **alphabetically by id** — which almost certainly produces the wrong execution order (e.g. `featurefix-api` before `featurefix-data-model`). Deps on tasks *inside* another subgoal (cross-boundary task deps) are not visible to `_topo_children` and do not fix the ordering. Only sibling `depends_on` on the subgoal goals themselves works.
+
 ## What this skill does NOT do
 
 - **Run any sub-agent.** Phase tasks run when the Cronos worker activates them; the scaffold only wires the DAG.

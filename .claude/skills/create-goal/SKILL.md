@@ -58,9 +58,9 @@ Goal
 │   ├── Task: test      (depends_on: [impl_id];      agent_model: sonnet)
 │   ├── Task: review    (depends_on: [test_id];      agent_model: opus)
 │   └── Task: doc       (depends_on: [review_id];    agent_model: haiku)
-├── Sub-Goal: Feature slice B  (analyst depends_on: [doc_id_of_A] if sequential)
+├── Sub-Goal: Feature slice B  (depends_on: [sub_goal_a_id] if sequential)
 │   └── analyst → architect → impl → test → review → doc
-└── Sub-Goal: Feature slice C
+└── Sub-Goal: Feature slice C  (depends_on: [sub_goal_b_id] if sequential)
     └── analyst → architect → impl → test → review → doc
 ```
 
@@ -68,7 +68,7 @@ Goal
 - One scout at goal level — never duplicate it per sub-goal (same codebase, one scan).
 - Sub-goals are independent feature slices (e.g. backend endpoint, frontend component, routing).
 - Do NOT create a separate "Tests" task — the `test` phase inside each sub-goal covers it.
-- Sequential sub-goals: set `depends_on` on the **analyst** of slice B to point at the **doc** task of slice A.
+- Sequential sub-goals: set `depends_on` on **Sub-Goal B itself** (the sibling goal object, not its analyst) pointing to Sub-Goal A's id. `_topo_children` only considers **sibling** `depends_on` for execution ordering — cross-sub-goal task deps (analyst of B → doc of A) are invisible to it and cause alphabetical ordering which is almost always wrong.
 - Each pipeline task brief must: (1) reference the scout report path, (2) name the CC-v1 agent contract file (`.claude/agents/pipeline-{agent}.md`), (3) specify the artifact output path, (4) end with `/pipeline-gate`.
 
 ## Procedure — simple goal
@@ -171,16 +171,19 @@ slices = [
     {"slug": "slice-b", "title": "Sub-Goal B", "brief": "…", "scope": "file_c.tsx"},
 ]
 
-prev_last_task_id = SCOUT_ID  # first analyst depends on scout
+prev_sg_id = None  # previous sub-goal id for sibling ordering
 
 for sl in slices:
     sg = api_post({
         "space_id": SPACE, "type": "goal", "parent_id": GOAL_ID,
         "priority": 2, "title": sl["title"], "brief": sl["brief"],
+        # Sibling dep: ensures _topo_children runs slices in the right order.
+        # Without this, all sub-goals have manual_order=0 and sort alphabetically.
+        "depends_on": [prev_sg_id] if prev_sg_id else [],
     })
     SG_ID = sg["id"]
 
-    prev_phase_id = prev_last_task_id
+    prev_phase_id = SCOUT_ID  # every slice's analyst starts from the shared scout
     for phase, model, agent_name in PHASES:
         t = api_post({
             "space_id": SPACE, "type": "task", "parent_id": SG_ID,
@@ -199,7 +202,7 @@ Then run: /pipeline-gate""",
         print(f"  [{sl['slug']}] {phase}: {t['id']}")
         prev_phase_id = t["id"]
 
-    prev_last_task_id = prev_phase_id  # next slice's analyst depends on this slice's doc
+    prev_sg_id = SG_ID  # next sub-goal's sibling dep points here
 ```
 
 ## Verify
@@ -222,7 +225,7 @@ for lane in tasks.values():
 - **Goal brief**: motivation, background, list of sub-goal/task names.
 - **Task brief**: exact file paths, line numbers, code snippets for every change; Acceptance section with testable criteria. The executing agent must not need to do additional research.
 - **Pipeline task brief**: always include (1) scout report path, (2) agent contract file, (3) artifact output path, (4) `/pipeline-gate` at the end.
-- **Dependencies**: `"depends_on": ["<task-id>"]` — each pipeline phase depends on the prior phase.
+- **Dependencies**: `"depends_on": ["<task-id>"]` — each pipeline phase depends on the prior phase. For sequential sub-goals, set `depends_on` on the **sub-goal itself** (not on its analyst) to enforce execution order via `_topo_children`.
 - **Model**: `"agent_model": "opus"` for architect and reviewer; `"haiku"` for scout and doc; `"sonnet"` for analyst, impl, test.
 
 ### Git workflow for development goals
