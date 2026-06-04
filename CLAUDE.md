@@ -64,22 +64,58 @@ HTTP Basic Auth via Caddy on every request. `/api/health` is public (no auth). C
 
 | Path | Purpose |
 |------|---------|
-| `backend/app/main.py` | FastAPI app, router registration, background task startup, file watcher |
+| `backend/app/main.py` | FastAPI app, router registration, background task startup (cron loop initialization), file watcher with event-trigger dispatch; task-state-change callback injection |
 | `backend/app/storage.py` | **CORE** — TaskStore, state machine, dependency DAG validation, cycle detection (41 KB) |
 | `backend/app/space_storage.py` | Space persistence, layouts, settings, `.cronos` subdirectory management |
 | `backend/app/agent.py` | Agent spawning, stdout/stderr capture, status tracking |
-| `backend/app/worker.py` | Background task processor (goals, agent execution, state transitions) |
+| `backend/app/worker.py` | Background task processor (goals, agent execution, state transitions); harness run lifecycle execution, event publishing for SSE streams |
 | `backend/app/models.py` | Pydantic schemas: TaskState, Task, Space, View, agent modes/models |
+| `backend/app/trace_parser.py` | Parse `STATUS:` fields from agent stdout, extract RunTrace (result, exit_reason, parent_run_id, memory_hit_rate, etc.) |
 | `backend/app/api/tasks.py` | Task CRUD, state transitions, drag-drop reordering, lane overrides (29 KB) |
 | `backend/app/api/spaces.py` | Space CRUD, repo linking, project settings |
+| `backend/app/api/harnesses.py` | Harness CRUD endpoints and run lifecycle (GET/POST/PUT/DELETE, POST /run, GET /runs, POST /webhook) with concurrency contract; webhook authentication via Bearer token |
+| `backend/app/api/harness_runs.py` | Harness run status and control endpoints (GET /{run_id}, POST /{run_id}/cancel, GET /{run_id}/stream SSE) |
+| `backend/app/harnesses/model.py` | Pydantic models with reference integrity validation (HarnessNode, HarnessEdge, Harness); Wait and Aggregator node data conventions; trigger node kinds (`task-state-change`, `webhook`, `file-change`) and their `data` schemas |
+| `backend/app/harnesses/validator.py` | DAG validation (cycle detection, self-loop rejection, reference fidelity checks, human Wait required fields R6); event-trigger validation (kind field, required/optional fields per kind, defaults application) |
+| `backend/app/harnesses/store.py` | HarnessStore with atomic YAML I/O to `.cronos/harnesses/<name>.yml` per space |
+| `backend/app/harnesses/executor.py` | **Harness executor** — runtime-gated BFS DAG interpreter with control-flow dispatch (decision/wait/aggregator nodes), agent invocation, fail-fast on node failure, variable scope propagation, run-state persistence, SSE event publishing (`node_transition`, `edge_chosen`, `run_status`), cancel-race guard |
+| `backend/app/harnesses/decision.py` | Decision node evaluator — four-layer signal precedence (STATUS marker > exit_reason > regex > variable condition) with whitelisted variable grammar (==, !=, in) |
+| `backend/app/harnesses/wait.py` | Wait node evaluators — `enter_wait()` parks human-mode harness runs with `waiting_node_id` routing key; `await_timed_wait()` sleeps timed-mode runs (MVP: restart re-sleeps full duration) |
+| `backend/app/harnesses/aggregator.py` | Aggregator node evaluator — `mode='all'` (fires when all predecessors done; any failure fails aggregator) or `mode='any'` (fires when first predecessor done; fails only if all fail); verdict-only semantics |
+| `backend/app/harnesses/interpolate.py` | Variable/data interpolation via `string.Template.safe_substitute` with precedence (root_vars < upstream_outputs) |
+| `backend/app/harnesses/brief_composer.py` | Child-task brief composition for harness executor nodes (agent header, skill prefix, prompt inclusion) |
+| `backend/app/harnesses/run_state.py` | RunState dataclass with lifecycle status and timing fields (`started_at`, `ended_at` ISO-8601 UTC per node); atomic persistence (tempfile + os.replace); reconciliation on resume |
+| `backend/app/harnesses/run_index.py` | Append-only per-harness run history index with concurrent-safe locking; `read_index()`, `append_run()`, `update_run_status()` |
+| `backend/app/harnesses/run_trigger.py` | Shared `enqueue_harness_run` helper — task creation, run index append, worker registration; used by POST /run endpoint and cron loop |
+| `backend/app/harnesses/cron.py` | Stateless cron-trigger background loop — `should_fire(expression, timezone, prev_tick, now)`, `has_active_run()`, `cron_loop()` with overlap guard and croniter integration |
 | `backend/app/memory_store.py` | Shared context storage |
+| `backend/app/harnesses/triggers.py` | Event routing core — `EventBusEvent` dataclass, `EventDebouncer` in-memory dedup, `fan_out_to_harnesses()` async dispatcher with pattern matching and harness selection |
 | `backend/app/git_ops.py` | `git clone/commit/push` wrappers for repo-linked spaces |
 | `backend/app/goal_sync.py` | Goal state propagation |
 | `frontend/src/App.tsx` | Root layout — sidebar nav + outlet (responsive mobile drawer) |
 | `frontend/src/pages/BoardPage.tsx` | Kanban board — dnd-kit drag-drop, lanes by TaskState |
 | `frontend/src/pages/TreePage.tsx` | Dependency DAG visualization (dagre) |
+| `frontend/src/pages/HarnessRunsPage.tsx` | Harness run history list with embedded per-run detail panel; trigger button and status badges |
+| `frontend/src/components/HarnessRunPanel.tsx` | Per-run detail panel with node status badges, live SSE indicator, cancel button, buffer-truncated badge |
 | `frontend/src/hooks/useTasks.ts` | React Query hooks for task CRUD |
-| `frontend/src/api.ts` | HTTP client |
+| `frontend/src/hooks/useHarnessRuns.ts` | React Query hooks for harness run queries, mutations (trigger, cancel), and SSE stream subscription |
+| `frontend/src/api.ts` | HTTP client; includes harness run types (RunSummary, NodeState, HarnessRunState) and API functions |
+| `frontend/src/pages/HarnessEditor.tsx` | Harness visual editor canvas page — React Flow v12 graph layout with 5 custom node types (Agent/Trigger/Decision/Wait/Aggregator), NodePalette drag source, VariableInspector side panel, Save button (GET-then-PUT); live-execution overlay with RunHistory (left panel), RunOverlay (canvas), and ChildTaskDrawer (right panel) |
+| `frontend/src/hooks/useHarnesses.ts` | React Query hooks for harness CRUD and canvas save (`useHarnesses` list, `useHarness` single fetch, `useSaveHarness` GET-then-PUT mutation enforcing created_at preservation) |
+| `frontend/src/components/harness/runStatus.ts` | Single source of truth for node run-status styling: `NodeRunStatus` union type, `RunStatusOverlayData` interface (optional fields: runStatus, startedAt, endedAt, childTaskId), and `runStatusClassName()` mapper returning Tailwind class strings per status |
+| `frontend/src/components/harness/harnessMapping.ts` | Round-trip module converting between React Flow flat graph shape (nodes[], edges[]) and backend nested NodeRef payload; `toReactFlow()` and `fromReactFlow()` pure functions |
+| `frontend/src/components/harness/AgentNode.tsx` | Custom React Flow node for Agent task invocation (input/output handles, label, agent_ref display); applies run status styling from `runStatusClassName()` |
+| `frontend/src/components/harness/TriggerNode.tsx` | React Flow node for harness triggers (output-only handle; Trigger/Webhook/FileChange kinds determined via harness data); applies run status styling |
+| `frontend/src/components/harness/DecisionNode.tsx` | React Flow node for conditional branching (input/output handles with yes/no ids); applies run status styling |
+| `frontend/src/components/harness/WaitNode.tsx` | React Flow node for human-wait synchronization points (input/output handles); applies run status styling |
+| `frontend/src/components/harness/AggregatorNode.tsx` | React Flow node for collecting multiple upstream branches (N input handles, single output; mode=all/any determined via harness data); applies run status styling |
+| `frontend/src/components/harness/RunOverlay.tsx` | Central run-state overlay component — renders node and edge styling for live-execution runs; consumes `useRunStateOverlay()` hook; cleans up stale overlay data when `runId` changes (R4 cleanup effect) |
+| `frontend/src/components/harness/RunHistory.tsx` | Left-panel component — lists harness runs newest-first with status pills and timestamps; emits `onSelectRun(runId, mode)` to trigger canvas run-state switch |
+| `frontend/src/components/harness/ChildTaskDrawer.tsx` | Right-side drawer component — accepts `child_task_id` prop, fetches task via `useTask()`, renders loading skeleton, then delegates to `ConversationStream` for task detail display |
+| `frontend/src/hooks/useRunStateOverlay.ts` | Central hook for run-state reduction: consumes SSE events (`useHarnessRunStream` live mode) or REST snapshots (`useHarnessRun` replay mode); coalesces events into `NodeRunStatus` and edge-coloring maps with `requestAnimationFrame` batching (R7) |
+| `frontend/src/components/harness/NodePalette.tsx` | Right-side draggable palette of 5 node types with React Flow dataTransfer semantics (effectAllowed=move) |
+| `frontend/src/components/harness/VariableInspector.tsx` | Right-side inspector panel — edits agent-specific config (agent_ref, prompt) when AgentNode selected, generic key/value config for other nodes, harness-level variables when no node selected |
+| `frontend/src/types.ts` | Harness visual editor type definitions (NodeType, Position, NodePort, HarnessNode, NodeRef, HarnessEdge, Harness interfaces mirroring backend Pydantic v2 models) |
 
 ## Directory layout
 

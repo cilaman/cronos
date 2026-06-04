@@ -1,0 +1,224 @@
+{
+  "cc_version": "1.0",
+  "goal_slug": "arc6-live-overlay",
+  "status": "running",
+  "created_at": "2026-06-03T11:04:56.102153+00:00",
+  "updated_at": "2026-06-04T09:35:25.257727+00:00",
+  "request_text": "Add the live-execution overlay — the differentiator — to the editor.\n\n- **Reuse SSE, not polling/websockets.** Subscribe to the 6.4 run-level stream for\n  node/edge transitions and to each Agent child's `/api/tasks/{id}/stream` (`_run_buffer`\n  replay covers late joiners).\n- Map run state to React Flow styling: **active node pulses, completed edges thicken,\n  failed paths desaturate.** Click a node → open its child task in ConversationStream.tsx\n  (child id per node from 6.4 status).\n- **Run history:** list past runs (from 6.4); open a finished run to replay final states +\n  traces. Empty: \"No runs yet.\"\n- New `frontend/src/components/harness/RunOverlay.tsx` + `RunHistory.tsx`; handle many\n  simultaneous streams without jank.\n\nAcceptance: trigger from the editor and watch the overlay animate per node; click a running\nnode → its live log; open a past run → final state; no-runs harness shows the empty state.\n",
+  "phases": {
+    "research": {
+      "phase": "research",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-scout",
+      "task_id": "2026-06-03-1104-pipeline-scout-6-8-live-execution-overla",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/arc6-live-overlay/scout-report-arc6-live-overlay.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "analysis": {
+      "phase": "analysis",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-analyst",
+      "task_id": "2026-06-03-1104-pipeline-analyst-6-8-live-execution-over",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/arc6-live-overlay/analysis-report-arc6-live-overlay.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [
+          "coverage_summary.strategies[4]: dropped unknown free-text strategy 'requirements_decomposition'",
+          "coverage_summary.strategies[5]: dropped unknown free-text strategy 'traceability_mapping'"
+        ],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "design": {
+      "phase": "design",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-architect",
+      "task_id": "2026-06-03-1104-pipeline-architect-6-8-live-execution-ov",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/arc6-live-overlay/design-report-arc6-live-overlay.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [
+          "coverage_summary.strategies[3]: dropped unknown free-text strategy 'component_decomposition'",
+          "coverage_summary.strategies[4]: dropped unknown free-text strategy 'iteration_planning'",
+          "coverage_summary.strategies[5]: dropped unknown free-text strategy 'risk_identification'"
+        ],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "implementation": {
+      "phase": "implementation",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-implementor",
+      "task_id": "2026-06-03-1104-pipeline-implementor-6-8-live-execution",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/arc6-live-overlay/impl-report-arc6-live-overlay--i7.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "test": {
+      "phase": "test",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "tester",
+      "task_id": "2026-06-03-1104-tester-6-8-live-execution-overlay-run-hi",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/arc6-live-overlay/test-report-arc6-live-overlay.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "review": {
+      "phase": "review",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-reviewer",
+      "task_id": "2026-06-03-1104-pipeline-reviewer-6-8-live-execution-ove",
+      "run_index": 1,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/arc6-live-overlay/review-report-arc6-live-overlay--attempt3.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 38.65,
+        "token_spend": 539705,
+        "tool_calls": 2,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "doc": {
+      "phase": "doc",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-doc-sync",
+      "task_id": "2026-06-03-1104-pipeline-doc-sync-6-8-live-execution-ove",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/arc6-live-overlay/doc-report-arc6-live-overlay.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    }
+  },
+  "telemetry": {
+    "total_duration_s": 38.65,
+    "total_token_spend": 539705,
+    "total_tool_calls": 2,
+    "total_files_read": 0,
+    "total_memory_hits": 0,
+    "phases_completed": 7,
+    "phases_escalated": 0,
+    "phases_retried": 0,
+    "phases_failed": 0
+  }
+}

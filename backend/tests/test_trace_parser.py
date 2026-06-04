@@ -654,3 +654,71 @@ def test_extract_run_trace_skill_not_in_index_leaves_fields_none():
     tc = trace.tool_calls[0]
     assert tc.adopted_tool_id is None
     assert tc.adopted_tool_kind is None
+
+
+# ---------------------------------------------------------------------------
+# parent_run_id
+# ---------------------------------------------------------------------------
+
+
+def test_parent_run_id_defaults_to_none():
+    """parent_run_id must default to None when not passed to extract_run_trace."""
+    trace = extract_run_trace([], **_base_kwargs())
+    assert trace.parent_run_id is None
+
+
+def test_parent_run_id_populated_when_passed_as_kwarg():
+    """parent_run_id must be set on RunTrace when passed as a keyword argument."""
+    trace = extract_run_trace([], **_base_kwargs(), parent_run_id="harness-run-123")
+    assert trace.parent_run_id == "harness-run-123"
+
+
+def test_parent_run_id_none_serializes_correctly():
+    """parent_run_id=None must round-trip through JSON serialization."""
+    trace = extract_run_trace([], **_base_kwargs())
+    assert trace.parent_run_id is None
+    data = json.loads(trace.model_dump_json())
+    assert data["parent_run_id"] is None
+
+
+def test_parent_run_id_value_serializes_correctly():
+    """parent_run_id with a value must round-trip through JSON serialization."""
+    trace = extract_run_trace([], **_base_kwargs(), parent_run_id="run-abc")
+    data = json.loads(trace.model_dump_json())
+    assert data["parent_run_id"] == "run-abc"
+    # Deserialize back into a RunTrace
+    restored = RunTrace.model_validate(data)
+    assert restored.parent_run_id == "run-abc"
+
+
+def test_parent_run_id_is_keyword_only():
+    """parent_run_id must be keyword-only — positional invocation must raise TypeError."""
+    import inspect
+    sig = inspect.signature(extract_run_trace)
+    param = sig.parameters.get("parent_run_id")
+    assert param is not None, "parent_run_id parameter missing from extract_run_trace"
+    assert param.kind == inspect.Parameter.KEYWORD_ONLY, (
+        "parent_run_id must be a keyword-only parameter"
+    )
+
+
+def test_existing_callers_unaffected():
+    """Existing call patterns without parent_run_id must continue to work unchanged."""
+    # Simulate caller patterns used in worker.py / test_arc5_e2e.py
+    trace = extract_run_trace([], **_base_kwargs())
+    assert trace.parent_run_id is None
+
+    trace2 = extract_run_trace(
+        [],
+        task_id=TASK_ID,
+        space_id=SPACE_ID,
+        run_index=0,
+        model="default",
+        mode="auto",
+        started_at=_NOW,
+        ended_at=_LATER,
+        exit_reason="DONE",
+        session_id=None,
+        had_crash=False,
+    )
+    assert trace2.parent_run_id is None

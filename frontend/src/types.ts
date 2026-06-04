@@ -478,6 +478,53 @@ export interface BuildInfo {
   repo_url: string | null;
 }
 
+// --- Harness visual editor ---
+
+export type NodeType = 'agent' | 'trigger' | 'decision' | 'wait' | 'aggregator';
+
+export interface Position {
+  x: number;
+  y: number;
+}
+
+export interface NodePort {
+  id: string;
+  label: string;
+  port_type: 'input' | 'output';
+}
+
+export interface HarnessNode {
+  id: string;
+  type: NodeType;
+  label: string;
+  position: Position;
+  ports: NodePort[];
+  config: Record<string, unknown>;
+}
+
+export interface NodeRef {
+  node_id: string;
+  port_id: string;
+}
+
+export interface HarnessEdge {
+  id: string;
+  source: NodeRef;
+  target: NodeRef;
+  label?: string;
+}
+
+export interface Harness {
+  name: string;
+  description?: string;
+  nodes: HarnessNode[];
+  edges: HarnessEdge[];
+  variables: Record<string, string>;
+  created_at?: string;
+  updated_at?: string;
+  version?: number;
+}
+
 // Memory
 export type MemoryKind = "fact" | "procedure" | "observation" | "reference";
 

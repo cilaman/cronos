@@ -1,9 +1,81 @@
 # Test Coverage — cronos-development
 
-**Updated**: 2026-06-03T12:44:54Z
-**Overall**: 82.87%  (+0.25% vs previous run 2026-06-03 A3-index)
+**Updated**: 2026-06-04T06:00:00Z
+**Backend overall**: 83.85%  (1962 passed, 0 failed, 0 errors, 0 skipped — +452 tests vs prior 1510; unchanged vs last full report which was also 83.85%)
+**Frontend**: 781 vitest tests passed across 44 files, 0 failed (+31 vs prior 750)
+**Tester rounds this session**: 1 (full pytest + full vitest both green on first run, no regressions)
+
+## Verification run (2026-06-04 — arc6-cron-trigger doc-sync + cron-trigger impl)
+
+Post-doc-sync verification for the `feature/arc-6-harnesses` branch after the
+arc6-cron-trigger pipeline completed its documentation phase (doc-sync commit
+`a6ba69b` touched docs only; CLAUDE.md + pipeline reports). The latest code
+commit `b3bbbd0` ("6.5 Cron trigger") shipped its own tests alongside the
+implementation. Full backend + frontend suites confirmed green with zero
+regressions.
+
+**Cron-trigger code coverage (all newly-shipped, well covered):**
+- `app/harnesses/run_trigger.py`: **100%** (23/23)
+- `app/harnesses/cron.py`: **85%** (92 stmts; misses are error/edge branches
+  90,164,188-189,206-208,235-239,256-257,319-320)
+- `app/harnesses/model.py`: **100%**, `interpolate.py`/`validator.py`/`wait.py`/
+  `brief_composer.py`: **100%**
+- `app/api/harnesses.py`: **93%**
+- `app/main.py`: **58%** (cron loop added here; main.py lifespan/watcher remain
+  the long-standing low-coverage area — pre-existing gap, not introduced by this task)
+
+New test files shipped with the implementation (already present, all passing):
+`tests/test_cron_eval.py`, `tests/test_cron_loop.py`,
+`tests/test_harness_run_trigger.py`, `tests/test_main_lifespan.py`.
+
+**No module lost coverage. No new tests written this session** — this was a
+verification-only pass confirming the docs change did not break the suite.
+
+## Lowest-coverage modules (priority queue for next session)
+
+| Module | Coverage | Notes |
+|--------|----------|-------|
+| app/main.py | 58% | lifespan/watcher/cron-loop wiring — hard to cover without integration harness |
+| app/git_ops.py | 59% | user git state — security-sensitive, slow climb |
+| app/worker.py | 66% | core scheduler — large module, many branches |
+| app/worker_pool.py | 70% | pool lifecycle |
+| app/api/test_reports.py | 70% | small module — easy wins |
+| app/space_storage.py | 72% | space lifecycle ops |
+
+## Suspected flakes
+- none this session
+
+---
+
+## Prior session
+
+## Recent changes (2026-06-03 — arc-5/C4 Frontend per-tool telemetry panel)
+
+Frontend-only task. New component `frontend/src/components/AdoptedToolTelemetry.tsx`
+(strip + expand/collapse), wired into `SpaceToolsPage` AdoptedSection rows, backed by
+`useToolTelemetry` hook → `api.toolTelemetry` → `GET /api/spaces/{id}/tools/{kind}/{name}/telemetry`
+typed by `ToolTelemetryResponse`. Backend telemetry endpoint shipped in arc-5/C2; no
+backend code changed here.
+
+Added 7 behavior-focused tests to `frontend/src/__tests__/AdoptedToolTelemetry.test.tsx`
+(now 19 tests), covering previously-untested branches:
+- **Loading state** — `loading…` shown while query pending; no call-count/no-calls leak.
+- **Pluralization** — singular "1 call" vs plural "2 calls" (`calls !== 1` branch).
+- **Success-rate color thresholds** — green at the inclusive 0.9 boundary, amber at 0.7,
+  danger below 0.7 (guards `>=` vs `>` regressions in `successColor`/`SuccessBar`).
+- **Error breakdown** — error-rate computation (`errors/calls` rounding), `{n} err` /
+  `{n} ok` legends present when `errors > 0`, and error legend omitted when `errors === 0`.
+- **Accessibility** — `aria-expanded` toggles false→true on strip click.
+
+The pre-existing tests already covered: strip with data, empty-history (calls=0),
+expand/collapse, window-prop passthrough, detail stat cells.
+
+---
+
+## Backend (unchanged this task — prior session figures retained below)
+
+**Prev backend run**: 82.87%  (+0.25% vs previous run 2026-06-03 A3-index)
 **Passed**: 1417 | **Failed**: 0 | **Errors**: 0 | **Skipped**: 0 | **Total**: 1417
-**Tester rounds this session**: 2 (1 wrong-assertion fix; full suite green, no regressions)
 
 ## Recent changes (2026-06-03 — B2 Adopt/Unadopt/List-Adopted API)
 

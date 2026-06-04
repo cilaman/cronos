@@ -33,6 +33,7 @@ from .trace_store import TraceStore
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .worker_pool import WorkerPool
+    from .harnesses.store import HarnessStore
 
 log = logging.getLogger("cronos.worker")
 
@@ -70,6 +71,109 @@ _DONE_SENTINEL: dict = {"type": "stream_end"}
 # Per-task replay buffer cap. Covers a typical Claude turn; older events
 # are dropped FIFO when exceeded.
 _RUN_BUFFER_CAP = 2000
+
+
+class _WorkerProtocolAdapter:
+    """Adapts Worker to satisfy harnesses.executor.WorkerProtocol.
+
+    The HarnessExecutor requires a WorkerProtocol object with ``run_agent``
+    and ``finalize_child`` methods.  This adapter bridges to the real Worker
+    without causing a circular-import.  It is used only during harness
+    resume (_resume_harness_run).
+    """
+
+    def __init__(self, worker: "Worker") -> None:
+        self._worker = worker
+
+    async def run_agent(self, task_id: str, **kwargs) -> RunTrace:
+        """Run the agent for a harness child task and return a RunTrace.
+
+        Delegates to ``run_agent()`` from agent.py directly so the Worker
+        does not need to expose a public run_agent method for protocol use.
+        """
+        task = self._worker.store.get(task_id)
+        if task is None:
+            raise RuntimeError(f"Child task {task_id!r} not found in store")
+        space = (
+            self._worker.space_store.get(task.space_id)
+            if self._worker.space_store
+            else None
+        )
+        result: AgentResult = await run_agent(task, user_message=None, space=space)
+        # Convert AgentResult to a minimal RunTrace for the executor.
+        from datetime import UTC, datetime as _dt
+        now = _dt.now(tz=UTC)
+        return RunTrace(
+            task_id=task_id,
+            space_id=task.space_id,
+            run_index=0,
+            session_id=result.session_id,
+            model=task.agent_model,
+            mode=task.agent_mode,
+            started_at=now,
+            ended_at=now,
+            duration_seconds=0.0,
+            exit_reason=result.status.value if result.status else "NO_STATUS",
+            final_text_snippet=(result.final_text or "")[:500],
+            parent_run_id=kwargs.get("parent_run_id"),
+        )
+
+    async def finalize_child(self, task_id: str, trace: RunTrace) -> TaskState:
+        """Finalize a harness child task and return its new TaskState.
+
+        Uses the trace's exit_reason to determine success (DONE) vs failure.
+        """
+        from datetime import UTC, datetime as _dt
+        ts = _dt.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        if trace.exit_reason == "DONE":
+            new_state = TaskState.DONE
+            waiting_question = None
+            history_entry = f"```\n{ts} [agent]\n{trace.final_text_snippet or '(done)'}\n```"
+        else:
+            new_state = TaskState.WAITING
+            waiting_question = f"Agent ended with exit_reason={trace.exit_reason!r}"
+            history_entry = (
+                f"```\n{ts} [agent]\n"
+                f"exit_reason={trace.exit_reason!r}\n{trace.final_text_snippet or ''}\n```"
+            )
+
+        try:
+            await self._worker.store.finalize_run(
+                task_id,
+                new_state=new_state,
+                session_id=trace.session_id,
+                waiting_question=waiting_question,
+                history_entry=history_entry,
+            )
+        except Exception:
+            log.exception("_WorkerProtocolAdapter.finalize_child failed for %s", task_id)
+
+        return new_state
+
+    def _publish(self, task_id: str, event: dict) -> None:
+        """Sync bridge to Worker._run_buffer (WorkerProtocol._publish is sync).
+
+        Worker._publish is async def but its body is purely synchronous.
+        This adapter replicates those operations so harness events reach
+        _run_buffer and SSE subscribers without an unawaited coroutine.
+        """
+        worker = self._worker
+        buf = worker._run_buffer.setdefault(task_id, [])
+        buf.append(event)
+        if len(buf) > _RUN_BUFFER_CAP:
+            del buf[: len(buf) - _RUN_BUFFER_CAP]
+        for q in list(worker._subscribers.get(task_id, [])):
+            try:
+                q.put_nowait(event)
+            except asyncio.QueueFull:
+                try:
+                    q.get_nowait()
+                except asyncio.QueueEmpty:
+                    pass
+                try:
+                    q.put_nowait(event)
+                except asyncio.QueueFull:
+                    pass
 
 
 def _topo_children(goal_id: str, store: TaskStore) -> list[str]:
@@ -130,14 +234,19 @@ class Worker:
         trace_store: TraceStore | None = None,
         memory_store: MemoryStore | None = None,
         on_idle: Callable[[Worker], Awaitable[None]] | None = None,
-        pool: WorkerPool | None = None,
+        pool: "WorkerPool | None" = None,
+        harness_store: "HarnessStore | None" = None,
+        *,
+        on_task_state_change: Callable[[str, str, str, str], Awaitable[None]] | None = None,
     ) -> None:
         self.store = store
         self.space_store = space_store
         self.stats_store = stats_store
         self.trace_store = trace_store
         self.memory_store = memory_store
+        self.harness_store = harness_store
         self.on_idle = on_idle
+        self._on_task_state_change = on_task_state_change
         self._space_id: str | None = None
         self._pool = pool
         self._queue: asyncio.Queue[tuple[str, str | None]] = asyncio.Queue()
@@ -157,6 +266,62 @@ class Worker:
         # Space-level subscribers receive run_start/run_end for all tasks in
         # this worker's space (used by the space SSE stream).
         self._space_subscribers: list[asyncio.Queue[dict]] = []
+        # Reverse-lookup cache: run_id → space_id.  Populated at startup by
+        # _rebuild_run_id_cache() and kept current via register_run().  Used by
+        # the /api/harness-runs/{run_id} endpoints (I5/I6) to resolve the space
+        # without scanning every space's harness-runs index files per request.
+        self._run_id_to_space_id: dict[str, str] = {}
+        self._rebuild_run_id_cache()
+
+    # ---- run_id cache ----
+
+    def _rebuild_run_id_cache(self) -> None:
+        """Populate _run_id_to_space_id by scanning known spaces' harness-run index files.
+
+        Called once at Worker construction time.  Safe to call again to refresh.
+        Each space stores per-harness index files at::
+
+            {DATA_DIR}/spaces/{space_id}/.cronos/harness-runs/{harness_id}-index.json
+
+        The index files are JSON arrays of RunSummary objects, each with a ``run_id``
+        field.  This method scans all ``*-index.json`` files under every space directory
+        to pre-populate the reverse-lookup cache used by GET /api/harness-runs/{run_id}.
+        Missing or malformed files are silently skipped.
+        """
+        spaces_root = DATA_DIR / "spaces"
+        if not spaces_root.is_dir():
+            return
+        import json as _json
+        for space_dir in spaces_root.iterdir():
+            if not space_dir.is_dir():
+                continue
+            space_id = space_dir.name
+            index_dir = space_dir / ".cronos" / "harness-runs"
+            if not index_dir.is_dir():
+                continue
+            for index_file in index_dir.glob("*-index.json"):
+                try:
+                    with index_file.open("r", encoding="utf-8") as fh:
+                        entries: list[dict] = _json.load(fh)
+                    for entry in entries:
+                        run_id = entry.get("run_id")
+                        if run_id:
+                            self._run_id_to_space_id[run_id] = space_id
+                except Exception:
+                    log.debug("_rebuild_run_id_cache: skipping %s (read error)", index_file)
+
+    def register_run(self, run_id: str, space_id: str) -> None:
+        """Register a new harness run in the reverse-lookup cache.
+
+        Called by the POST /run API endpoint (I5) immediately after creating the
+        index entry so that subsequent GET /api/harness-runs/{run_id} requests
+        resolve the space in O(1) without re-scanning the filesystem.
+        """
+        self._run_id_to_space_id[run_id] = space_id
+
+    def lookup_space_id(self, run_id: str) -> str | None:
+        """Return the space_id for *run_id*, or None if not in the cache."""
+        return self._run_id_to_space_id.get(run_id)
 
     # ---- public api ----
 
@@ -262,10 +427,229 @@ class Worker:
         else:
             await self._run_task(task_id, user_message)
 
+    async def _execute_harness_run(
+        self,
+        task_id: str,
+        harness_id: str,
+        space_id: str,
+        *,
+        initial_run: bool,
+    ) -> bool:
+        """Execute (initial_run=True) or resume (initial_run=False) a harness run.
+
+        Builds HarnessExecutor with event_worker=_WorkerProtocolAdapter(self) so
+        all node_transition/edge_chosen/run_status events land in _run_buffer.
+        Returns True if executor.execute() was called; False on setup error.
+        """
+        if self.harness_store is None or self.space_store is None:
+            return False
+
+        space = self.space_store.get(space_id)
+        if space is None:
+            log.warning(
+                "_execute_harness_run: space %r not found for run %s", space_id, task_id
+            )
+            return False
+
+        space_dir = str(self.space_store.spaces_dir / space_id)
+        try:
+            harness = await self.harness_store.get(space_dir, harness_id)
+        except Exception:
+            log.exception(
+                "Failed to load harness %r for task %s; cannot %s harness run.",
+                harness_id, task_id, "start" if initial_run else "resume",
+            )
+            return False
+
+        # F2 fix: event_worker uses the adapter (not Worker directly) because
+        # WorkerProtocol._publish is sync, but Worker._publish is async def.
+        # Passing Worker directly would create un-awaited coroutines and drop
+        # all events. The adapter's sync _publish writes to _run_buffer directly.
+        from .harnesses.executor import HarnessExecutor
+
+        def _tools_resolver(space_id: str, agent_ref: str):
+            return None
+
+        _adapter = _WorkerProtocolAdapter(self)
+        executor = HarnessExecutor(
+            self.store,
+            _adapter,
+            _tools_resolver,
+            event_worker=_adapter,
+        )
+
+        log.info(
+            "%s harness run %r (harness=%r) via executor.execute().",
+            "Starting" if initial_run else "Resuming",
+            task_id,
+            harness_id,
+        )
+        try:
+            result_state = await executor.execute(task_id, harness, space)
+        except Exception:
+            log.exception("executor.execute() failed for harness run %s", task_id)
+            return True  # Was a harness task — caller should not run run_agent.
+
+        # Transition the task state based on whether execution completed or parked.
+        timestamp = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        if result_state.waiting_node_id is not None:
+            # Harness parked at a human Wait node — transition to WAITING.
+            log.info(
+                "Harness run %r parked at waiting_node_id=%r.",
+                task_id, result_state.waiting_node_id,
+            )
+            history_entry = (
+                f"```\n{timestamp} [harness]\n"
+                f"Waiting at node: {result_state.waiting_node_id}\n```"
+            )
+            try:
+                await self.store.finalize_run(
+                    task_id,
+                    new_state=TaskState.WAITING,
+                    session_id=None,
+                    waiting_question=f"Harness waiting at node: {result_state.waiting_node_id}",
+                    history_entry=history_entry,
+                )
+            except Exception:
+                log.exception("Failed to finalize harness run %s to WAITING", task_id)
+        else:
+            # Harness execution completed (all nodes done or fail-fast).
+            log.info("Harness run %r completed.", task_id)
+            history_entry = f"```\n{timestamp} [harness]\nHarness run completed.\n```"
+            try:
+                await self.store.finalize_run(
+                    task_id,
+                    new_state=TaskState.DONE,
+                    session_id=None,
+                    waiting_question=None,
+                    history_entry=history_entry,
+                )
+            except Exception:
+                log.exception("Failed to finalize harness run %s to DONE", task_id)
+
+        return True
+
+    async def _resume_harness_run(self, task_id: str) -> bool:
+        """Resume a WAITING harness run (waiting_node_id is set in run-state).
+
+        Returns True if executor.execute() was called; False if no harness
+        run-state exists for task_id (caller should proceed with run_agent).
+        """
+        if self.harness_store is None or self.space_store is None:
+            return False
+
+        task = self.store.get(task_id)
+        if task is None:
+            return False
+
+        # Compute the run-state file path (same formula as executor.py).
+        run_state_path = (
+            DATA_DIR / "spaces" / task.space_id / ".cronos" / "harness-runs" / f"{task_id}.json"
+        )
+        if not run_state_path.exists():
+            return False
+
+        # Load the run state to check for a pending human Wait.
+        try:
+            from .harnesses.run_state import load as load_run_state
+            run_state = load_run_state(run_state_path)
+        except Exception:
+            log.exception("Failed to load harness run state for %s", task_id)
+            return False
+
+        if run_state is None or run_state.waiting_node_id is None:
+            # No waiting node — not a harness resume (or harness completed).
+            return False
+
+        return await self._execute_harness_run(
+            task_id,
+            run_state.harness_id,
+            task.space_id,
+            initial_run=False,
+        )
+
+    async def _run_initial_harness_run(self, task_id: str) -> bool:
+        """F1 fix: execute a freshly-triggered harness run for the first time.
+
+        Called from _run_task when task_id is in _run_id_to_space_id (set by
+        register_run() on POST /run) but no run-state JSON exists yet.
+        Resolves harness_id from the index file, then delegates to
+        _execute_harness_run(initial_run=True).
+
+        Returns True if executor.execute() was called; False if task_id is
+        not a known harness run (caller should fall through to run_agent).
+        """
+        space_id = self._run_id_to_space_id.get(task_id)
+        if space_id is None:
+            return False  # Not a harness run; fall through to run_agent.
+
+        if self.harness_store is None or self.space_store is None:
+            return False
+
+        # Resolve harness_id from the run-index file (written by POST /run).
+        harness_id: str | None = None
+        index_dir = DATA_DIR / "spaces" / space_id / ".cronos" / "harness-runs"
+        import json as _json
+        if index_dir.is_dir():
+            for index_file in index_dir.glob("*-index.json"):
+                try:
+                    with index_file.open("r", encoding="utf-8") as fh:
+                        entries: list[dict] = _json.load(fh)
+                    for entry in entries:
+                        if entry.get("run_id") == task_id:
+                            harness_id = entry.get("harness_id")
+                            break
+                except Exception:
+                    log.debug("_run_initial_harness_run: skipping %s (read error)", index_file)
+                if harness_id is not None:
+                    break
+
+        if harness_id is None:
+            log.warning(
+                "_run_initial_harness_run: could not find harness_id for run %s in space %s",
+                task_id, space_id,
+            )
+            return False
+
+        return await self._execute_harness_run(
+            task_id,
+            harness_id,
+            space_id,
+            initial_run=True,
+        )
+
     async def _run_task(self, task_id: str, user_message: str | None) -> None:
         task = self.store.get(task_id)
         if task is None:
             log.warning("Skipping unknown task %s", task_id)
+            return
+
+        # Check if this is a WAITING harness run goal being resumed via a
+        # pending_messages reply.  If so, delegate to executor.execute() and
+        # skip the regular run_agent path entirely.
+        handled = await self._resume_harness_run(task_id)
+        if handled:
+            log.info("Task %s handled as harness resume; skipping run_agent.", task_id)
+            await self._publish(task_id, {
+                "type": "run_end",
+                "task_id": task_id,
+                "status": None,
+                "new_state": None,
+            })
+            return
+
+        # F1 fix: check for a freshly-triggered harness run (task_id in
+        # _run_id_to_space_id means POST /run registered it).  Without this
+        # branch the worker falls through to run_agent on a task with no agent.
+        handled = await self._run_initial_harness_run(task_id)
+        if handled:
+            log.info("Task %s handled as initial harness run; skipping run_agent.", task_id)
+            await self._publish(task_id, {
+                "type": "run_end",
+                "task_id": task_id,
+                "status": None,
+                "new_state": None,
+            })
             return
 
         self._current_id = task_id
@@ -422,6 +806,7 @@ class Worker:
         session_id_to_persist = (
             result.session_id if result.exit_code == 0 and not result.stopped else None
         )
+        old_state_value = task_pre.state.value if task_pre is not None else ""
         try:
             await self.store.finalize_run(
                 task_id,
@@ -432,6 +817,27 @@ class Worker:
             )
         except Exception:
             log.exception("Failed to persist finalize for %s", task_id)
+
+        # Invoke the optional task-state-change callback (wired by main.py to
+        # fan out harness triggers).  Called only on DONE transitions so that
+        # harness-trigger fans out exactly once per completed run.  Wrapped in
+        # try/except so a failing callback never aborts downstream hooks.
+        if new_state == TaskState.DONE and self._on_task_state_change is not None:
+            task_after = self.store.get(task_id)
+            space_id_for_cb = task_after.space_id if task_after is not None else (
+                task_pre.space_id if task_pre is not None else ""
+            )
+            try:
+                await self._on_task_state_change(
+                    space_id_for_cb,
+                    task_id,
+                    old_state_value,
+                    new_state.value,
+                )
+            except Exception:
+                log.exception(
+                    "on_task_state_change callback failed for task %s; continuing", task_id
+                )
 
         if new_state == TaskState.DONE and self.space_store is not None:
             task_done = self.store.get(task_id)
@@ -956,6 +1362,12 @@ class Worker:
                 pass
 
     async def _publish(self, task_id: str, event: dict) -> None:
+        # Event ``type`` values that appear in _run_buffer:
+        #   Legacy task events: "run_start", "run_end", "run_error",
+        #     "goal_child_start", "goal_child_end", "goal_child_skipped", "pr_opened"
+        #   Harness events (added by I3): "node_transition", "edge_chosen", "run_status"
+        # Harness events are discriminated by their ``type`` field so that existing
+        # SSE consumers that only recognise legacy event names silently ignore them.
         buf = self._run_buffer.setdefault(task_id, [])
         buf.append(event)
         if len(buf) > _RUN_BUFFER_CAP:

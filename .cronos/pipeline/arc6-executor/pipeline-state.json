@@ -1,0 +1,220 @@
+{
+  "cc_version": "1.0",
+  "goal_slug": "arc6-executor",
+  "status": "running",
+  "created_at": "2026-06-03T11:04:55.538580+00:00",
+  "updated_at": "2026-06-03T20:07:19.364922+00:00",
+  "request_text": "Build the runtime in `backend/app/harnesses/executor.py`. A run is a Task (`type=goal`);\n**only Agent nodes become child tasks.**\n\n- **Do NOT reuse `_run_goal` wholesale** (only recurse/`run_agent` branches exist). Build\n  a **new stateful DAG interpreter** walking the graph: at an Agent node, materialise/enqueue\n  a child Task and await its terminal state (reuse `run_agent` + `_finalize_child` + the\n  topo-sort from `_topo_children` [worker.py:51]). Stub control-flow nodes as pass-through\n  here (6.3 implements them) so a linear all-Agent harness runs end to end.\n- **Agent binding:** compose `agent_ref` + `prompt_template` + resolved `variable_bindings`\n  into the child Task `brief` (skills get a `/<name>` prefix); resolve `agent_ref` against\n  api/tools.py. No new `--agent` flag.\n- **Variable/data passing:** define how an upstream node's output (child\n  `RunTrace.final_text_snippet` / STATUS) flows into a downstream node's `prompt_template`\n  variables.\n- **`parent_run_id`:** optional field on `RunTrace` (trace_parser.py:110); thread through\n  `extract_run_trace`, set on each Agent child, persist in the trace JSON without breaking\n  TracePanel.tsx.\n- Run state (per-node status, chosen edges, child ids) persists at\n  `{space}/.cronos/harness-runs/<run_id>.json` (restart-safe).\n- Address worker contention: a run holds the space's single serial worker\n  (worker_pool.py) for its whole duration — avoid starving normal tasks.\n\nAcceptance: a 3-node linear harness expands to a goal + 3 child tasks in topo order; each\nchild's `parent_run_id` = run id; an upstream output is interpolated into the next prompt;\nrun-state file reflects per-node status.\n",
+  "phases": {
+    "research": {
+      "phase": "research",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-scout",
+      "task_id": "2026-06-03-1104-pipeline-scout-6-2-harness-executor-core",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/arc6-executor/scout-report-arc6-executor.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "analysis": {
+      "phase": "analysis",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-analyst",
+      "task_id": "2026-06-03-1104-pipeline-analyst-6-2-harness-executor-co",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/arc6-executor/analysis-report-arc6-executor.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [
+          "coverage_summary.strategies[3]: dropped unknown free-text strategy 'requirements_decomposition'",
+          "coverage_summary.strategies[4]: dropped unknown free-text strategy 'traceability_mapping'"
+        ],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "design": {
+      "phase": "design",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-architect",
+      "task_id": "2026-06-03-1104-pipeline-architect-6-2-harness-executor",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/arc6-executor/design-report-arc6-executor.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "implementation": {
+      "phase": "implementation",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-implementor",
+      "task_id": "2026-06-03-1104-pipeline-implementor-6-2-harness-executo",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/arc6-executor/impl-report-arc6-executor--i6.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "test": {
+      "phase": "test",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "tester",
+      "task_id": "2026-06-03-1104-tester-6-2-harness-executor-core-interpr",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/arc6-executor/test-report-arc6-executor.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "review": {
+      "phase": "review",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-reviewer",
+      "task_id": "2026-06-03-1104-pipeline-reviewer-6-2-harness-executor-c",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/arc6-executor/review-report-arc6-executor--attempt1.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "doc": {
+      "phase": "doc",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-doc-sync",
+      "task_id": "2026-06-03-1104-pipeline-doc-sync-6-2-harness-executor-c",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/arc6-executor/doc-report-arc6-executor.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    }
+  },
+  "telemetry": {
+    "total_duration_s": 0.0,
+    "total_token_spend": 0,
+    "total_tool_calls": 0,
+    "total_files_read": 0,
+    "total_memory_hits": 0,
+    "phases_completed": 7,
+    "phases_escalated": 0,
+    "phases_retried": 0,
+    "phases_failed": 0
+  }
+}
