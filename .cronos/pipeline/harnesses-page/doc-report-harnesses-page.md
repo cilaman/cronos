@@ -26,7 +26,7 @@ intentionally_not_updated:
     reason: "Deployment unchanged. No new environment variables, ports, or service configuration introduced."
 metrics:
   tool_calls: 5
-  files_read: 5
+  files_read: 6
   memory_hits: 0
   docs_updated: 1
   docs_considered: 4
