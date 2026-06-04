@@ -7,19 +7,30 @@ import '../components/harness/reactflow-overrides.css';
 import { nodeTypes } from '../components/harness/nodeTypes';
 import { NodePalette } from '../components/harness/NodePalette';
 import { VariableInspector } from '../components/harness/VariableInspector';
+import { RunOverlay } from '../components/harness/RunOverlay';
+import { RunHistory } from '../components/harness/RunHistory';
+import { ChildTaskDrawer } from '../components/harness/ChildTaskDrawer';
 import { useHarness, useSaveHarness } from '../hooks/useHarnesses';
+import { useTriggerHarnessRun } from '../hooks/useHarnessRuns';
 import { toReactFlow, fromReactFlow } from '../components/harness/harnessMapping';
 import type { HarnessNode } from '../types';
+import type { OverlayMode } from '../hooks/useRunStateOverlay';
 
 function HarnessEditorInner() {
   const { spaceId = '', name = '' } = useParams<{ spaceId: string; name: string }>();
   const { data: harness, isLoading, isError } = useHarness(spaceId, name);
   const saveMutation = useSaveHarness(spaceId, name);
+  const triggerMutation = useTriggerHarnessRun();
   const { screenToFlowPosition } = useReactFlow();
 
   const [nodes, setNodes, onNodesChange] = useNodesState<RFNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<RFEdge>([]);
   const [selectedNode, setSelectedNode] = useState<HarnessNode | null>(null);
+
+  // Run overlay state
+  const [currentRunId, setCurrentRunId] = useState<string | null>(null);
+  const [overlayMode, setOverlayMode] = useState<OverlayMode>('live');
+  const [selectedChildTaskId, setSelectedChildTaskId] = useState<string | null>(null);
 
   // Initialize canvas from loaded harness
   React.useEffect(() => {
@@ -70,6 +81,33 @@ function HarnessEditorInner() {
     setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data: { ...n.data, ...config } } : n));
   }, [setNodes]);
 
+  const handleTriggerRun = useCallback(() => {
+    triggerMutation.mutate(
+      { spaceId, name },
+      {
+        onSuccess: (data) => {
+          setCurrentRunId(data.run_id);
+          setOverlayMode('live');
+          setSelectedChildTaskId(null);
+        },
+      },
+    );
+  }, [triggerMutation, spaceId, name]);
+
+  const handleSelectRun = useCallback((runId: string, mode: 'live' | 'replay') => {
+    setCurrentRunId(runId);
+    setOverlayMode(mode);
+    setSelectedChildTaskId(null);
+  }, []);
+
+  const handleNodeOpen = useCallback((childTaskId: string) => {
+    setSelectedChildTaskId(childTaskId);
+  }, []);
+
+  const handleCloseDrawer = useCallback(() => {
+    setSelectedChildTaskId(null);
+  }, []);
+
   if (isLoading) return <div className="p-6 text-ink-faint">Loading harness…</div>;
   if (isError) return <div className="p-6 text-danger">Failed to load harness.</div>;
   if (!harness) return null;
@@ -96,10 +134,32 @@ function HarnessEditorInner() {
         >
           {saveMutation.isPending ? 'Saving…' : 'Save'}
         </button>
+        <button
+          type="button"
+          onClick={handleTriggerRun}
+          disabled={triggerMutation.isPending}
+          className="rounded border border-green-400/40 bg-green-50 px-3 py-1 text-xs font-medium text-green-700 transition hover:bg-green-100 disabled:opacity-60"
+          data-testid="run-button"
+        >
+          {triggerMutation.isPending ? 'Starting…' : 'Run'}
+        </button>
       </header>
 
       {/* Canvas area */}
       <div className="flex flex-1 overflow-hidden">
+        {/* Left panel: RunHistory */}
+        <div
+          className="flex w-48 flex-col border-r border-hairline bg-surface-1 overflow-y-auto"
+          data-testid="run-history-panel"
+        >
+          <div className="border-b border-hairline px-3 py-1.5">
+            <span className="font-display text-[10px] font-semibold uppercase tracking-[0.24em] text-ink-faint">
+              Run History
+            </span>
+          </div>
+          <RunHistory spaceId={spaceId} name={name} onSelectRun={handleSelectRun} />
+        </div>
+
         <NodePalette />
         <div className="harness-canvas relative flex-1" onDragOver={onDragOver} onDrop={onDrop}>
           <ReactFlow
@@ -112,12 +172,24 @@ function HarnessEditorInner() {
             nodeTypes={nodeTypes}
             fitView
           />
+          {currentRunId !== null && (
+            <RunOverlay
+              runId={currentRunId}
+              mode={overlayMode}
+              onNodeOpen={handleNodeOpen}
+            />
+          )}
         </div>
         <VariableInspector
           selectedNode={selectedNode}
           harness={harness}
           onNodeChange={handleNodeChange}
           onVariableChange={() => {}}
+        />
+        {/* Right panel: ChildTaskDrawer */}
+        <ChildTaskDrawer
+          child_task_id={selectedChildTaskId}
+          onClose={handleCloseDrawer}
         />
       </div>
     </div>

@@ -1,7 +1,9 @@
 import { Handle, Position } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
+import { runStatusClassName } from './runStatus';
+import type { RunStatusOverlayData } from './runStatus';
 
-export interface AgentNodeData {
+export interface AgentNodeData extends RunStatusOverlayData {
   label?: string;
   agent_ref?: string;
   [key: string]: unknown;
@@ -9,8 +11,9 @@ export interface AgentNodeData {
 
 export function AgentNode({ data }: NodeProps) {
   const nodeData = data as AgentNodeData;
+  const statusClass = runStatusClassName(nodeData.runStatus);
   return (
-    <div className="rounded border border-hairline bg-surface-2 px-3 py-2 text-xs min-w-[120px]">
+    <div className={`rounded border border-hairline bg-surface-2 px-3 py-2 text-xs min-w-[120px]${statusClass ? ` ${statusClass}` : ''}`}>
       <Handle type="target" position={Position.Top} />
       <div className="font-semibold text-ink uppercase tracking-wide mb-1">AGENT</div>
       {nodeData.label && (

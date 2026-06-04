@@ -19,3 +19,14 @@
   background: transparent;
   border-color: currentColor;
 }
+
+/* Run-status overlay animations — scoped to harness canvas nodes */
+/* Ensures animate-pulse works on node wrappers inside the React Flow container */
+@keyframes harness-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.harness-canvas .react-flow__node .animate-pulse {
+  animation: harness-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
