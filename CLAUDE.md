@@ -65,15 +65,16 @@ HTTP Basic Auth via Caddy on every request. `/api/health` is public (no auth). C
 | Path | Purpose |
 |------|---------|
 | `backend/app/main.py` | FastAPI app, router registration, background task startup (cron loop initialization), file watcher with event-trigger dispatch; task-state-change callback injection |
-| `backend/app/storage.py` | **CORE** — TaskStore, state machine, dependency DAG validation, cycle detection (41 KB); feature/fix task queries (`feature_board`, `realizing_items`), state-machine support (`transition_feature`, `set_realizes`) |
+| `backend/app/storage.py` | **CORE** — TaskStore, state machine, dependency DAG validation, cycle detection (41 KB) |
 | `backend/app/space_storage.py` | Space persistence, layouts, settings, `.cronos` subdirectory management |
 | `backend/app/agent.py` | Agent spawning, stdout/stderr capture, status tracking |
 | `backend/app/worker.py` | Background task processor (goals, agent execution, state transitions); harness run lifecycle execution, event publishing for SSE streams |
-| `backend/app/models.py` | Pydantic schemas: TaskState, Task, Space, View, agent modes/models; FeatureState enum and feature/fix task fields |
-| `backend/app/feature_state.py` | Feature/fix state-machine transition tables — `FEATURE_USER_TRANSITIONS` and `FEATURE_WORKER_TRANSITIONS` frozensets for stateful feature/fix task lifecycle |
+| `backend/app/models.py` | Pydantic schemas: TaskState, Task, Space, View, agent modes/models; feature/fix schemas (CreateFeatureBody, PatchFeatureBody, PatchFeatureStateBody, PatchRealizeBody, FeatureBoard, FeatureRead) |
 | `backend/app/trace_parser.py` | Parse `STATUS:` fields from agent stdout, extract RunTrace (result, exit_reason, parent_run_id, memory_hit_rate, etc.) |
 | `backend/app/api/tasks.py` | Task CRUD, state transitions, drag-drop reordering, lane overrides (29 KB) |
 | `backend/app/api/spaces.py` | Space CRUD, repo linking, project settings |
+| `backend/app/api/features.py` | Features/fixes API router (8 endpoints: POST, GET, GET /{id}, PATCH /{id}, PATCH /{id}/feature-state, PATCH /{id}/realize, POST /{id}/process, DELETE /{id} [reserved, returns 501]); auth-parity with tasks_router; single _fire_mirror funnel (R13) |
+| `backend/app/feature_hooks.py` | S3/S4 contract shims for feature decomposition and GitHub mirroring; async no-op stubs with locked signatures |
 | `backend/app/api/harnesses.py` | Harness CRUD endpoints and run lifecycle (GET/POST/PUT/DELETE, POST /run, GET /runs, POST /webhook) with concurrency contract; webhook authentication via Bearer token |
 | `backend/app/api/harness_runs.py` | Harness run status and control endpoints (GET /{run_id}, POST /{run_id}/cancel, GET /{run_id}/stream SSE) |
 | `backend/app/harnesses/model.py` | Pydantic models with reference integrity validation (HarnessNode, HarnessEdge, Harness); Wait and Aggregator node data conventions; trigger node kinds (`task-state-change`, `webhook`, `file-change`) and their `data` schemas |
