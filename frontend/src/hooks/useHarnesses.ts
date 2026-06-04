@@ -38,3 +38,32 @@ export function useSaveHarness(spaceId: string, name: string) {
     },
   });
 }
+
+// 4. useCreateHarness — create a new empty harness
+export function useCreateHarness(spaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { name: string; description?: string }) =>
+      api.createHarness(spaceId, {
+        name: payload.name,
+        description: payload.description,
+        nodes: [],
+        edges: [],
+        variables: {},
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['harnesses', spaceId] });
+    },
+  });
+}
+
+// 5. useDeleteHarness — delete a harness by name
+export function useDeleteHarness(spaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => api.deleteHarness(spaceId, name),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['harnesses', spaceId] });
+    },
+  });
+}

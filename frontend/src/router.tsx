@@ -12,6 +12,7 @@ import { SpaceToolsPage } from "./pages/SpaceToolsPage";
 import { StatsPage } from "./pages/StatsPage";
 import { TreePage } from "./pages/TreePage";
 import { HarnessRunsPage } from "./pages/HarnessRunsPage";
+import { HarnessListPage } from "./pages/HarnessListPage";
 
 const HarnessEditor = React.lazy(() => import("./pages/HarnessEditor").then((m) => ({ default: m.HarnessEditor })));
 
@@ -30,6 +31,7 @@ export function AppRoutes() {
         <Route path="spaces/:spaceId/tree" element={<TreePage />} />
         <Route path="spaces/:spaceId/settings" element={<SpaceSettingsPage />} />
         <Route path="spaces/:spaceId/tools" element={<SpaceToolsPage />} />
+        <Route path="spaces/:spaceId/harnesses" element={<HarnessListPage />} />
         <Route path="spaces/:spaceId/harnesses/:name/runs" element={<HarnessRunsPage />} />
         <Route
           path="spaces/:spaceId/harnesses/:name/edit"
