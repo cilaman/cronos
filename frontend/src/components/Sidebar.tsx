@@ -1,4 +1,4 @@
-import { NavLink, useParams } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import { cn } from "../utils/cn";
 import { useSpaces } from "../hooks/useSpaces";
 import type { SpaceSummary } from "../types";
@@ -98,7 +98,6 @@ interface Props {
 export function Sidebar({ onClose }: Props) {
   const { data } = useSpaces();
   const spaces = data?.spaces ?? [];
-  const { spaceId } = useParams<{ spaceId: string }>();
 
   return (
     <aside className="flex h-full w-56 shrink-0 flex-col border-r border-hairline bg-surface-1 glass-pane">
@@ -173,20 +172,18 @@ export function Sidebar({ onClose }: Props) {
             </>
           )}
         </NavLink>
-        {spaceId && (
-          <NavLink
-            to={`/spaces/${spaceId}/harnesses`}
-            className={primaryNavLinkClasses}
-            onClick={onClose}
-          >
-            {({ isActive }) => (
-              <>
-                {isActive && <ActiveStrip />}
-                Harnesses
-              </>
-            )}
-          </NavLink>
-        )}
+        <NavLink
+          to="/harnesses"
+          className={primaryNavLinkClasses}
+          onClick={onClose}
+        >
+          {({ isActive }) => (
+            <>
+              {isActive && <ActiveStrip />}
+              Harnesses
+            </>
+          )}
+        </NavLink>
       </nav>
 
       <div className="mt-2 border-t border-hairline px-4 pb-1 pt-3">
