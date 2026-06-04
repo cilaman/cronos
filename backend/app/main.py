@@ -26,6 +26,7 @@ from .api.views import router as views_router
 from .auth import require_auth
 from .harnesses import HarnessStore
 from .harnesses.cron import cron_loop
+from .harnesses.triggers import EventBusEvent, fan_out_to_harnesses
 from .memory_store import MemoryStore
 from .space_storage import CRONOS_SUBDIR, RESERVED_SPACE_DIRS, SpaceStore
 from .stats_store import StatsStore
@@ -172,8 +173,12 @@ async def watch_spaces_dir(
     task_store: TaskStore,
     space_store: SpaceStore,
     stop_event: asyncio.Event,
+    *,
+    harness_store: object | None = None,
+    worker_pool: object | None = None,
 ) -> None:
     import time
+    from pathlib import PurePath
     from .tools.adoption import NotAdopted, recompute_local_sha
 
     log.info("Watching %s for task & space changes", SPACES_DIR)
@@ -216,6 +221,95 @@ async def watch_spaces_dir(
                 await task_store.reindex_path(path)
             elif path.name == "space.yml":
                 await space_store.reindex_path(path)
+
+            # --- File-change event trigger fan-out ---
+            # Perform AFTER the existing reindex calls to preserve current
+            # task throughput.  Fast early-exit: skip spaces with no
+            # file-change triggers to avoid harness-store enumeration on
+            # every filesystem event.
+            #
+            # Dispatch via asyncio.create_task() so the watcher hot path
+            # never awaits harness-store reads — the loop only enqueues.
+            if harness_store is None or worker_pool is None:
+                continue
+
+            # Derive space_id and space_dir from the path.  len(rel.parts)
+            # is guaranteed >= 2 at this point (checked above).
+            fc_space_id = rel.parts[0]
+            fc_space_dir = SPACES_DIR / fc_space_id
+
+            # Fast early-exit: list harnesses for the space and check
+            # whether any file-change trigger nodes exist.  The list() call
+            # is sync-backed by an in-memory dict so it is O(n_harnesses)
+            # and typically negligible for ≤10 harnesses per space.
+            try:
+                harnesses = await harness_store.list(fc_space_dir)
+            except Exception:
+                log.exception(
+                    "watch_spaces_dir: failed to list harnesses for space %s",
+                    fc_space_id,
+                )
+                continue
+
+            # Build the set of (trigger_node, harness, debounce_seconds) for
+            # file-change triggers whose watch_pattern matches the changed path.
+            from datetime import UTC, datetime as _wdt  # noqa: PLC0415
+            file_path_str = str(path)
+            has_any_fc_trigger = False
+            for harness in harnesses:
+                for node in harness.nodes:
+                    if node.type.value != "trigger":
+                        continue
+                    if node.data.get("kind") != "file-change":
+                        continue
+                    has_any_fc_trigger = True
+                    # Pattern-match: PurePath.match() on the path relative to
+                    # space_dir to support patterns like ".cronos/tasks/*.md".
+                    watch_pattern = node.data.get("watch_pattern", "")
+                    try:
+                        rel_to_space = path.relative_to(fc_space_dir)
+                        matches = PurePath(rel_to_space).match(watch_pattern)
+                    except ValueError:
+                        matches = False
+
+                    if not matches:
+                        continue
+
+                    # Build the EventBusEvent for this (space, pattern, path).
+                    event_id = f"file-change:{fc_space_id}:{watch_pattern}:{file_path_str}"
+                    event = EventBusEvent(
+                        kind="file-change",
+                        space_id=fc_space_id,
+                        event_id=event_id,
+                        payload={
+                            "path": file_path_str,
+                            "event": str(_change),
+                            "watch_pattern": watch_pattern,
+                        },
+                        timestamp=_wdt.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    )
+
+                    # Dispatch via create_task — never await directly in the
+                    # watcher hot path (design risk mitigation).
+                    asyncio.create_task(
+                        fan_out_to_harnesses(
+                            event,
+                            harness_store=harness_store,
+                            task_store=task_store,
+                            worker_pool=worker_pool,
+                            space_dir=fc_space_dir,
+                        ),
+                        name=f"file-change-fanout:{fc_space_id}",
+                    )
+                    log.debug(
+                        "watch_spaces_dir: dispatched file-change fan-out for "
+                        "space=%s pattern=%r path=%r",
+                        fc_space_id, watch_pattern, file_path_str,
+                    )
+
+            if not has_any_fc_trigger:
+                # Nothing to do for this space — skip without logging noise.
+                pass
 
 
 def _migrate_legacy_spaces() -> None:
@@ -299,13 +393,61 @@ async def lifespan(app: FastAPI):
     app.state.discovery_sources_path = DISCOVERY_SOURCES_PATH
 
     worker_pool = WorkerPool(task_store, space_store, stats_store=stats_store, trace_store=trace_store, memory_store=memory_store)
+
+    # Build the on_task_state_change closure that will be injected into each
+    # Worker.  The closure is built here in main.py so that worker.py has
+    # zero runtime dependency on app.harnesses (circular-import guard, R5).
+    #
+    # The callback is only invoked for DONE transitions (worker.py guard).
+    # fan_out_to_harnesses() dispatches to harnesses with a task-state-change
+    # trigger node whose watched_state matches "done".
+    from datetime import UTC, datetime as _ldt
+
+    async def _on_task_state_change(
+        space_id: str,
+        task_id: str,
+        old_state: str,
+        new_state: str,
+    ) -> None:
+        space_dir = SPACES_DIR / space_id
+        event = EventBusEvent(
+            kind="task-state-change",
+            space_id=space_id,
+            event_id=f"task-state-change:{space_id}:{task_id}",
+            payload={
+                "task_id": task_id,
+                "old_state": old_state,
+                "new_state": new_state,
+            },
+            timestamp=_ldt.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        )
+        await fan_out_to_harnesses(
+            event,
+            harness_store=harness_store,
+            task_store=task_store,
+            worker_pool=worker_pool,
+            space_dir=space_dir,
+        )
+
     for space in space_store.list_all():
         await worker_pool.start_for_space(space.id)
+        # Inject the callback into the newly-started worker.  The worker is
+        # created inside WorkerPool.start_for_space() without the callback
+        # (WorkerPool is not scope_files for I5); we set it here directly.
+        worker = worker_pool.get(space.id)
+        if worker is not None:
+            worker._on_task_state_change = _on_task_state_change
     app.state.worker_pool = worker_pool
 
     stop_event = asyncio.Event()
     watcher = asyncio.create_task(
-        watch_spaces_dir(task_store, space_store, stop_event),
+        watch_spaces_dir(
+            task_store,
+            space_store,
+            stop_event,
+            harness_store=harness_store,
+            worker_pool=worker_pool,
+        ),
         name="watcher",
     )
     archiver = asyncio.create_task(

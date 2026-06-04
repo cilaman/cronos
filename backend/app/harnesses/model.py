@@ -29,6 +29,11 @@ Node ``data`` dict conventions (informational — enforced by validator.py):
       the predecessor agent's signal; no extra ``data`` fields are required.
 
   Trigger nodes (NodeType.trigger):
+    Trigger nodes come in two flavours: **cron triggers** and **event triggers**.
+    The presence of a ``kind`` field in ``data`` distinguishes event triggers from
+    cron triggers.  Cron triggers have no ``kind`` field.
+
+    Cron trigger ``data`` fields:
     - ``expression`` (str, required): cron expression in standard 5-field format
       (minute hour day-of-month month day-of-week), e.g. ``'0 * * * *'`` fires
       every hour.  Evaluated by ``croniter``; malformed expressions are
@@ -40,6 +45,39 @@ Node ``data`` dict conventions (informational — enforced by validator.py):
     Cron semantics note — **No back-fill of missed ticks across restart**: only
     the current wall-clock time is evaluated each tick.  If the process was
     offline when a scheduled firing was due, that firing is silently skipped.
+
+    Event trigger ``data`` fields — common:
+    - ``kind`` (str, required): one of ``'webhook'``, ``'file-change'``, or
+      ``'task-state-change'``.  The presence of this field marks the node as an
+      event trigger; validation is enforced by ``validator.py::_validate_trigger_nodes``
+      (R7).
+
+    Event trigger ``data`` fields — per-kind:
+
+    ``kind='webhook'``:
+      - ``webhook_path`` (str, required): logical identifier used as the event_id
+        stable key for deduplication; also intended as a future flat-route path.
+      - ``auth_token`` (str, required): Bearer token the caller must supply in the
+        ``Authorization`` header.  Comparison uses ``secrets.compare_digest()`` to
+        avoid timing side-channels.  Tokens shorter than 16 characters trigger a
+        one-time ``log.warning``.  **Note**: tokens are stored in plaintext in the
+        harness YAML — treat harness files as confidential; a secrets-API migration
+        is planned as a follow-up goal.
+
+    ``kind='file-change'``:
+      - ``watch_pattern`` (str, required): glob pattern matched via
+        ``pathlib.PurePath.match()`` against the path of each changed file
+        relative to the space directory (e.g. ``'.cronos/tasks/*.md'``).
+        Recursive ``**`` patterns are supported; negation patterns are not (deferred).
+      - ``debounce_seconds`` (float, optional): minimum quiet period before the
+        trigger re-fires for the same ``(space_id, watch_pattern, file_path)``
+        combination.  Defaults to ``0.5`` when absent.
+
+    ``kind='task-state-change'``:
+      - ``watched_state`` (str, optional): the task state transition destination
+        that causes the trigger to fire.  Defaults to ``'DONE'`` when absent.
+        Value must be a valid ``TaskState`` string (e.g. ``'DONE'``, ``'ACTIVE'``,
+        ``'WAITING'``).
 
   Agent nodes have no mandatory ``data`` keys.
 """

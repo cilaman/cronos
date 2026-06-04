@@ -236,6 +236,8 @@ class Worker:
         on_idle: Callable[[Worker], Awaitable[None]] | None = None,
         pool: "WorkerPool | None" = None,
         harness_store: "HarnessStore | None" = None,
+        *,
+        on_task_state_change: Callable[[str, str, str, str], Awaitable[None]] | None = None,
     ) -> None:
         self.store = store
         self.space_store = space_store
@@ -244,6 +246,7 @@ class Worker:
         self.memory_store = memory_store
         self.harness_store = harness_store
         self.on_idle = on_idle
+        self._on_task_state_change = on_task_state_change
         self._space_id: str | None = None
         self._pool = pool
         self._queue: asyncio.Queue[tuple[str, str | None]] = asyncio.Queue()
@@ -803,6 +806,7 @@ class Worker:
         session_id_to_persist = (
             result.session_id if result.exit_code == 0 and not result.stopped else None
         )
+        old_state_value = task_pre.state.value if task_pre is not None else ""
         try:
             await self.store.finalize_run(
                 task_id,
@@ -813,6 +817,27 @@ class Worker:
             )
         except Exception:
             log.exception("Failed to persist finalize for %s", task_id)
+
+        # Invoke the optional task-state-change callback (wired by main.py to
+        # fan out harness triggers).  Called only on DONE transitions so that
+        # harness-trigger fans out exactly once per completed run.  Wrapped in
+        # try/except so a failing callback never aborts downstream hooks.
+        if new_state == TaskState.DONE and self._on_task_state_change is not None:
+            task_after = self.store.get(task_id)
+            space_id_for_cb = task_after.space_id if task_after is not None else (
+                task_pre.space_id if task_pre is not None else ""
+            )
+            try:
+                await self._on_task_state_change(
+                    space_id_for_cb,
+                    task_id,
+                    old_state_value,
+                    new_state.value,
+                )
+            except Exception:
+                log.exception(
+                    "on_task_state_change callback failed for task %s; continuing", task_id
+                )
 
         if new_state == TaskState.DONE and self.space_store is not None:
             task_done = self.store.get(task_id)

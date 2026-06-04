@@ -10,6 +10,8 @@ Validation rules enforced here:
   R6: human Wait nodes must supply ``max_wait_seconds`` in their ``data``
       dict.  A missing field would cause the harness to park in WAITING
       indefinitely if no reply ever arrives.
+  R7: trigger nodes with a ``kind`` field in their ``data`` must satisfy
+      per-kind field requirements (see ``_validate_trigger_nodes``).
 
 The cycle detection algorithm is adapted from storage.py::_dep_cycle_path
 (BFS through depends_on links) but traverses *outbound edges per node*
@@ -114,6 +116,106 @@ def find_cycle(
     return None
 
 
+# ---------------------------------------------------------------------------
+# Trigger-node validation (R7)
+# ---------------------------------------------------------------------------
+
+#: Required fields for each event trigger kind (field name → type check label).
+_TRIGGER_REQUIRED: dict[str, list[str]] = {
+    "webhook": ["webhook_path", "auth_token"],
+    "file-change": ["watch_pattern"],
+    "task-state-change": [],
+}
+
+#: Default values applied by _apply_trigger_defaults (never mutates caller dict).
+_TRIGGER_DEFAULTS: dict[str, dict] = {
+    "file-change": {"debounce_seconds": 0.5},
+    "task-state-change": {"watched_state": "DONE"},
+}
+
+
+def _apply_trigger_defaults(kind: str, data: dict) -> dict:
+    """Return a *new* dict with defaults merged into *data* for the given *kind*.
+
+    This is a pure helper — it never mutates the caller's ``data`` dict.
+    Only fields that are **absent** from *data* are filled with the default
+    value; existing values are always preserved.
+
+    Parameters
+    ----------
+    kind:
+        The trigger kind string (e.g. ``'file-change'``).
+    data:
+        The raw ``data`` dict from the trigger node.
+
+    Returns
+    -------
+    dict
+        A new dict containing all entries from *data* plus any missing
+        defaults for *kind*.  If *kind* has no registered defaults the
+        return value is a shallow copy of *data*.
+    """
+    defaults = _TRIGGER_DEFAULTS.get(kind, {})
+    # Build new dict: start from defaults then overlay caller values so that
+    # explicit caller values are never silently replaced.
+    merged = {**defaults, **data}
+    return merged
+
+
+def _validate_trigger_nodes(harness: Harness) -> None:
+    """
+    Enforce R7: every trigger node whose ``data`` dict contains a ``kind``
+    field must satisfy the per-kind field requirements listed below.
+
+    Recognised kinds and their rules
+    ---------------------------------
+    ``webhook``
+        Requires ``webhook_path`` (str) and ``auth_token`` (str) in ``data``.
+        Both must be present; neither may be empty.
+
+    ``file-change``
+        Requires ``watch_pattern`` (str) in ``data``.
+        ``debounce_seconds`` defaults to ``0.5`` when absent (applied by
+        :func:`_apply_trigger_defaults`; not validated as a required field).
+
+    ``task-state-change``
+        No required fields.  ``watched_state`` defaults to ``'DONE'`` when
+        absent (applied by :func:`_apply_trigger_defaults`).
+
+    Parameters
+    ----------
+    harness:
+        The harness to inspect.
+
+    Raises
+    ------
+    HarnessValidationError
+        If a required field is missing from a trigger node's ``data`` dict.
+        The error message includes the offending node id, the trigger kind,
+        and the missing field name.
+    """
+    for node in harness.nodes:
+        if node.type is not NodeType.trigger:
+            continue
+        kind = node.data.get("kind")
+        if kind is None:
+            # Cron-style triggers (no ``kind``) are not event triggers;
+            # they are validated separately by the executor.
+            continue
+        if kind not in _TRIGGER_REQUIRED:
+            raise HarnessValidationError(
+                f"node '{node.id}': trigger kind '{kind}' is not recognised;"
+                f" supported kinds: {sorted(_TRIGGER_REQUIRED)}"
+            )
+        required_fields = _TRIGGER_REQUIRED[kind]
+        for field in required_fields:
+            if field not in node.data:
+                raise HarnessValidationError(
+                    f"node '{node.id}': trigger kind '{kind}' requires"
+                    f" '{field}' in data (R7)"
+                )
+
+
 def _validate_wait_nodes(harness: Harness) -> None:
     """
     Enforce R6: every human Wait node must supply ``max_wait_seconds`` in its
@@ -147,6 +249,7 @@ def validate_graph(harness: Harness) -> None:
     Currently checks:
       - R5: the edge graph is a DAG (no cycles, no self-loops).
       - R6: human Wait nodes supply ``max_wait_seconds``.
+      - R7: event trigger nodes satisfy per-kind data requirements.
 
     Raises
     ------
@@ -158,6 +261,7 @@ def validate_graph(harness: Harness) -> None:
         ``max_wait_seconds`` on a human Wait node).
     """
     _validate_wait_nodes(harness)
+    _validate_trigger_nodes(harness)
     cycle = find_cycle(harness.nodes, harness.edges)
     if cycle is not None:
         path_str = " -> ".join(cycle)
