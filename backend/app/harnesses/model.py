@@ -28,7 +28,20 @@ Node ``data`` dict conventions (informational — enforced by validator.py):
     - Routing is driven by ``HarnessEdge.condition`` labels evaluated against
       the predecessor agent's signal; no extra ``data`` fields are required.
 
-  Agent / Trigger nodes have no mandatory ``data`` keys.
+  Trigger nodes (NodeType.trigger):
+    - ``expression`` (str, required): cron expression in standard 5-field format
+      (minute hour day-of-month month day-of-week), e.g. ``'0 * * * *'`` fires
+      every hour.  Evaluated by ``croniter``; malformed expressions are
+      logged and skipped — the loop does **not** crash.
+    - ``timezone`` (str, optional): IANA timezone name (e.g. ``'Europe/Prague'``,
+      ``'America/New_York'``).  Defaults to UTC when absent or when the name
+      cannot be resolved by ``dateutil.tz``.
+
+    Cron semantics note — **No back-fill of missed ticks across restart**: only
+    the current wall-clock time is evaluated each tick.  If the process was
+    offline when a scheduled firing was due, that firing is silently skipped.
+
+  Agent nodes have no mandatory ``data`` keys.
 """
 
 from __future__ import annotations

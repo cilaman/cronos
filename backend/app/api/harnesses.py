@@ -36,9 +36,8 @@ from ..harnesses import (
     HarnessStore,
 )
 from ..harnesses import run_index
-from ..harnesses.run_index import RunSummary
-from ..storage import TaskStore, USER_TRANSITIONS
-from ..models import TaskState
+from ..harnesses.run_trigger import enqueue_harness_run
+from ..storage import TaskStore
 from ..worker_pool import WorkerPool
 
 log = logging.getLogger(__name__)
@@ -257,9 +256,9 @@ async def trigger_harness_run(
 ) -> dict:
     """Manually trigger a harness run.
 
-    Creates a task in the space's task store, appends a RunSummary to the
-    per-harness run index, registers the run_id in the worker's reverse-lookup
-    cache, transitions the task to ACTIVE, and enqueues it on the worker.
+    Verifies the harness exists, then delegates task creation, run-index
+    appending, worker registration, and enqueueing to
+    ``harnesses.run_trigger.enqueue_harness_run``.
 
     Returns 202 with run_id, harness_id, and triggered_at.
     """
@@ -279,47 +278,25 @@ async def trigger_harness_run(
 
     now_iso = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    # Create the harness run task. run_id == task.id per design constraint.
     try:
-        task = await task_store.create(
-            space_id=space_id,
-            title=f"Harness run: {name}",
+        summary = await enqueue_harness_run(
+            task_store,
+            harness_store,
+            pool,
+            space_id,
+            space_dir,
+            name,
             brief=f"Automated harness run triggered via API for harness '{name}'.",
-            type="task",
+            triggered_at=now_iso,
         )
     except Exception as exc:
-        log.exception("Failed to create harness run task for harness %r in space %r", name, space_id)
+        log.exception("Failed to enqueue harness run for harness %r in space %r", name, space_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create run task: {exc}",
         ) from exc
 
-    run_id = task.id
-
-    # Append to the run index.
-    summary = RunSummary(
-        run_id=run_id,
-        harness_id=name,
-        status="running",
-        triggered_at=now_iso,
-    )
-    await run_index.append_run(space_dir, name, summary)
-
-    # Register in the worker reverse-lookup cache (O(1) for GET /harness-runs/{run_id}).
-    worker = pool.get(space_id)
-    if worker is not None:
-        worker.register_run(run_id, space_id)
-
-    # Transition task to ACTIVE and enqueue on the worker.
-    try:
-        await task_store.transition(run_id, TaskState.ACTIVE, allowed=USER_TRANSITIONS)
-    except Exception:
-        log.warning("Could not transition harness run task %s to ACTIVE", run_id)
-
-    if worker is not None:
-        await worker.enqueue(run_id)
-
-    return {"run_id": run_id, "harness_id": name, "triggered_at": now_iso}
+    return {"run_id": summary.run_id, "harness_id": name, "triggered_at": now_iso}
 
 
 @router.get("/{name}/runs")

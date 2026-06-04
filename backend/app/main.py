@@ -25,6 +25,7 @@ from .api.traces import router as traces_router
 from .api.views import router as views_router
 from .auth import require_auth
 from .harnesses import HarnessStore
+from .harnesses.cron import cron_loop
 from .memory_store import MemoryStore
 from .space_storage import CRONOS_SUBDIR, RESERVED_SPACE_DIRS, SpaceStore
 from .stats_store import StatsStore
@@ -49,6 +50,7 @@ DISCOVERY_INTERVAL_HOURS = float(os.environ.get("CRONOS_DISCOVERY_INTERVAL_HOURS
 DISCOVERY_DB_PATH = DATA_DIR / "cronos-index.db"
 DISCOVERY_SOURCES_PATH = DATA_DIR / "tool_sources.yml"
 EVOLVE_TOOLS_INTERVAL_HOURS = float(os.environ.get("CRONOS_EVOLVE_TOOLS_INTERVAL_HOURS", str(7 * 24)))
+CRON_INTERVAL_SECONDS = float(os.environ.get("CRONOS_CRON_INTERVAL_SECONDS", "60"))
 
 
 def _path_is_reserved(path: Path, root: Path) -> bool:
@@ -336,6 +338,18 @@ async def lifespan(app: FastAPI):
         ),
         name="evolve_tools",
     )
+    cron = asyncio.create_task(
+        cron_loop(
+            harness_store,
+            space_store,
+            SPACES_DIR,
+            CRON_INTERVAL_SECONDS,
+            stop_event,
+            task_store=task_store,
+            worker_pool=worker_pool,
+        ),
+        name="cron",
+    )
 
     # Recover in-flight runs: any task left in ACTIVE on startup gets
     # re-enqueued on its space's worker. The agent resumes via its stored
@@ -357,7 +371,7 @@ async def lifespan(app: FastAPI):
     finally:
         stop_event.set()
         await worker_pool.stop_all()
-        for bg_task in (watcher, archiver, memory_pruner, discoverer, evolve_tools):
+        for bg_task in (watcher, archiver, memory_pruner, discoverer, evolve_tools, cron):
             try:
                 await asyncio.wait_for(bg_task, timeout=5.0)
             except asyncio.TimeoutError:
