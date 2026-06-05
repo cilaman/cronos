@@ -93,8 +93,8 @@ vi.mock('../../components/harness/VariableInspector', () => ({
     if (selectedNode && selectedNode.type === 'agent') {
       return (
         <div data-testid="variable-inspector">
-          <input aria-label="agent_ref" defaultValue={selectedNode.config.agent_ref ?? ''} />
-          <textarea aria-label="prompt" defaultValue={selectedNode.config.prompt ?? ''} />
+          <input aria-label="agent_ref" defaultValue={selectedNode.data.agent_ref ?? ''} />
+          <textarea aria-label="prompt_template" defaultValue={selectedNode.data.prompt_template ?? ''} />
         </div>
       );
     }
@@ -125,27 +125,24 @@ const fixture: Harness = {
       type: 'trigger',
       label: 'Start',
       position: { x: 0, y: 0 },
-      ports: [{ id: 'out', label: 'Out', port_type: 'output' }],
-      config: {},
+      ports: { out: {} },
+      data: {},
     },
     {
       id: 'n2',
       type: 'agent',
       label: 'Run',
       position: { x: 200, y: 0 },
-      ports: [
-        { id: 'in', label: 'In', port_type: 'input' },
-        { id: 'out', label: 'Out', port_type: 'output' },
-      ],
-      config: { agent_ref: 'my-agent', prompt: 'hello' },
+      ports: { in: {}, out: {} },
+      data: { agent_ref: 'my-agent', prompt_template: 'hello' },
     },
     {
       id: 'n3',
       type: 'decision',
       label: 'Check',
       position: { x: 400, y: 0 },
-      ports: [{ id: 'in', label: 'In', port_type: 'input' }],
-      config: {},
+      ports: { in: {}, yes: {}, no: {} },
+      data: {},
     },
   ],
   edges: [
@@ -154,7 +151,7 @@ const fixture: Harness = {
   ],
   variables: {},
   created_at: '2024-01-01T00:00:00Z',
-  version: 1,
+  version: '1.0',
 };
 
 // ---------------------------------------------------------------------------
@@ -262,11 +259,11 @@ describe('HarnessEditor acceptance (R15)', () => {
 
     // VariableInspector shows agent_ref input for agent node
     expect(screen.getByLabelText('agent_ref')).toBeInTheDocument();
-    expect(screen.getByLabelText('prompt')).toBeInTheDocument();
+    expect(screen.getByLabelText('prompt_template')).toBeInTheDocument();
 
     // Invoke onNodeChange directly (simulates the inspector calling back)
     await act(async () => {
-      capturedOnNodeChange!('n2', { agent_ref: 'new-agent', prompt: 'hello' });
+      capturedOnNodeChange!('n2', { agent_ref: 'new-agent', prompt_template: 'hello' });
     });
 
     // After onNodeChange, the save payload should reflect the updated config
@@ -279,7 +276,7 @@ describe('HarnessEditor acceptance (R15)', () => {
     const savedPayload: Harness = mockMutate.mock.calls[0][0];
     const savedN2 = savedPayload.nodes.find(n => n.id === 'n2');
     expect(savedN2).toBeDefined();
-    expect(savedN2!.config.agent_ref).toBe('new-agent');
+    expect(savedN2!.data.agent_ref).toBe('new-agent');
   });
 
   // -------------------------------------------------------------------------

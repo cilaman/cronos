@@ -598,7 +598,7 @@ export interface Harness {
   variables: Record<string, string>;
   created_at?: string;
   updated_at?: string;
-  version?: number;
+  version?: string | number;
 }
 
 // Memory

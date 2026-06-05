@@ -171,22 +171,22 @@ const mockHarness: Harness = {
       type: 'trigger',
       label: 'Start',
       position: { x: 0, y: 0 },
-      ports: [{ id: 'out', label: 'Out', port_type: 'output' }],
-      config: {},
+      ports: { out: {} },
+      data: {},
     },
     {
       id: 'n2',
       type: 'agent',
       label: 'Run',
       position: { x: 200, y: 0 },
-      ports: [],
-      config: { agent_ref: 'my-agent', prompt: 'hello' },
+      ports: { in: {}, out: {} },
+      data: { agent_ref: 'my-agent', prompt_template: 'hello' },
     },
   ],
   edges: [],
   variables: {},
   created_at: '2024-01-01T00:00:00Z',
-  version: 1,
+  version: '1.0',
 };
 
 // ---------------------------------------------------------------------------
