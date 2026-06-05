@@ -396,6 +396,7 @@ async def lifespan(app: FastAPI):
     app.state.discovery_sources_path = DISCOVERY_SOURCES_PATH
 
     worker_pool = WorkerPool(task_store, space_store, stats_store=stats_store, trace_store=trace_store, memory_store=memory_store)
+    feature_hooks.configure_pool(worker_pool)
 
     # Build the on_task_state_change closure that will be injected into each
     # Worker.  The closure is built here in main.py so that worker.py has
