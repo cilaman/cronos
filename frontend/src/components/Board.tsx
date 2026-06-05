@@ -11,9 +11,10 @@ import {
 } from "@dnd-kit/core";
 import { arrayMove } from "@dnd-kit/sortable";
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useBoard, useReorderTasks, useTransitionTask } from "../hooks/useTasks";
 import { useRunning } from "../hooks/useRunning";
+import { useFeatureBoard } from "../hooks/useFeatures";
 import { LANES, type TaskState, type TaskSummary, canUserTransition } from "../types";
 import type { BoardSortMode } from "../lib/storage";
 import { Detail } from "./Detail";
@@ -66,8 +67,10 @@ export function Board({
 }: Props) {
   const effectiveViewId = spaceId ? (viewId ?? "default") : null;
   const { data, isLoading, error } = useBoard(spaceId, effectiveViewId);
+  const { data: featureBoardData } = useFeatureBoard(spaceId);
   const transition = useTransitionTask();
   const reorder = useReorderTasks();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const openId = searchParams.get("task");
   const [activeTask, setActiveTask] = useState<TaskSummary | null>(null);
@@ -225,6 +228,8 @@ export function Board({
     : colCount === 3 ? "lg:grid-cols-3"
     : "lg:grid-cols-4";
 
+  const featureBacklog = featureBoardData?.backlog ?? [];
+
   return (
     <>
       <DndContext
@@ -268,7 +273,7 @@ export function Board({
               isRunning={isRunning}
               expandedGoals={expandedGoals}
               onToggleGoal={onToggleGoal}
-              onHideLane={onHideLane}
+              onHideLane={onHideLane ? (s) => onHideLane(s as TaskState) : undefined}
             />
           ))}
         </div>
@@ -279,6 +284,36 @@ export function Board({
           ) : null}
         </DragOverlay>
       </DndContext>
+
+      {/* Features Backlog — read-only column rendered OUTSIDE the DndContext/SortableContext
+          to prevent dnd-kit from treating it as a droppable target (R13 contract). */}
+      {featureBacklog.length > 0 && (
+        <div
+          data-testid="features-backlog-column"
+          className="mx-2 mt-2 lg:mx-4"
+        >
+          <div className="mb-2 flex items-center gap-2">
+            <h2 className="font-display text-xs font-semibold uppercase tracking-[0.14em] text-ink-muted">
+              Features Backlog
+            </h2>
+            <span className="font-mono text-[10px] text-ink-faint">
+              ({featureBacklog.length})
+            </span>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {featureBacklog.map((task) => (
+              <Card
+                key={task.id}
+                task={task}
+                onClick={() => navigate("/features")}
+                onOpenTask={() => navigate("/features")}
+                compact={compact}
+                dragDisabled
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {openId && <Detail taskId={openId} onClose={() => setOpenId(null)} />}
     </>

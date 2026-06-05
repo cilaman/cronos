@@ -91,6 +91,8 @@ const MODE_LABELS: Record<AgentMode, string> = {
 const TYPE_BADGE_STYLES: Partial<Record<TaskType, string>> = {
   goal: "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-400/30 dark:bg-violet-400/10 dark:text-violet-400",
   issue: "border-orange-200 bg-orange-50 text-orange-600 dark:border-orange-400/30 dark:bg-orange-400/10 dark:text-orange-400",
+  feature: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-400",
+  fix: "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/30 dark:bg-rose-400/10 dark:text-rose-400",
 };
 
 const STATE_BADGE_STYLES: Record<TaskState, string> = {
@@ -498,6 +500,23 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
               <IconFileText />
             </button>
           )}
+          {task.issue_url && (
+            <a
+              href={task.issue_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Open issue"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center text-ink-faint transition hover:text-accent-bright"
+            >
+              <IconFileText />
+            </a>
+          )}
+          {task.feature_key && (
+            <span className="inline-flex items-center rounded border border-emerald-200 bg-emerald-50 px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-400">
+              {task.feature_key}
+            </span>
+          )}
         </div>
 
         {task.parent_id && task.parent_title && (
@@ -518,6 +537,51 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
           >
             ↑ {task.parent_title}
           </span>
+        )}
+
+        {task.realizes && (
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenTask?.(task.realizes!);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.stopPropagation();
+                onOpenTask?.(task.realizes!);
+              }
+            }}
+            className="mb-1 block cursor-pointer truncate font-mono text-[10px] uppercase tracking-[0.1em] text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300"
+          >
+            → realizes {task.realizes}
+          </span>
+        )}
+
+        {(taskType === "feature" || taskType === "fix") && (task.realized_by?.length ?? 0) > 0 && (
+          <div className="mb-1 flex flex-wrap gap-1">
+            {task.realized_by!.map((itemId) => (
+              <span
+                key={itemId}
+                role="button"
+                tabIndex={0}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenTask?.(itemId);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.stopPropagation();
+                    onOpenTask?.(itemId);
+                  }
+                }}
+                className="cursor-pointer font-mono text-[10px] uppercase tracking-[0.1em] text-ink-faint hover:text-ink-muted"
+              >
+                ← {itemId}
+              </span>
+            ))}
+          </div>
         )}
 
         <h3 className="truncate text-sm font-semibold leading-snug text-ink">{task.title}</h3>

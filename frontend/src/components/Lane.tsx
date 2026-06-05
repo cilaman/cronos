@@ -4,27 +4,44 @@ import { cn } from "../utils/cn";
 import { EmptyState } from "./ui/EmptyState";
 import { StickyToolbar } from "./ui/StickyToolbar";
 import { Card } from "./Card";
-import type { TaskState, TaskSummary } from "../types";
+import type { TaskSummary } from "../types";
 
 interface Props {
-  state: TaskState;
+  /**
+   * The state identifier for this lane. Must come from exactly one lane-system
+   * constant — use `LANES[n].state` for the Tasks board, or `FEATURE_LANES[n].state`
+   * for the Features board. Never mix values across lane systems.
+   *
+   * Widened to `string` (from `TaskState`) so the same component can serve both
+   * the Tasks board (TaskState values) and the Features board (FeatureState values).
+   */
+  state: string;
   label: string;
   tasks: TaskSummary[];
   onOpen: (id: string) => void;
   onAdd: () => void;
   compact?: boolean;
+  /**
+   * Whether to show the "+ New task" add button in the lane header.
+   * Defaults to `true` when `state === "backlog"`, preserving the existing
+   * Tasks-board behaviour at all existing call-sites.
+   */
+  showAdd?: boolean;
   onOpenTask?: (id: string) => void;
   blocksCountMap?: Record<string, number>;
   isRunning?: (id: string) => boolean;
   expandedGoals?: Set<string>;
   onToggleGoal?: (id: string) => void;
-  onHideLane?: (state: TaskState) => void;
+  onHideLane?: (state: string) => void;
 }
 
-export function Lane({ state, label, tasks, onOpen, onAdd, compact = false, onOpenTask, blocksCountMap, isRunning, expandedGoals, onToggleGoal, onHideLane }: Props) {
+export function Lane({ state, label, tasks, onOpen, onAdd, compact = false, showAdd, onOpenTask, blocksCountMap, isRunning, expandedGoals, onToggleGoal, onHideLane }: Props) {
   const { isOver, setNodeRef } = useDroppable({ id: state });
   const taskIds = tasks.map((t) => t.id);
   const anyRunning = isRunning !== undefined && tasks.some((t) => isRunning(t.id));
+
+  // Default: show the add button on the backlog lane (backward-compatible with Tasks board).
+  const shouldShowAdd = showAdd !== undefined ? showAdd : state === "backlog";
 
   return (
     <section
@@ -50,7 +67,7 @@ export function Lane({ state, label, tasks, onOpen, onAdd, compact = false, onOp
           )}
         </div>
         <div className="ml-auto flex items-center gap-1">
-          {state === "backlog" && (
+          {shouldShowAdd && (
             <button
               type="button"
               onClick={onAdd}

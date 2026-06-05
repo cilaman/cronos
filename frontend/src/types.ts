@@ -26,6 +26,62 @@ export function canUserTransition(from: TaskState, to: TaskState): boolean {
   return USER_TRANSITIONS_SET.has(`${from}->${to}`);
 }
 
+// ---------------------------------------------------------------------------
+// Feature / Fix state machine
+// ---------------------------------------------------------------------------
+
+/** Five-state lifecycle for feature and fix tasks — distinct from TaskState. */
+export type FeatureState =
+  | "backlog"
+  | "processing"
+  | "planned"
+  | "waiting"
+  | "done";
+
+/**
+ * Lane metadata for the Features Kanban board.
+ * INTENTIONALLY disjoint from LANES (TaskState lanes) — the arrays share no
+ * element identity even though some string values are reused across systems.
+ * Never insert FeatureState values into the LANES array or vice-versa.
+ */
+export const FEATURE_LANES: { state: FeatureState; label: string }[] = [
+  { state: "backlog", label: "Backlog" },
+  { state: "processing", label: "Processing" },
+  { state: "planned", label: "Planned" },
+  { state: "waiting", label: "Waiting" },
+  { state: "done", label: "Done" },
+];
+
+// User-initiated feature transitions. Mirrors FEATURE_USER_TRANSITIONS in
+// backend/app/feature_state.py (7 edges).
+const FEATURE_USER_TRANSITIONS_SET = new Set<string>([
+  "backlog->processing",
+  "processing->backlog",
+  "planned->processing",
+  "waiting->processing",
+  "waiting->planned",
+  "planned->done",
+  "done->backlog",
+]);
+
+/** Guard for legal user-initiated feature state transitions (drag-and-drop). */
+export function canFeatureTransition(
+  from: FeatureState,
+  to: FeatureState
+): boolean {
+  if (from === to) return false;
+  return FEATURE_USER_TRANSITIONS_SET.has(`${from}->${to}`);
+}
+
+/** Features/fixes grouped by FeatureState lane — mirrors backend FeatureBoard. */
+export interface FeatureBoard {
+  backlog: TaskSummary[];
+  processing: TaskSummary[];
+  planned: TaskSummary[];
+  waiting: TaskSummary[];
+  done: TaskSummary[];
+}
+
 export interface ChildProgressItem {
   id: string;
   title: string;
@@ -61,11 +117,18 @@ export interface TaskSummary {
   proposed_pr_path?: string | null;
   children_progress?: { done: number; total: number; waiting: number; items?: ChildProgressItem[] } | null;
   is_running?: boolean;
+  // Feature/fix fields (optional — only present on type=feature|fix tasks)
+  feature_state?: FeatureState | null;
+  feature_key?: string | null;
+  issue_number?: number | null;
+  issue_url?: string | null;
+  realizes?: string | null;
+  realized_by?: string[];
 }
 
 export type AgentMode = "plan" | "auto" | "ask";
 
-export type TaskType = "task" | "goal" | "issue";
+export type TaskType = "task" | "goal" | "issue" | "feature" | "fix";
 
 export const AGENT_MODES: { value: AgentMode; label: string }[] = [
   { value: "plan", label: "Planning" },
@@ -109,6 +172,13 @@ export interface Task {
   unmet_dependencies?: Array<{ id: string; title: string }>;
   pr_url?: string | null;
   proposed_pr_path?: string | null;
+  // Feature/fix fields (optional — only present on type=feature|fix tasks)
+  feature_state?: FeatureState | null;
+  feature_key?: string | null;
+  issue_number?: number | null;
+  issue_url?: string | null;
+  realizes?: string | null;
+  realized_by?: string[];
 }
 
 export interface RoutedTo {

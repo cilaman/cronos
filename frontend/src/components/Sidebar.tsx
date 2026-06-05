@@ -136,7 +136,15 @@ export function Sidebar({ onClose }: Props) {
           {({ isActive }) => (
             <>
               {isActive && <ActiveStrip />}
-              Kanban
+              Tasks
+            </>
+          )}
+        </NavLink>
+        <NavLink to="/features" className={primaryNavLinkClasses} onClick={onClose}>
+          {({ isActive }) => (
+            <>
+              {isActive && <ActiveStrip />}
+              Features
             </>
           )}
         </NavLink>

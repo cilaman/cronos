@@ -672,3 +672,225 @@ describe("Card — combined goal that blocks others and is blocked", () => {
     expect(onOpenTask).toHaveBeenCalledWith("parent-99");
   });
 });
+
+// ---------------------------------------------------------------------------
+// type=feature — badge style and feature-specific fields
+// ---------------------------------------------------------------------------
+
+describe("Card — type=feature", () => {
+  it("renders the FEATURE badge text with emerald style", () => {
+    const task = makeTask({ type: "feature" });
+
+    renderCard({ task, onClick: () => {} });
+
+    const badge = screen.getByText("feature");
+    expect(badge).toBeInTheDocument();
+    expect(badge.className).toContain("uppercase");
+    expect(badge.className).toContain("emerald");
+  });
+
+  it("sets data-task-type='feature' on the root", () => {
+    const task = makeTask({ type: "feature" });
+
+    const { container } = renderCard({ task, onClick: () => {} });
+
+    expect(getCardRoot(container).getAttribute("data-task-type")).toBe("feature");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// type=fix — badge style
+// ---------------------------------------------------------------------------
+
+describe("Card — type=fix", () => {
+  it("renders the FIX badge text with rose style", () => {
+    const task = makeTask({ type: "fix" });
+
+    renderCard({ task, onClick: () => {} });
+
+    const badge = screen.getByText("fix");
+    expect(badge).toBeInTheDocument();
+    expect(badge.className).toContain("uppercase");
+    expect(badge.className).toContain("rose");
+  });
+
+  it("sets data-task-type='fix' on the root", () => {
+    const task = makeTask({ type: "fix" });
+
+    const { container } = renderCard({ task, onClick: () => {} });
+
+    expect(getCardRoot(container).getAttribute("data-task-type")).toBe("fix");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// feature_key chip
+// ---------------------------------------------------------------------------
+
+describe("Card — feature_key chip", () => {
+  it("renders the feature_key chip when feature_key is present", () => {
+    const task = makeTask({ type: "feature", feature_key: "FEAT-123" });
+
+    renderCard({ task, onClick: () => {} });
+
+    expect(screen.getByText("FEAT-123")).toBeInTheDocument();
+  });
+
+  it("does NOT render a feature_key chip when feature_key is absent", () => {
+    const task = makeTask({ type: "feature", feature_key: null });
+
+    renderCard({ task, onClick: () => {} });
+
+    expect(screen.queryByText(/FEAT-/)).not.toBeInTheDocument();
+  });
+
+  it("does NOT render a feature_key chip when feature_key is undefined", () => {
+    const task = makeTask({ type: "feature" });
+
+    renderCard({ task, onClick: () => {} });
+
+    expect(screen.queryByText(/FEAT-/)).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// issue_url anchor
+// ---------------------------------------------------------------------------
+
+describe("Card — issue_url anchor", () => {
+  it("renders an issue link anchor when issue_url is present", () => {
+    const task = makeTask({
+      type: "issue",
+      issue_url: "https://github.com/owner/repo/issues/42",
+    });
+
+    renderCard({ task, onClick: () => {} });
+
+    const anchor = screen.getByTitle("Open issue");
+    expect(anchor).toBeInTheDocument();
+    expect(anchor.getAttribute("href")).toBe(
+      "https://github.com/owner/repo/issues/42",
+    );
+    expect(anchor.getAttribute("target")).toBe("_blank");
+  });
+
+  it("does NOT render the issue link when issue_url is absent", () => {
+    const task = makeTask({ type: "issue", issue_url: null });
+
+    renderCard({ task, onClick: () => {} });
+
+    expect(screen.queryByTitle("Open issue")).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// realizes chip
+// ---------------------------------------------------------------------------
+
+describe("Card — realizes chip", () => {
+  it("renders a '→ realizes ...' chip when realizes is present", () => {
+    const task = makeTask({
+      type: "fix",
+      realizes: "feat-task-99",
+    });
+
+    renderCard({ task, onClick: () => {} });
+
+    expect(screen.getByText(/→ realizes feat-task-99/i)).toBeInTheDocument();
+  });
+
+  it("does NOT render the realizes chip when realizes is null", () => {
+    const task = makeTask({ type: "fix", realizes: null });
+
+    renderCard({ task, onClick: () => {} });
+
+    expect(screen.queryByText(/→ realizes/i)).not.toBeInTheDocument();
+  });
+
+  it("calls onOpenTask with the realizes id when the chip is clicked", async () => {
+    const onOpenTask = vi.fn();
+    const onClick = vi.fn();
+    const task = makeTask({
+      type: "fix",
+      realizes: "feat-task-99",
+    });
+
+    renderCard({ task, onClick, onOpenTask });
+    const user = userEvent.setup();
+    await user.click(screen.getByText(/→ realizes feat-task-99/i));
+
+    expect(onOpenTask).toHaveBeenCalledTimes(1);
+    expect(onOpenTask).toHaveBeenCalledWith("feat-task-99");
+    expect(onClick).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// realized_by list (feature/fix cards only)
+// ---------------------------------------------------------------------------
+
+describe("Card — realized_by list", () => {
+  it("renders realized_by entries as click-through items on a feature card", () => {
+    const task = makeTask({
+      type: "feature",
+      realized_by: ["fix-task-1", "fix-task-2"],
+    });
+
+    renderCard({ task, onClick: () => {} });
+
+    expect(screen.getByText(/fix-task-1/i)).toBeInTheDocument();
+    expect(screen.getByText(/fix-task-2/i)).toBeInTheDocument();
+  });
+
+  it("renders realized_by entries on a fix card", () => {
+    const task = makeTask({
+      type: "fix",
+      realized_by: ["fix-task-3"],
+    });
+
+    renderCard({ task, onClick: () => {} });
+
+    expect(screen.getByText(/fix-task-3/i)).toBeInTheDocument();
+  });
+
+  it("does NOT render realized_by section when the list is empty", () => {
+    const task = makeTask({
+      type: "feature",
+      realized_by: [],
+    });
+
+    renderCard({ task, onClick: () => {} });
+
+    // No realized_by entries should appear
+    expect(screen.queryByText(/fix-task-/i)).not.toBeInTheDocument();
+  });
+
+  it("does NOT render realized_by section on a non-feature/fix card type", () => {
+    const task = makeTask({
+      type: "goal",
+      realized_by: ["fix-task-1"],
+    });
+
+    renderCard({ task, onClick: () => {} });
+
+    // goal type should NOT render realized_by
+    expect(screen.queryByText(/fix-task-1/i)).not.toBeInTheDocument();
+  });
+
+  it("calls onOpenTask with the item id when a realized_by entry is clicked", async () => {
+    const onOpenTask = vi.fn();
+    const onClick = vi.fn();
+    const task = makeTask({
+      type: "feature",
+      realized_by: ["fix-task-1", "fix-task-2"],
+    });
+
+    renderCard({ task, onClick, onOpenTask });
+    const user = userEvent.setup();
+    await user.click(screen.getByText(/fix-task-1/i));
+
+    expect(onOpenTask).toHaveBeenCalledTimes(1);
+    expect(onOpenTask).toHaveBeenCalledWith("fix-task-1");
+    expect(onClick).not.toHaveBeenCalled();
+  });
+});

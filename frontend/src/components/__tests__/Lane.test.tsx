@@ -3,7 +3,8 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DndContext } from "@dnd-kit/core";
 import { Lane } from "../Lane";
-import type { TaskState, TaskSummary } from "../../types";
+import type { TaskSummary } from "../../types";
+import { LANES, FEATURE_LANES } from "../../types";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -30,7 +31,7 @@ function makeTask(overrides: Partial<TaskSummary> = {}): TaskSummary {
 }
 
 function renderLane(props: Partial<React.ComponentProps<typeof Lane>> & {
-  state: TaskState;
+  state: string;
   label: string;
 }) {
   return render(
@@ -44,6 +45,112 @@ function renderLane(props: Partial<React.ComponentProps<typeof Lane>> & {
     </DndContext>,
   );
 }
+
+// ---------------------------------------------------------------------------
+// Lane-system disjointness invariant (R14)
+// ---------------------------------------------------------------------------
+
+describe("Lane — LANES / FEATURE_LANES disjointness", () => {
+  it("LANES and FEATURE_LANES are distinct array objects (never the same reference)", () => {
+    // They must be separate const arrays — merging them would break the lane-system
+    // contract which requires each board to use exactly one lane-system constant.
+    expect(LANES).not.toBe(FEATURE_LANES);
+  });
+
+  it("no element object is shared by reference between LANES and FEATURE_LANES", () => {
+    // Each lane entry must be its own object — shared references would allow a mutation
+    // in one lane system to corrupt the other.
+    for (const laneEntry of LANES) {
+      expect(FEATURE_LANES).not.toContain(laneEntry);
+    }
+  });
+
+  it("FEATURE_LANES contains the five expected FeatureState values", () => {
+    const states = FEATURE_LANES.map((l) => l.state);
+    expect(states).toContain("backlog");
+    expect(states).toContain("processing");
+    expect(states).toContain("planned");
+    expect(states).toContain("waiting");
+    expect(states).toContain("done");
+    expect(states).toHaveLength(5);
+  });
+
+  it("FEATURE_LANES exclusively includes FeatureState values — no TaskState-only values", () => {
+    // TaskState includes 'archived' and 'active'; FeatureState does not.
+    // This asserts the lane systems remain disjoint in identity even if some string
+    // values overlap (e.g. 'backlog', 'waiting', 'done' are valid in both systems).
+    const featureStates = FEATURE_LANES.map((l) => l.state);
+    expect(featureStates).not.toContain("archived");
+    expect(featureStates).not.toContain("active");
+  });
+
+  it("LANES exclusively includes TaskState values — no FeatureState-only values", () => {
+    // FeatureState includes 'processing' and 'planned'; TaskState does not.
+    const taskStates = LANES.map((l) => l.state);
+    expect(taskStates).not.toContain("processing");
+    expect(taskStates).not.toContain("planned");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// showAdd prop — override behaviour
+// ---------------------------------------------------------------------------
+
+describe("Lane — showAdd prop", () => {
+  it("shows the add button on backlog lane by default (legacy behaviour)", () => {
+    renderLane({ state: "backlog", label: "To Do" });
+    expect(screen.getByRole("button", { name: /New task/i })).toBeInTheDocument();
+  });
+
+  it("does NOT show the add button on non-backlog lanes by default (legacy behaviour)", () => {
+    renderLane({ state: "active", label: "Active" });
+    expect(screen.queryByRole("button", { name: /New task/i })).not.toBeInTheDocument();
+  });
+
+  it("shows the add button when showAdd=true regardless of state", () => {
+    renderLane({ state: "processing", label: "Processing", showAdd: true });
+    expect(screen.getByRole("button", { name: /New task/i })).toBeInTheDocument();
+  });
+
+  it("hides the add button when showAdd=false even on the backlog lane", () => {
+    renderLane({ state: "backlog", label: "To Do", showAdd: false });
+    expect(screen.queryByRole("button", { name: /New task/i })).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TaskState call-site compatibility — existing Tasks board values still work
+// ---------------------------------------------------------------------------
+
+describe("Lane — TaskState call-sites (Tasks board backward-compatibility)", () => {
+  it("renders correctly when passed a TaskState 'backlog' value", () => {
+    renderLane({ state: "backlog", label: "To Do" });
+    expect(screen.getByRole("heading", { name: "To Do" })).toBeInTheDocument();
+  });
+
+  it("renders correctly when passed a TaskState 'active' value", () => {
+    renderLane({ state: "active", label: "Active" });
+    expect(screen.getByRole("heading", { name: "Active" })).toBeInTheDocument();
+  });
+
+  it("renders correctly when passed a TaskState 'waiting' value", () => {
+    renderLane({ state: "waiting", label: "Waiting" });
+    expect(screen.getByRole("heading", { name: "Waiting" })).toBeInTheDocument();
+  });
+
+  it("renders correctly when passed a TaskState 'done' value", () => {
+    renderLane({ state: "done", label: "Done" });
+    expect(screen.getByRole("heading", { name: "Done" })).toBeInTheDocument();
+  });
+
+  it("all LANES entries render without error", () => {
+    for (const { state, label } of LANES) {
+      const { unmount } = renderLane({ state, label });
+      expect(screen.getByRole("heading", { name: label })).toBeInTheDocument();
+      unmount();
+    }
+  });
+});
 
 // ---------------------------------------------------------------------------
 // onHideLane × button

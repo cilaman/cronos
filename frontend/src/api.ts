@@ -7,6 +7,8 @@ import type {
   Board,
   BuildInfo,
   DiscoveredTool,
+  FeatureBoard,
+  FeatureState,
   GlobalStats,
   Harness,
   MemoryItem,
@@ -395,5 +397,22 @@ export const api = {
   deleteHarness: (spaceId: string, name: string): Promise<void> =>
     request<void>(`/api/spaces/${spaceId}/harnesses/${encodeURIComponent(name)}`, {
       method: "DELETE",
+    }),
+
+  // --- features ---
+  features: (spaceId: string): Promise<FeatureBoard> =>
+    request<FeatureBoard>(`/api/spaces/${spaceId}/features`),
+  transitionFeatureState: (taskId: string, state: FeatureState): Promise<Task> =>
+    request<Task>(`/api/tasks/${taskId}/feature-state`, {
+      method: "PATCH",
+      body: JSON.stringify({ state }),
+    }),
+  createFeature: (
+    spaceId: string,
+    body: { title: string; type: "feature" | "fix"; description?: string },
+  ): Promise<Task> =>
+    request<Task>(`/api/spaces/${spaceId}/features`, {
+      method: "POST",
+      body: JSON.stringify(body),
     }),
 };
