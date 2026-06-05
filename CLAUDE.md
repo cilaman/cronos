@@ -64,8 +64,8 @@ HTTP Basic Auth via Caddy on every request. `/api/health` is public (no auth). C
 
 | Path | Purpose |
 |------|---------|
-| `backend/app/main.py` | FastAPI app, router registration, background task startup (cron loop initialization), file watcher with event-trigger dispatch; task-state-change callback injection |
-| `backend/app/storage.py` | **CORE** — TaskStore, state machine, dependency DAG validation, cycle detection (41 KB) |
+| `backend/app/main.py` | FastAPI app, router registration, background task startup (cron loop initialization), file watcher with event-trigger dispatch; task-state-change callback injection; lifespan startup wires feature_hooks.configure_store(task_store) |
+| `backend/app/storage.py` | **CORE** — TaskStore, state machine, dependency DAG validation, cycle detection (41 KB); includes `set_issue_refs` method for GitHub issue persistence |
 | `backend/app/space_storage.py` | Space persistence, layouts, settings, `.cronos` subdirectory management |
 | `backend/app/agent.py` | Agent spawning, stdout/stderr capture, status tracking |
 | `backend/app/worker.py` | Background task processor (goals, agent execution, state transitions); harness run lifecycle execution, event publishing for SSE streams |
@@ -73,8 +73,9 @@ HTTP Basic Auth via Caddy on every request. `/api/health` is public (no auth). C
 | `backend/app/trace_parser.py` | Parse `STATUS:` fields from agent stdout, extract RunTrace (result, exit_reason, parent_run_id, memory_hit_rate, etc.) |
 | `backend/app/api/tasks.py` | Task CRUD, state transitions, drag-drop reordering, lane overrides (29 KB) |
 | `backend/app/api/spaces.py` | Space CRUD, repo linking, project settings |
-| `backend/app/api/features.py` | Features/fixes API router (8 endpoints: POST, GET, GET /{id}, PATCH /{id}, PATCH /{id}/feature-state, PATCH /{id}/realize, POST /{id}/process, DELETE /{id} [reserved, returns 501]); auth-parity with tasks_router; single _fire_mirror funnel (R13) |
-| `backend/app/feature_hooks.py` | S3/S4 contract shims for feature decomposition and GitHub mirroring; async no-op stubs with locked signatures |
+| `backend/app/api/features.py` | Features/fixes API router (8 endpoints: POST, GET, GET /{id}, PATCH /{id}, PATCH /{id}/feature-state, PATCH /{id}/realize, POST /{id}/process, DELETE /{id} [reserved, returns 501]); auth-parity with tasks_router; single _fire_mirror funnel for non-blocking background GitHub mirror dispatch (R13) |
+| `backend/app/git_issues.py` | GitHub issue API helpers — `gh_issue_upsert(space_dir, task)` creates or updates GitHub issue, `gh_issue_close(space_dir, task)` closes the issue; falls back to local `.cronos/issues/{task_id}.md` if `gh` unavailable |
+| `backend/app/feature_hooks.py` | Feature operation hooks: `mirror_feature_to_github` (create, edit, state transition) with one-way sync to GitHub, MD fallback for offline/auth errors, and issue-ref persistence via `set_issue_refs`; `configure_store(task_store)` wiring for production; async contract shims with fire-and-forget scheduling |
 | `backend/app/api/harnesses.py` | Harness CRUD endpoints and run lifecycle (GET/POST/PUT/DELETE, POST /run, GET /runs, POST /webhook) with concurrency contract; webhook authentication via Bearer token |
 | `backend/app/api/harness_runs.py` | Harness run status and control endpoints (GET /{run_id}, POST /{run_id}/cancel, GET /{run_id}/stream SSE) |
 | `backend/app/harnesses/model.py` | Pydantic models with reference integrity validation (HarnessNode, HarnessEdge, Harness); Wait and Aggregator node data conventions; trigger node kinds (`task-state-change`, `webhook`, `file-change`) and their `data` schemas |

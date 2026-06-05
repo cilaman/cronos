@@ -27,6 +27,30 @@ docker compose up --build
 `/api/health` reports `claude_on_path: true` (the CLI is baked into the
 backend image), `worker_running: true`, and `tasks_indexed: <N>`.
 
+## GitHub issue mirror
+
+When a space is linked to a GitHub repository (via `git_repo_url` setting),
+creating or editing a feature/fix task automatically mirrors it to a GitHub
+issue. The mirror runs as a background task and does not block the API
+response.
+
+**Prerequisites:** `gh` CLI must be installed and authenticated:
+
+```bash
+gh auth login
+```
+
+**Behavior:**
+- **Create task:** Creates a GitHub issue and stores the issue number and
+  URL on the task. If `gh` is unavailable or fails, writes a fallback
+  Markdown file to `.cronos/issues/{task_id}.md`.
+- **Edit title/brief:** Updates the corresponding GitHub issue (or re-writes
+  the fallback file if the issue is stale).
+- **Move to Done:** Closes the corresponding GitHub issue.
+
+All operations are non-blocking; the task API responds immediately while the
+mirror executes in the background.
+
 ## Deploying to a VPS
 
 See [deploy/VPS_SETUP.md](deploy/VPS_SETUP.md) for the full checklist:
