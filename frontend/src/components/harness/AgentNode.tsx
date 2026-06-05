@@ -14,15 +14,15 @@ export function AgentNode({ data }: NodeProps) {
   const statusClass = runStatusClassName(nodeData.runStatus);
   return (
     <div className={`rounded border border-hairline bg-surface-2 px-3 py-2 text-xs min-w-[120px]${statusClass ? ` ${statusClass}` : ''}`}>
-      <Handle type="target" position={Position.Top} />
+      <Handle type="target" position={Position.Top} id="in" />
       <div className="font-semibold text-ink uppercase tracking-wide mb-1">AGENT</div>
       {nodeData.label && (
         <div className="text-ink truncate">{nodeData.label}</div>
       )}
       {nodeData.agent_ref && (
-        <div className="text-ink opacity-70 truncate">{nodeData.agent_ref}</div>
+        <div className="text-ink opacity-70 truncate">{nodeData.agent_ref as string}</div>
       )}
-      <Handle type="source" position={Position.Bottom} />
+      <Handle type="source" position={Position.Bottom} id="out" />
     </div>
   );
 }
