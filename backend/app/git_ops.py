@@ -414,6 +414,30 @@ async def detect_github_remote(space_dir: Path) -> str | None:
     return None
 
 
+async def branch_exists_on_origin(space_dir: Path, branch: str) -> bool:
+    """Return True if `origin/<branch>` is known to the local git repo.
+
+    Calls ``validate_branch`` to reject unsafe names, then checks with
+    ``git rev-parse --verify origin/<branch>``.  Does NOT fetch first —
+    callers are responsible for calling ``fetch_origin`` before this if
+    freshness is required.
+
+    Returns False (never raises) on invalid branch names, subprocess
+    errors, or non-zero git exits.
+    """
+    try:
+        validate_branch(branch)
+    except GitError:
+        return False
+    try:
+        code, _out, _err = await _run(
+            "rev-parse", "--verify", f"origin/{branch}", cwd=space_dir
+        )
+        return code == 0
+    except Exception:
+        return False
+
+
 async def gh_pr_create(
     worktree: Path,
     *,

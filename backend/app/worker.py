@@ -11,10 +11,12 @@ from pathlib import Path
 
 from . import autopilot_pr
 from .agent import AgentResult, CRONOS_SUBDIR, DATA_DIR, Status, run_agent
+from . import feature_sync
 from . import goal_sync
 from . import memory_retrieval
 from .memory_parser import parse_memory_blocks
 from .memory_store import MemoryStore
+from .feature_state import FeatureState
 from .models import TaskState
 from .space_storage import SpaceStore
 from .stats import (
@@ -424,8 +426,178 @@ class Worker:
             return
         if task.type == "goal":
             await self._run_goal(task_id, user_message)
+        elif task.type in ("feature", "fix") and task.feature_state == FeatureState.PROCESSING:
+            await self._run_feature_decompose(task_id, user_message)
         else:
             await self._run_task(task_id, user_message)
+
+    async def _run_feature_decompose(self, task_id: str, user_message: str | None = None) -> None:
+        """Decompose a feature/fix task via the feature-decompose skill.
+
+        Spawns an auto-mode agent run that invokes the feature-decompose skill.
+        On completion:
+        - If realizing_items >= 1 AND result.status == DONE → transition feature_state to PLANNED.
+        - Otherwise → derive a waiting_question and transition feature_state to WAITING.
+
+        The task's TaskState is updated via finalize_run (ACTIVE → DONE on success,
+        ACTIVE → WAITING on failure).  feature_state is updated separately via
+        transition_feature with FEATURE_WORKER_TRANSITIONS.
+
+        OQ-D resolution: transition_feature has no waiting_question kwarg; the
+        waiting_question is persisted on task.waiting_question via finalize_run,
+        which is the only atomic update path available without extending storage.py
+        out of scope.
+        """
+        from .storage import FEATURE_WORKER_TRANSITIONS
+
+        task = self.store.get(task_id)
+        if task is None:
+            log.warning("_run_feature_decompose: unknown task %s", task_id)
+            return
+
+        self._current_id = task_id
+        cancel_event = asyncio.Event()
+        self._current_cancel = cancel_event
+        self._run_buffer[task_id] = []
+        started_at = datetime.now(tz=UTC)
+        await self._publish(task_id, {"type": "run_start", "task_id": task_id})
+
+        async def on_event(event: dict) -> None:
+            await self._publish(task_id, event)
+
+        space = self.space_store.get(task.space_id) if self.space_store else None
+
+        # Construct the skill-prefixed user_message so the agent always invokes
+        # the feature-decompose skill regardless of the brief contents.
+        decompose_prompt = (
+            "Use the feature-decompose skill to decompose this feature request "
+            "into a goal and child tasks.\n\n"
+        )
+        if user_message:
+            decompose_prompt += user_message
+
+        run_exception: str | None = None
+        result = None
+        try:
+            result = await run_agent(
+                task,
+                user_message=decompose_prompt,
+                on_event=on_event,
+                cancel_event=cancel_event,
+                space=space,
+            )
+        except FileNotFoundError as e:
+            run_exception = f"claude binary not found: {e}"
+            await self._publish(task_id, {"type": "run_error", "error": run_exception})
+            log.exception("Failed to spawn claude for feature decompose %s", task_id)
+        except Exception as e:
+            run_exception = str(e)
+            await self._publish(task_id, {"type": "run_error", "error": run_exception})
+            log.exception("Agent error on feature decompose %s", task_id)
+        finally:
+            self._current_cancel = None
+
+        ended_at = datetime.now(tz=UTC)
+        timestamp = ended_at.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        if run_exception is not None:
+            # Agent crashed before producing any result.
+            waiting_question = "Decomposition agent crashed"
+            history_entry = (
+                f"```\n{timestamp} [agent]\n(agent error: {run_exception})\n```"
+            )
+            new_task_state = TaskState.WAITING
+            new_feature_state = FeatureState.WAITING
+        else:
+            # Build history entry from agent output.
+            body = result.final_text.strip() or "(no assistant text)"
+            if result.exit_code != 0:
+                body += f"\n\n(exit code {result.exit_code}; stderr tail: {result.stderr_tail.strip()})"
+            history_entry = f"```\n{timestamp} [agent]\n{body}\n```"
+
+            # Determine outcome based on realizing items and agent status.
+            items: list = []
+            try:
+                items = await self.store.realizing_items(task_id)
+            except Exception:
+                log.exception("Failed to fetch realizing_items for %s", task_id)
+
+            if result.status == Status.DONE and len(items) >= 1:
+                # Success: agent decomposed and created realizing items.
+                waiting_question = None
+                new_task_state = TaskState.DONE
+                new_feature_state = FeatureState.PLANNED
+            elif result.status == Status.DONE and len(items) == 0:
+                # Agent reported DONE but created no realizing tasks.
+                waiting_question = "Decomposition agent completed but created no tasks"
+                new_task_state = TaskState.WAITING
+                new_feature_state = FeatureState.WAITING
+            elif result.status == Status.WAIT:
+                # Agent needs human input.
+                waiting_question = result.context or "Agent requested human input"
+                new_task_state = TaskState.WAITING
+                new_feature_state = FeatureState.WAITING
+            elif result.status == Status.BLOCKED:
+                # Agent is blocked.
+                waiting_question = "Decomposition blocked"
+                new_task_state = TaskState.WAITING
+                new_feature_state = FeatureState.WAITING
+            elif result.exit_code != 0:
+                # Non-zero exit without a STATUS marker counts as crash.
+                waiting_question = "Decomposition agent crashed"
+                new_task_state = TaskState.WAITING
+                new_feature_state = FeatureState.WAITING
+            else:
+                # No STATUS marker at all.
+                waiting_question = "No STATUS marker from decomposition agent"
+                new_task_state = TaskState.WAITING
+                new_feature_state = FeatureState.WAITING
+
+        # Persist task state + history + waiting_question atomically.
+        # OQ-D: waiting_question is stored on task.waiting_question via finalize_run
+        # (the only available atomic write path); transition_feature has no equivalent kwarg.
+        try:
+            await self.store.finalize_run(
+                task_id,
+                new_state=new_task_state,
+                session_id=(
+                    result.session_id
+                    if result is not None and result.exit_code == 0
+                    else None
+                ),
+                waiting_question=waiting_question,
+                history_entry=history_entry,
+            )
+        except Exception:
+            log.exception("Failed to finalize feature decompose run for %s", task_id)
+
+        # Transition feature_state independently of task.state.
+        try:
+            await self.store.transition_feature(
+                task_id,
+                new_feature_state,
+                allowed=FEATURE_WORKER_TRANSITIONS,
+            )
+        except Exception:
+            log.exception(
+                "Failed to transition feature_state to %r for %s", new_feature_state, task_id
+            )
+
+        status_val = result.status.value if result is not None and result.status else None
+        await self._publish(
+            task_id,
+            {
+                "type": "run_end",
+                "task_id": task_id,
+                "status": status_val,
+                "new_state": new_task_state.value,
+            },
+        )
+        for q in list(self._subscribers.get(task_id, [])):
+            try:
+                q.put_nowait(_DONE_SENTINEL)
+            except asyncio.QueueFull:
+                pass
 
     async def _execute_harness_run(
         self,
@@ -890,6 +1062,12 @@ class Worker:
             await goal_sync.propagate_to_parent(task_id, self.store, self._pool)
         except Exception:
             log.exception("Failed to propagate state to parent goal for %s", task_id)
+
+        # Propagate new state to the feature/fix this task realizes (if any).
+        try:
+            await feature_sync.propagate_to_feature(task_id, self.store, self._pool)
+        except Exception:
+            log.exception("feature_sync.propagate_to_feature failed for task_id=%s", task_id)
 
         exit_reason = (
             "STOPPED" if result.stopped

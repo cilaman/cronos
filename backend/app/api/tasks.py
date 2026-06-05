@@ -26,6 +26,7 @@ from ..storage import (
     summarize,
     unmet_deps,
 )
+from .. import feature_sync
 from .. import goal_sync
 from ..worker import Worker, sse_events
 from ..worker_pool import WorkerPool
@@ -533,6 +534,10 @@ async def reply_to_task(task_id: str, body: ReplyBody, request: Request) -> Goal
             task_id, user_message=body.message
         )
     await goal_sync.propagate_to_parent(task_id, store, pool)
+    try:
+        await feature_sync.propagate_to_feature(task_id, store, pool)
+    except Exception:
+        log.exception("feature_sync.propagate_to_feature failed for task_id=%s", task_id)
     task_read = _build_task_read(outcome.task, space_store.get(outcome.task.space_id), store)
     return GoalReplyResponse(task=task_read, routed_to=None)
 

@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Literal
 if TYPE_CHECKING:
     from .models import Space, Task
     from .storage import TaskStore
+    from .worker_pool import WorkerPool
 
 log = logging.getLogger(__name__)
 
@@ -50,6 +51,33 @@ def configure_store(store: "TaskStore") -> None:
     """
     global _task_store
     _task_store = store
+
+
+# ---------------------------------------------------------------------------
+# Module-level worker pool reference — set by main.py or injected by tests.
+#
+# main.py should call ``configure_pool(pool)`` during lifespan startup so
+# that enqueue_feature_decomposition can submit decomposition tasks to the
+# background worker.  Tests inject a mock WorkerPool via:
+#
+#     import app.feature_hooks as fh
+#     fh._worker_pool = mock_pool
+#
+# When _worker_pool is None, enqueue_feature_decomposition logs a WARNING and
+# returns without raising (graceful degradation for tests and misconfiguration).
+# ---------------------------------------------------------------------------
+
+_worker_pool: "WorkerPool | None" = None
+
+
+def configure_pool(pool: "WorkerPool") -> None:
+    """Wire a WorkerPool instance into the module for use by enqueue hooks.
+
+    Called by main.py during lifespan startup.  Idempotent — may be called
+    multiple times (e.g. during test setup).
+    """
+    global _worker_pool
+    _worker_pool = pool
 
 
 _DATA_DIR = Path(os.environ.get("CRONOS_DATA_DIR", "/data"))
@@ -178,13 +206,32 @@ async def mirror_feature_to_github(
 async def enqueue_feature_decomposition(task: "Task") -> None:
     """Enqueue a feature/fix task for S4 decomposition processing.
 
-    S4 contract — no-op stub.  S4 will implement the actual worker enqueue
-    logic (e.g. posting a message to a queue or spawning a sub-agent).
+    S4 implementation — submits the task to the background worker pool so
+    the decomposition agent can be invoked asynchronously.
+
+    Resolves the module-level ``_worker_pool`` (injected by ``configure_pool``
+    during lifespan startup) and calls ``pool.enqueue(task.space_id, task.id)``.
+
+    Does NOT mutate ``feature_state`` — the API caller (``POST /features/{id}/process``)
+    has already transitioned the feature to PROCESSING before calling this hook.
+
+    Graceful degradation: when ``_worker_pool`` is None (test isolation or
+    misconfiguration), logs a WARNING and returns without raising.
 
     Args:
-        task: The feature or fix task to decompose.
+        task: The feature or fix task whose decomposition should be enqueued.
 
     Returns:
         None.
     """
+    pool = _worker_pool
+    if pool is None:
+        log.warning(
+            "enqueue_feature_decomposition: _worker_pool not configured — "
+            "enqueue skipped for task=%s",
+            task.id,
+        )
+        return None
+
+    await pool.enqueue(task.space_id, task.id)
     return None
