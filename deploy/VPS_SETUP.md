@@ -21,7 +21,6 @@ On the **VPS**:
 - Ubuntu 24.04 (or any current LTS)
 - A DNS A/AAAA record pointing `cronos.example.com` at the VPS public IP
 - SSH access as a sudo user
-- (Optional) `gh` CLI for GitHub issue mirroring (see §3.1)
 
 ---
 
@@ -65,25 +64,6 @@ sudo usermod -aG docker cronos    # NOT $USER — the systemd unit runs as crono
 ```
 
 Verify: `docker run --rm hello-world`.
-
-### 3.1 — GitHub CLI (optional, for issue mirroring)
-
-If you plan to link Cronos spaces to GitHub repositories and use the one-way
-issue mirror feature, install and authenticate the `gh` CLI:
-
-```bash
-# Install gh CLI
-sudo apt-get install -y gh
-
-# Log in as the cronos user
-gh auth login
-```
-
-The login flow will ask how you authenticate with GitHub (SSH is recommended if
-you've already set up a deploy key). Once authenticated, feature/fix tasks in
-Cronos will automatically mirror to GitHub issues. If `gh` is not installed or
-authentication fails, mirrors fall back to local Markdown files at
-`.cronos/issues/{task_id}.md`.
 
 ---
 
