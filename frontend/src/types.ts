@@ -226,6 +226,7 @@ export interface SpaceSummary {
 export interface SpacesResponse {
   spaces: SpaceSummary[];
   totals: Record<TaskState, number>;
+  feature_totals?: Record<FeatureState, number>;
 }
 
 export type AutopilotMode = "disabled" | "enabled" | "paused";

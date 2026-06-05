@@ -15,6 +15,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from ..models import (
+    FeatureState,
     Space,
     SpaceSummary,
     SpacesResponse,
@@ -116,7 +117,11 @@ async def list_spaces(request: Request) -> SpacesResponse:
     totals: dict[TaskState, int] = {s: 0 for s in TaskState}
     for task in task_store.all():
         totals[task.state] = totals.get(task.state, 0) + 1
-    return SpacesResponse(spaces=summaries, totals=totals)
+    feature_totals: dict[FeatureState, int] = {}
+    for task in task_store.all():
+        if task.feature_state is not None:
+            feature_totals[task.feature_state] = feature_totals.get(task.feature_state, 0) + 1
+    return SpacesResponse(spaces=summaries, totals=totals, feature_totals=feature_totals)
 
 
 @router.get("/{space_id}", response_model=Space)

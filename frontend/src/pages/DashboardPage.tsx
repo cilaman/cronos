@@ -654,7 +654,7 @@ export function DashboardPage() {
       {/* ── Zone A: Mission Control ─────────────────────────────────────────── */}
 
       {/* Stat tiles */}
-      <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
+      <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-6">
         <StatTile label="To Do" value={totals.backlog ?? 0} to="/board" />
         <StatTile
           label="Active agents"
@@ -671,6 +671,7 @@ export function DashboardPage() {
         />
         <StatTile label="Done" value={totals.done ?? 0} to="/board" />
         <StatTile label="Total tasks" value={totalTasks} to="/board" />
+        <StatTile label="Features" value={spacesData?.feature_totals?.backlog ?? 0} to="/features" />
       </section>
 
       {/* Analytics — above the fold, always visible */}

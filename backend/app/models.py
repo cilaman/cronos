@@ -271,6 +271,7 @@ class SpaceSummary(BaseModel):
 class SpacesResponse(BaseModel):
     spaces: list[SpaceSummary] = []
     totals: dict[TaskState, int] = Field(default_factory=dict)
+    feature_totals: dict[FeatureState, int] = Field(default_factory=dict)
 
 
 class Activity(BaseModel):
