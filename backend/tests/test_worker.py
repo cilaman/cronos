@@ -1096,6 +1096,125 @@ async def test_nested_goal_subgoal_failure_pauses_parent(worker, task_store, mon
 
 
 # ---------------------------------------------------------------------------
+# _run_goal: trace and stats recording for the goal itself
+# ---------------------------------------------------------------------------
+
+
+async def test_run_goal_records_trace_for_goal_task(worker, task_store, monkeypatch):
+    """_run_goal writes a synthetic RunTrace for the goal task itself."""
+    import app.worker as worker_module
+
+    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None, goal_context=None, **kwargs):
+        return _make_result(exit_code=0, status=Status.DONE)
+
+    monkeypatch.setattr(worker_module, "run_agent", fake_run_agent)
+
+    goal = await task_store.create(space_id=SPACE_ID, title="Traced Goal", brief="g", type="goal")
+    await task_store.create(space_id=SPACE_ID, title="C1", brief="b", parent_id=goal.id)
+    await task_store.transition(
+        goal.id, TaskState.ACTIVE, allowed={(TaskState.BACKLOG, TaskState.ACTIVE)}
+    )
+
+    await worker._run_goal(goal.id, None)
+
+    assert task_store.get(goal.id).state == TaskState.DONE
+    trace = await worker.trace_store.load_latest(SPACE_ID, goal.id)
+    assert trace is not None
+    assert trace.task_id == goal.id
+    assert trace.exit_reason == "DONE"
+    assert trace.run_index == 0
+
+
+async def test_run_goal_records_stats_for_goal_task(worker, task_store, monkeypatch):
+    """_run_goal writes a RunStats entry for the goal task itself."""
+    import app.worker as worker_module
+
+    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None, goal_context=None, **kwargs):
+        return _make_result(exit_code=0, status=Status.DONE)
+
+    monkeypatch.setattr(worker_module, "run_agent", fake_run_agent)
+
+    goal = await task_store.create(space_id=SPACE_ID, title="Traced Goal", brief="g", type="goal")
+    await task_store.create(space_id=SPACE_ID, title="C1", brief="b", parent_id=goal.id)
+    await task_store.transition(
+        goal.id, TaskState.ACTIVE, allowed={(TaskState.BACKLOG, TaskState.ACTIVE)}
+    )
+
+    await worker._run_goal(goal.id, None)
+
+    stats = await worker.stats_store.load(SPACE_ID, goal.id)
+    assert stats is not None
+    assert len(stats.runs) == 1
+    assert stats.runs[0].exit_reason == "DONE"
+    assert stats.runs[0].run_index == 0
+
+
+async def test_run_goal_records_waiting_trace_on_child_failure(worker, task_store, monkeypatch):
+    """_run_goal writes exit_reason='WAITING' when a child task fails."""
+    import app.worker as worker_module
+
+    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None, goal_context=None, **kwargs):
+        return _make_result(exit_code=0, status=Status.WAIT, context="Need input")
+
+    monkeypatch.setattr(worker_module, "run_agent", fake_run_agent)
+
+    goal = await task_store.create(space_id=SPACE_ID, title="Goal", brief="g", type="goal")
+    await task_store.create(space_id=SPACE_ID, title="C1", brief="b", parent_id=goal.id)
+    await task_store.transition(
+        goal.id, TaskState.ACTIVE, allowed={(TaskState.BACKLOG, TaskState.ACTIVE)}
+    )
+
+    await worker._run_goal(goal.id, None)
+
+    assert task_store.get(goal.id).state == TaskState.WAITING
+    trace = await worker.trace_store.load_latest(SPACE_ID, goal.id)
+    assert trace is not None
+    assert trace.exit_reason == "WAITING"
+
+
+async def test_run_goal_increments_run_index_on_second_run(worker, task_store, monkeypatch):
+    """Trace run_index increments when the goal is re-run."""
+    import app.worker as worker_module
+
+    call_count = {"n": 0}
+
+    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None, goal_context=None, **kwargs):
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            return _make_result(exit_code=0, status=Status.WAIT, context="wait")
+        return _make_result(exit_code=0, status=Status.DONE)
+
+    monkeypatch.setattr(worker_module, "run_agent", fake_run_agent)
+
+    goal = await task_store.create(space_id=SPACE_ID, title="Re-run Goal", brief="g", type="goal")
+    c1 = await task_store.create(space_id=SPACE_ID, title="C1", brief="b", parent_id=goal.id)
+    await task_store.transition(
+        goal.id, TaskState.ACTIVE, allowed={(TaskState.BACKLOG, TaskState.ACTIVE)}
+    )
+
+    # First run — child fails → goal WAITING
+    await worker._run_goal(goal.id, None)
+    assert task_store.get(goal.id).state == TaskState.WAITING
+
+    # Resume goal and child for second run
+    await task_store.transition(
+        c1.id, TaskState.BACKLOG, allowed={(TaskState.WAITING, TaskState.BACKLOG)}
+    )
+    await task_store.transition(
+        goal.id, TaskState.ACTIVE, allowed={(TaskState.WAITING, TaskState.ACTIVE)}
+    )
+
+    # Second run — child succeeds → goal DONE
+    await worker._run_goal(goal.id, None)
+    assert task_store.get(goal.id).state == TaskState.DONE
+
+    traces = await worker.trace_store.list_runs(SPACE_ID, goal.id)
+    assert len(traces) == 2
+    assert traces[0].run_index == 0
+    assert traces[1].run_index == 1
+
+
+# ---------------------------------------------------------------------------
 # _finalize: autopilot post-DONE PR hook
 # ---------------------------------------------------------------------------
 

@@ -1431,7 +1431,8 @@ class Worker:
                 f"Completed {len(completed)}, skipped {len(skipped)} already-done."
             )
 
-        timestamp = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        ended_at = datetime.now(tz=UTC)
+        timestamp = ended_at.strftime("%Y-%m-%dT%H:%M:%SZ")
         history_entry = f"```\n{timestamp} [agent]\n{summary}\n```"
 
         try:
@@ -1444,6 +1445,61 @@ class Worker:
             )
         except Exception:
             log.exception("Failed to finalize goal %s", goal_id)
+
+        # Record a synthetic orchestration trace and stats for the goal itself.
+        goal_exit_reason = (
+            "STOPPED" if stopped
+            else ("DONE" if goal_new_state == TaskState.DONE else "WAITING")
+        )
+        goal_task = self.store.get(goal_id)
+        if goal_task is not None and (self.trace_store is not None or self.stats_store is not None):
+            try:
+                run_index = 0
+                if self.stats_store is not None:
+                    existing = await self.stats_store.load(goal_task.space_id, goal_id)
+                    run_index = len(existing.runs) if existing else 0
+                elif self.trace_store is not None:
+                    run_index = await self.trace_store.count_runs(goal_task.space_id, goal_id)
+
+                if self.stats_store is not None:
+                    run_stats = RunStats(
+                        run_index=run_index,
+                        started_at=started_at,
+                        ended_at=ended_at,
+                        duration_seconds=round((ended_at - started_at).total_seconds(), 2),
+                        model=goal_task.agent_model or "default",
+                        real_model=None,
+                        mode=goal_task.agent_mode or "auto",
+                        exit_reason=goal_exit_reason,
+                        had_crash=False,
+                    )
+                    try:
+                        await self.stats_store.append_run(
+                            goal_task.space_id, goal_id, goal_task.title, run_stats
+                        )
+                    except Exception:
+                        log.exception("Failed to save stats for goal %s", goal_id)
+
+                if self.trace_store is not None:
+                    goal_trace = RunTrace(
+                        task_id=goal_id,
+                        space_id=goal_task.space_id,
+                        run_index=run_index,
+                        session_id=None,
+                        model=goal_task.agent_model or "default",
+                        mode=goal_task.agent_mode or "auto",
+                        started_at=started_at,
+                        ended_at=ended_at,
+                        duration_seconds=round((ended_at - started_at).total_seconds(), 2),
+                        exit_reason=goal_exit_reason,
+                        final_text_snippet=summary[:500],
+                    )
+                    try:
+                        await self.trace_store.save_run(goal_task.space_id, goal_id, goal_trace)
+                    except Exception:
+                        log.exception("Failed to save trace for goal %s", goal_id)
+            except Exception:
+                log.exception("Failed to record telemetry for goal %s", goal_id)
 
         self._current_cancel = None
 
