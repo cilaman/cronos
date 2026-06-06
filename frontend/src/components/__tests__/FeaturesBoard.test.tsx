@@ -23,6 +23,13 @@ vi.mock("../../hooks/useFeatures", () => ({
   useCreateFeature: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
+vi.mock("../../hooks/useSpaces", () => ({
+  useSpaces: () => ({
+    data: { spaces: [{ id: "space-1", name: "Space One", color: "#aaa", icon: null }] },
+    isLoading: false,
+  }),
+}));
+
 // Capture onDragEnd so tests can fire synthetic drag events.
 type DragEndHandler = (e: {
   active: { id: string };
@@ -295,20 +302,21 @@ describe("FeaturesBoard — illegal drag-end guard (canFeatureTransition)", () =
 });
 
 // ---------------------------------------------------------------------------
-// 4. null spaceId renders empty-state message (FeaturesPage without route param)
+// 4. FeaturesPage — space selector and scoped rendering
 // ---------------------------------------------------------------------------
 
-describe("FeaturesPage — null spaceId empty-state", () => {
-  it("renders empty-state when no spaceId is in route or localStorage", () => {
-    // jsdom localStorage is empty; no route param → effectiveSpaceId is null
+describe("FeaturesPage — space selector", () => {
+  it("renders a space filter dropdown on the unscoped /features route", () => {
     renderPage("/features");
-    expect(screen.getByText(/Pick a space from the sidebar/i)).toBeInTheDocument();
+    // The SpaceFilterDropdown renders a button (the trigger) visible in the toolbar
+    expect(screen.getByRole("button", { name: /all spaces|space one/i })).toBeInTheDocument();
   });
 
-  it("does not render FeaturesBoard when effectiveSpaceId is null", () => {
+  it("renders FeaturesBoard when spaces are loaded (auto-selects first space)", () => {
+    featureBoardResult = { data: emptyBoard, isLoading: false, error: null };
     renderPage("/features");
-    // Lanes must NOT render when there is no space
-    expect(screen.queryByRole("heading", { name: "Backlog" })).not.toBeInTheDocument();
+    // With useSpaces mocked to return space-1, auto-select fires and board renders
+    expect(screen.getByRole("heading", { name: "Backlog" })).toBeInTheDocument();
   });
 
   it("renders FeaturesBoard when spaceId is provided via route param", () => {
@@ -316,5 +324,12 @@ describe("FeaturesPage — null spaceId empty-state", () => {
     renderPageScoped();
     expect(screen.getByRole("heading", { name: "Backlog" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Processing" })).toBeInTheDocument();
+  });
+
+  it("does not render space dropdown on the scoped route", () => {
+    featureBoardResult = { data: emptyBoard, isLoading: false, error: null };
+    renderPageScoped();
+    // Scoped page has no SpaceFilterDropdown; no "All spaces" button
+    expect(screen.queryByRole("button", { name: /all spaces/i })).not.toBeInTheDocument();
   });
 });
