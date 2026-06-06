@@ -171,11 +171,7 @@ async def test_features_board_shows_feature_in_correct_lane(async_client, task_s
         type="feature",
     )
 
-    # Note: the features router is registered with @router.get("/"), which means the
-    # full URL is /api/features/ (with trailing slash). FastAPI redirects /api/features
-    # (no trailing slash) with a 307; httpx does not follow redirects. Use the trailing
-    # slash form to avoid the redirect.
-    resp = await async_client.get(f"/api/features/?space_id={SPACE_ID}")
+    resp = await async_client.get(f"/api/features?space_id={SPACE_ID}")
     assert resp.status_code == 200
     fb = resp.json()
 
@@ -227,7 +223,7 @@ async def test_feature_totals_reflects_done_feature(async_client, task_store):
     )
 
     # Verify it is in PROCESSING lane.
-    resp = await async_client.get(f"/api/features/?space_id={SPACE_ID}")
+    resp = await async_client.get(f"/api/features?space_id={SPACE_ID}")
     assert resp.status_code == 200
     fb = resp.json()
     processing_ids = [t["id"] for t in fb.get("processing", [])]
@@ -309,7 +305,7 @@ async def test_feature_totals_reflects_done_feature(async_client, task_store):
     )
 
     # Step f: assert GET /api/features/ shows feature in done lane.
-    features_resp = await async_client.get(f"/api/features/?space_id={SPACE_ID}")
+    features_resp = await async_client.get(f"/api/features?space_id={SPACE_ID}")
     assert features_resp.status_code == 200
     fb_done = features_resp.json()
     done_ids = [t["id"] for t in fb_done.get("done", [])]
