@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 from .trace_parser import RunTrace
+from .trace_redact import redact_trace_dict
 
 log = logging.getLogger("cronos.trace_store")
 
@@ -47,8 +48,9 @@ class TraceStore:
             path.parent.mkdir(parents=True, exist_ok=True)
             tmp = path.with_suffix(".tmp")
             try:
+                clean = redact_trace_dict(trace.model_dump(mode="json"))
                 tmp.write_text(
-                    trace.model_dump_json(indent=2),
+                    json.dumps(clean, indent=2),
                     encoding="utf-8",
                 )
                 os.replace(tmp, path)
