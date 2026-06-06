@@ -1,0 +1,20 @@
+{
+  "cc_version": "1.0",
+  "goal_slug": "arc8-dev-process",
+  "status": "running",
+  "created_at": "2026-06-03T10:57:16.393693+00:00",
+  "updated_at": "2026-06-03T10:57:16.393693+00:00",
+  "request_text": "Build the `DevRuntimeManager` core in\n`backend/app/dev_runtimes.py` (extends SG1's allocator). Keyed by\n`space_id`; mirrors the agent subprocess pattern. **No HTTP API or\nUI in this subgoal.**\n\n**Lifecycle.** `start(space_id)` / `stop(space_id)` /\n`restart(space_id)`. Spawn with\n`asyncio.create_subprocess_exec` mirroring `run_agent`\n([agent.py:254-260](backend/app/agent.py#L254-L260)), `cwd =\nspace_dir(space_id)`\n([space_storage.py:659-669](backend/app/space_storage.py#L659-L669)),\nenv inheriting + the allocated ports. **Net-new:** pass\n`start_new_session=True` so the whole process group can be killed\n(dev servers fork children — `run_agent` does not do this).\nCommand resolution: `kind != custom` runs `command`;\n`kind=custom` runs `start_script` (stop via `stop_script`).\n\n**Status.** Track `stopped | starting | running | healthy |\nunhealthy | exited | error` per space (registry dict modeled on\n`WorkerPool._workers`,\n[worker_pool.py:39](backend/app/worker_pool.py#L39)).\n\n**Log capture + pub/sub.** Capture stdout/stderr into a bounded\nring buffer (mirror `drain_stderr`,\n[agent.py:269-283](backend/app/agent.py#L269-L283)) and a stdout\nread loop ([agent.py:344-375](backend/app/agent.py#L344-L375))\nthat does **not** block on EOF (see the comment at\n[agent.py:337-343](backend/app/agent.py#L337-L343) — dev servers\nkeep the pipe open). Fan lines out to subscribers via a\n`subscribe(space_id)`/`_publish` pair mirroring\n[worker.py:161-178](backend/app/worker.py#L161-L178) +\n[worker.py:899-930](backend/app/worker.py#L899-L930) (replay\nbuffer + drop-oldest backpressure).\n\n**Stop/restart.** SIGTERM the process group → wait 2s → SIGKILL\n(mirror `kill_on_cancel`,\n[agent.py:285-302](backend/app/agent.py#L285-L302)) using\n`os.killpg`. `restart` = stop then start.\n\n**Health poller.** Per running runtime, an async task GETs\n`health_url` every `CRONOS_DEV_HEALTH_INTERVAL_S` (default 3):\n200 → `healthy` and record the URL; non-200/exception →\n`unhealthy`; stop polling on process exit. Skip if no `health_url`.\n\n**Shutdown.** `stop_all()` mirroring `WorkerPool.stop_all`\n([worker_pool.py:132-143](backend/app/worker_pool.py#L132-L143)).\n\n**Acceptance** (unit, mocked subprocess + health client): `start`\nspawns with correct cmd/cwd/env and `start_new_session=True`;\nstdout lines are captured and replayed to a subscriber; the health\npoller flips `running → healthy` on a mocked 200; `stop`\nterminates the process group; `restart` = stop then start; two\nmanagers on different spaces don't collide on ports.\n",
+  "phases": {},
+  "telemetry": {
+    "total_duration_s": 0.0,
+    "total_token_spend": 0,
+    "total_tool_calls": 0,
+    "total_files_read": 0,
+    "total_memory_hits": 0,
+    "phases_completed": 0,
+    "phases_escalated": 0,
+    "phases_retried": 0,
+    "phases_failed": 0
+  }
+}

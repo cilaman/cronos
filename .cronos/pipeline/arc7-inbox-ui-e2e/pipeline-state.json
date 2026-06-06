@@ -1,0 +1,20 @@
+{
+  "cc_version": "1.0",
+  "goal_slug": "arc7-inbox-ui-e2e",
+  "status": "running",
+  "created_at": "2026-06-03T10:26:56.500735+00:00",
+  "updated_at": "2026-06-03T10:26:56.500735+00:00",
+  "request_text": "# Arc 7/S4 — Inbox panel + two-task e2e\n\n**Frontend:** add `Message` to `frontend/src/types.ts`;\nsurface a task's messages either as a new\n`frontend/src/components/InboxPanel.tsx` or a section in\n`frontend/src/components/ConversationStream.tsx`\n— sender, subject, payload, read state — updating live off the\nexisting `/api/tasks/{id}/stream` SSE (`message` events) via\n`useLiveStream`. Include a small manual \"send message\" composer for\ntesting. Match the paper/ink card styling (use [[frontend-design]]).\nTanStack key `[\"inbox\", spaceId, taskId]`, invalidate on `message`\nevent.\n\n**End-to-end pytest** (deterministic, no network): task A's run calls\n`SendMessage` to `agent://<space>/<B>`; assert B's mailbox file\nexists, B is woken (enqueued with the pending poke), B's run calls\n`ReadInbox` and receives the payload, and both runs' traces record the\nmessage. Drive the MCP tools against the in-process API (FastAPI\nTestClient); stub the agent subprocess.\n\n**Scope files:** `frontend/src/types.ts`,\n`frontend/src/components/InboxPanel.tsx` (new) +/or\n`ConversationStream.tsx`, a React Query hook under\n`frontend/src/hooks/`, and `backend/tests/test_messaging_e2e.py` (new).\n\n**Acceptance:** inbox panel renders messages + read state and updates\nlive on delivery; manual composer sends; the e2e test passes covering\nsend → wake → read → trace end to end.\n\n**Depends on:** Arc 7/S2 (arc7-agent-mail-tools) and Arc 7/S3\n(arc7-wake-and-trace) must be complete before starting this pipeline.\n\n---\n\n## Standing rules (apply to every phase of this pipeline)\n\n**Branch:** all phase work commits to `feature/arc-7-messaging` (create from\n`main` if missing; never branch from another base). Use [[goal-task-commit]]\nafter the review phase verdict is `pass`. **Do NOT call /goal-finalize in the\ndoc phase** — the `feature/arc-7-messaging` branch is shared across all four\nArc 7 subgoals and will be manually merged to `main` only after all subgoals\ncomplete. The doc phase simply emits `STATUS: DONE` after the gate passes,\nwithout merging.\n\n**Locked design:** MCP stdio server for `SendMessage`/`ReadInbox`; file-backed\nmailboxes at `{space}/.cronos/mailboxes/<task_id>/`; address\n`agent://<space_id>/<task_id>`; reuse `pending_messages`, the worker event bus,\n`on_idle`/`enqueue`, and `/api/tasks/{id}/stream` SSE. Do not introduce SQLite\ntables, Redis, or an HTTP MCP transport.\n\n**Test gate:** the pipeline's own `test` + `review` phases are the gate —\npytest (≥60% floor) and vitest must pass before `doc`. Commit only after the\nreview phase verdict is `pass`.\n\n**STATUS / gating** is owned by `/pipeline-gate` at each phase; do not emit\nSTATUS by hand.\n",
+  "phases": {},
+  "telemetry": {
+    "total_duration_s": 0.0,
+    "total_token_spend": 0,
+    "total_tool_calls": 0,
+    "total_files_read": 0,
+    "total_memory_hits": 0,
+    "phases_completed": 0,
+    "phases_escalated": 0,
+    "phases_retried": 0,
+    "phases_failed": 0
+  }
+}

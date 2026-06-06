@@ -1,0 +1,72 @@
+{
+  "task_id": "2026-05-27-0513-full-regression-tests",
+  "space_id": "cronos-development",
+  "title": "Full regression tests",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-05-27T05:13:56.951500Z",
+      "ended_at": "2026-05-27T05:17:34.889762Z",
+      "duration_seconds": 217.94,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "NO_STATUS",
+      "input_tokens": 3,
+      "output_tokens": 826,
+      "cache_read_tokens": 34337,
+      "cache_creation_tokens": 8923,
+      "cost_usd": 0.056161,
+      "tool_uses": {
+        "Agent": 1,
+        "Bash": 13,
+        "Read": 1
+      },
+      "error_count": 1,
+      "had_crash": false
+    },
+    {
+      "run_index": 1,
+      "started_at": "2026-05-27T05:42:10.645013Z",
+      "ended_at": "2026-05-27T05:51:30.045106Z",
+      "duration_seconds": 559.4,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "NO_STATUS",
+      "input_tokens": 5,
+      "output_tokens": 1487,
+      "cache_read_tokens": 45511,
+      "cache_creation_tokens": 24059,
+      "cost_usd": 0.126195,
+      "tool_uses": {
+        "Agent": 2,
+        "Read": 2,
+        "Edit": 1,
+        "Bash": 4
+      },
+      "error_count": 0,
+      "had_crash": false
+    },
+    {
+      "run_index": 2,
+      "started_at": "2026-05-27T06:32:26.778750Z",
+      "ended_at": "2026-05-27T06:33:02.962254Z",
+      "duration_seconds": 36.18,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "NO_STATUS",
+      "input_tokens": 9,
+      "output_tokens": 1714,
+      "cache_read_tokens": 182331,
+      "cache_creation_tokens": 3737,
+      "cost_usd": 0.09445,
+      "tool_uses": {
+        "Bash": 6
+      },
+      "error_count": 1,
+      "had_crash": false
+    }
+  ]
+}

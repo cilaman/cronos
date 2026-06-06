@@ -1,120 +1,406 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { VariableInspector } from '../VariableInspector';
-import type { HarnessNode, Harness } from '../../../types';
+import type { HarnessNode, HarnessEdge, Harness } from '../../../types';
 
-function makeAgentNode(config: Record<string, unknown> = {}): HarnessNode {
+// ---------------------------------------------------------------------------
+// Fixture helpers
+// ---------------------------------------------------------------------------
+
+function makeNode(
+  type: HarnessNode['type'],
+  data: Record<string, unknown> = {},
+): HarnessNode {
   return {
     id: 'node-1',
-    type: 'agent',
-    label: 'My Agent',
+    type,
+    label: 'Test Node',
     position: { x: 0, y: 0 },
-    ports: [],
-    config,
+    ports: {},
+    data,
   };
 }
 
-function makeNonAgentNode(type: 'trigger' | 'decision' | 'wait' | 'aggregator', config: Record<string, unknown> = {}): HarnessNode {
+function makeEdge(condition?: string | null): HarnessEdge {
   return {
-    id: 'node-2',
-    type,
-    label: 'A Node',
-    position: { x: 0, y: 0 },
-    ports: [],
-    config,
+    id: 'edge-1',
+    source: { node_id: 'n1', port_id: 'yes' },
+    target: { node_id: 'n2', port_id: 'in' },
+    condition: condition ?? null,
   };
 }
 
 function makeHarness(variables: Record<string, string> = {}): Harness {
-  return {
-    name: 'test-harness',
-    nodes: [],
-    edges: [],
-    variables,
-  };
+  return { name: 'h', nodes: [], edges: [], variables };
 }
 
-describe('VariableInspector', () => {
-  it('shows agent_ref and prompt fields when agent node selected', () => {
-    const node = makeAgentNode({ agent_ref: 'my-agent', prompt: 'Do something' });
-    const harness = makeHarness();
+// ---------------------------------------------------------------------------
+// Agent node
+// ---------------------------------------------------------------------------
+
+describe('VariableInspector — agent node', () => {
+  it('renders agent_ref and prompt_template fields', () => {
+    const node = makeNode('agent', { agent_ref: 'my-agent', prompt_template: 'Do something' });
     render(
       <VariableInspector
         selectedNode={node}
-        harness={harness}
+        harness={makeHarness()}
         onNodeChange={vi.fn()}
         onVariableChange={vi.fn()}
-      />
+      />,
     );
     expect(screen.getByLabelText('agent_ref')).toBeTruthy();
-    expect(screen.getByLabelText('prompt')).toBeTruthy();
-    // Check values are set
-    const agentRefInput = screen.getByLabelText('agent_ref') as HTMLInputElement;
-    expect(agentRefInput.value).toBe('my-agent');
-    const promptTextarea = screen.getByLabelText('prompt') as HTMLTextAreaElement;
-    expect(promptTextarea.value).toBe('Do something');
+    expect(screen.getByLabelText('prompt_template')).toBeTruthy();
+
+    expect((screen.getByLabelText('agent_ref') as HTMLInputElement).value).toBe('my-agent');
+    expect((screen.getByLabelText('prompt_template') as HTMLTextAreaElement).value).toBe(
+      'Do something',
+    );
   });
 
-  it('shows generic config when non-agent node selected', () => {
-    const node = makeNonAgentNode('trigger', { timeout: '30s', retries: '3' });
-    const harness = makeHarness();
+  it('calls onNodeChange with data.agent_ref on change', () => {
+    const onNodeChange = vi.fn();
+    const node = makeNode('agent', { agent_ref: 'old', prompt_template: 'prompt' });
     render(
       <VariableInspector
         selectedNode={node}
-        harness={harness}
-        onNodeChange={vi.fn()}
+        harness={makeHarness()}
+        onNodeChange={onNodeChange}
         onVariableChange={vi.fn()}
-      />
+      />,
     );
-    expect(screen.getByText('timeout:')).toBeTruthy();
-    expect(screen.getByText('30s')).toBeTruthy();
-    expect(screen.getByText('retries:')).toBeTruthy();
-    expect(screen.getByText('3')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('agent_ref'), { target: { value: 'new-agent' } });
+    expect(onNodeChange).toHaveBeenCalledWith('node-1', {
+      agent_ref: 'new-agent',
+      prompt_template: 'prompt',
+    });
   });
 
-  it('shows harness variables when no node selected', () => {
-    const harness = makeHarness({ ENV: 'production', TIMEOUT: '60' });
+  it('calls onNodeChange with data.prompt_template on textarea change', () => {
+    const onNodeChange = vi.fn();
+    const node = makeNode('agent', { agent_ref: 'ref', prompt_template: 'original' });
+    render(
+      <VariableInspector
+        selectedNode={node}
+        harness={makeHarness()}
+        onNodeChange={onNodeChange}
+        onVariableChange={vi.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('prompt_template'), { target: { value: 'updated' } });
+    expect(onNodeChange).toHaveBeenCalledWith('node-1', {
+      agent_ref: 'ref',
+      prompt_template: 'updated',
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Wait node
+// ---------------------------------------------------------------------------
+
+describe('VariableInspector — wait node', () => {
+  it('renders mode dropdown defaulting to human', () => {
+    const node = makeNode('wait', {});
+    render(
+      <VariableInspector
+        selectedNode={node}
+        harness={makeHarness()}
+        onNodeChange={vi.fn()}
+        onVariableChange={vi.fn()}
+      />,
+    );
+    const select = screen.getByLabelText('wait-mode') as HTMLSelectElement;
+    expect(select.value).toBe('human');
+  });
+
+  it('renders max_wait_seconds when mode=human', () => {
+    const node = makeNode('wait', { mode: 'human', max_wait_seconds: 300 });
+    render(
+      <VariableInspector
+        selectedNode={node}
+        harness={makeHarness()}
+        onNodeChange={vi.fn()}
+        onVariableChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByLabelText('max_wait_seconds')).toBeTruthy();
+    expect((screen.getByLabelText('max_wait_seconds') as HTMLInputElement).value).toBe('300');
+  });
+
+  it('renders duration_seconds when mode=timed', () => {
+    const node = makeNode('wait', { mode: 'timed', duration_seconds: 60 });
+    render(
+      <VariableInspector
+        selectedNode={node}
+        harness={makeHarness()}
+        onNodeChange={vi.fn()}
+        onVariableChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByLabelText('duration_seconds')).toBeTruthy();
+  });
+
+  it('calls onNodeChange when mode changes', () => {
+    const onNodeChange = vi.fn();
+    const node = makeNode('wait', { mode: 'human' });
+    render(
+      <VariableInspector
+        selectedNode={node}
+        harness={makeHarness()}
+        onNodeChange={onNodeChange}
+        onVariableChange={vi.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('wait-mode'), { target: { value: 'timed' } });
+    expect(onNodeChange).toHaveBeenCalledWith('node-1', { mode: 'timed' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Aggregator node
+// ---------------------------------------------------------------------------
+
+describe('VariableInspector — aggregator node', () => {
+  it('renders mode dropdown defaulting to all', () => {
+    const node = makeNode('aggregator', {});
+    render(
+      <VariableInspector
+        selectedNode={node}
+        harness={makeHarness()}
+        onNodeChange={vi.fn()}
+        onVariableChange={vi.fn()}
+      />,
+    );
+    expect((screen.getByLabelText('aggregator-mode') as HTMLSelectElement).value).toBe('all');
+  });
+
+  it('calls onNodeChange with mode=any', () => {
+    const onNodeChange = vi.fn();
+    const node = makeNode('aggregator', { mode: 'all' });
+    render(
+      <VariableInspector
+        selectedNode={node}
+        harness={makeHarness()}
+        onNodeChange={onNodeChange}
+        onVariableChange={vi.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('aggregator-mode'), { target: { value: 'any' } });
+    expect(onNodeChange).toHaveBeenCalledWith('node-1', { mode: 'any' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Trigger node
+// ---------------------------------------------------------------------------
+
+describe('VariableInspector — trigger node', () => {
+  it('renders kind dropdown defaulting to cron', () => {
+    const node = makeNode('trigger', {});
+    render(
+      <VariableInspector
+        selectedNode={node}
+        harness={makeHarness()}
+        onNodeChange={vi.fn()}
+        onVariableChange={vi.fn()}
+      />,
+    );
+    expect((screen.getByLabelText('trigger-kind') as HTMLSelectElement).value).toBe('cron');
+  });
+
+  it('renders cron expression field when kind=cron', () => {
+    const node = makeNode('trigger', { expression: '0 * * * *' });
+    render(
+      <VariableInspector
+        selectedNode={node}
+        harness={makeHarness()}
+        onNodeChange={vi.fn()}
+        onVariableChange={vi.fn()}
+      />,
+    );
+    expect((screen.getByLabelText('cron-expression') as HTMLInputElement).value).toBe(
+      '0 * * * *',
+    );
+  });
+
+  it('renders webhook fields when kind=webhook', () => {
+    const node = makeNode('trigger', { kind: 'webhook', webhook_path: '/hook', auth_token: 'secret' });
+    render(
+      <VariableInspector
+        selectedNode={node}
+        harness={makeHarness()}
+        onNodeChange={vi.fn()}
+        onVariableChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByLabelText('webhook-path')).toBeTruthy();
+    expect(screen.getByLabelText('auth-token')).toBeTruthy();
+  });
+
+  it('renders file-change fields when kind=file-change', () => {
+    const node = makeNode('trigger', { kind: 'file-change', watch_pattern: '**/*.md' });
+    render(
+      <VariableInspector
+        selectedNode={node}
+        harness={makeHarness()}
+        onNodeChange={vi.fn()}
+        onVariableChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByLabelText('watch-pattern')).toBeTruthy();
+  });
+
+  it('renders task-state-change field when kind=task-state-change', () => {
+    const node = makeNode('trigger', { kind: 'task-state-change', watched_state: 'DONE' });
+    render(
+      <VariableInspector
+        selectedNode={node}
+        harness={makeHarness()}
+        onNodeChange={vi.fn()}
+        onVariableChange={vi.fn()}
+      />,
+    );
+    expect((screen.getByLabelText('watched-state') as HTMLInputElement).value).toBe('DONE');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Edge condition
+// ---------------------------------------------------------------------------
+
+describe('VariableInspector — edge condition', () => {
+  it('renders edge-condition input when an edge is selected', () => {
+    const edge = makeEdge('yes');
+    render(
+      <VariableInspector
+        selectedNode={null}
+        selectedEdge={edge}
+        harness={makeHarness()}
+        onNodeChange={vi.fn()}
+        onVariableChange={vi.fn()}
+      />,
+    );
+    expect((screen.getByLabelText('edge-condition') as HTMLInputElement).value).toBe('yes');
+  });
+
+  it('calls onNodeChange with __edge__ prefix when condition changes', () => {
+    const onNodeChange = vi.fn();
+    const edge = makeEdge(null);
+    render(
+      <VariableInspector
+        selectedNode={null}
+        selectedEdge={edge}
+        harness={makeHarness()}
+        onNodeChange={onNodeChange}
+        onVariableChange={vi.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('edge-condition'), { target: { value: 'no' } });
+    expect(onNodeChange).toHaveBeenCalledWith('__edge__edge-1', { condition: 'no' });
+  });
+
+  it('sends null condition when input is cleared', () => {
+    const onNodeChange = vi.fn();
+    const edge = makeEdge('yes');
+    render(
+      <VariableInspector
+        selectedNode={null}
+        selectedEdge={edge}
+        harness={makeHarness()}
+        onNodeChange={onNodeChange}
+        onVariableChange={vi.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('edge-condition'), { target: { value: '' } });
+    expect(onNodeChange).toHaveBeenCalledWith('__edge__edge-1', { condition: null });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Variables panel
+// ---------------------------------------------------------------------------
+
+describe('VariableInspector — variables panel', () => {
+  it('shows harness variables when no node/edge selected', () => {
+    const harness = makeHarness({ ENV: 'prod', TIMEOUT: '60' });
     render(
       <VariableInspector
         selectedNode={null}
         harness={harness}
         onNodeChange={vi.fn()}
         onVariableChange={vi.fn()}
-      />
+      />,
     );
     expect(screen.getByText('ENV')).toBeTruthy();
     expect(screen.getByText('TIMEOUT')).toBeTruthy();
   });
 
-  it('shows empty state when harness is null and no node selected', () => {
+  it('calls onVariableChange when a variable input changes', () => {
+    const onVariableChange = vi.fn();
+    const harness = makeHarness({ MY_VAR: 'old' });
+    render(
+      <VariableInspector
+        selectedNode={null}
+        harness={harness}
+        onNodeChange={vi.fn()}
+        onVariableChange={onVariableChange}
+      />,
+    );
+    const inputs = screen.getAllByRole('textbox');
+    // First input that has value 'old' is the variable input
+    const varInput = inputs.find((el) => (el as HTMLInputElement).value === 'old')!;
+    fireEvent.change(varInput, { target: { value: 'new' } });
+    expect(onVariableChange).toHaveBeenCalledWith('MY_VAR', 'new');
+  });
+
+  it('calls onVariableAdd when Add button clicked with key + value', () => {
+    const onVariableAdd = vi.fn();
+    const harness = makeHarness({});
+    render(
+      <VariableInspector
+        selectedNode={null}
+        harness={harness}
+        onNodeChange={vi.fn()}
+        onVariableChange={vi.fn()}
+        onVariableAdd={onVariableAdd}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('new-variable-key'), {
+      target: { value: 'NEW_KEY' },
+    });
+    fireEvent.change(screen.getByLabelText('new-variable-value'), {
+      target: { value: 'my-value' },
+    });
+    fireEvent.click(screen.getByLabelText('add-variable'));
+    expect(onVariableAdd).toHaveBeenCalledWith('NEW_KEY', 'my-value');
+  });
+
+  it('calls onVariableRemove when remove button clicked', () => {
+    const onVariableRemove = vi.fn();
+    const harness = makeHarness({ DEL_ME: 'val' });
+    render(
+      <VariableInspector
+        selectedNode={null}
+        harness={harness}
+        onNodeChange={vi.fn()}
+        onVariableChange={vi.fn()}
+        onVariableRemove={onVariableRemove}
+      />,
+    );
+    fireEvent.click(screen.getByLabelText('remove-variable-DEL_ME'));
+    expect(onVariableRemove).toHaveBeenCalledWith('DEL_ME');
+  });
+
+  it('shows empty state when harness is null and no node/edge selected', () => {
     render(
       <VariableInspector
         selectedNode={null}
         harness={null}
         onNodeChange={vi.fn()}
         onVariableChange={vi.fn()}
-      />
+      />,
     );
     expect(screen.getByText('No harness loaded.')).toBeTruthy();
-  });
-
-  it('calls onNodeChange when agent_ref field changes', () => {
-    const node = makeAgentNode({ agent_ref: 'old-agent', prompt: 'original prompt' });
-    const harness = makeHarness();
-    const onNodeChange = vi.fn();
-    render(
-      <VariableInspector
-        selectedNode={node}
-        harness={harness}
-        onNodeChange={onNodeChange}
-        onVariableChange={vi.fn()}
-      />
-    );
-    const input = screen.getByLabelText('agent_ref') as HTMLInputElement;
-    fireEvent.change(input, { target: { value: 'new-agent' } });
-    expect(onNodeChange).toHaveBeenCalledWith('node-1', {
-      agent_ref: 'new-agent',
-      prompt: 'original prompt',
-    });
   });
 });

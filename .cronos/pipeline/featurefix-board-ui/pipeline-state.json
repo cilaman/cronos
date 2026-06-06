@@ -1,0 +1,224 @@
+{
+  "cc_version": "1.0",
+  "goal_slug": "featurefix-board-ui",
+  "status": "running",
+  "created_at": "2026-06-03T16:31:36.935933+00:00",
+  "updated_at": "2026-06-05T14:17:04.032148+00:00",
+  "request_text": "# S5 — Features board + Tasks rename + cards + composer + realization links\n\n**Title:** `Features&Fixes/S5 — Features board, Tasks rename, cards` · **has_ui:** yes · **dep:** S2, S4\n\n- **types.ts:** `FeatureState` union; `FEATURE_LANES` (5) + `canFeatureTransition()`; extend `TaskType`;\n  optional `feature_state/feature_key/issue_number/issue_url/realizes` on `TaskSummary` (39-64) + `Task`\n  (86-112); `realized_by?: Array<{id;title;type?;state}>` (server-computed); a `FeatureBoard` interface.\n  Keep the two lane systems disjoint (note 6).\n- **`pages/FeaturesPage.tsx` + `components/FeaturesBoard.tsx`** (new): parallel lightweight board (note 5)\n  reusing `Lane`/`Card`/`DndContext`/sensors over `FEATURE_LANES`. Drag → `useTransitionFeatureState`\n  (note 7); illegal transition = no-op. Add `lg:grid-cols-5`. **Skip lane hide/restore**.\n- **`Lane.tsx`:** widen `state` to `string`; add `showAdd?: boolean`; Tasks board passes\n  `showAdd={state===\"backlog\"}` (backward-compatible).\n- **`Card.tsx`:** `feature`/`fix` `TYPE_BADGE_STYLES` (91-94); `feature_key` chip; issue-link anchor\n  cloning the `pr_url` anchor (476-487); a `→ realizes FEAT-NNN` chip cloning the parent-link chip\n  (503-521, click-through via `onOpenTask`); on a feature card, a `realized_by` click-through list.\n- **Hooks/API:** `hooks/useFeatures.ts` (new) — `useFeatureBoard(spaceId)` keyed `[\"features\",spaceId]`\n  `refetchInterval:5000`; `useTransitionFeatureState`, `useCreateFeature`. **Every feature mutation\n  invalidates `[\"features\",…]` AND `[\"board\",…]`** (shared Backlog) + `[\"spaces\"]`. `api.ts`: `features`,\n  `transitionFeatureState`, `createFeature`.\n- **Routing/nav:** router.tsx add `/features` + `/spaces/:spaceId/features`; Sidebar.tsx rename `/board`\n  `\"Kanban\"→\"Tasks\"`, add `\"Features\"`.\n- **Shared Backlog on the Tasks board** (read-only, single source of truth): an extra click-through\n  Backlog column fed by `useFeatureBoard(spaceId).data.backlog`, outside the dnd `SortableContext`;\n  click → `/features`. `Board.tsx`'s `TaskState` drag stays untouched.\n- **Composer:** reuse `TaskForm` with a Feature/Fix `type` toggle (wired to `useCreateFeature`) on the\n  Features Backlog lane header. Use [[frontend-design]] for styling.\n\n**Scope files:** types.ts, `pages/FeaturesPage.tsx` + `components/FeaturesBoard.tsx` + `hooks/useFeatures.ts` (new), Lane.tsx, Card.tsx, api.ts, router.tsx, Sidebar.tsx.\n**Acceptance:** `/features` renders 5 lanes; drag hits the feature-state endpoint only; sidebar shows\n\"Tasks\"+\"Features\" and `/board` still works; feature card shows key + badge + issue link + realizing\nitems; a `realizes` goal/task shows a `→ realizes FEAT-NNN` chip; a feature/fix can be created from the\nFeatures Backlog; the Tasks board shows the shared read-only Backlog with existing task flows unchanged;\n`tsc --strict` clean (no lane-system key mixing).\n\n---\n\n## Standing Rules (apply to all phases)\n\n**Branch:** all phase work commits to `feature/features-and-fixes` (from `main` if\nmissing; never branch from another base, never merge to `main`). Use [[goal-task-commit]]\nafter review passes.\n**Locked design:** apply the parent goal's **Locked decisions** + **Locked design notes 1–7** verbatim\n(reuse `Task` with `feature`/`fix`; `feature_state` machine; per-space `FEAT-`/`FIX-`; `realizes` field;\none-way `gh` mirror, MD canonical; git-linked only). No new SQLite tables (index columns only), no Redis,\nno HTTP issue API.\n**Test gate:** the pipeline's `test`+`review` phases gate — pytest (≥60%) and vitest/`tsc --strict`\nmust pass before `doc`; commit only on a `pass` verdict. **STATUS/gating** is owned by [[pipeline-gate]].\n",
+  "phases": {
+    "research": {
+      "phase": "research",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-scout",
+      "task_id": "2026-06-03-1631-pipeline-scout-features-fixes-s5-feature",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/featurefix-board-ui/scout-report-featurefix-board-ui.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "analysis": {
+      "phase": "analysis",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-analyst",
+      "task_id": "2026-06-03-1631-pipeline-analyst-features-fixes-s5-featu",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/featurefix-board-ui/analysis-report-featurefix-board-ui.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [
+          "coverage_summary.strategies[2]: dropped unknown free-text strategy 'requirements_decomposition'",
+          "coverage_summary.strategies[3]: dropped unknown free-text strategy 'traceability_mapping'"
+        ],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "design": {
+      "phase": "design",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-architect",
+      "task_id": "2026-06-03-1631-pipeline-architect-features-fixes-s5-fea",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/featurefix-board-ui/design-report-featurefix-board-ui.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [
+          "coverage_summary.strategies[2]: dropped unknown free-text strategy 'component_decomposition'",
+          "coverage_summary.strategies[3]: dropped unknown free-text strategy 'iteration_planning'",
+          "coverage_summary.strategies[4]: dropped unknown free-text strategy 'risk_identification'"
+        ],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "implementation": {
+      "phase": "implementation",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-implementor",
+      "task_id": "2026-06-03-1631-pipeline-implementor-features-fixes-s5-f",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/featurefix-board-ui/impl-report-featurefix-board-ui--i9.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "test": {
+      "phase": "test",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "tester",
+      "task_id": "2026-06-03-1631-tester-features-fixes-s5-features-board",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/featurefix-board-ui/test-report-featurefix-board-ui.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "review": {
+      "phase": "review",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-reviewer",
+      "task_id": "2026-06-03-1631-pipeline-reviewer-features-fixes-s5-feat",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/featurefix-board-ui/review-report-featurefix-board-ui--attempt1.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "doc": {
+      "phase": "doc",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-doc-sync",
+      "task_id": "2026-06-03-1631-pipeline-doc-sync-features-fixes-s5-feat",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/featurefix-board-ui/doc-report-featurefix-board-ui.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    }
+  },
+  "telemetry": {
+    "total_duration_s": 0.0,
+    "total_token_spend": 0,
+    "total_tool_calls": 0,
+    "total_files_read": 0,
+    "total_memory_hits": 0,
+    "phases_completed": 7,
+    "phases_escalated": 0,
+    "phases_retried": 0,
+    "phases_failed": 0
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "task_id": "2026-05-30-1836-hanging-tasks",
+  "space_id": "cronos-development",
+  "title": "Hanging tasks",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-05-30T18:41:42.037247Z",
+      "ended_at": "2026-05-30T18:53:46.768944Z",
+      "duration_seconds": 724.73,
+      "model": "opus-4-8",
+      "real_model": "claude-opus-4-8",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 79,
+      "output_tokens": 49947,
+      "cache_read_tokens": 3769707,
+      "cache_creation_tokens": 139725,
+      "cost_usd": 12.021614,
+      "tool_uses": {
+        "Read": 13,
+        "Bash": 17,
+        "Grep": 2,
+        "Edit": 6,
+        "Write": 1
+      },
+      "error_count": 2,
+      "had_crash": false,
+      "memory_hit_rate": null
+    }
+  ]
+}

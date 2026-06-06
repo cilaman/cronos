@@ -48,17 +48,20 @@ describe("Harness", () => {
     };
     expect(port.port_type).toBe("output");
 
+    // NodePort is kept for historical reference; HarnessNode.ports is now a dict
+    void port;
+
     const node: HarnessNode = {
       id: "node-1",
       type: "agent",
       label: "My Agent",
       position: { x: 50, y: 75 },
-      ports: [port],
-      config: { agent_ref: "my-agent", prompt: "do the thing" },
+      ports: { in: {}, out: {} },
+      data: { agent_ref: "my-agent", prompt_template: "do the thing" },
     };
     expect(node.type).toBe("agent");
-    expect(node.ports).toHaveLength(1);
-    expect(node.config["agent_ref"]).toBe("my-agent");
+    expect(Object.keys(node.ports)).toContain("in");
+    expect(node.data["agent_ref"]).toBe("my-agent");
 
     const harness: Harness = {
       name: "my-harness",
@@ -68,14 +71,14 @@ describe("Harness", () => {
       variables: { key1: "value1" },
       created_at: "2024-01-01T00:00:00Z",
       updated_at: "2024-01-01T00:01:00Z",
-      version: 1,
+      version: "1.0",
     };
 
     expect(harness.name).toBe("my-harness");
     expect(harness.nodes).toHaveLength(1);
     expect(harness.edges).toHaveLength(0);
     expect(harness.variables["key1"]).toBe("value1");
-    expect(harness.version).toBe(1);
+    expect(harness.version).toBe("1.0");
   });
 
   it("allows optional fields to be omitted", () => {

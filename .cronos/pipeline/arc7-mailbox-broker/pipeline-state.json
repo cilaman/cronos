@@ -1,0 +1,20 @@
+{
+  "cc_version": "1.0",
+  "goal_slug": "arc7-mailbox-broker",
+  "status": "running",
+  "created_at": "2026-06-03T10:26:56.187727+00:00",
+  "updated_at": "2026-06-03T10:26:56.187727+00:00",
+  "request_text": "# Arc 7/S1 — Mailbox broker + persistence + API\n\nNew `backend/app/messaging.py`:\n- `Message` Pydantic model: `id, from_addr, to_addr, subject, body,\n  payload: dict, created_at, delivered_at: datetime|None,\n  read_at: datetime|None`.\n- `MessageStore` — file-as-truth: one atomic JSON per message under\n  `{space}/.cronos/mailboxes/<task_id>/<msg_id>.json` (reuse the\n  tmp→rename `atomic_write` pattern from\n  `backend/app/trace_store.py`). Methods: `save(msg)`,\n  `inbox(space_id, task_id, unread_only=False) -> list[Message]`\n  (order-stable by `created_at`), `mark_read(space_id, task_id, msg_id)`.\n- `MessageBroker` — in-process singleton: `send(msg)` resolves the\n  `agent://` address, persists via `MessageStore`, then publishes a\n  `message` event onto the worker event bus so subscribers update live.\n  Address parse/format helpers `parse_addr`/`format_addr`.\n\nNew `backend/app/api/messaging.py` (registered in\n`backend/app/main.py:237` like the other routers):\n- `POST /api/messages/send` body `{to, subject, body, payload}` → 201\n  with the stored `Message` (sender resolved from request context;\n  explicit `from` allowed for manual/testing sends).\n- `GET /api/spaces/{id}/tasks/{task_id}/inbox?unread=<bool>` → messages.\n- `POST /api/spaces/{id}/tasks/{task_id}/inbox/{msg_id}/read` → 204.\n\n**Scope files:** `backend/app/messaging.py` (new),\n`backend/app/api/messaging.py` (new), `backend/app/main.py` (router\nregistration only).\n\n**Acceptance:** `send` writes one JSON + returns it; `inbox` lists it\norder-stably; `unread` filter + `mark_read` flips `read_at`; broker\npublishes a `message` event observable via the worker bus. Invalid\n`agent://` address → 422.\n\n---\n\n## Standing rules (apply to every phase of this pipeline)\n\n**Branch:** all phase work commits to `feature/arc-7-messaging` (create from\n`main` if missing; never branch from another base). Use [[goal-task-commit]]\nafter the review phase verdict is `pass`. **Do NOT call /goal-finalize in the\ndoc phase** — the `feature/arc-7-messaging` branch is shared across all four\nArc 7 subgoals and will be manually merged to `main` only after all subgoals\ncomplete. The doc phase simply emits `STATUS: DONE` after the gate passes,\nwithout merging.\n\n**Locked design:** MCP stdio server for `SendMessage`/`ReadInbox`; file-backed\nmailboxes at `{space}/.cronos/mailboxes/<task_id>/`; address\n`agent://<space_id>/<task_id>`; reuse `pending_messages`, the worker event bus,\n`on_idle`/`enqueue`, and `/api/tasks/{id}/stream` SSE. Do not introduce SQLite\ntables, Redis, or an HTTP MCP transport.\n\n**Test gate:** the pipeline's own `test` + `review` phases are the gate —\npytest (≥60% floor) and vitest must pass before `doc`. Commit only after the\nreview phase verdict is `pass`.\n\n**STATUS / gating** is owned by `/pipeline-gate` at each phase; do not emit\nSTATUS by hand.\n",
+  "phases": {},
+  "telemetry": {
+    "total_duration_s": 0.0,
+    "total_token_spend": 0,
+    "total_tool_calls": 0,
+    "total_files_read": 0,
+    "total_memory_hits": 0,
+    "phases_completed": 0,
+    "phases_escalated": 0,
+    "phases_retried": 0,
+    "phases_failed": 0
+  }
+}

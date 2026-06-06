@@ -1,0 +1,75 @@
+{
+  "task_id": "2026-05-27-1010-upgrade",
+  "space_id": "cronos-development",
+  "run_index": 1,
+  "session_id": "94a32551-8069-47c7-873e-9d28eb259d6d",
+  "model": "default",
+  "real_model": "claude-sonnet-4-6",
+  "mode": "auto",
+  "started_at": "2026-05-27T10:12:25.751979Z",
+  "ended_at": "2026-05-27T10:12:31.538871Z",
+  "duration_seconds": 5.79,
+  "exit_reason": "NO_STATUS",
+  "turns": [
+    {
+      "turn_index": 0,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 3,
+      "output_tokens": 6,
+      "cache_read_tokens": 21374,
+      "cache_creation_tokens": 27
+    },
+    {
+      "turn_index": 1,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01XZKvHkxWC7SaXsghqxmTiM"
+      ],
+      "input_tokens": 3,
+      "output_tokens": 6,
+      "cache_read_tokens": 21374,
+      "cache_creation_tokens": 27
+    },
+    {
+      "turn_index": 2,
+      "text_snippet": "No, we're on `cronos/2026-05-27-1010-upgrade`, not `main`.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 1,
+      "cache_read_tokens": 21401,
+      "cache_creation_tokens": 136
+    }
+  ],
+  "tool_calls": [
+    {
+      "tool_call_index": 0,
+      "tool_use_id": "toolu_01XZKvHkxWC7SaXsghqxmTiM",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"git branch --show-current\", \"description\": \"Show current branch\"}",
+      "output_summary": "cronos/2026-05-27-1010-upgrade",
+      "is_error": false,
+      "turn_index": 1,
+      "elapsed_seconds": null
+    }
+  ],
+  "total_tool_calls": 1,
+  "unique_tools": [
+    "Bash"
+  ],
+  "error_tool_calls": 0,
+  "read_tool_calls": 0,
+  "write_tool_calls": 1,
+  "exploration_ratio": 0.0,
+  "error_recovery_count": 0,
+  "backtrack_count": 0,
+  "final_text_snippet": "No, we're on `cronos/2026-05-27-1010-upgrade`, not `main`.",
+  "had_crash": false,
+  "memory_injected": [],
+  "memory_used": [],
+  "memory_written": [],
+  "memory_hit_rate": 0.0
+}

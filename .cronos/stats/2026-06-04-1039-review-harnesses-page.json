@@ -1,0 +1,37 @@
+{
+  "task_id": "2026-06-04-1039-review-harnesses-page",
+  "space_id": "cronos-development",
+  "title": "review \u2013 harnesses-page",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-04T11:07:32.553015Z",
+      "ended_at": "2026-06-04T11:15:18.755073Z",
+      "duration_seconds": 466.2,
+      "model": "opus",
+      "real_model": "claude-opus-4-7",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 84,
+      "output_tokens": 17232,
+      "cache_read_tokens": 6001228,
+      "cache_creation_tokens": 188378,
+      "cost_usd": 13.827589,
+      "tool_uses": {
+        "Bash": 31,
+        "Read": 13,
+        "ToolSearch": 1,
+        "TaskCreate": 5,
+        "TaskUpdate": 10,
+        "Grep": 1,
+        "Edit": 1,
+        "Write": 1,
+        "Skill": 2
+      },
+      "error_count": 2,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

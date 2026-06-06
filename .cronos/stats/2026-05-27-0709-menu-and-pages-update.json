@@ -1,0 +1,36 @@
+{
+  "task_id": "2026-05-27-0709-menu-and-pages-update",
+  "space_id": "cronos-development",
+  "title": "Menu and pages update",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-05-27T07:09:09.401247Z",
+      "ended_at": "2026-05-27T07:14:39.271091Z",
+      "duration_seconds": 329.87,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "STOPPED",
+      "input_tokens": 7,
+      "output_tokens": 1713,
+      "cache_read_tokens": 74200,
+      "cache_creation_tokens": 20307,
+      "cost_usd": 0.124127,
+      "tool_uses": {
+        "Agent": 1,
+        "Glob": 3,
+        "Read": 16,
+        "ToolSearch": 2,
+        "TaskCreate": 8,
+        "TaskUpdate": 3,
+        "Skill": 1,
+        "Bash": 3,
+        "Grep": 3
+      },
+      "error_count": 0,
+      "had_crash": false,
+      "memory_hit_rate": null
+    }
+  ]
+}

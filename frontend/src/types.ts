@@ -558,6 +558,7 @@ export interface Position {
   y: number;
 }
 
+/** @deprecated Only kept for historical test fixtures; HarnessNode.ports is now a dict. */
 export interface NodePort {
   id: string;
   label: string;
@@ -569,8 +570,10 @@ export interface HarnessNode {
   type: NodeType;
   label: string;
   position: Position;
-  ports: NodePort[];
-  config: Record<string, unknown>;
+  /** Port dict keyed by port-id — mirrors backend HarnessNode.ports: dict[str, dict]. */
+  ports: Record<string, Record<string, unknown>>;
+  /** Arbitrary node-specific configuration — mirrors backend HarnessNode.data. */
+  data: Record<string, unknown>;
 }
 
 export interface NodeRef {
@@ -582,6 +585,8 @@ export interface HarnessEdge {
   id: string;
   source: NodeRef;
   target: NodeRef;
+  /** Optional guard expression evaluated by the executor; null = unconditional. */
+  condition?: string | null;
   label?: string;
 }
 
@@ -593,7 +598,7 @@ export interface Harness {
   variables: Record<string, string>;
   created_at?: string;
   updated_at?: string;
-  version?: number;
+  version?: string | number;
 }
 
 // Memory

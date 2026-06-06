@@ -115,7 +115,7 @@ HTTP Basic Auth via Caddy on every request. `/api/health` is public (no auth). C
 | `frontend/src/components/harness/ChildTaskDrawer.tsx` | Right-side drawer component — accepts `child_task_id` prop, fetches task via `useTask()`, renders loading skeleton, then delegates to `ConversationStream` for task detail display |
 | `frontend/src/hooks/useRunStateOverlay.ts` | Central hook for run-state reduction: consumes SSE events (`useHarnessRunStream` live mode) or REST snapshots (`useHarnessRun` replay mode); coalesces events into `NodeRunStatus` and edge-coloring maps with `requestAnimationFrame` batching (R7) |
 | `frontend/src/components/harness/NodePalette.tsx` | Right-side draggable palette of 5 node types with React Flow dataTransfer semantics (effectAllowed=move) |
-| `frontend/src/components/harness/VariableInspector.tsx` | Right-side inspector panel — edits agent-specific config (agent_ref, prompt) when AgentNode selected, generic key/value config for other nodes, harness-level variables when no node selected |
+| `frontend/src/components/harness/VariableInspector.tsx` | Right-side inspector panel — per-node-type config editing: AgentNode (agent_ref + prompt_template), WaitNode (mode + max_wait_seconds), AggregatorNode (mode all/any), TriggerNode (kind + per-kind fields), edge condition editing; harness-level variables add/remove UI |
 | `frontend/src/types.ts` | Harness visual editor type definitions (NodeType, Position, NodePort, HarnessNode, NodeRef, HarnessEdge, Harness interfaces mirroring backend Pydantic v2 models) |
 
 ## Directory layout

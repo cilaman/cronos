@@ -17,7 +17,7 @@ from . import memory_retrieval
 from .memory_parser import parse_memory_blocks
 from .memory_store import MemoryStore
 from .feature_state import FeatureState
-from .models import TaskState
+from .models import AiToolEntry, TaskState
 from .space_storage import SpaceStore
 from .stats import (
     AdoptedToolRunStats,
@@ -217,6 +217,36 @@ def _topo_children(goal_id: str, store: TaskStore) -> list[str]:
         return sorted(children.keys(), key=lambda cid: (children[cid].manual_order, cid))
 
     return result
+
+
+def resolve_tool(
+    space_claude_dir: Path,
+    global_claude_dir: Path,
+    agent_ref: str,
+) -> AiToolEntry | None:
+    """Resolve an agent_ref to an AiToolEntry by scanning .claude directories.
+
+    Scans space scope first (agents → skills → commands → context), then global
+    scope in the same order. Returns the first name match, or None.
+    """
+    if not agent_ref:
+        return None
+
+    from app.tools.scanner import _scan_category, _scan_skills
+    from app.api.tools import _scan_context  # lazy import to avoid circular dependency
+
+    for claude_dir, scope in [(space_claude_dir, "space"), (global_claude_dir, "global")]:
+        entries = (
+            _scan_category(claude_dir, "agents", scope)
+            + _scan_skills(claude_dir, scope)
+            + _scan_category(claude_dir, "commands", scope, recursive=True)
+            + _scan_context(claude_dir, scope)
+        )
+        for entry in entries:
+            if entry.name == agent_ref:
+                return entry
+
+    return None
 
 
 class Worker:
@@ -639,8 +669,10 @@ class Worker:
         # all events. The adapter's sync _publish writes to _run_buffer directly.
         from .harnesses.executor import HarnessExecutor
 
-        def _tools_resolver(space_id: str, agent_ref: str):
-            return None
+        def _tools_resolver(space_id: str, agent_ref: str) -> AiToolEntry | None:
+            space_claude_dir = self.space_store.spaces_dir / space_id / ".claude"
+            global_claude_dir = Path.home() / ".claude"
+            return resolve_tool(space_claude_dir, global_claude_dir, agent_ref)
 
         _adapter = _WorkerProtocolAdapter(self)
         executor = HarnessExecutor(

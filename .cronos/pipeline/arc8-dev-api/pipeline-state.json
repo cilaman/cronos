@@ -1,0 +1,20 @@
+{
+  "cc_version": "1.0",
+  "goal_slug": "arc8-dev-api",
+  "status": "running",
+  "created_at": "2026-06-03T10:57:16.510516+00:00",
+  "updated_at": "2026-06-03T10:57:16.510516+00:00",
+  "request_text": "Expose the `DevRuntimeManager` (SG2) over HTTP and stream its logs\nvia SSE.\n\n**Wire the manager.** Construct `DevRuntimeManager` in the lifespan\n([main.py:147-232](backend/app/main.py#L147-L232)) alongside\n`worker_pool` ([main.py:192](backend/app/main.py#L192)); stash on\n`app.state.dev_runtime_manager`. Add\n`await dev_runtime_manager.stop_all()` to the `finally` block\n([main.py:223-232](backend/app/main.py#L223-L232)).\n\n**Endpoints.** New `backend/app/api/dev_runtime.py` router\nregistered at [main.py:238-246](backend/app/main.py#L238-L246)\nunder `dependencies=_auth`:\n- `POST /api/spaces/{id}/dev/start | /stop | /restart` → returns\n  `DevRuntimeStatus`.\n- `GET /api/spaces/{id}/dev/status` →\n  `{state, pid, ports, health, url}`.\n- `GET /api/spaces/{id}/dev/stream` → SSE log stream.\n\nRead shared state via `request.app.state.*` like\n[spaces.py:46-55](backend/app/api/spaces.py#L46-L55). Return 404\nwhen the space has no `dev_runtime` config; 409 on `start` when\nalready running.\n\n**SSE.** Clone `stream_space`\n([spaces.py:130-148](backend/app/api/spaces.py#L130-L148)):\n`StreamingResponse(..., media_type=\"text/event-stream\",\nheaders={Cache-Control, X-Accel-Buffering, Connection})`. The\ngenerator mirrors `sse_space_events`\n([worker.py:986-1002](backend/app/worker.py#L986-L1002)) — emit\n`\": ok\\n\\n\"`, drain the replay buffer, stream live\n`data: {json}\\n\\n` lines from `manager.subscribe(space_id)`, and\n`event: end` on process exit.\n\n**Acceptance:** `start` returns 200 with `state=running`; `status`\nreflects state + ports + health; `stream` emits captured log lines\nthen `end` on stop; `stop` returns 200/204; `start` on a space\nwithout `dev_runtime` → 404; `start` twice → 409.\n",
+  "phases": {},
+  "telemetry": {
+    "total_duration_s": 0.0,
+    "total_token_spend": 0,
+    "total_tool_calls": 0,
+    "total_files_read": 0,
+    "total_memory_hits": 0,
+    "phases_completed": 0,
+    "phases_escalated": 0,
+    "phases_retried": 0,
+    "phases_failed": 0
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "task_id": "2026-05-30-1437-2-1-scout-research-agent",
+  "space_id": "cronos-development",
+  "title": "2.1 scout (research) agent",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-05-30T16:45:19.407963Z",
+      "ended_at": "2026-05-30T16:47:43.215085Z",
+      "duration_seconds": 143.81,
+      "model": "sonnet",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 30,
+      "output_tokens": 6026,
+      "cache_read_tokens": 818008,
+      "cache_creation_tokens": 29811,
+      "cost_usd": 0.447674,
+      "tool_uses": {
+        "Bash": 21,
+        "Read": 3,
+        "Skill": 3,
+        "Write": 1
+      },
+      "error_count": 1,
+      "had_crash": false,
+      "memory_hit_rate": null
+    }
+  ]
+}

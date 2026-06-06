@@ -1,0 +1,30 @@
+{
+  "task_id": "2026-05-31-1507-pipeline-reviewer-show-running-commit-an",
+  "space_id": "cronos-development",
+  "title": "pipeline-reviewer: Show running commit and upgrade time in the sidebar",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-01T11:40:33.192701Z",
+      "ended_at": "2026-06-01T11:42:11.329548Z",
+      "duration_seconds": 98.14,
+      "model": "opus",
+      "real_model": "claude-opus-4-7",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 16,
+      "output_tokens": 6705,
+      "cache_read_tokens": 632696,
+      "cache_creation_tokens": 68756,
+      "cost_usd": 2.741334,
+      "tool_uses": {
+        "Read": 1,
+        "Edit": 7,
+        "Bash": 2
+      },
+      "error_count": 0,
+      "had_crash": false,
+      "memory_hit_rate": null
+    }
+  ]
+}

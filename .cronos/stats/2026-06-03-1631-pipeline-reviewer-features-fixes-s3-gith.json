@@ -1,0 +1,87 @@
+{
+  "task_id": "2026-06-03-1631-pipeline-reviewer-features-fixes-s3-gith",
+  "space_id": "cronos-development",
+  "title": "pipeline-reviewer: Features&Fixes/S3 \u2014 GitHub issue mirror (one-way)",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-04T19:32:54.092608Z",
+      "ended_at": "2026-06-04T19:39:57.702656Z",
+      "duration_seconds": 423.61,
+      "model": "opus",
+      "real_model": "claude-opus-4-7",
+      "mode": "auto",
+      "exit_reason": "BLOCKED",
+      "input_tokens": 22,
+      "output_tokens": 7062,
+      "cache_read_tokens": 628867,
+      "cache_creation_tokens": 48586,
+      "cost_usd": 2.384268,
+      "tool_uses": {
+        "Bash": 50,
+        "Agent": 1,
+        "Read": 8,
+        "Write": 1,
+        "Skill": 1
+      },
+      "error_count": 3,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    },
+    {
+      "run_index": 1,
+      "started_at": "2026-06-04T21:46:00.708378Z",
+      "ended_at": "2026-06-04T21:57:36.643503Z",
+      "duration_seconds": 695.94,
+      "model": "opus",
+      "real_model": "claude-opus-4-7",
+      "mode": "auto",
+      "exit_reason": "NO_STATUS",
+      "input_tokens": 14,
+      "output_tokens": 7213,
+      "cache_read_tokens": 642073,
+      "cache_creation_tokens": 88870,
+      "cost_usd": 3.170607,
+      "tool_uses": {
+        "Read": 21,
+        "Bash": 44,
+        "Edit": 10,
+        "Agent": 1,
+        "Write": 5
+      },
+      "error_count": 2,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    },
+    {
+      "run_index": 2,
+      "started_at": "2026-06-05T04:04:33.928761Z",
+      "ended_at": "2026-06-05T04:11:48.822986Z",
+      "duration_seconds": 434.89,
+      "model": "opus",
+      "real_model": "claude-opus-4-7",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 24,
+      "output_tokens": 6747,
+      "cache_read_tokens": 1156708,
+      "cache_creation_tokens": 192255,
+      "cost_usd": 5.846228,
+      "tool_uses": {
+        "ToolSearch": 1,
+        "TaskCreate": 2,
+        "TaskUpdate": 4,
+        "Bash": 29,
+        "Agent": 2,
+        "Read": 11,
+        "Write": 1
+      },
+      "error_count": 0,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

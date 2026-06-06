@@ -1,0 +1,36 @@
+{
+  "task_id": "2026-06-03-1631-pipeline-reviewer-features-fixes-s2-feat",
+  "space_id": "cronos-development",
+  "title": "pipeline-reviewer: Features&Fixes/S2 \u2014 features API + realize + process",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-04T18:31:16.449842Z",
+      "ended_at": "2026-06-04T18:37:14.640596Z",
+      "duration_seconds": 358.19,
+      "model": "opus",
+      "real_model": "claude-opus-4-7",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 38,
+      "output_tokens": 7973,
+      "cache_read_tokens": 1274014,
+      "cache_creation_tokens": 135301,
+      "cost_usd": 5.04646,
+      "tool_uses": {
+        "Bash": 44,
+        "Read": 18,
+        "ToolSearch": 1,
+        "TaskCreate": 2,
+        "TaskUpdate": 4,
+        "Agent": 1,
+        "Write": 1,
+        "Skill": 1
+      },
+      "error_count": 2,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

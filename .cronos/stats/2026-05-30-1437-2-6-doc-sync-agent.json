@@ -1,0 +1,32 @@
+{
+  "task_id": "2026-05-30-1437-2-6-doc-sync-agent",
+  "space_id": "cronos-development",
+  "title": "2.6 doc-sync agent",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-05-30T18:33:08.392160Z",
+      "ended_at": "2026-05-30T18:41:41.995039Z",
+      "duration_seconds": 513.6,
+      "model": "sonnet",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 29,
+      "output_tokens": 26819,
+      "cache_read_tokens": 2107884,
+      "cache_creation_tokens": 93751,
+      "cost_usd": 1.386303,
+      "tool_uses": {
+        "Read": 8,
+        "Glob": 1,
+        "Write": 2,
+        "Bash": 16,
+        "Skill": 2
+      },
+      "error_count": 5,
+      "had_crash": false,
+      "memory_hit_rate": null
+    }
+  ]
+}

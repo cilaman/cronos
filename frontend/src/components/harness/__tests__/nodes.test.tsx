@@ -41,8 +41,8 @@ describe('AgentNode', () => {
 
   it('has input and output handles', () => {
     render(<AgentNode {...makeProps({ label: 'Agent' })} />);
-    expect(screen.getByTestId('handle-target-top')).toBeTruthy();
-    expect(screen.getByTestId('handle-source-bottom')).toBeTruthy();
+    expect(screen.getByTestId('handle-target-in')).toBeTruthy();
+    expect(screen.getByTestId('handle-source-out')).toBeTruthy();
   });
 });
 
@@ -55,8 +55,8 @@ describe('TriggerNode', () => {
 
   it('has only output handle (no input handle)', () => {
     render(<TriggerNode {...makeProps({ label: 'Start' })} />);
-    expect(screen.getByTestId('handle-source-bottom')).toBeTruthy();
-    expect(screen.queryByTestId('handle-target-top')).toBeNull();
+    expect(screen.getByTestId('handle-source-out')).toBeTruthy();
+    expect(screen.queryByTestId('handle-target-in')).toBeNull();
   });
 });
 
@@ -69,7 +69,7 @@ describe('DecisionNode', () => {
 
   it('has input handle and two output handles (yes/no)', () => {
     render(<DecisionNode {...makeProps({ label: 'Branch?' })} />);
-    expect(screen.getByTestId('handle-target-top')).toBeTruthy();
+    expect(screen.getByTestId('handle-target-in')).toBeTruthy();
     expect(screen.getByTestId('handle-source-yes')).toBeTruthy();
     expect(screen.getByTestId('handle-source-no')).toBeTruthy();
   });
@@ -84,8 +84,8 @@ describe('WaitNode', () => {
 
   it('has input and output handles', () => {
     render(<WaitNode {...makeProps({ label: 'Pause' })} />);
-    expect(screen.getByTestId('handle-target-top')).toBeTruthy();
-    expect(screen.getByTestId('handle-source-bottom')).toBeTruthy();
+    expect(screen.getByTestId('handle-target-in')).toBeTruthy();
+    expect(screen.getByTestId('handle-source-out')).toBeTruthy();
   });
 });
 
@@ -101,7 +101,7 @@ describe('AggregatorNode', () => {
     expect(screen.getByTestId('handle-target-in-0')).toBeTruthy();
     expect(screen.getByTestId('handle-target-in-1')).toBeTruthy();
     expect(screen.getByTestId('handle-target-in-2')).toBeTruthy();
-    expect(screen.getByTestId('handle-source-bottom')).toBeTruthy();
+    expect(screen.getByTestId('handle-source-out')).toBeTruthy();
   });
 });
 

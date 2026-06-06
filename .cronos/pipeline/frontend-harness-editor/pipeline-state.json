@@ -1,0 +1,224 @@
+{
+  "cc_version": "1.0",
+  "goal_slug": "frontend-harness-editor",
+  "status": "running",
+  "created_at": "2026-06-05T23:27:18.851846+00:00",
+  "updated_at": "2026-06-06T00:32:10.310422+00:00",
+  "request_text": "Align the harness visual editor to the backend data model so saved harnesses\nare valid and runnable. The backend model in `backend/app/harnesses/model.py` is the source of\ntruth and MUST NOT be changed.\n\nAcceptance criteria:\n1. **Node data round-trip.** `frontend/src/components/harness/harnessMapping.ts` `toReactFlow()`\n   maps backend `node.data` into the editor and `fromReactFlow()` maps editor state back into\n   `node.data` (NOT a separate `config` key). No keys are dropped in either direction. Update\n   `frontend/src/types.ts` so the node type exposes `data` consistently.\n2. **prompt_template.** The agent prompt field persists to `node.data.prompt_template` (what the\n   runtime reads at `backend/app/harnesses/executor.py:736`). `VariableInspector.tsx` currently\n   reads/writes `config.prompt` — fix it.\n3. **ports as dict + defaults + Handle ids.** `fromReactFlow()` emits `ports` as `dict[str,dict]`\n   (never a list, never `[]`). New nodes get default ports matching the Handle `id`s their node\n   component renders: DecisionNode (`yes`,`no`), AgentNode/TriggerNode/WaitNode (single in/out),\n   AggregatorNode (N inputs + single out). A freshly dragged node must save without a 422.\n4. **Edge condition round-trip + editing.** `HarnessEdge.condition: str|None` (backend) maps to/from\n   the editor edge. Decision-out edges expose an editable condition (`yes`/`no`/default = null).\n5. **Editable config for ALL node types**, not just Agent: decision condition, wait\n   `max_wait_seconds` + mode, aggregator `mode` (all/any), trigger kind + per-kind fields.\n6. **Variables add/edit/remove.** Wire `onVariableChange` through `HarnessEditor.tsx` so it mutates\n   `harness.variables`; add UI to add and remove variable rows. Saved harness has the variables.\n7. **Save feedback.** Surface backend 422 validation errors in the editor (inline or toast) instead\n   of failing silently.\n\nAll changes are frontend-only under `frontend/src/`. Add/extend vitest coverage for harnessMapping\nround-trip and VariableInspector field wiring. Run `cd frontend && npm test` and `npm run build`.",
+  "phases": {
+    "scout": {
+      "phase": "scout",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-scout",
+      "task_id": "2026-06-05-2327-scout-frontend-harness-editor",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/frontend-harness-editor/scout-report-frontend-harness-editor.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "analysis": {
+      "phase": "analysis",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-analyst",
+      "task_id": "2026-06-05-2327-analysis-frontend-harness-editor",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/frontend-harness-editor/analysis-report-frontend-harness-editor.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [
+          "coverage_summary.strategies[2]: dropped unknown free-text strategy 'requirements_decomposition'",
+          "coverage_summary.strategies[3]: dropped unknown free-text strategy 'traceability_mapping'"
+        ],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "design": {
+      "phase": "design",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-architect",
+      "task_id": "2026-06-05-2327-design-frontend-harness-editor",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/frontend-harness-editor/design-report-frontend-harness-editor.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [
+          "coverage_summary.strategies[2]: dropped unknown free-text strategy 'component_decomposition'",
+          "coverage_summary.strategies[3]: dropped unknown free-text strategy 'iteration_planning'",
+          "coverage_summary.strategies[4]: dropped unknown free-text strategy 'risk_identification'"
+        ],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "implementation": {
+      "phase": "implementation",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-implementor",
+      "task_id": "2026-06-05-2327-impl-frontend-harness-editor",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/frontend-harness-editor/impl-report-frontend-harness-editor--i4.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "test": {
+      "phase": "test",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-tester",
+      "task_id": "2026-06-05-2327-test-frontend-harness-editor",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/frontend-harness-editor/test-report-frontend-harness-editor.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "review": {
+      "phase": "review",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-reviewer",
+      "task_id": "2026-06-05-2327-review-frontend-harness-editor",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/frontend-harness-editor/review-report-frontend-harness-editor--attempt1.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "doc": {
+      "phase": "doc",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-doc-sync",
+      "task_id": "2026-06-05-2327-doc-frontend-harness-editor",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/frontend-harness-editor/doc-report-frontend-harness-editor.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    }
+  },
+  "telemetry": {
+    "total_duration_s": 0.0,
+    "total_token_spend": 0,
+    "total_tool_calls": 0,
+    "total_files_read": 0,
+    "total_memory_hits": 0,
+    "phases_completed": 7,
+    "phases_escalated": 0,
+    "phases_retried": 0,
+    "phases_failed": 0
+  }
+}

@@ -1,0 +1,224 @@
+{
+  "cc_version": "1.0",
+  "goal_slug": "featurefix-dashboard-e2e",
+  "status": "running",
+  "created_at": "2026-06-03T16:31:37.016938+00:00",
+  "updated_at": "2026-06-05T15:11:30.782193+00:00",
+  "request_text": "# S6 — Dashboard & stats impact + end-to-end verification\n\n**Title:** `Features&Fixes/S6 — dashboard impact + e2e` · **has_ui:** yes · **dep:** S3, S4, S5\n\n- **Dashboard** (DashboardPage.tsx): add a minimal **\"Features\"/\"In Backlog\"** tile linking to\n  `/features`, fed by a **new** `feature_totals: Record<FeatureState,number>` on `SpacesResponse` — do\n  **not** widen `totals`/`task_counts`/`Activity.state` (note 6). AI Performance + Test Health untouched.\n- **Backend totals:** extend `SpacesResponse`/`SpaceSummary` (api/spaces.py:86-119) with feature-count\n  fields (separate from `task_counts`). StatsPage/per-task stats out of scope (no agent runs).\n- **E2E pytest** `backend/tests/test_features_e2e.py` (deterministic; TestClient; stub agent\n  subprocess + `gh`): capture → `FEAT-001` + MD + mocked issue (number/url) → `/process` →\n  decomposition creates goal+tasks with `realizes` → `planned` → drive goal to `done` + simulate\n  `feature/<slug>` deleted on origin → feature `done` + issue closed; assert Tasks board excludes\n  it, Features board buckets it, `feature_totals` reflects it.\n\n**Scope files:** DashboardPage.tsx, api/spaces.py, types.ts (feature-count fields), `backend/tests/test_features_e2e.py` (new).\n**Acceptance:** dashboard shows feature presence (≥ tile + total) without altering the 5 task tiles or\n`task_counts`-driven UI (Spaces grid, Sidebar open-count); AI Performance + Test Health render\nidentically; the e2e passes end-to-end; `tsc --strict` + pytest ≥60% green.\n\n---\n\n## Standing Rules (apply to all phases)\n\n**Branch:** all phase work commits to `feature/features-and-fixes` (from `main` if\nmissing; never branch from another base, never merge to `main`). Use [[goal-task-commit]]\nafter review passes.\n**Locked design:** apply the parent goal's **Locked decisions** + **Locked design notes 1–7** verbatim\n(reuse `Task` with `feature`/`fix`; `feature_state` machine; per-space `FEAT-`/`FIX-`; `realizes` field;\none-way `gh` mirror, MD canonical; git-linked only). No new SQLite tables (index columns only), no Redis,\nno HTTP issue API.\n**Test gate:** the pipeline's `test`+`review` phases gate — pytest (≥60%) and vitest/`tsc --strict`\nmust pass before `doc`; commit only on a `pass` verdict. **STATUS/gating** is owned by [[pipeline-gate]].\n",
+  "phases": {
+    "research": {
+      "phase": "research",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-scout",
+      "task_id": "2026-06-03-1631-pipeline-scout-features-fixes-s6-dashboa",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/featurefix-dashboard-e2e/scout-report-featurefix-dashboard-e2e.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "analysis": {
+      "phase": "analysis",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-analyst",
+      "task_id": "2026-06-03-1631-pipeline-analyst-features-fixes-s6-dashb",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/featurefix-dashboard-e2e/analysis-report-featurefix-dashboard-e2e.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [
+          "coverage_summary.strategies[2]: dropped unknown free-text strategy 'requirements_decomposition'",
+          "coverage_summary.strategies[3]: dropped unknown free-text strategy 'traceability_mapping'"
+        ],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "design": {
+      "phase": "design",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-architect",
+      "task_id": "2026-06-03-1631-pipeline-architect-features-fixes-s6-das",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/featurefix-dashboard-e2e/design-report-featurefix-dashboard-e2e.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [
+          "coverage_summary.strategies[2]: dropped unknown free-text strategy 'component_decomposition'",
+          "coverage_summary.strategies[3]: dropped unknown free-text strategy 'iteration_planning'",
+          "coverage_summary.strategies[4]: dropped unknown free-text strategy 'risk_identification'"
+        ],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "implementation": {
+      "phase": "implementation",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-implementor",
+      "task_id": "2026-06-03-1631-pipeline-implementor-features-fixes-s6-d",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/featurefix-dashboard-e2e/impl-report-featurefix-dashboard-e2e--i6.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "test": {
+      "phase": "test",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "tester",
+      "task_id": "2026-06-03-1631-tester-features-fixes-s6-dashboard-impac",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/featurefix-dashboard-e2e/test-report-featurefix-dashboard-e2e.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "review": {
+      "phase": "review",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-reviewer",
+      "task_id": "2026-06-03-1631-pipeline-reviewer-features-fixes-s6-dash",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/featurefix-dashboard-e2e/review-report-featurefix-dashboard-e2e--attempt1.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "doc": {
+      "phase": "doc",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-doc-sync",
+      "task_id": "2026-06-03-1631-pipeline-doc-sync-features-fixes-s6-dash",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/featurefix-dashboard-e2e/doc-report-featurefix-dashboard-e2e.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    }
+  },
+  "telemetry": {
+    "total_duration_s": 0.0,
+    "total_token_spend": 0,
+    "total_tool_calls": 0,
+    "total_files_read": 0,
+    "total_memory_hits": 0,
+    "phases_completed": 7,
+    "phases_escalated": 0,
+    "phases_retried": 0,
+    "phases_failed": 0
+  }
+}

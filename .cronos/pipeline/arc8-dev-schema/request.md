@@ -1,0 +1,41 @@
+Add a `dev_runtime` config to space metadata plus a per-space port
+allocator. **No process spawning in this subgoal** — schema,
+persistence, and port reservation only.
+
+**Schema.** Extend the `Space` Pydantic model
+([models.py:120-152](backend/app/models.py#L120-L152)) with
+`dev_runtime: DevRuntime | None = None` and
+`prod_url: str | None = None`. New nested model `DevRuntime`:
+`kind: Literal["docker-compose","npm","python","custom"]`,
+`command: str | None`, `start_script: str | None`,
+`stop_script: str | None`, `health_url: str | None`,
+`ports: list[int] = []`. Validator: `kind="custom"` requires
+`start_script` + `stop_script`; any other `kind` requires
+`command`. `health_url` optional.
+
+**Persistence (YAML).** `dump_space`
+([space_storage.py:182-198](backend/app/space_storage.py#L182-L198))
+builds an **explicit dict** — add `dev_runtime` + `prod_url` there
+or they are silently dropped on save. `parse_space_yaml`
+([space_storage.py:153-165](backend/app/space_storage.py#L153-L165))
+must round-trip them. Add a `set_dev_runtime(space_id, cfg)`
+mutator mirroring `set_autopilot`
+([space_storage.py:434-454](backend/app/space_storage.py#L434-L454)):
+lock → `model_copy(update=...)` → `atomic_write`
+([storage.py:346-351](backend/app/storage.py#L346-L351)).
+
+**Port allocator.** New `backend/app/dev_runtimes.py` (allocator
+only this subgoal): `allocate_ports(space_id, count) -> list[int]`
+returns a disjoint block, **persisted** and **non-colliding across
+spaces** when several run at once; `release_ports(space_id)` frees
+them. Base port via env `CRONOS_DEV_PORT_BASE` (default 5300),
+fixed block size per space. Deterministic per space id. If the
+config declares explicit `ports`, honor them but still reserve to
+prevent cross-space collision.
+
+**Acceptance:** a space with `dev_runtime` + `prod_url`
+round-trips through `dump_space`/`parse_space_yaml`; two distinct
+spaces receive disjoint port blocks; `kind=custom` without scripts
+is rejected; non-custom without `command` is rejected; releasing a
+space frees its ports for reuse.
+

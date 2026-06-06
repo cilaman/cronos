@@ -1,0 +1,31 @@
+{
+  "task_id": "2026-06-03-1049-arc-8",
+  "space_id": "cronos-development",
+  "title": "Arc 8",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-03T10:49:45.292655Z",
+      "ended_at": "2026-06-03T10:58:55.656967Z",
+      "duration_seconds": 550.36,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 3629,
+      "output_tokens": 31716,
+      "cache_read_tokens": 1123095,
+      "cache_creation_tokens": 71379,
+      "cost_usd": 1.091227,
+      "tool_uses": {
+        "Read": 2,
+        "Write": 2,
+        "Bash": 10,
+        "Skill": 2
+      },
+      "error_count": 2,
+      "had_crash": false,
+      "memory_hit_rate": null
+    }
+  ]
+}

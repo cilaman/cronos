@@ -1,0 +1,32 @@
+{
+  "task_id": "2026-06-03-1054-arc-6",
+  "space_id": "cronos-development",
+  "title": "Arc 6",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-03T10:58:55.670352Z",
+      "ended_at": "2026-06-03T11:06:16.079820Z",
+      "duration_seconds": 440.41,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 20,
+      "output_tokens": 23075,
+      "cache_read_tokens": 904528,
+      "cache_creation_tokens": 61533,
+      "cost_usd": 0.848292,
+      "tool_uses": {
+        "Bash": 7,
+        "Read": 2,
+        "Write": 3,
+        "Skill": 2,
+        "Edit": 1
+      },
+      "error_count": 1,
+      "had_crash": false,
+      "memory_hit_rate": null
+    }
+  ]
+}

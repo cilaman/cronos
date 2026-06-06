@@ -17,7 +17,7 @@ export function TriggerNode({ data }: NodeProps) {
       {nodeData.label && (
         <div className="text-ink truncate">{nodeData.label}</div>
       )}
-      <Handle type="source" position={Position.Bottom} />
+      <Handle type="source" position={Position.Bottom} id="out" />
     </div>
   );
 }

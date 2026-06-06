@@ -1,0 +1,31 @@
+{
+  "task_id": "2026-06-02-1320-git-handling-still-not-standardised",
+  "space_id": "cronos-development",
+  "title": "Git handling still not standardised",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-02T13:21:05.174092Z",
+      "ended_at": "2026-06-02T13:24:17.885150Z",
+      "duration_seconds": 192.71,
+      "model": "opus-4-8",
+      "real_model": "claude-opus-4-8",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 21,
+      "output_tokens": 14619,
+      "cache_read_tokens": 526250,
+      "cache_creation_tokens": 61746,
+      "cost_usd": 3.043853,
+      "tool_uses": {
+        "Read": 6,
+        "Bash": 4,
+        "Write": 1,
+        "Edit": 2
+      },
+      "error_count": 1,
+      "had_crash": false,
+      "memory_hit_rate": null
+    }
+  ]
+}

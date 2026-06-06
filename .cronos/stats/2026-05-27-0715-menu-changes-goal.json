@@ -1,0 +1,32 @@
+{
+  "task_id": "2026-05-27-0715-menu-changes-goal",
+  "space_id": "cronos-development",
+  "title": "Menu changes goal",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-05-27T07:15:53.578943Z",
+      "ended_at": "2026-05-27T07:20:01.028897Z",
+      "duration_seconds": 247.45,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 27,
+      "output_tokens": 11486,
+      "cache_read_tokens": 1034858,
+      "cache_creation_tokens": 50967,
+      "cost_usd": 0.673955,
+      "tool_uses": {
+        "Agent": 1,
+        "Read": 13,
+        "Glob": 3,
+        "Bash": 15,
+        "ToolSearch": 2
+      },
+      "error_count": 2,
+      "had_crash": false,
+      "memory_hit_rate": null
+    }
+  ]
+}

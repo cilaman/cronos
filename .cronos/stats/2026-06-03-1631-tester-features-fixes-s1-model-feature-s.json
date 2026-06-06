@@ -1,0 +1,31 @@
+{
+  "task_id": "2026-06-03-1631-tester-features-fixes-s1-model-feature-s",
+  "space_id": "cronos-development",
+  "title": "tester: Features&Fixes/S1 \u2014 model, feature_state, numbering, realizes",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-04T16:58:59.289500Z",
+      "ended_at": "2026-06-04T17:06:16.191161Z",
+      "duration_seconds": 436.9,
+      "model": "sonnet",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 8,
+      "output_tokens": 2281,
+      "cache_read_tokens": 191829,
+      "cache_creation_tokens": 25692,
+      "cost_usd": 0.188133,
+      "tool_uses": {
+        "Agent": 1,
+        "Bash": 17,
+        "Skill": 1
+      },
+      "error_count": 0,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

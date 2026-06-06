@@ -1,0 +1,220 @@
+{
+  "cc_version": "1.0",
+  "goal_slug": "arc6-harness-model",
+  "status": "running",
+  "created_at": "2026-06-03T11:04:55.436723+00:00",
+  "updated_at": "2026-06-03T19:09:38.228196+00:00",
+  "request_text": "Build the harness data layer. New package `backend/app/harnesses/` (`model.py`, `store.py`)\nwith a Pydantic model + YAML round-trip.\n\n- `HarnessNode`: `id`, `type` (`agent|trigger|decision|wait|aggregator`), `position {x,y}`,\n  `ports` (named in/out socket ids), `data: dict` (type-specific config — e.g. an agent\n  node's `agent_ref` + `prompt_template` + `variable_bindings`), `label`. Include\n  position/ports/data from the start so frontend subgoals extend additively, never revise.\n- `HarnessEdge`: `id`, `source` (node+port), `target` (node+port), optional `condition` label.\n  `Harness`: `name`, `description`, `nodes[]`, `edges[]`, `variables: dict`, `version`.\n- Persist at `{space}/.cronos/harnesses/<name>.yml` (source of truth); atomic write\n  (tmpfile + `os.replace`) per space_storage.py. Path-safe filename; name uniqueness.\n- Validator: graph is a DAG (no cycles), edges reference existing nodes/ports, only\n  allowed types. **Adapt** (do not reuse verbatim) the cycle logic in storage.py\n  (`_dep_cycle_path` / `validate_depends_on`) to node/edge structures.\n- CRUD `backend/app/api/harnesses.py` wired into main.py, following DI+auth in\n  api/tasks.py: `GET/POST/PUT/DELETE /api/spaces/{id}/harnesses[/<name>]`.\n  Invalid graph ⇒ 422. Resolve YAML round-trip fidelity vs editor as second writer\n  (last-writer-wins) and concurrent CRUD vs a live run.\n\nAcceptance: POST a 3-node/2-edge harness → GET round-trips losslessly; a cycle or\ndangling edge → 422; on-disk YAML matches the API payload.\n",
+  "phases": {
+    "research": {
+      "phase": "research",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-scout",
+      "task_id": "2026-06-03-1104-pipeline-scout-6-1-harness-model-yaml-pe",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/arc6-harness-model/scout-report-arc6-harness-model.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "analysis": {
+      "phase": "analysis",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-analyst",
+      "task_id": "2026-06-03-1104-pipeline-analyst-6-1-harness-model-yaml",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/arc6-harness-model/analysis-report-arc6-harness-model.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [
+          "coverage_summary.strategies[2]: dropped unknown free-text strategy 'requirements_decomposition'",
+          "coverage_summary.strategies[3]: dropped unknown free-text strategy 'traceability_mapping'"
+        ],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "design": {
+      "phase": "design",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-architect",
+      "task_id": "2026-06-03-1104-pipeline-architect-6-1-harness-model-yam",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/arc6-harness-model/design-report-arc6-harness-model.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "implementation": {
+      "phase": "implementation",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-implementor",
+      "task_id": "2026-06-03-1104-pipeline-implementor-6-1-harness-model-y",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/arc6-harness-model/impl-report-arc6-harness-model--i6.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "test": {
+      "phase": "test",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "tester",
+      "task_id": "2026-06-03-1104-tester-6-1-harness-model-yaml-persistenc",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/arc6-harness-model/test-report-arc6-harness-model.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "review": {
+      "phase": "review",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-reviewer",
+      "task_id": "2026-06-03-1104-pipeline-reviewer-6-1-harness-model-yaml",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/arc6-harness-model/review-report-arc6-harness-model--attempt2.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "doc": {
+      "phase": "doc",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-doc-sync",
+      "task_id": "2026-06-03-1104-pipeline-doc-sync-6-1-harness-model-yaml",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/arc6-harness-model/doc-report-arc6-harness-model.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    }
+  },
+  "telemetry": {
+    "total_duration_s": 0.0,
+    "total_token_spend": 0,
+    "total_tool_calls": 0,
+    "total_files_read": 0,
+    "total_memory_hits": 0,
+    "phases_completed": 7,
+    "phases_escalated": 0,
+    "phases_retried": 0,
+    "phases_failed": 0
+  }
+}
