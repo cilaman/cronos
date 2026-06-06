@@ -401,18 +401,23 @@ export const api = {
 
   // --- features ---
   features: (spaceId: string): Promise<FeatureBoard> =>
-    request<FeatureBoard>(`/api/spaces/${spaceId}/features`),
+    request<FeatureBoard>(`/api/features?space_id=${encodeURIComponent(spaceId)}`),
   transitionFeatureState: (taskId: string, state: FeatureState): Promise<Task> =>
-    request<Task>(`/api/tasks/${taskId}/feature-state`, {
+    request<Task>(`/api/features/${taskId}/feature-state`, {
       method: "PATCH",
-      body: JSON.stringify({ state }),
+      body: JSON.stringify({ feature_state: state }),
     }),
   createFeature: (
     spaceId: string,
     body: { title: string; type: "feature" | "fix"; description?: string },
   ): Promise<Task> =>
-    request<Task>(`/api/spaces/${spaceId}/features`, {
+    request<Task>(`/api/features`, {
       method: "POST",
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        space_id: spaceId,
+        title: body.title,
+        type: body.type,
+        brief: body.description ?? "",
+      }),
     }),
 };
