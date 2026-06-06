@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -128,6 +128,19 @@ export function FeaturesBoard({ spaceId }: Props) {
   const { data, isLoading, error } = useFeatureBoard(spaceId);
   const transition = useTransitionFeatureState(spaceId);
   const [activeTask, setActiveTask] = useState<TaskSummary | null>(null);
+  const [hiddenLanes, setHiddenLanes] = useState<Set<FeatureState>>(new Set());
+
+  const hideLane = useCallback((state: string) => {
+    setHiddenLanes((prev) => new Set([...prev, state as FeatureState]));
+  }, []);
+
+  const showLane = useCallback((state: FeatureState) => {
+    setHiddenLanes((prev) => {
+      const next = new Set(prev);
+      next.delete(state);
+      return next;
+    });
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -183,6 +196,16 @@ export function FeaturesBoard({ spaceId }: Props) {
   }
   if (!data) return null;
 
+  const visibleLanes = FEATURE_LANES.filter(({ state }) => !hiddenLanes.has(state));
+  const hiddenLaneList = FEATURE_LANES.filter(({ state }) => hiddenLanes.has(state));
+  const colCount = visibleLanes.length;
+  const lgCols =
+    colCount === 1 ? "lg:grid-cols-1"
+    : colCount === 2 ? "lg:grid-cols-2"
+    : colCount === 3 ? "lg:grid-cols-3"
+    : colCount === 4 ? "lg:grid-cols-4"
+    : "lg:grid-cols-5";
+
   return (
     <DndContext
       sensors={sensors}
@@ -191,8 +214,27 @@ export function FeaturesBoard({ spaceId }: Props) {
       onDragEnd={onDragEnd}
       onDragCancel={onDragCancel}
     >
-      <div className="grid h-full grid-cols-1 gap-2 p-2 md:grid-cols-2 lg:grid-cols-5 lg:gap-3 lg:p-4">
-        {FEATURE_LANES.map(({ state, label }) => {
+      {hiddenLaneList.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 px-2 pt-2 lg:px-4">
+          <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-faint">
+            Hidden:
+          </span>
+          {hiddenLaneList.map(({ state, label }) => (
+            <button
+              key={state}
+              type="button"
+              onClick={() => showLane(state)}
+              aria-label={`Show ${label} lane`}
+              title={`Show ${label}`}
+              className="rounded border border-dashed border-hairline px-2 py-0.5 font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-muted transition hover:border-accent hover:bg-surface-2 hover:text-accent-bright focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+            >
+              + {label}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className={`grid h-full grid-cols-1 gap-2 p-2 md:grid-cols-2 ${lgCols} lg:gap-3 lg:p-4`}>
+        {visibleLanes.map(({ state, label }) => {
           const isBacklog = state === "backlog";
           const tasks = data[state];
           const taskIds = tasks.map((t) => t.id);
@@ -207,6 +249,7 @@ export function FeaturesBoard({ spaceId }: Props) {
                   onOpen={() => {}}
                   onAdd={() => {}}
                   showAdd={false}
+                  onHideLane={hideLane}
                 />
               </SortableContext>
               {isBacklog && <FeatureComposer spaceId={spaceId} />}
