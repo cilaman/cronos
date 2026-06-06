@@ -1,0 +1,495 @@
+{
+  "task_id": "2026-05-27-1309-test-health",
+  "space_id": "cronos-development",
+  "run_index": 1,
+  "session_id": "93ec1352-d9de-47b7-8bfc-e543484f7b45",
+  "model": "default",
+  "real_model": "claude-sonnet-4-6",
+  "mode": "auto",
+  "started_at": "2026-05-27T13:20:28.884629Z",
+  "ended_at": "2026-05-27T13:22:22.757891Z",
+  "duration_seconds": 113.87,
+  "exit_reason": "STOPPED",
+  "turns": [
+    {
+      "turn_index": 0,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 3,
+      "output_tokens": 8,
+      "cache_read_tokens": 13158,
+      "cache_creation_tokens": 29244
+    },
+    {
+      "turn_index": 1,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_0168j1pMMfSSJHPT6vkaygh8"
+      ],
+      "input_tokens": 3,
+      "output_tokens": 8,
+      "cache_read_tokens": 13158,
+      "cache_creation_tokens": 29244
+    },
+    {
+      "turn_index": 2,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_016Up5GqmVXAoor4B6fpsT1S"
+      ],
+      "input_tokens": 3,
+      "output_tokens": 8,
+      "cache_read_tokens": 13158,
+      "cache_creation_tokens": 29244
+    },
+    {
+      "turn_index": 3,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 20,
+      "cache_read_tokens": 42402,
+      "cache_creation_tokens": 2836
+    },
+    {
+      "turn_index": 4,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01Xn1Mkt2VKxJm1Yjt4bSWX3"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 20,
+      "cache_read_tokens": 42402,
+      "cache_creation_tokens": 2836
+    },
+    {
+      "turn_index": 5,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 34,
+      "cache_read_tokens": 45238,
+      "cache_creation_tokens": 438
+    },
+    {
+      "turn_index": 6,
+      "text_snippet": "Main is checked out in the primary worktree. I'll commit and push there directly.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 34,
+      "cache_read_tokens": 45238,
+      "cache_creation_tokens": 438
+    },
+    {
+      "turn_index": 7,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01QsLfhkPYo1Ymb8mAnSESbP"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 34,
+      "cache_read_tokens": 45238,
+      "cache_creation_tokens": 438
+    },
+    {
+      "turn_index": 8,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 45676,
+      "cache_creation_tokens": 414
+    },
+    {
+      "turn_index": 9,
+      "text_snippet": "The workspace and main worktree are separate. I need to copy the modified file into the main worktree first.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 45676,
+      "cache_creation_tokens": 414
+    },
+    {
+      "turn_index": 10,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01S6SZQsVBemZwebPdPLKk8C"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 45676,
+      "cache_creation_tokens": 414
+    },
+    {
+      "turn_index": 11,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 27,
+      "cache_read_tokens": 46090,
+      "cache_creation_tokens": 416
+    },
+    {
+      "turn_index": 12,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01UPz43DQevVr58LS1MHqEvL"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 27,
+      "cache_read_tokens": 46090,
+      "cache_creation_tokens": 416
+    },
+    {
+      "turn_index": 13,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 38,
+      "cache_read_tokens": 46506,
+      "cache_creation_tokens": 1466
+    },
+    {
+      "turn_index": 14,
+      "text_snippet": "The main worktree has some styling changes that diverged from the workspace base. Let me apply only the test health changes cleanly using a patch.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 38,
+      "cache_read_tokens": 46506,
+      "cache_creation_tokens": 1466
+    },
+    {
+      "turn_index": 15,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01GWJSZBw7muG6sxpcfU7tiA"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 38,
+      "cache_read_tokens": 46506,
+      "cache_creation_tokens": 1466
+    },
+    {
+      "turn_index": 16,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01KrPRgEbBimd9mdm9NgetoG"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 49,
+      "cache_read_tokens": 47972,
+      "cache_creation_tokens": 1090
+    },
+    {
+      "turn_index": 17,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01S9omYD3PPW2kgVZ5dQM6KC"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 54,
+      "cache_read_tokens": 49062,
+      "cache_creation_tokens": 515
+    },
+    {
+      "turn_index": 18,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 26,
+      "cache_read_tokens": 49577,
+      "cache_creation_tokens": 170
+    },
+    {
+      "turn_index": 19,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_013hw8z4TREHDcKtbgvNeExs"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 26,
+      "cache_read_tokens": 49577,
+      "cache_creation_tokens": 170
+    },
+    {
+      "turn_index": 20,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_019AYWyhhRDHXdmhQbCAuo3m"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 69,
+      "cache_read_tokens": 49747,
+      "cache_creation_tokens": 216
+    },
+    {
+      "turn_index": 21,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 22,
+      "cache_read_tokens": 49963,
+      "cache_creation_tokens": 2198
+    },
+    {
+      "turn_index": 22,
+      "text_snippet": "The conflict is just a section comment difference. I'll resolve it by keeping the new components and using main's comment.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 22,
+      "cache_read_tokens": 49963,
+      "cache_creation_tokens": 2198
+    },
+    {
+      "turn_index": 23,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_015gQSMrMRjVMLFyLt34JXpB"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 22,
+      "cache_read_tokens": 49963,
+      "cache_creation_tokens": 2198
+    },
+    {
+      "turn_index": 24,
+      "text_snippet": "Now verify no more conflicts and TypeScript is clean, then commit and push:",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 1,
+      "cache_read_tokens": 52161,
+      "cache_creation_tokens": 3809
+    },
+    {
+      "turn_index": 25,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_012P2YtTiUVGkaB1Lv2V7hxG"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 1,
+      "cache_read_tokens": 52161,
+      "cache_creation_tokens": 3809
+    },
+    {
+      "turn_index": 26,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01MmR8ToTT7CRJJ2fk4QrFyE"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 58,
+      "cache_read_tokens": 55970,
+      "cache_creation_tokens": 154
+    },
+    {
+      "turn_index": 27,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_015KA2aja9ziSRReDBNGNfHM"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 68,
+      "cache_read_tokens": 56124,
+      "cache_creation_tokens": 152
+    }
+  ],
+  "tool_calls": [
+    {
+      "tool_call_index": 0,
+      "tool_use_id": "toolu_0168j1pMMfSSJHPT6vkaygh8",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"git status && git diff\", \"description\": \"Show working tree status and diff\"}",
+      "output_summary": "On branch cronos/2026-05-27-1309-test-health\nChanges not staged for commit:\n  (use \"git add <file>...\" to update what will be committed)\n  (use \"git restore <file>...\" to discard changes in working directory)\n\tmodified:   frontend/src/pages/DashboardPage.tsx\n\nno changes added to commit (use \"git add\" and/or \"git commit -a\")\ndiff --git a/frontend/src/pages/DashboardPage.tsx b/frontend/src/pages/DashboardPage.tsx\nindex c8baf76..b64768b 100644\n--- a/frontend/src/pages/DashboardPage.tsx\n+++ b/frontend/src/pages/DashboardPage.tsx\n@@ -3,13 +3,14 @@ import { Link, useNavigate } from \"react-router-dom\";\n import { useActivity, useImportSpace, useSpaces } from \"../hooks/useSpaces\";\n import { useCreateTask } from \"../hooks/useTasks\";\n import { useGlobalStats } from \"../hooks/useStats\";\n-import { useTestReports } from \"../hooks/useTestReports\";\n+import { useTestReports, useLatestTestReport } from \"../hooks/useTestReports\";\n import { TaskForm } from \"../components/TaskForm\";\n import { EmptyState } …",
+      "is_error": false,
+      "turn_index": 1,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 1,
+      "tool_use_id": "toolu_016Up5GqmVXAoor4B6fpsT1S",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"git log --oneline -5\", \"description\": \"Show recent commits\"}",
+      "output_summary": "5a5db71 fix(deploy): support flexible .env path in upgrade webhook and script\n2bc5158 Make memory writing prescriptive in agent STATUS_CONTRACT\n560e202 Name of the tab\n6cb25ea fix(deploy): self-heal cronos.service against root-owned ~/.docker\n593daa3 Wire memory retrieval into agent execution pipeline",
+      "is_error": false,
+      "turn_index": 2,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 2,
+      "tool_use_id": "toolu_01Xn1Mkt2VKxJm1Yjt4bSWX3",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"git checkout main && git add frontend/src/pages/DashboardPage.tsx\", \"description\": \"Switch to main and stage the changed file\"}",
+      "output_summary": "Exit code 128\nfatal: 'main' is already used by worktree at '/data/spaces/cronos-development'",
+      "is_error": true,
+      "turn_index": 4,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 3,
+      "tool_use_id": "toolu_01QsLfhkPYo1Ymb8mAnSESbP",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"cd /data/spaces/cronos-development && git add frontend/src/pages/DashboardPage.tsx && git commit -m \\\"$(cat <<'EOF'\\nfeat(dashboard): show test suite details and per-module coverage in Test Health\\n\\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\\nEOF\\n)\\\"\", \"description\": \"Commit the Test Health dashboard changes on main\"}",
+      "output_summary": "Exit code 1\nOn branch main\nYour branch is up to date with 'origin/main'.\n\nUntracked files:\n  (use \"git add <file>...\" to include in what will be committed)\n\t.coverage\n\t.cronos/.trash/\n\t.cronos/space.yml\n\t.cronos/stats/\n\t.cronos/tasks/\n\t.cronos/test-reports/\n\t.cronos/traces/\n\t.cronos/workspaces/\n\tbackend/test-report-20260527-051720.json\n\tfrontend/coverage/\n\nnothing added to commit but untracked files present (use \"git add\" to track)",
+      "is_error": true,
+      "turn_index": 7,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 4,
+      "tool_use_id": "toolu_01S6SZQsVBemZwebPdPLKk8C",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"cp /data/spaces/cronos-development/.cronos/workspaces/2026-05-27-1309-test-health/frontend/src/pages/DashboardPage.tsx /data/spaces/cronos-development/frontend/src/pages/DashboardPage.tsx && cd /data/spaces/cronos-development && git diff --stat\", \"description\": \"Copy modified file to main worktree and verify diff\"}",
+      "output_summary": " frontend/src/pages/DashboardPage.tsx | 534 +++++++++++++++++------------------\n 1 file changed, 266 insertions(+), 268 deletions(-)\nShell cwd was reset to /data/spaces/cronos-development/.cronos/workspaces/2026-05-27-1309-test-health",
+      "is_error": false,
+      "turn_index": 10,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 5,
+      "tool_use_id": "toolu_01UPz43DQevVr58LS1MHqEvL",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"cd /data/spaces/cronos-development && git diff frontend/src/pages/DashboardPage.tsx | head -60\", \"description\": \"Inspect actual diff in main worktree\"}",
+      "output_summary": "diff --git a/frontend/src/pages/DashboardPage.tsx b/frontend/src/pages/DashboardPage.tsx\nindex bd6f0b0..b64768b 100644\n--- a/frontend/src/pages/DashboardPage.tsx\n+++ b/frontend/src/pages/DashboardPage.tsx\n@@ -1,15 +1,16 @@\n-import { useEffect, useRef, useState } from \"react\";\n+import { useRef, useState } from \"react\";\n import { Link, useNavigate } from \"react-router-dom\";\n import { useActivity, useImportSpace, useSpaces } from \"../hooks/useSpaces\";\n import { useCreateTask } from \"../hooks/useTasks\";\n import { useGlobalStats } from \"../hooks/useStats\";\n-import { useTestReports } from \"../hooks/useTestReports\";\n+import { useTestReports, useLatestTestReport } from \"../hooks/useTestReports\";\n import { TaskForm } from \"../components/TaskForm\";\n import { EmptyState } from \"../components/ui/EmptyState\";\n import { SpaceTag } from \"../components/ui/SpaceTag\";\n+import { TestStatusBadge } from \"../components/TestStatusBadge\";\n import { api } from \"../api\";\n import { formatRelative } from \"../util…",
+      "is_error": false,
+      "turn_index": 12,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 6,
+      "tool_use_id": "toolu_01GWJSZBw7muG6sxpcfU7tiA",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"cd /data/spaces/cronos-development && git checkout frontend/src/pages/DashboardPage.tsx\", \"description\": \"Restore main worktree's DashboardPage.tsx\"}",
+      "output_summary": "Updated 1 path from the index\nShell cwd was reset to /data/spaces/cronos-development/.cronos/workspaces/2026-05-27-1309-test-health",
+      "is_error": false,
+      "turn_index": 15,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 7,
+      "tool_use_id": "toolu_01KrPRgEbBimd9mdm9NgetoG",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"git diff frontend/src/pages/DashboardPage.tsx > /tmp/test-health.patch && head -20 /tmp/test-health.patch\", \"description\": \"Export workspace diff as a patch file\"}",
+      "output_summary": "diff --git a/frontend/src/pages/DashboardPage.tsx b/frontend/src/pages/DashboardPage.tsx\nindex c8baf76..b64768b 100644\n--- a/frontend/src/pages/DashboardPage.tsx\n+++ b/frontend/src/pages/DashboardPage.tsx\n@@ -3,13 +3,14 @@ import { Link, useNavigate } from \"react-router-dom\";\n import { useActivity, useImportSpace, useSpaces } from \"../hooks/useSpaces\";\n import { useCreateTask } from \"../hooks/useTasks\";\n import { useGlobalStats } from \"../hooks/useStats\";\n-import { useTestReports } from \"../hooks/useTestReports\";\n+import { useTestReports, useLatestTestReport } from \"../hooks/useTestReports\";\n import { TaskForm } from \"../components/TaskForm\";\n import { EmptyState } from \"../components/ui/EmptyState\";\n import { SpaceTag } from \"../components/ui/SpaceTag\";\n+import { TestStatusBadge } from \"../components/TestStatusBadge\";\n import { api } from \"../api\";\n import { formatRelative } from \"../utils/format\";\n-import type { Activity, SpaceSummary, TaskState, TestReportSummary } from \"../types\";\n…",
+      "is_error": false,
+      "turn_index": 16,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 8,
+      "tool_use_id": "toolu_01S9omYD3PPW2kgVZ5dQM6KC",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"cd /data/spaces/cronos-development && git apply --3way /tmp/test-health.patch 2>&1\", \"description\": \"Apply test health patch to main worktree with 3-way merge\"}",
+      "output_summary": "Exit code 1\nApplied patch to 'frontend/src/pages/DashboardPage.tsx' with conflicts.\nU frontend/src/pages/DashboardPage.tsx",
+      "is_error": true,
+      "turn_index": 17,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 9,
+      "tool_use_id": "toolu_013hw8z4TREHDcKtbgvNeExs",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"cd /data/spaces/cronos-development && grep -n \\\"<<<<<<\\\\|=======\\\\|>>>>>>>\\\" frontend/src/pages/DashboardPage.tsx\", \"description\": \"Find conflict markers\"}",
+      "output_summary": "261:<<<<<<< ours\n263:=======\n370:>>>>>>> theirs\nShell cwd was reset to /data/spaces/cronos-development/.cronos/workspaces/2026-05-27-1309-test-health",
+      "is_error": false,
+      "turn_index": 19,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 10,
+      "tool_use_id": "toolu_019AYWyhhRDHXdmhQbCAuo3m",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/frontend/src/pages/DashboardPage.tsx\", \"offset\": 255, \"limit\": 125}",
+      "output_summary": "255\t        <p className=\"self-center font-mono text-[11px] text-ink-faint\">No reports yet</p>\n256\t      )}\n257\t    </div>\n258\t  );\n259\t}\n260\t\n261\t<<<<<<< ours\n262\t// ── Space + activity components ───────────────────────────────────────────────\n263\t=======\n264\tfunction fmtDuration(seconds: number | null): string {\n265\t  if (seconds == null) return \"—\";\n266\t  if (seconds < 60) return `${seconds.toFixed(1)}s`;\n267\t  const m = Math.floor(seconds / 60);\n268\t  const s = Math.round(seconds % 60);\n269\t  return `${m}m ${s}s`;\n270\t}\n271\t\n272\tfunction SuiteRow({ suite }: { suite: TestSuite }) {\n273\t  const hasFailed = suite.failed > 0 || suite.errors > 0;\n274\t  return (\n275\t    <details className=\"group border-b border-hairline last:border-0\">\n276\t      <summary className=\"flex cursor-pointer list-none items-center gap-3 px-4 py-2.5 hover:bg-surface-2/40\">\n277\t        <span className=\"flex-1 truncate font-mono text-[12px] text-ink\">{suite.name}</span>\n278\t        <span className=\"font-mono text…",
+      "is_error": false,
+      "turn_index": 20,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 11,
+      "tool_use_id": "toolu_015gQSMrMRjVMLFyLt34JXpB",
+      "name": "Edit",
+      "input_summary": "{\"replace_all\": false, \"file_path\": \"/data/spaces/cronos-development/frontend/src/pages/DashboardPage.tsx\", \"old_string\": \"<<<<<<< ours\\n// ── Space + activity components ───────────────────────────────────────────────\\n=======\\nfunction fmtDuration(seconds: number | null): string {\\n  if (seconds == null) return \\\"—\\\";\\n  if (seconds < 60) return `${seconds.toFixed(1)}s`;\\n  const m = Math.floor(seconds / 60);\\n  const s = Math.round(seconds % 60);\\n  return `${m}m ${s}s`;\\n}\\n\\nfunction SuiteR…",
+      "output_summary": "The file /data/spaces/cronos-development/frontend/src/pages/DashboardPage.tsx has been updated successfully. (file state is current in your context — no need to Read it back)",
+      "is_error": false,
+      "turn_index": 23,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 12,
+      "tool_use_id": "toolu_012P2YtTiUVGkaB1Lv2V7hxG",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"grep -n \\\"<<<<<<\\\\|=======\\\\|>>>>>>>\\\" /data/spaces/cronos-development/frontend/src/pages/DashboardPage.tsx && echo \\\"CONFLICTS FOUND\\\" || echo \\\"No conflicts\\\"\", \"description\": \"Check for remaining conflict markers\"}",
+      "output_summary": "No conflicts",
+      "is_error": false,
+      "turn_index": 25,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 13,
+      "tool_use_id": "toolu_01MmR8ToTT7CRJJ2fk4QrFyE",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"cd /data/spaces/cronos-development/frontend && node_modules/.bin/tsc --noEmit 2>&1\", \"description\": \"TypeScript check on main worktree\"}",
+      "output_summary": "Shell cwd was reset to /data/spaces/cronos-development/.cronos/workspaces/2026-05-27-1309-test-health",
+      "is_error": false,
+      "turn_index": 26,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 14,
+      "tool_use_id": "toolu_015KA2aja9ziSRReDBNGNfHM",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"cd /data/spaces/cronos-development && git add frontend/src/pages/DashboardPage.tsx && git commit -m \\\"$(cat <<'EOF'\\nfeat(dashboard): show test suite details and per-module coverage in Test Health\\n\\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\\nEOF\\n)\\\"\", \"description\": \"Commit the Test Health changes to main\"}",
+      "output_summary": "[main 35b897e] feat(dashboard): show test suite details and per-module coverage in Test Health\n 1 file changed, 110 insertions(+), 2 deletions(-)\nShell cwd was reset to /data/spaces/cronos-development/.cronos/workspaces/2026-05-27-1309-test-health",
+      "is_error": false,
+      "turn_index": 27,
+      "elapsed_seconds": null
+    }
+  ],
+  "total_tool_calls": 15,
+  "unique_tools": [
+    "Bash",
+    "Read",
+    "Edit"
+  ],
+  "error_tool_calls": 3,
+  "read_tool_calls": 4,
+  "write_tool_calls": 11,
+  "exploration_ratio": 0.267,
+  "error_recovery_count": 3,
+  "backtrack_count": 0,
+  "final_text_snippet": "",
+  "had_crash": false,
+  "memory_injected": [],
+  "memory_used": [],
+  "memory_written": [],
+  "memory_hit_rate": 0.0
+}

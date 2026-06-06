@@ -1,0 +1,1031 @@
+{
+  "task_id": "2026-05-26-2006-goals-in-active-lane-do-not-process-task",
+  "space_id": "cronos-development",
+  "run_index": 0,
+  "session_id": "624dfb09-5e5b-411a-9fe8-7ee9e63b3062",
+  "model": "default",
+  "real_model": "claude-sonnet-4-6",
+  "mode": "auto",
+  "started_at": "2026-05-26T20:06:24.133736Z",
+  "ended_at": "2026-05-26T20:16:16.583491Z",
+  "duration_seconds": 592.45,
+  "exit_reason": "DONE",
+  "turns": [
+    {
+      "turn_index": 0,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 2,
+      "output_tokens": 8,
+      "cache_read_tokens": 13157,
+      "cache_creation_tokens": 6176
+    },
+    {
+      "turn_index": 1,
+      "text_snippet": "Let me look at the recent commits and relevant code to investigate this issue.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 2,
+      "output_tokens": 8,
+      "cache_read_tokens": 13157,
+      "cache_creation_tokens": 6176
+    },
+    {
+      "turn_index": 2,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01NVPjTWPFk3EHuuysPBW7ru"
+      ],
+      "input_tokens": 2,
+      "output_tokens": 8,
+      "cache_read_tokens": 13157,
+      "cache_creation_tokens": 6176
+    },
+    {
+      "turn_index": 3,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01UeJj62TJpWXaDiJ2PXYBn1"
+      ],
+      "input_tokens": 2,
+      "output_tokens": 8,
+      "cache_read_tokens": 13157,
+      "cache_creation_tokens": 6176
+    },
+    {
+      "turn_index": 4,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 19333,
+      "cache_creation_tokens": 1718
+    },
+    {
+      "turn_index": 5,
+      "text_snippet": "Let me look at the worker and storage code to understand how tasks are processed in goals.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 19333,
+      "cache_creation_tokens": 1718
+    },
+    {
+      "turn_index": 6,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01SdVBznqE8EoS7qw6jpFxon"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 19333,
+      "cache_creation_tokens": 1718
+    },
+    {
+      "turn_index": 7,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01S1Uogh99Uc1PZQauSgnW1m"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 19333,
+      "cache_creation_tokens": 1718
+    },
+    {
+      "turn_index": 8,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 9,
+      "cache_read_tokens": 21051,
+      "cache_creation_tokens": 13325
+    },
+    {
+      "turn_index": 9,
+      "text_snippet": "Let me look at goal_sync and worker_pool to understand the automation mechanism.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 9,
+      "cache_read_tokens": 21051,
+      "cache_creation_tokens": 13325
+    },
+    {
+      "turn_index": 10,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01X37S6EkuLkeJdxGon8rNWM"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 9,
+      "cache_read_tokens": 21051,
+      "cache_creation_tokens": 13325
+    },
+    {
+      "turn_index": 11,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_011csVgoZNzMMSnMFFCkGtNQ"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 9,
+      "cache_read_tokens": 21051,
+      "cache_creation_tokens": 13325
+    },
+    {
+      "turn_index": 12,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 9,
+      "cache_read_tokens": 34376,
+      "cache_creation_tokens": 6909
+    },
+    {
+      "turn_index": 13,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01BN5eKA2scULFRvLj5C1ehE"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 9,
+      "cache_read_tokens": 34376,
+      "cache_creation_tokens": 6909
+    },
+    {
+      "turn_index": 14,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01YP4PRg9jbtntmh5Fjj3by1"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 9,
+      "cache_read_tokens": 34376,
+      "cache_creation_tokens": 6909
+    },
+    {
+      "turn_index": 15,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 9,
+      "cache_read_tokens": 41285,
+      "cache_creation_tokens": 2991
+    },
+    {
+      "turn_index": 16,
+      "text_snippet": "Let me look at the recent `859578d` commit in detail and the `start_task` / autopilot code.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 9,
+      "cache_read_tokens": 41285,
+      "cache_creation_tokens": 2991
+    },
+    {
+      "turn_index": 17,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01FvMrJ4AyomJXqCXaYSVKZE"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 9,
+      "cache_read_tokens": 41285,
+      "cache_creation_tokens": 2991
+    },
+    {
+      "turn_index": 18,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01FJHnKxokuRUGUYDpeo9STa"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 9,
+      "cache_read_tokens": 41285,
+      "cache_creation_tokens": 2991
+    },
+    {
+      "turn_index": 19,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 44276,
+      "cache_creation_tokens": 5028
+    },
+    {
+      "turn_index": 20,
+      "text_snippet": "Let me look at the `start_task` API and the storage layer.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 44276,
+      "cache_creation_tokens": 5028
+    },
+    {
+      "turn_index": 21,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_019LxicRAoFq7hYnVwmhsi7K"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 44276,
+      "cache_creation_tokens": 5028
+    },
+    {
+      "turn_index": 22,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 49304,
+      "cache_creation_tokens": 1652
+    },
+    {
+      "turn_index": 23,
+      "text_snippet": "Let me check the app startup and any task recovery logic.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 49304,
+      "cache_creation_tokens": 1652
+    },
+    {
+      "turn_index": 24,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01YMrHviggEohZNZ9tr9wSud"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 49304,
+      "cache_creation_tokens": 1652
+    },
+    {
+      "turn_index": 25,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 50956,
+      "cache_creation_tokens": 4143
+    },
+    {
+      "turn_index": 26,
+      "text_snippet": "Let me look at the `finalize_run` and `board` methods in storage.py.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 50956,
+      "cache_creation_tokens": 4143
+    },
+    {
+      "turn_index": 27,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01HFVmE1L8QEhrxfxanfnd98"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 50956,
+      "cache_creation_tokens": 4143
+    },
+    {
+      "turn_index": 28,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_014uj74q9r9zCffjvbGcuH4u"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 50956,
+      "cache_creation_tokens": 4143
+    },
+    {
+      "turn_index": 29,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01NU456gmLJQ9V1WJ8pAu8MY"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 70,
+      "cache_read_tokens": 55099,
+      "cache_creation_tokens": 1898
+    },
+    {
+      "turn_index": 30,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01NzdxRTAVn2r4Z9wUXjj9Qb"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 70,
+      "cache_read_tokens": 55099,
+      "cache_creation_tokens": 1898
+    },
+    {
+      "turn_index": 31,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 56997,
+      "cache_creation_tokens": 2245
+    },
+    {
+      "turn_index": 32,
+      "text_snippet": "Let me look at the arc-9 propagate commit and the full task flow.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 56997,
+      "cache_creation_tokens": 2245
+    },
+    {
+      "turn_index": 33,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_018WTE7LBJu9nHHBreTu5DhD"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 56997,
+      "cache_creation_tokens": 2245
+    },
+    {
+      "turn_index": 34,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_0118fDEhjttdLsH8PzfypdC6"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 56997,
+      "cache_creation_tokens": 2245
+    },
+    {
+      "turn_index": 35,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 59242,
+      "cache_creation_tokens": 4332
+    },
+    {
+      "turn_index": 36,
+      "text_snippet": "Let me check the git log for goal_sync.py and look at the storage finalize_run logic.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 59242,
+      "cache_creation_tokens": 4332
+    },
+    {
+      "turn_index": 37,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_013B6G93a7U6VFkL5sRHiBbs"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 59242,
+      "cache_creation_tokens": 4332
+    },
+    {
+      "turn_index": 38,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01CRVtpqiuH3EC2rXBK2AZpt"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 59242,
+      "cache_creation_tokens": 4332
+    },
+    {
+      "turn_index": 39,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 63574,
+      "cache_creation_tokens": 3606
+    },
+    {
+      "turn_index": 40,
+      "text_snippet": "Let me look at the arc-9 auto-resume commit to understand what changed.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 63574,
+      "cache_creation_tokens": 3606
+    },
+    {
+      "turn_index": 41,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01Do2mmvj8bRJGhJLztxsVcy"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 63574,
+      "cache_creation_tokens": 3606
+    },
+    {
+      "turn_index": 42,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 67180,
+      "cache_creation_tokens": 2945
+    },
+    {
+      "turn_index": 43,
+      "text_snippet": "I found the bug. Let me confirm my understanding by tracing the flow.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 67180,
+      "cache_creation_tokens": 2945
+    },
+    {
+      "turn_index": 44,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01LKW5hAxmwsjCD1pQorDdNj"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 67180,
+      "cache_creation_tokens": 2945
+    },
+    {
+      "turn_index": 45,
+      "text_snippet": "The bug is in `goal_sync.py`. Here's the scenario:\n\n1. Goal G is WAITING (paused). Children: T1 (DONE), T2 (WAITING).\n2. User replies to T2 → T2 transitions WAITING→ACTIVE → enqueued as standalone.\n3. `propagate_to_parent(T2)` fires: T2=ACTIVE, G=WAITING → **G transitions to ACTIVE** (shown in active lane), but **NOT enqueued**.\n4. Worker runs T2 standalone → T2 finishes DONE.\n5. `_finalize(T2)` → `propagate_to_parent(T2)`: T2=DONE, G=**ACTIVE** → **neither branch fires** (only fires when G=WAITING) → G is never re-enqueued.\n\nGoal stays ACTIVE in the lane forever, with no worker processing it. The fix: extend the DONE/ARCHIVED branch to also handle `parent_state == ACTIVE`, and skip the state transition (already active), but still enqueue if not currently running.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 1,
+      "cache_read_tokens": 70125,
+      "cache_creation_tokens": 14761
+    },
+    {
+      "turn_index": 46,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01NsnDbqPpjBJBX1fLRfH3gv"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 1,
+      "cache_read_tokens": 70125,
+      "cache_creation_tokens": 14761
+    },
+    {
+      "turn_index": 47,
+      "text_snippet": "Now let me verify the fix looks correct:",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 7,
+      "cache_read_tokens": 84886,
+      "cache_creation_tokens": 1156
+    },
+    {
+      "turn_index": 48,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01PQzae9pkpkNA6Kzhw34YiJ"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 7,
+      "cache_read_tokens": 84886,
+      "cache_creation_tokens": 1156
+    },
+    {
+      "turn_index": 49,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 9,
+      "cache_read_tokens": 86042,
+      "cache_creation_tokens": 1228
+    },
+    {
+      "turn_index": 50,
+      "text_snippet": "Good. Now let me look at the existing goal_sync tests and add a test for the new case.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 9,
+      "cache_read_tokens": 86042,
+      "cache_creation_tokens": 1228
+    },
+    {
+      "turn_index": 51,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01NVYKhXQrYbjVMUw7Eq41mZ"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 9,
+      "cache_read_tokens": 86042,
+      "cache_creation_tokens": 1228
+    },
+    {
+      "turn_index": 52,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_018J95wyVBwcmjR1TdYXg68e"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 73,
+      "cache_read_tokens": 87270,
+      "cache_creation_tokens": 223
+    },
+    {
+      "turn_index": 53,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 87493,
+      "cache_creation_tokens": 3345
+    },
+    {
+      "turn_index": 54,
+      "text_snippet": "I need to update the test file: `test_idempotent_already_active` needs updating (old behavior was no-op when parent ACTIVE, new behavior is to enqueue), and I need to add a test for the new \"worker currently running\" guard.\n\nFirst, update `_RecordingPool` to add `get()` (needed by the new code path):",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 87493,
+      "cache_creation_tokens": 3345
+    },
+    {
+      "turn_index": 55,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01SRUs2CuGNCjPvGdCoTZZnV"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 87493,
+      "cache_creation_tokens": 3345
+    },
+    {
+      "turn_index": 56,
+      "text_snippet": "Now update the `test_idempotent_already_active` test (which tested the old no-op behavior) to reflect the new enqueue behavior, and add the \"running guard\" test:",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 90838,
+      "cache_creation_tokens": 1697
+    },
+    {
+      "turn_index": 57,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01VjgwiboFEV1uKcjounU7h7"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 90838,
+      "cache_creation_tokens": 1697
+    },
+    {
+      "turn_index": 58,
+      "text_snippet": "Now run the tests to confirm everything passes:",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 2,
+      "cache_read_tokens": 92535,
+      "cache_creation_tokens": 850
+    },
+    {
+      "turn_index": 59,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01Lb7kJ36U4K1UZUJYT2Jwv9"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 2,
+      "cache_read_tokens": 92535,
+      "cache_creation_tokens": 850
+    },
+    {
+      "turn_index": 60,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 9,
+      "cache_read_tokens": 93385,
+      "cache_creation_tokens": 2949
+    },
+    {
+      "turn_index": 61,
+      "text_snippet": "All 12 tests pass. Let me run the broader relevant tests to confirm nothing is broken:",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 9,
+      "cache_read_tokens": 93385,
+      "cache_creation_tokens": 2949
+    },
+    {
+      "turn_index": 62,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01F9Xh9yjdb5AeF5h4GuLH15"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 9,
+      "cache_read_tokens": 93385,
+      "cache_creation_tokens": 2949
+    },
+    {
+      "turn_index": 63,
+      "text_snippet": "299 tests pass. The fix is complete.\n\n**Root cause:** `goal_sync.propagate_to_parent` only re-enqueued the goal when `parent_state == WAITING`. But there's a two-step sequence where a goal ends up ACTIVE without being in the worker queue:\n\n1. User replies to a WAITING child → child becomes ACTIVE → `propagate_to_parent` transitions goal WAITING→ACTIVE (lane sync, no enqueue)\n2. Child finishes DONE → `propagate_to_parent` fires again, but now `parent_state == ACTIVE` → old code skipped entirely → goal stuck ACTIVE with nobody processing it\n\n**Fix:** Extended the DONE/ARCHIVED branch in `goal_sync.propagate_to_parent` to also handle `parent_state == ACTIVE`. When parent is already ACTIVE, skip the redundant state transition but still enqueue the goal — unless `worker.current() == goal_id`, which means `_run_goal` is already orchestrating it internally (in which case re-enqueueing is unnecessary and would cause a double run).\n\nSTATUS: DONE",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 1,
+      "cache_read_tokens": 96334,
+      "cache_creation_tokens": 1484
+    }
+  ],
+  "tool_calls": [
+    {
+      "tool_call_index": 0,
+      "tool_use_id": "toolu_01NVPjTWPFk3EHuuysPBW7ru",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"cd /data/spaces/cronos-development && git log --oneline -20\", \"description\": \"Show recent git commits\"}",
+      "output_summary": "5ada885 feat(memory): capture MEMORY: blocks from agent output and persist as unconfirmed\n463b7d6 fix(agent): recognize **STATUS: DONE** bold markdown and fix upgrade instructions\n1405566 Merge branch 'cronos/2026-05-26-0604-a2-implement-memorystore-i-o-atomic-writ'\nd885fcf Merge branch 'cronos/2026-05-26-0604-a3-generate-and-maintain-index-md-per-sc'\n7b5cd9f feat(memory): add MemoryStore with rebuild_index and REST CRUD\n4fc301e feat(memory): implement MemoryStore I/O with atomic writes and scope paths\nac1b959 feat(TaskActionBar): add \"Send to Backlog\" and \"Move to Done\" button functionality with tests\n859578d fix(tasks): ensure parent goals are reactivated on child state transitions\n457b691 refactor(Board): remove hideExpandedChildren prop and related logic; always hide goal children from lanes\n4c9baba fix(frontend/tests): unblock tsc build after Space.autopilot + TanStack type tightening\n9143498 Refactor code structure for improved readability and maintainability\na982510 Add tests fo…",
+      "is_error": false,
+      "turn_index": 2,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 1,
+      "tool_use_id": "toolu_01UeJj62TJpWXaDiJ2PXYBn1",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"cd /data/spaces/cronos-development && git diff HEAD~5..HEAD --name-only\", \"description\": \"Show files changed in last 5 commits\"}",
+      "output_summary": ".cronos/test-coverage.md\n.env.example\nCaddyfile.dev\nbackend/.coverage\nbackend/app/agent.py\nbackend/app/api/memory.py\nbackend/app/api/spaces.py\nbackend/app/api/tasks.py\nbackend/app/auth.py\nbackend/app/main.py\nbackend/app/memory_parser.py\nbackend/app/memory_retrieval.py\nbackend/app/memory_store.py\nbackend/app/models.py\nbackend/app/storage.py\nbackend/app/worker.py\nbackend/app/worker_pool.py\nbackend/tests/conftest.py\nbackend/tests/test_agent.py\nbackend/tests/test_api_memory.py\nbackend/tests/test_api_tasks.py\nbackend/tests/test_auth.py\nbackend/tests/test_deploy_security.py\nbackend/tests/test_memory_parser.py\nbackend/tests/test_memory_retrieval.py\nbackend/tests/test_memory_store.py\nbackend/tests/test_storage.py\nbackend/uv.lock\ndeploy/upgrade-webhook.py\ndocker-compose.yml\nfrontend/package-lock.json\nfrontend/package.json\nfrontend/src/__tests__/BoardPage.test.tsx\nfrontend/src/__tests__/Card.test.tsx\nfrontend/src/components/Board.tsx\nfrontend/src/components/Card.tsx\nfrontend/src/components/Detai…",
+      "is_error": false,
+      "turn_index": 3,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 2,
+      "tool_use_id": "toolu_01SdVBznqE8EoS7qw6jpFxon",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"cd /data/spaces/cronos-development && git log --oneline --all | head -30 && git show 859578d --stat\", \"description\": \"Show details of the reactivation fix commit\"}",
+      "output_summary": "e8d2e8c feat(memory): v1 retrieval — keyword + index walk\n5ada885 feat(memory): capture MEMORY: blocks from agent output and persist as unconfirmed\n463b7d6 fix(agent): recognize **STATUS: DONE** bold markdown and fix upgrade instructions\nb2b773a WIP on feature/arc-9-goal-ux: 97d6ddc fix(agent): recognize **STATUS: DONE** bold markdown and fix upgrade instructions\nc13cc5f index on feature/arc-9-goal-ux: 97d6ddc fix(agent): recognize **STATUS: DONE** bold markdown and fix upgrade instructions\nd3133fa untracked files on feature/arc-9-goal-ux: 97d6ddc fix(agent): recognize **STATUS: DONE** bold markdown and fix upgrade instructions\n97d6ddc fix(agent): recognize **STATUS: DONE** bold markdown and fix upgrade instructions\n1405566 Merge branch 'cronos/2026-05-26-0604-a2-implement-memorystore-i-o-atomic-writ'\nd885fcf Merge branch 'cronos/2026-05-26-0604-a3-generate-and-maintain-index-md-per-sc'\nf3b1e0a feat(memory): add MemoryItem schema and MemoryStore skeleton\n7b5cd9f feat(memory): add Memor…",
+      "is_error": false,
+      "turn_index": 6,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 3,
+      "tool_use_id": "toolu_01S1Uogh99Uc1PZQauSgnW1m",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/backend/app/worker.py\"}",
+      "output_summary": "1\tfrom __future__ import annotations\n2\t\n3\timport asyncio\n4\timport logging\n5\tfrom collections import defaultdict, deque\n6\tfrom collections.abc import AsyncIterator, Awaitable, Callable\n7\tfrom datetime import UTC, datetime\n8\t\n9\tfrom . import autopilot_pr\n10\tfrom .agent import AgentResult, Status, run_agent\n11\tfrom . import goal_sync\n12\tfrom .memory_parser import parse_memory_blocks\n13\tfrom .memory_store import MemoryStore\n14\tfrom .models import TaskState\n15\tfrom .space_storage import SpaceStore\n16\tfrom .stats import RunStats, _tier_from_real_model, compute_cost, extract_tokens_and_tools\n17\tfrom .stats_store import StatsStore\n18\tfrom .storage import InvalidTransition, TaskStore, USER_TRANSITIONS\n19\tfrom .trace_parser import extract_run_trace\n20\tfrom .trace_store import TraceStore\n21\t\n22\tfrom typing import TYPE_CHECKING\n23\tif TYPE_CHECKING:\n24\t    from .worker_pool import WorkerPool\n25\t\n26\tlog = logging.getLogger(\"cronos.worker\")\n27\t\n28\t# Sentinel event signalling end-of-stream on a subscr…",
+      "is_error": false,
+      "turn_index": 7,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 4,
+      "tool_use_id": "toolu_01X37S6EkuLkeJdxGon8rNWM",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"find /data/spaces/cronos-development/backend -name \\\"goal_sync.py\\\" -o -name \\\"worker_pool.py\\\" | xargs ls -la\", \"description\": \"Find goal_sync and worker_pool files\"}",
+      "output_summary": "-rw-r--r-- 1 root root 2936 May 25 14:31 /data/spaces/cronos-development/backend/app/goal_sync.py\n-rw-r--r-- 1 root root 5137 May 26 16:32 /data/spaces/cronos-development/backend/app/worker_pool.py",
+      "is_error": false,
+      "turn_index": 10,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 5,
+      "tool_use_id": "toolu_011csVgoZNzMMSnMFFCkGtNQ",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"cd /data/spaces/cronos-development && git show 6773193 --stat && git show 6773193 -p -- backend/\", \"description\": \"Show changes from the goal routing commit arc-9\"}",
+      "output_summary": "commit 6773193f3972c079c41d61565626538b307eef43\nAuthor: Martin Cichý <martin.cichy@gmail.com>\nDate:   Mon May 25 17:30:55 2026 +0000\n\n    arc-9: route goal-level messages to active child or next-up backlog child\n    \n    - POST /api/tasks/{id}/reply: when task.type==\"goal\", routes to running\n      child (apply_reply + propagate_to_parent), queues in goal.pending_messages\n      for first BACKLOG child, or history-only for childless goals. Response\n      always GoalReplyResponse {task, routed_to}.\n    - GET /api/tasks/{id}/route-preview: same routing logic, no mutation.\n    - storage.py: append_pending() and record_user_message() helpers.\n    - worker.py: drain goal.pending_messages into goal_context on _run_goal start.\n    - Frontend: ChatInput routeHint + routeToast props; Detail.tsx polls\n      route-preview for goals and shows \"Sent to {child}\" toast on reply.\n    - Tests: three backend branches + route-preview + vitest for hint label.\n    \n    Co-Authored-By: Claude Sonnet 4.6 <nore…",
+      "is_error": false,
+      "turn_index": 11,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 6,
+      "tool_use_id": "toolu_01BN5eKA2scULFRvLj5C1ehE",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/backend/app/goal_sync.py\"}",
+      "output_summary": "1\tfrom __future__ import annotations\n2\t\n3\timport logging\n4\tfrom typing import TYPE_CHECKING\n5\t\n6\tfrom .models import TaskState\n7\tfrom .storage import InvalidTransition, TaskStore\n8\t\n9\tif TYPE_CHECKING:\n10\t    from .worker_pool import WorkerPool\n11\t\n12\tlog = logging.getLogger(\"cronos.goal_sync\")\n13\t\n14\t# Separate from USER_TRANSITIONS / WORKER_TRANSITIONS so the intent is explicit:\n15\t# this is a synchronization action, not a user or post-run-worker action.\n16\tGOAL_SYNC_TRANSITIONS: set[tuple[TaskState, TaskState]] = {\n17\t    (TaskState.WAITING, TaskState.ACTIVE),\n18\t}\n19\t\n20\t\n21\tasync def propagate_to_parent(\n22\t    child_id: str,\n23\t    store: TaskStore,\n24\t    worker_pool: WorkerPool | None,\n25\t) -> None:\n26\t    \"\"\"Propagate a child's new state to its parent goal.\n27\t\n28\t    Called after apply_reply (API layer) and after _finalize (worker).\n29\t    No-op when the child has no parent or the parent is not a goal.\n30\t    \"\"\"\n31\t    child = store.get(child_id)\n32\t    if child is None or c…",
+      "is_error": false,
+      "turn_index": 13,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 7,
+      "tool_use_id": "toolu_01YP4PRg9jbtntmh5Fjj3by1",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/backend/app/worker_pool.py\"}",
+      "output_summary": "1\tfrom __future__ import annotations\n2\t\n3\timport asyncio\n4\timport logging\n5\t\n6\tfrom .autopilot import pickup_next, start_picked\n7\tfrom .memory_store import MemoryStore\n8\tfrom .space_storage import SpaceStore\n9\tfrom .stats_store import StatsStore\n10\tfrom .storage import TaskStore\n11\tfrom .trace_store import TraceStore\n12\tfrom .worker import Worker\n13\t\n14\tlog = logging.getLogger(\"cronos.worker_pool\")\n15\t\n16\t\n17\tclass WorkerPool:\n18\t    \"\"\"One `Worker` per space.\n19\t\n20\t    Tasks in different spaces run concurrently; tasks within the same space\n21\t    stay serial (each space's worker has its own queue). Combined with the\n22\t    \"no two spaces share a repo\" invariant in `SpaceStore`, this guarantees\n23\t    no two concurrent processes ever touch the same git working tree.\n24\t    \"\"\"\n25\t\n26\t    def __init__(\n27\t        self,\n28\t        task_store: TaskStore,\n29\t        space_store: SpaceStore,\n30\t        stats_store: StatsStore | None = None,\n31\t        trace_store: TraceStore | None = None,…",
+      "is_error": false,
+      "turn_index": 14,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 8,
+      "tool_use_id": "toolu_01FvMrJ4AyomJXqCXaYSVKZE",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"cd /data/spaces/cronos-development && git show 859578d -p\", \"description\": \"Show full diff of the parent goal reactivation fix\"}",
+      "output_summary": "commit 859578d51df6f0ad10368ef6208b5e42eb6348d1\nAuthor: Martin Cichý <martin.cichy@ais-servis.cz>\nDate:   Tue May 26 11:57:02 2026 +0200\n\n    fix(tasks): ensure parent goals are reactivated on child state transitions\n\ndiff --git a/backend/app/api/tasks.py b/backend/app/api/tasks.py\nindex eaecc8e..f62991a 100644\n--- a/backend/app/api/tasks.py\n+++ b/backend/app/api/tasks.py\n@@ -397,8 +397,10 @@ async def update_task(task_id: str, body: UpdateTaskBody, request: Request) -> T\n async def transition_task(\n     task_id: str, body: TransitionBody, request: Request\n ) -> TaskRead:\n+    store = get_store(request)\n+    pool = get_pool(request)\n     try:\n-        updated = await get_store(request).transition(\n+        updated = await store.transition(\n             task_id, body.state, allowed=USER_TRANSITIONS\n         )\n     except TaskNotFound:\n@@ -409,7 +411,8 @@ async def transition_task(\n         raise HTTPException(status_code=400, detail=str(e)) from None\n     if updated.state == TaskState.A…",
+      "is_error": false,
+      "turn_index": 17,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 9,
+      "tool_use_id": "toolu_01FJHnKxokuRUGUYDpeo9STa",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"cd /data/spaces/cronos-development && cat backend/app/autopilot.py\", \"description\": \"Read autopilot.py\"}",
+      "output_summary": "from __future__ import annotations\n\nimport logging\nfrom typing import TYPE_CHECKING\n\nfrom .models import Task, TaskState\nfrom .storage import TaskStore, USER_TRANSITIONS, unmet_deps\n\nif TYPE_CHECKING:\n    from .models import Space\n    from .worker import Worker\n\nlog = logging.getLogger(\"cronos.autopilot\")\n\n\ndef eligible_backlog(space_id: str, store: TaskStore) -> list[Task]:\n    \"\"\"Return BACKLOG tasks in space_id whose all depends_on are DONE or ARCHIVED.\n\n    Excludes type=goal tasks.\n    \"\"\"\n    all_tasks = store.all()\n    by_id = {t.id: t for t in all_tasks}\n    return [\n        t for t in all_tasks\n        if t.space_id == space_id\n        and t.state == TaskState.BACKLOG\n        and t.type != \"goal\"\n        and not unmet_deps(t, by_id)\n    ]\n\n\ndef rank(tasks: list[Task]) -> list[Task]:\n    \"\"\"Sort by priority ASC, manual_order ASC, created_at ASC.\"\"\"\n    return sorted(tasks, key=lambda t: (t.priority, t.manual_order, t.created_at))\n\n\nasync def pickup_next(space: Space | None, sto…",
+      "is_error": false,
+      "turn_index": 18,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 10,
+      "tool_use_id": "toolu_019LxicRAoFq7hYnVwmhsi7K",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/backend/app/api/tasks.py\", \"offset\": 380, \"limit\": 60}",
+      "output_summary": "380\t            brief=body.brief,\n381\t            agent_mode=body.agent_mode,\n382\t            agent_model=body.agent_model,\n383\t            priority=body.priority,\n384\t            type=body.type,\n385\t            parent_id=body.parent_id,\n386\t            depends_on=body.depends_on,\n387\t        )\n388\t    except TaskNotFound:\n389\t        raise HTTPException(status_code=404, detail=f\"Task {task_id} not found\") from None\n390\t    except StorageError as e:\n391\t        raise HTTPException(status_code=400, detail=str(e)) from None\n392\t    store = get_store(request)\n393\t    return _build_task_read(task, get_space_store(request).get(task.space_id), store)\n394\t\n395\t\n396\t@router.patch(\"/{task_id}/state\", response_model=TaskRead)\n397\tasync def transition_task(\n398\t    task_id: str, body: TransitionBody, request: Request\n399\t) -> TaskRead:\n400\t    store = get_store(request)\n401\t    pool = get_pool(request)\n402\t    try:\n403\t        updated = await store.transition(\n404\t            task_id, body.state,…",
+      "is_error": false,
+      "turn_index": 21,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 11,
+      "tool_use_id": "toolu_01YMrHviggEohZNZ9tr9wSud",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/backend/app/main.py\"}",
+      "output_summary": "1\tfrom __future__ import annotations\n2\t\n3\timport asyncio\n4\timport logging\n5\timport os\n6\timport shutil\n7\tfrom contextlib import asynccontextmanager\n8\tfrom pathlib import Path\n9\t\n10\tfrom fastapi import Depends, FastAPI, Request, Response\n11\tfrom watchfiles import awatch\n12\t\n13\tfrom .api.activity import router as activity_router\n14\tfrom .api.memory import router as memory_router\n15\tfrom .api.spaces import router as spaces_router\n16\tfrom .api.stats import router as stats_router\n17\tfrom .api.tasks import router as tasks_router\n18\tfrom .api.test_reports import router as test_reports_router\n19\tfrom .api.tools import router as tools_router\n20\tfrom .api.traces import router as traces_router\n21\tfrom .api.views import router as views_router\n22\tfrom .auth import require_auth\n23\tfrom .memory_store import MemoryStore\n24\tfrom .space_storage import CRONOS_SUBDIR, RESERVED_SPACE_DIRS, SpaceStore\n25\tfrom .stats_store import StatsStore\n26\tfrom .storage import TaskStore\n27\tfrom .test_report_store import T…",
+      "is_error": false,
+      "turn_index": 24,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 12,
+      "tool_use_id": "toolu_01HFVmE1L8QEhrxfxanfnd98",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"cd /data/spaces/cronos-development && grep -n \\\"def finalize_run\\\\|def board\\\\|async def board\\\\|def transition\\\\|ACTIVE.*DONE\\\\|DONE.*state\\\" backend/app/storage.py | head -60\", \"description\": \"Find key methods in storage.py\"}",
+      "output_summary": "55:    (TaskState.ACTIVE, TaskState.DONE),\n591:    def board(self, space_id: str | None = None) -> Board:\n706:    async def transition(\n749:    async def finalize_run(\nShell cwd was reset to /data/spaces/cronos-development/.cronos/workspaces/2026-05-26-2006-goals-in-active-lane-do-not-process-task",
+      "is_error": false,
+      "turn_index": 27,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 13,
+      "tool_use_id": "toolu_014uj74q9r9zCffjvbGcuH4u",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"cd /data/spaces/cronos-development && grep -n \\\"ACTIVE\\\\|DONE\\\\|BACKLOG\\\" backend/app/storage.py | grep -i \\\"transition\\\\|allowed\\\\|WORKER\\\\|USER\\\" | head -30\", \"description\": \"Find transition-related constants in storage.py\"}",
+      "output_summary": "881:        \"\"\"Force-transition any state -> ACTIVE so a queued follow-up turn can run.\n884:        mid-run. Bypasses `WORKER_TRANSITIONS` because DONE -> ACTIVE is not\n1057:        \"\"\"Transition DONE tasks older than threshold_days to ARCHIVED. Returns count.\"\"\"\nShell cwd was reset to /data/spaces/cronos-development/.cronos/workspaces/2026-05-26-2006-goals-in-active-lane-do-not-process-task",
+      "is_error": false,
+      "turn_index": 28,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 14,
+      "tool_use_id": "toolu_01NU456gmLJQ9V1WJ8pAu8MY",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/backend/app/storage.py\", \"offset\": 40, \"limit\": 80}",
+      "output_summary": "40\t\n41\tUSER_TRANSITIONS: set[tuple[TaskState, TaskState]] = {\n42\t    (TaskState.BACKLOG, TaskState.ACTIVE),\n43\t    (TaskState.ACTIVE, TaskState.BACKLOG),\n44\t    (TaskState.WAITING, TaskState.BACKLOG),\n45\t    (TaskState.WAITING, TaskState.DONE),\n46\t    (TaskState.DONE, TaskState.BACKLOG),\n47\t    (TaskState.DONE, TaskState.ARCHIVED),\n48\t    (TaskState.WAITING, TaskState.ARCHIVED),\n49\t    (TaskState.ARCHIVED, TaskState.BACKLOG),\n50\t    (TaskState.ARCHIVED, TaskState.DONE),\n51\t}\n52\t\n53\tWORKER_TRANSITIONS: set[tuple[TaskState, TaskState]] = {\n54\t    (TaskState.ACTIVE, TaskState.WAITING),\n55\t    (TaskState.ACTIVE, TaskState.DONE),\n56\t    (TaskState.WAITING, TaskState.ACTIVE),\n57\t}\n58\t\n59\t\n60\tclass StorageError(Exception):\n61\t    \"\"\"Raised for invalid storage operations (bad transition, missing task).\"\"\"\n62\t\n63\t\n64\tclass TaskNotFound(StorageError):\n65\t    pass\n66\t\n67\t\n68\tclass InvalidTransition(StorageError):\n69\t    pass\n70\t\n71\t\n72\tclass UnknownSpace(StorageError):\n73\t    pass\n74\t\n75\t\n76\tclas…",
+      "is_error": false,
+      "turn_index": 29,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 15,
+      "tool_use_id": "toolu_01NzdxRTAVn2r4Z9wUXjj9Qb",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/backend/app/storage.py\", \"offset\": 591, \"limit\": 80}",
+      "output_summary": "591\t    def board(self, space_id: str | None = None) -> Board:\n592\t        \"\"\"Return tasks grouped by state. `None` or \"all\" ⇒ cross-space.\"\"\"\n593\t        scope = None if space_id in (None, \"all\", \"\") else space_id\n594\t        lanes: dict[TaskState, list[TaskSummary]] = {s: [] for s in TaskState}\n595\t        for task in self._by_id.values():\n596\t            if scope is not None and task.space_id != scope:\n597\t                continue\n598\t            s = summarize(task)\n599\t            blockers = unmet_deps(task, self._by_id)\n600\t            if blockers:\n601\t                s = s.model_copy(update={\"unmet_dependencies\": blockers})\n602\t            lanes[task.state].append(s)\n603\t        for items in lanes.values():\n604\t            items.sort(key=lambda t: (t.manual_order, -t.updated_at.timestamp()))\n605\t        return Board(\n606\t            backlog=lanes[TaskState.BACKLOG],\n607\t            active=lanes[TaskState.ACTIVE],\n608\t            waiting=lanes[TaskState.WAITING],\n609\t            d…",
+      "is_error": false,
+      "turn_index": 30,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 16,
+      "tool_use_id": "toolu_018WTE7LBJu9nHHBreTu5DhD",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"cd /data/spaces/cronos-development && git show d7b946f --stat\", \"description\": \"Show arc-9 propagate commit stats\"}",
+      "output_summary": "commit d7b946f7addf5bb7efb402fcd31673d153a863f3\nAuthor: Martin Cichý <martin.cichy@gmail.com>\nDate:   Tue May 26 04:07:25 2026 +0000\n\n    fix(security): use constant-time secret comparison and remove webhook secret from prompts [CRIT-004/MED-006]\n    \n    - deploy/upgrade-webhook.py: replace plain == with hmac.compare_digest() to prevent timing attacks; add per-request logging of IP and timestamp\n    - backend/app/agent.py: remove UPGRADE_WEBHOOK_SECRET from _upgrade_instructions() so the secret is never sent to the Claude API; drop the now-unused module-level variable\n    - backend/tests/test_deploy_security.py: new AST-based tests verifying hmac.compare_digest is used and no plain equality survives\n    - backend/tests/test_agent.py: update tests to match new contract (no secret header in prompt)\n    \n    Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\n\n backend/app/agent.py                  | 15 +------\n backend/tests/test_agent.py           | 67 +++++++++++++++++++++------…",
+      "is_error": false,
+      "turn_index": 33,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 17,
+      "tool_use_id": "toolu_0118fDEhjttdLsH8PzfypdC6",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"cd /data/spaces/cronos-development && git log --oneline --all -- backend/app/worker.py | head -15\", \"description\": \"Show commits that changed worker.py\"}",
+      "output_summary": "5ada885 feat(memory): capture MEMORY: blocks from agent output and persist as unconfirmed\n6c860ba arc-9: live processing pulse on currently-running card\n6315e59 arc-9: route goal-level messages to active child or next-up\ne4d9e2a arc-9: route goal-level messages to active child or next-up\n6773193 arc-9: route goal-level messages to active child or next-up backlog child\n26279b9 arc-9: route goal-level messages to active child or next-up backlog child\n669de93 arc-9: live processing pulse on currently-running card\nf359e41 arc-9: live processing pulse on currently-running card\nd8fd4dc arc-9: propagate child state to parent goal + auto-resume\n3a4c33e arc-9: propagate child state to parent goal + auto-resume\n9bb77a9 arc-4: Post-DONE — commit, rebase, push, PR flow\n8d270d6 arc-4: Post-DONE — commit, rebase, push, PR flow\n3ef2416 arc-4: Autopilot pickup module + worker idle hook\n488c450 arc-4: Autopilot pickup module + worker idle hook\n6034f1a arc-4: Autopilot pickup module + worker idle hook\nS…",
+      "is_error": false,
+      "turn_index": 34,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 18,
+      "tool_use_id": "toolu_013B6G93a7U6VFkL5sRHiBbs",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"cd /data/spaces/cronos-development && git log --oneline --all -- backend/app/goal_sync.py\", \"description\": \"Show commits that changed goal_sync.py\"}",
+      "output_summary": "d8fd4dc arc-9: propagate child state to parent goal + auto-resume\n3a4c33e arc-9: propagate child state to parent goal + auto-resume\nShell cwd was reset to /data/spaces/cronos-development/.cronos/workspaces/2026-05-26-2006-goals-in-active-lane-do-not-process-task",
+      "is_error": false,
+      "turn_index": 37,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 19,
+      "tool_use_id": "toolu_01CRVtpqiuH3EC2rXBK2AZpt",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/backend/app/storage.py\", \"offset\": 749, \"limit\": 80}",
+      "output_summary": "749\t    async def finalize_run(\n750\t        self,\n751\t        task_id: str,\n752\t        *,\n753\t        new_state: TaskState,\n754\t        session_id: str | None,\n755\t        waiting_question: str | None,\n756\t        history_entry: str,\n757\t    ) -> Task:\n758\t        \"\"\"Atomic post-agent-run update: state, session id, question, history.\"\"\"\n759\t        async with self._lock:\n760\t            task = self._by_id.get(task_id)\n761\t            if task is None:\n762\t                raise TaskNotFound(task_id)\n763\t            if new_state != task.state and (task.state, new_state) not in WORKER_TRANSITIONS:\n764\t                raise InvalidTransition(\n765\t                    f\"Worker cannot move task from {task.state.value} to {new_state.value}\"\n766\t                )\n767\t            history = task.history.strip()\n768\t            if history:\n769\t                history = history + \"\\n\\n\" + history_entry.strip()\n770\t            else:\n771\t                history = history_entry.strip()\n772\t           …",
+      "is_error": false,
+      "turn_index": 38,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 20,
+      "tool_use_id": "toolu_01Do2mmvj8bRJGhJLztxsVcy",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"cd /data/spaces/cronos-development && git show d8fd4dc -p -- backend/app/worker.py backend/app/goal_sync.py\", \"description\": \"Show arc-9 propagate changes to worker and goal_sync\"}",
+      "output_summary": "commit d8fd4dc0687bc2881a2172f788740089f08456da\nAuthor: Martin Cichý <martin.cichy@gmail.com>\nDate:   Mon May 25 14:36:59 2026 +0000\n\n    arc-9: propagate child state to parent goal + auto-resume\n    \n    - New goal_sync.py: propagate_to_parent(child_id, store, worker_pool)\n      activates a WAITING parent goal when its child becomes ACTIVE (lane\n      sync) or DONE/ARCHIVED (re-enqueues goal so orchestration resumes).\n    - Worker._finalize: calls propagate_to_parent after finalize_run so\n      standalone runs of goal children trigger the propagation path.\n    - WorkerPool.enqueue(space_id, task_id): convenience method used by\n      goal_sync to re-enqueue a goal on the correct worker.\n    - Worker.__init__: accepts pool back-ref (set by WorkerPool.start_for_space).\n    - reply_to_task API: calls propagate_to_parent after apply_reply so a\n      user reply to a WAITING child surfaces the parent goal as ACTIVE.\n    - 11 new tests in test_goal_sync.py cover all propagation rules +\n      …",
+      "is_error": false,
+      "turn_index": 41,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 21,
+      "tool_use_id": "toolu_01LKW5hAxmwsjCD1pQorDdNj",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/backend/app/goal_sync.py\"}",
+      "output_summary": "Wasted call — file unchanged since your last Read. Refer to that earlier tool_result instead.",
+      "is_error": false,
+      "turn_index": 44,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 22,
+      "tool_use_id": "toolu_01NsnDbqPpjBJBX1fLRfH3gv",
+      "name": "Edit",
+      "input_summary": "{\"replace_all\": false, \"file_path\": \"/data/spaces/cronos-development/backend/app/goal_sync.py\", \"old_string\": \"    elif child_state in (TaskState.DONE, TaskState.ARCHIVED) and parent_state == TaskState.WAITING:\\n        # Child completed → activate goal and re-enqueue so orchestration resumes.\\n        # _run_goal skips already-done children, so it will pick the next eligible one.\\n        try:\\n            await store.transition(\\n                child.parent_id, TaskState.ACTIVE, allowed=GOAL_…",
+      "output_summary": "The file /data/spaces/cronos-development/backend/app/goal_sync.py has been updated successfully. (file state is current in your context — no need to Read it back)",
+      "is_error": false,
+      "turn_index": 46,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 23,
+      "tool_use_id": "toolu_01PQzae9pkpkNA6Kzhw34YiJ",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/backend/app/goal_sync.py\"}",
+      "output_summary": "1\tfrom __future__ import annotations\n2\t\n3\timport logging\n4\tfrom typing import TYPE_CHECKING\n5\t\n6\tfrom .models import TaskState\n7\tfrom .storage import InvalidTransition, TaskStore\n8\t\n9\tif TYPE_CHECKING:\n10\t    from .worker_pool import WorkerPool\n11\t\n12\tlog = logging.getLogger(\"cronos.goal_sync\")\n13\t\n14\t# Separate from USER_TRANSITIONS / WORKER_TRANSITIONS so the intent is explicit:\n15\t# this is a synchronization action, not a user or post-run-worker action.\n16\tGOAL_SYNC_TRANSITIONS: set[tuple[TaskState, TaskState]] = {\n17\t    (TaskState.WAITING, TaskState.ACTIVE),\n18\t}\n19\t\n20\t\n21\tasync def propagate_to_parent(\n22\t    child_id: str,\n23\t    store: TaskStore,\n24\t    worker_pool: WorkerPool | None,\n25\t) -> None:\n26\t    \"\"\"Propagate a child's new state to its parent goal.\n27\t\n28\t    Called after apply_reply (API layer) and after _finalize (worker).\n29\t    No-op when the child has no parent or the parent is not a goal.\n30\t    \"\"\"\n31\t    child = store.get(child_id)\n32\t    if child is None or c…",
+      "is_error": false,
+      "turn_index": 48,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 24,
+      "tool_use_id": "toolu_01NVYKhXQrYbjVMUw7Eq41mZ",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"find /data/spaces/cronos-development/backend/tests -name \\\"test_goal_sync.py\\\"\", \"description\": \"Find goal_sync test file\"}",
+      "output_summary": "/data/spaces/cronos-development/backend/tests/test_goal_sync.py",
+      "is_error": false,
+      "turn_index": 51,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 25,
+      "tool_use_id": "toolu_018J95wyVBwcmjR1TdYXg68e",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/backend/tests/test_goal_sync.py\"}",
+      "output_summary": "1\t\"\"\"Tests for goal_sync.propagate_to_parent.\n2\t\n3\tCovers:\n4\t- Child → ACTIVE, parent WAITING → parent transitions to ACTIVE.\n5\t- Child → DONE, parent WAITING → parent transitions to ACTIVE and goal is re-enqueued.\n6\t- Child → ARCHIVED, parent WAITING → same as DONE.\n7\t- Child → WAITING, parent ACTIVE → no-op.\n8\t- Task without parent → no-op.\n9\t- Child of non-goal parent → no-op (defensive).\n10\t- Integration: pause→resume cycle via reply + _finalize.\n11\t\"\"\"\n12\tfrom __future__ import annotations\n13\t\n14\timport pytest\n15\t\n16\tfrom app.goal_sync import propagate_to_parent, GOAL_SYNC_TRANSITIONS\n17\tfrom app.models import TaskState\n18\tfrom app.storage import TaskStore\n19\t\n20\tSPACE_ID = \"test-space\"\n21\t\n22\t\n23\t# ---------------------------------------------------------------------------\n24\t# Helpers\n25\t# ---------------------------------------------------------------------------\n26\t\n27\t\n28\tasync def _create_goal(store: TaskStore, *, title: str = \"Goal\") -> str:\n29\t    task = await store.create…",
+      "is_error": false,
+      "turn_index": 52,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 26,
+      "tool_use_id": "toolu_01SRUs2CuGNCjPvGdCoTZZnV",
+      "name": "Edit",
+      "input_summary": "{\"replace_all\": false, \"file_path\": \"/data/spaces/cronos-development/backend/tests/test_goal_sync.py\", \"old_string\": \"class _RecordingPool:\\n    \\\"\\\"\\\"Minimal WorkerPool stand-in that records enqueue calls.\\\"\\\"\\\"\\n\\n    enqueued: list[tuple[str, str]]\\n\\n    def __init__(self) -> None:\\n        self.enqueued = []\\n\\n    async def enqueue(self, space_id: str, task_id: str) -> None:\\n        self.enqueued.append((space_id, task_id))\", \"new_string\": \"class _MockWorker:\\n    \\\"\\\"\\\"Minimal Worker sta…",
+      "output_summary": "The file /data/spaces/cronos-development/backend/tests/test_goal_sync.py has been updated successfully. (file state is current in your context — no need to Read it back)",
+      "is_error": false,
+      "turn_index": 55,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 27,
+      "tool_use_id": "toolu_01VjgwiboFEV1uKcjounU7h7",
+      "name": "Edit",
+      "input_summary": "{\"replace_all\": false, \"file_path\": \"/data/spaces/cronos-development/backend/tests/test_goal_sync.py\", \"old_string\": \"async def test_idempotent_already_active(task_store: TaskStore) -> None:\\n    \\\"\\\"\\\"Calling propagate twice when parent is already ACTIVE is a no-op.\\\"\\\"\\\"\\n    goal_id = await _create_goal(task_store)\\n    child_id = await _create_child(task_store, goal_id)\\n\\n    await _set_state(task_store, goal_id, TaskState.ACTIVE)\\n    await _set_state(task_store, child_id, TaskState.DONE)\\…",
+      "output_summary": "The file /data/spaces/cronos-development/backend/tests/test_goal_sync.py has been updated successfully. (file state is current in your context — no need to Read it back)",
+      "is_error": false,
+      "turn_index": 57,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 28,
+      "tool_use_id": "toolu_01Lb7kJ36U4K1UZUJYT2Jwv9",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"cd /data/spaces/cronos-development/backend && python -m pytest tests/test_goal_sync.py -v 2>&1\", \"description\": \"Run goal_sync tests\"}",
+      "output_summary": "Exit code 1\n============================= test session starts ==============================\nplatform linux -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- /usr/local/bin/python\ncachedir: .pytest_cache\nmetadata: {'Python': '3.12.13', 'Platform': 'Linux-6.8.0-71-generic-x86_64-with-glibc2.41', 'Packages': {'pytest': '9.0.3', 'pluggy': '1.6.0'}, 'Plugins': {'cov': '7.1.0', 'json-report': '1.5.0', 'asyncio': '1.4.0', 'metadata': '3.1.1', 'anyio': '4.13.0'}}\nrootdir: /data/spaces/cronos-development/backend\nconfigfile: pyproject.toml\nplugins: cov-7.1.0, json-report-1.5.0, asyncio-1.4.0, metadata-3.1.1, anyio-4.13.0\nasyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function\ncollecting ... collected 12 items\n\ntests/test_goal_sync.py::test_child_active_parent_waiting_activates_parent PASSED [  8%]\ntests/test_goal_sync.py::test_child_done_parent_waiting_activates_and_enqueues PASSED [ 16%]\ntests/test_goal_sync.py::test_child_archived…",
+      "is_error": true,
+      "turn_index": 59,
+      "elapsed_seconds": null
+    },
+    {
+      "tool_call_index": 29,
+      "tool_use_id": "toolu_01F9Xh9yjdb5AeF5h4GuLH15",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"cd /data/spaces/cronos-development/backend && python -m pytest tests/test_goal_sync.py tests/test_api_tasks.py tests/test_storage.py -v --no-cov 2>&1 | tail -40\", \"description\": \"Run goal_sync, api_tasks, and storage tests without coverage\"}",
+      "output_summary": "tests/test_storage.py::test_set_parent_clear_persists_to_disk PASSED     [ 87%]\ntests/test_storage.py::test_set_parent_self_reference_raises_cycle_error PASSED [ 87%]\ntests/test_storage.py::test_set_parent_creates_cycle_raises PASSED       [ 88%]\ntests/test_storage.py::test_set_parent_missing_parent_raises PASSED      [ 88%]\ntests/test_storage.py::test_set_parent_unknown_task_raises_task_not_found PASSED [ 88%]\ntests/test_storage.py::test_set_parent_advances_updated_at PASSED        [ 89%]\ntests/test_storage.py::test_set_depends_on_assigns_list PASSED           [ 89%]\ntests/test_storage.py::test_set_depends_on_empty_list_clears PASSED      [ 89%]\ntests/test_storage.py::test_set_depends_on_persists_to_disk PASSED       [ 90%]\ntests/test_storage.py::test_set_depends_on_self_reference_raises PASSED  [ 90%]\ntests/test_storage.py::test_set_depends_on_creates_cycle_raises PASSED   [ 90%]\ntests/test_storage.py::test_set_depends_on_missing_dep_raises PASSED     [ 91%]\ntests/test_storage.py::te…",
+      "is_error": false,
+      "turn_index": 62,
+      "elapsed_seconds": null
+    }
+  ],
+  "total_tool_calls": 30,
+  "unique_tools": [
+    "Bash",
+    "Read",
+    "Edit"
+  ],
+  "error_tool_calls": 1,
+  "read_tool_calls": 13,
+  "write_tool_calls": 17,
+  "exploration_ratio": 0.433,
+  "error_recovery_count": 1,
+  "backtrack_count": 0,
+  "final_text_snippet": "299 tests pass. The fix is complete.\n\n**Root cause:** `goal_sync.propagate_to_parent` only re-enqueued the goal when `parent_state == WAITING`. But there's a two-step sequence where a goal ends up ACTIVE without being in the worker queue:\n\n1. User replies to a WAITING child → child becomes ACTIVE → `propagate_to_parent` transitions goal WAITING→ACTIVE (lane sync, no enqueue)\n2. Child finishes DONE → `propagate_to_parent` fires again, but now `parent_state == ACTIVE` → old code skipped entirely →…",
+  "had_crash": false
+}

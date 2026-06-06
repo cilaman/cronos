@@ -1,0 +1,152 @@
+{
+  "task_id": "2026-05-29-1557-opus-4-8",
+  "space_id": "cronos-development",
+  "title": "Opus 4.8",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-05-29T15:57:58.265360Z",
+      "ended_at": "2026-05-29T16:03:42.811330Z",
+      "duration_seconds": 344.55,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "plan",
+      "exit_reason": "NO_STATUS",
+      "input_tokens": 576,
+      "output_tokens": 15301,
+      "cache_read_tokens": 1070230,
+      "cache_creation_tokens": 61278,
+      "cost_usd": 0.782104,
+      "tool_uses": {
+        "Agent": 2,
+        "Bash": 45,
+        "Grep": 8,
+        "ToolSearch": 2,
+        "Glob": 2,
+        "WebSearch": 2,
+        "Read": 15,
+        "WebFetch": 2
+      },
+      "error_count": 6,
+      "had_crash": false,
+      "memory_hit_rate": null
+    },
+    {
+      "run_index": 1,
+      "started_at": "2026-05-29T16:14:01.036792Z",
+      "ended_at": "2026-05-29T16:18:37.405604Z",
+      "duration_seconds": 276.37,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "NO_STATUS",
+      "input_tokens": 41,
+      "output_tokens": 15049,
+      "cache_read_tokens": 2541609,
+      "cache_creation_tokens": 73053,
+      "cost_usd": 1.262289,
+      "tool_uses": {
+        "ToolSearch": 1,
+        "Bash": 30,
+        "Read": 3,
+        "Write": 3
+      },
+      "error_count": 2,
+      "had_crash": false,
+      "memory_hit_rate": null
+    },
+    {
+      "run_index": 2,
+      "started_at": "2026-05-29T16:38:19.826800Z",
+      "ended_at": "2026-05-29T17:29:46.213683Z",
+      "duration_seconds": 3086.39,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "STOPPED",
+      "input_tokens": 35,
+      "output_tokens": 17291,
+      "cache_read_tokens": 3244301,
+      "cache_creation_tokens": 25939,
+      "cost_usd": 1.330032,
+      "tool_uses": {
+        "Read": 7,
+        "Bash": 26
+      },
+      "error_count": 3,
+      "had_crash": false,
+      "memory_hit_rate": null
+    },
+    {
+      "run_index": 3,
+      "started_at": "2026-05-29T18:14:58.861099Z",
+      "ended_at": "2026-05-29T18:18:58.888117Z",
+      "duration_seconds": 240.03,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "NO_STATUS",
+      "input_tokens": 29,
+      "output_tokens": 10965,
+      "cache_read_tokens": 3507291,
+      "cache_creation_tokens": 160010,
+      "cost_usd": 1.816787,
+      "tool_uses": {
+        "Bash": 17,
+        "Read": 5,
+        "Write": 3,
+        "Skill": 1,
+        "Edit": 2,
+        "Grep": 1,
+        "Agent": 1,
+        "Glob": 1
+      },
+      "error_count": 7,
+      "had_crash": false,
+      "memory_hit_rate": null
+    },
+    {
+      "run_index": 4,
+      "started_at": "2026-05-29T18:47:09.155887Z",
+      "ended_at": "2026-05-29T18:47:45.729774Z",
+      "duration_seconds": 36.57,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "NO_STATUS",
+      "input_tokens": 6,
+      "output_tokens": 1690,
+      "cache_read_tokens": 496512,
+      "cache_creation_tokens": 148856,
+      "cost_usd": 0.732532,
+      "tool_uses": {
+        "Bash": 3
+      },
+      "error_count": 0,
+      "had_crash": false,
+      "memory_hit_rate": null
+    },
+    {
+      "run_index": 5,
+      "started_at": "2026-05-29T19:12:21.206031Z",
+      "ended_at": "2026-05-29T19:12:54.975180Z",
+      "duration_seconds": 33.77,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "NO_STATUS",
+      "input_tokens": 5,
+      "output_tokens": 1787,
+      "cache_read_tokens": 486379,
+      "cache_creation_tokens": 2016,
+      "cost_usd": 0.180294,
+      "tool_uses": {
+        "Skill": 1,
+        "Bash": 1
+      },
+      "error_count": 1,
+      "had_crash": false,
+      "memory_hit_rate": null
+    }
+  ]
+}

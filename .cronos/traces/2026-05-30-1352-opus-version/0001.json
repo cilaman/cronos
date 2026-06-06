@@ -1,0 +1,50 @@
+{
+  "task_id": "2026-05-30-1352-opus-version",
+  "space_id": "cronos-development",
+  "run_index": 1,
+  "session_id": "bc6e8f1f-dd9b-4689-a27f-9c13c82d8e49",
+  "model": "opus",
+  "real_model": "claude-opus-4-7",
+  "mode": "auto",
+  "started_at": "2026-05-30T14:04:12.452344Z",
+  "ended_at": "2026-05-30T14:04:18.716570Z",
+  "duration_seconds": 6.26,
+  "exit_reason": "DONE",
+  "turns": [
+    {
+      "turn_index": 0,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 6,
+      "output_tokens": 8,
+      "cache_read_tokens": 30849,
+      "cache_creation_tokens": 52
+    },
+    {
+      "turn_index": 1,
+      "text_snippet": "I am Claude Opus 4.7 — exact model ID `claude-opus-4-7`. This is stated in my environment context as the model powering this session.\n\nSTATUS: DONE",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 6,
+      "output_tokens": 8,
+      "cache_read_tokens": 30849,
+      "cache_creation_tokens": 52
+    }
+  ],
+  "tool_calls": [],
+  "total_tool_calls": 0,
+  "unique_tools": [],
+  "error_tool_calls": 0,
+  "read_tool_calls": 0,
+  "write_tool_calls": 0,
+  "exploration_ratio": 0.0,
+  "error_recovery_count": 0,
+  "backtrack_count": 0,
+  "final_text_snippet": "I am Claude Opus 4.7 — exact model ID `claude-opus-4-7`. This is stated in my environment context as the model powering this session.\n\nSTATUS: DONE",
+  "had_crash": false,
+  "memory_injected": [],
+  "memory_used": [],
+  "memory_written": [],
+  "memory_hit_rate": 0.0
+}

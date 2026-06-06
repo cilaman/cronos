@@ -1,0 +1,33 @@
+{
+  "task_id": "2026-06-05-2327-test-backend-harness-tools-resolver",
+  "space_id": "cronos-development",
+  "title": "test \u2013 backend-harness-tools-resolver",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-06T00:51:32.011016Z",
+      "ended_at": "2026-06-06T00:56:48.339257Z",
+      "duration_seconds": 316.33,
+      "model": "sonnet",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 40,
+      "output_tokens": 10652,
+      "cache_read_tokens": 1954259,
+      "cache_creation_tokens": 60132,
+      "cost_usd": 0.971673,
+      "tool_uses": {
+        "Bash": 35,
+        "Read": 5,
+        "Grep": 3,
+        "Write": 1,
+        "Skill": 1
+      },
+      "error_count": 4,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "cc_version": "1.0",
+  "goal_slug": "arc8-dev-schema",
+  "status": "running",
+  "created_at": "2026-06-03T10:57:16.294731+00:00",
+  "updated_at": "2026-06-03T10:57:16.294731+00:00",
+  "request_text": "Add a `dev_runtime` config to space metadata plus a per-space port\nallocator. **No process spawning in this subgoal** — schema,\npersistence, and port reservation only.\n\n**Schema.** Extend the `Space` Pydantic model\n([models.py:120-152](backend/app/models.py#L120-L152)) with\n`dev_runtime: DevRuntime | None = None` and\n`prod_url: str | None = None`. New nested model `DevRuntime`:\n`kind: Literal[\"docker-compose\",\"npm\",\"python\",\"custom\"]`,\n`command: str | None`, `start_script: str | None`,\n`stop_script: str | None`, `health_url: str | None`,\n`ports: list[int] = []`. Validator: `kind=\"custom\"` requires\n`start_script` + `stop_script`; any other `kind` requires\n`command`. `health_url` optional.\n\n**Persistence (YAML).** `dump_space`\n([space_storage.py:182-198](backend/app/space_storage.py#L182-L198))\nbuilds an **explicit dict** — add `dev_runtime` + `prod_url` there\nor they are silently dropped on save. `parse_space_yaml`\n([space_storage.py:153-165](backend/app/space_storage.py#L153-L165))\nmust round-trip them. Add a `set_dev_runtime(space_id, cfg)`\nmutator mirroring `set_autopilot`\n([space_storage.py:434-454](backend/app/space_storage.py#L434-L454)):\nlock → `model_copy(update=...)` → `atomic_write`\n([storage.py:346-351](backend/app/storage.py#L346-L351)).\n\n**Port allocator.** New `backend/app/dev_runtimes.py` (allocator\nonly this subgoal): `allocate_ports(space_id, count) -> list[int]`\nreturns a disjoint block, **persisted** and **non-colliding across\nspaces** when several run at once; `release_ports(space_id)` frees\nthem. Base port via env `CRONOS_DEV_PORT_BASE` (default 5300),\nfixed block size per space. Deterministic per space id. If the\nconfig declares explicit `ports`, honor them but still reserve to\nprevent cross-space collision.\n\n**Acceptance:** a space with `dev_runtime` + `prod_url`\nround-trips through `dump_space`/`parse_space_yaml`; two distinct\nspaces receive disjoint port blocks; `kind=custom` without scripts\nis rejected; non-custom without `command` is rejected; releasing a\nspace frees its ports for reuse.\n",
+  "phases": {},
+  "telemetry": {
+    "total_duration_s": 0.0,
+    "total_token_spend": 0,
+    "total_tool_calls": 0,
+    "total_files_read": 0,
+    "total_memory_hits": 0,
+    "phases_completed": 0,
+    "phases_escalated": 0,
+    "phases_retried": 0,
+    "phases_failed": 0
+  }
+}

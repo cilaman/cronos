@@ -1,0 +1,35 @@
+{
+  "task_id": "2026-06-03-1631-pipeline-scout-features-fixes-s3-github",
+  "space_id": "cronos-development",
+  "title": "pipeline-scout: Features&Fixes/S3 \u2014 GitHub issue mirror (one-way)",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-04T18:41:36.008651Z",
+      "ended_at": "2026-06-04T18:46:00.413100Z",
+      "duration_seconds": 264.4,
+      "model": "haiku",
+      "real_model": "claude-haiku-4-5-20251001",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 102,
+      "output_tokens": 5503,
+      "cache_read_tokens": 494619,
+      "cache_creation_tokens": 31181,
+      "cost_usd": 0.092844,
+      "tool_uses": {
+        "Read": 13,
+        "Bash": 40,
+        "Agent": 1,
+        "Glob": 4,
+        "Grep": 2,
+        "Write": 1,
+        "Skill": 1
+      },
+      "error_count": 5,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

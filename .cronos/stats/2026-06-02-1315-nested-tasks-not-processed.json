@@ -1,0 +1,33 @@
+{
+  "task_id": "2026-06-02-1315-nested-tasks-not-processed",
+  "space_id": "cronos-development",
+  "title": "Nested tasks not processed",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-02T13:15:48.504599Z",
+      "ended_at": "2026-06-02T13:18:48.072053Z",
+      "duration_seconds": 179.57,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 20,
+      "output_tokens": 6471,
+      "cache_read_tokens": 404063,
+      "cache_creation_tokens": 40250,
+      "cost_usd": 0.369281,
+      "tool_uses": {
+        "Agent": 1,
+        "Read": 12,
+        "Bash": 9,
+        "Skill": 3,
+        "Write": 2,
+        "Edit": 1
+      },
+      "error_count": 2,
+      "had_crash": false,
+      "memory_hit_rate": null
+    }
+  ]
+}

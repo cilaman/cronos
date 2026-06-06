@@ -1,0 +1,35 @@
+{
+  "task_id": "2026-06-03-1631-pipeline-scout-features-fixes-s2-feature",
+  "space_id": "cronos-development",
+  "title": "pipeline-scout: Features&Fixes/S2 \u2014 features API + realize + process",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-04T17:14:29.842177Z",
+      "ended_at": "2026-06-04T17:17:10.773834Z",
+      "duration_seconds": 160.93,
+      "model": "haiku",
+      "real_model": "claude-haiku-4-5-20251001",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 75,
+      "output_tokens": 4610,
+      "cache_read_tokens": 392052,
+      "cache_creation_tokens": 30208,
+      "cost_usd": 0.080072,
+      "tool_uses": {
+        "Read": 6,
+        "Bash": 32,
+        "Agent": 1,
+        "Glob": 3,
+        "Grep": 1,
+        "Write": 1,
+        "Skill": 1
+      },
+      "error_count": 6,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

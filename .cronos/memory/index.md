@@ -1,0 +1,134 @@
+# Memory Index — space:cronos-development
+Updated: 2026-06-06T01:01:58Z
+
+## Facts
+- [[mem-20260527191150-04e3c858]] **Dashboard is the mission-control hub — no standalone stats/tests pages** — ✓ score=10.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260527191150-2573ec85]] **Backend test coverage floor is 60%, enforced in pyproject.toml** — ✓ score=10.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260527191150-4cadc9f7]] **Key backend modules for agent execution and state transitions** — ✓ score=10.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260527191150-8f729886]] **Trace exit_reason is the primary diagnostic for unexpected task states** — ✓ score=10.00 last_used=2026-06-06T00:27:52Z
+- [[mem-20260527191150-9d9c065d]] **Live domain is cronos.cilaman.com — ultc.at / ULTC references are stale** — ✓ score=10.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260527191150-b7dd0eb1]] **Agent memory flow: MEMORY: blocks → memory_store → memory_retrieval → next prompt** — ✓ score=10.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260527191150-ddc36668]] **Goal feature-branch workflow: 3 skills in .claude/skills/** — ✓ score=10.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260530002751-90138492]] **STATUS_CONTRACT in backend/app/agent.py updated to make /task-finalize the primary completion path; STATUS: WAIT and STA** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260530002751-ad8f241e]] **task-finalize skill created at .claude/skills/task-finalize/SKILL.md — 5-step completion procedure (verify → trace → git** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260530060014-bd5cb563]] **Added `"opus-4-8"` as an explicit model option across backend and frontend. Key files: `backend/app/models.py` (AgentMod** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260530140020-5058cae1]] **Goal `2026-05-29-1912-opus-4-8-support` merged to `main` on 2026-05-30 via `--no-ff` merge (commit `6b6fcc0`). All tests** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260530151021-b31bf0e4]] **CC-v1 contract module landed at `backend/app/pipeline/contract.py` + `backend/app/pipeline/CONTRACT.md` (re-exported via** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260530151728-609b7216]] **7 CC-v1 per-class YAML schemas created at `backend/app/pipeline/schemas/` (commit c6087a3 on `feature/pipeline-foundatio** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260530153123-53193103]] **CC-v1 verifier shipped at `backend/app/pipeline/verify.py`. Public surface: `verify(agent_class, slug, space) -> VerifyR** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260530154026-e36265e7]] **`backend/app/pipeline/normalize.py` landed (task 1.4). Six drift fixers: blocker_string_wrap, strategy_synonym (kb_searc** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260530155232-e16db3d7]] **CC-v1 regression fixture harness landed at `backend/app/pipeline/fixtures/` — 7 golden artifacts (one per class: researc** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260530161204-b03d2e9a]] **`feature/pipeline-foundation-cc-v1-contract-schem` merged to main on 2026-05-30 (commit `b91d9ec`). Adds `backend/app/pi** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260530164428-b6dbb33f]] **pipeline-scout agent added at `.claude/agents/pipeline-scout.md` (CC-v1, class=research). Uses Haiku model, does memory-** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260530165322-5955dff4]] **pipeline-analyst CC-v1 agent landed at `.claude/agents/pipeline-analyst.md` (commit 883951b on main). Sonnet 4.6, class=** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260530171041-447177c3]] **pipeline-implementor CC-v1 agent at `.claude/agents/pipeline-implementor.md` (commit d0b1be2). Sonnet model, tools: Read** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260530171835-af2e4514]] **tester agent at `.claude/agents/tester.md` now has a CC-v1 Phase 6: when `slug` is supplied, writes `{space}/.cronos/pip** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260530172629-b4b55fed]] **`pipeline-reviewer` CC-v1 agent at `.claude/agents/pipeline-reviewer.md` (commit 8daf566). Opus model, tools: Read/Grep/** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260530183308-81dc890c]] **pipeline-doc-sync CC-v1 agent at `.claude/agents/pipeline-doc-sync.md` (commit 796dfbc). Haiku model, tools: Read/Grep/G** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260530183308-9565263c]] **CLAUDE.md Registered agents table now includes all 6 pipeline agents (scout/analyst/architect/implementor/reviewer/doc-s** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260530184142-d3ba7195]] **pipeline-doc-sync CC-v1 agent at `.claude/agents/pipeline-doc-sync.md` committed at efe080e on workspace branch. Haiku m** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260530190553-d1cb29c8]] **`backend/app/pipeline/state_writer.py` landed (task 3.1). Public API: `init_pipeline`, `update_phase`, `record_phase_log** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260530191608-ab2bbcb3]] **`.claude/skills/pipeline-gate/SKILL.md` created (task 3.2, commit `b4e6728` on `feature/orchestration-logging-glue-scaff** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260530194142-ad063218]] **pipeline-scaffold SKILL.md (`feature/orchestration-logging-glue-scaffold-gate` commit `72d1a0f`) now wires the full feat** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260530222635-d346b43d]] **The CC-v1 `retro` class uses filename_prefix `retro` (not `retro-report`), so the canonical artifact path is `.cronos/pi** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260530223057-9c2d5248]] **`backend/app/pipeline/known-issues.md` created — Cronos-native F-NN catalog (seeded with F-01/F-02); `backend/app/pipeli** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260530224238-acd85c9f]] **`backend/app/pipeline/retro_memory_writer.py` created — reads a verified `retro-{slug}.md`, extracts `findings[]`, and c** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260530231354-970af71b]] **`backend/app/pipeline/normalize.py` now loads `normalize_rules.json` (sidecar registry) at import-time and merges its `s** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260530231354-d75d22b8]] **`backend/app/pipeline/auto_improver.py` (task 4.4, commit b91420e on `feature/self-improvement-loop-retro-known-issues`)** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260530232604-a68316b9]] **`backend/app/pipeline/run_evals.py` — standalone CC-v1 eval harness (Cronos port of Delivery Notes `run_evals.py`). Auto** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260530233051-25ebbb64]] **`backend/app/pipeline/CHANGELOG.md` created (CC-v1 version history + bumping rules). `PhaseEntry.cc_version` field added** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260602071918-e166ec14]] **Created Cronos goal `2026-06-02-0718-ai-tools-detail-screens` ("AI Tools Detail Screens") with 4 child tasks: (1) backen** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260602081004-c77b5f14]] **Added `AiToolDetail` model to `backend/app/models.py` and `GET /api/spaces/{space_id}/tool-content` endpoint to `backend** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260602081634-ba23eb2e]] **Created `frontend/src/components/ToolDetailPanel.tsx` — slide-over drawer component showing full tool details (category ** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260602082226-93a38458]] **`SpaceToolsPage.tsx` now uses `useSearchParams` (React Router) as the sole source of truth for the open tool panel. `sel** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260602134228-115feaca]] **Fixed `backend/app/worker.py` `_run_goal()`: added `child.type == "goal"` branch (line ~748) that calls `self._run_goal(** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260602135830-0f4cff0d]] **`.claude/skills/goal-branch-setup/SKILL.md` reworked (commit `89c5eb0` on `feature/standardise-git-feature-branch-lifecy** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260602140313-1d185043]] **goal-finalize SKILL.md reworked (commit 20a68ff, feature/standardise-git-feature-branch-lifecycle) — Step 1 uses canonic** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260602140541-4050047c]] **`goal-task-commit` SKILL.md updated (commit `0d3ae3d`, `feature/standardise-git-feature-branch-lifecycle`): added canoni** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260602141719-46fc0fdd]] **task-finalize/SKILL.md Step 3.A now notes that goal-task-commit walks the parent_id chain to the root goal automatically** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260602141719-7223c4a6]] **Goal 2026-06-02-1322-standardise-git-feature-branch-lifecycle merged to main as commit 41354af; feature/standardise-git-** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260602141719-e8beebe8]] **create-goal/SKILL.md has a new "Git workflow for development goals" subsection (end of "Writing good briefs") describing** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260602144254-2e0d98aa]] **Added `type` field to `ChildItem` backend model (`backend/app/models.py`) and `ChildProgressItem` frontend interface (`f** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260602145955-9a985f4f]] **Replaced 1.5px status dots in `frontend/src/components/Card.tsx` with color-coded pill badges (`STATE_BADGE_STYLES` + `S** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260602150630-6367ac84]] **Improved expanded goal card child items in `frontend/src/components/Card.tsx`: title upgraded to `text-sm font-medium te** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260603085956-7c431d22]] **Fixed text overflow bug in Card.tsx default-density view — the h3 title (default density, line ~523) was missing the `tr** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260603110616-6aebb01b]] **Arc 6 board set up 2026-06-03: umbrella `2026-06-03-1104-arc-6-harnesses`, 8 CC-v1 pipeline subgoals (arc6-harness-model** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260603113410-2e24ae11]] **Arc-5 root goal slug is `arc-5-a-discovery-tool-sources-yml-index`; feature branch is `feature/arc-5-a-discovery-tool-so** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260603113410-e2c58338]] **`backend/app/tools/sources.py` created (arc-5/A1, commit b02ed16 on `feature/arc-5-a-discovery-tool-sources-yml-index`).** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260603123720-e50aad65]] **`backend/app/tools/adoption.py` created (arc-5/B1, commit ed63a77 on `feature/arc-5-tools`). Provides `AdoptionManifest(** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260603124804-c5eebbff]] **`backend/app/api/adoption.py` created (arc-5/B2, commit 528b6d2 on `feature/arc-5-tools`). POST `/api/spaces/{id}/adopt`** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260603130304-3d6e729a]] **Arc 5/B3 complete — `_load_adopted_dirs()`, `_read_hook_settings()`, `_merge_hook_settings()`, `_read/_write_workspace_s** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260603131549-695e3afa]] **B4 upstream-advance + 3-way merge task merged to `feature/arc-5-tools` (commit 1efba2a). Three files modified: `adoption** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260603140435-c604264b]] **arc-5/C1 complete (commit 68f0532 on feature/arc-5-tools). Three files modified: `backend/app/trace_parser.py` gained `a** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260603141436-6f63f431]] **arc-5/C2 complete (commit ea572b4 on feature/arc-5-tools). Three files modified: `backend/app/stats.py` gained `AdoptedT** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260603143231-7b39377d]] **arc-5/C3 complete (commit 43ef012 on feature/arc-5-tools). Four files modified + two new: `backend/app/tools/evolve.py` ** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260603150447-01590c09]] **arc-5/C5 e2e test at backend/tests/test_arc5_e2e.py (commit 98f88ac on feature/arc-5-tools). 7 tests, no network/git cal** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260603163329-e4dce11c]] **Cronos board for Features & Fixes arc fully wired — root goal `2026-06-03-1631-features-and-fixes` (branch: `feature/fea** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260603172418-5ebe5cab]] **HarnessStore, HarnessNotFound, HarnessNameConflict, HarnessGraphError re-exported from `backend/app/harnesses/__init__.p** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260603172418-cf9618cc]] **arc6/6.1 harness YAML persistence CRUD API landed on `feature/arc-6-harnesses` (commit 61058f1). New package `backend/ap** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260603195355-51b871b1]] **arc-6/6.2 harness executor landed at `backend/app/harnesses/executor.py` (commit `27817ac` on `feature/arc-6-harnesses`)** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260603195355-eb5950cd]] **arc-6/6.2 harness executor landed at `backend/app/harnesses/executor.py` (commit `27817ac` on `feature/arc-6-harnesses`)** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260604044541-33232aa8]] **arc6-run-lifecycle Phase 6 review closed at attempt 2 (verdict=pass); commit `3092b5e` on `feature/arc-6-harnesses` land** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260604065636-2075ef96]] **Arc 6.6 event triggers landed on `feature/arc-6-harnesses` (commit 4553fed). New files: `backend/app/harnesses/triggers.** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260604091729-53716524]] **Missing traces root cause: `_finalize_child()` in `backend/app/worker.py` (goal child task path) did NOT call `trace_sto** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260604093746-24406881]] **pipeline-doc-sync phase (arc6-live-overlay) completed. Updated CLAUDE.md with 5 new component entries (runStatus.ts, Run** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260604093746-da56c27c]] **Gate verification passed (exit 0, outcome=proceed). Phase metrics recorded to pipeline-state.json. Artifact at .cronos/p** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260604095614-17c43011]] **Arc 6 (harnesses) merged to main 2026-06-04 at commit d878799. 8 subgoals (6.1–6.8) plus integration commit 92c8867. Fea** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260604110732-58e4ccbe]] **HarnessesPage at `frontend/src/pages/HarnessesPage.tsx` — global `/harnesses` landing page with deterministic space-sele** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260604110732-9d0ab994]] **Sidebar.tsx `useParams` and `spaceId` gate removed for Harnesses nav link (lines 176–189 replaced); NavLink now always v** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+- [[mem-20260606005131-71ad46af]] **resolve_tool helper added to backend/app/worker.py at module scope (lines 222-249); replaces the stub _tools_resolver cl** — ✓ score=0.00 last_used=2026-06-06T01:01:58Z
+
+## Procedures
+- [[mem-20260527191150-16760160]] **GitHub HTTPS push uses CRONOS_GIT_TOKEN env var** — ✓ score=10.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260527191150-6a66db50]] **Use plan mode for diagnostic/investigation tasks** — ✓ score=10.00 last_used=2026-06-06T00:27:52Z
+- [[mem-20260530060014-e42b3c7e]] **When adding a new model alias that needs a different CLI name, add to `_MODEL_CLI_NAMES` in `agent.py` — that dict is th** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260530060639-da621f67]] **When a goal-task-commit finds the feature branch already checked out in the main worktree (git error: "already used by w** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260530151021-5ad14a8b]] **First task of a Cronos goal → run `goal-branch-setup` to create `feature/<goal_slug>` from `origin/main` and switch the ** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260530164428-30f12cde]] **To write an agent file to `.claude/agents/` (blocked by settings.json Write permission): write to `/tmp/` via `python3 /** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260530165322-85f38d03]] **For Goal 2 phase-agent tasks, commit directly to main (no feature branch — established by task 2.1 fcad0fd). Use Python ** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260530172629-254e593d]] **Smoke-test for a CC-v1 review fixture: build artifact at `{space}/.cronos/pipeline/{parent_slug}/review-report-{slug}.md** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260530191608-c3b54b46]] **When the goal feature branch is locked in a sibling worktree (another task's workspace), commit on the local `cronos/TAS** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260530193205-ffe1af8f]] **`git commit <pathspec>` (with `-m <msg>` BEFORE the `--`, like `git commit -m "..." -- <path>`) commits ONLY changes in ** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260530224238-10ca439b]] **After retro gate passes (PHASE=retro, VERIFY_EXIT=0), `pipeline-gate` Step 3b shells out to `python -m app.pipeline.retr** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260530231354-0bf9c084]] **For goal feature branches checked out in another worktree (`fatal: 'feature/...' is already used by worktree`), don't tr** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260602140313-13ef2ecd]] **When a goal feature branch is checked out in another worktree, edit files in the current workspace, then shutil.copy2 to** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260603131549-081fc710]] **Duplicate-guard pattern for auto-created tasks: search `task_store.all()` by `space_id + title + state not in (done, arc** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260604044541-2b2c29b9]] **bounded review loop pattern — attempt 1 needs_fix → spawn implementor with new iteration scoped tightly to offending fil** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260604093746-8ddc3ff0]] **For doc phase tasks in Arc 6 shared-branch goals: after agent runs, invoke /pipeline-gate (verifies + records state), th** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260604095614-71d4037b]] **`npm test` (vitest) does NOT type-check test files; run `npm run build` separately before merging or TS errors in `*.tes** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+
+## Observations
+- [[mem-20260527191150-338710ae]] **Goal state machine deadlock fix (2026-05-26): propagate_to_parent() must enqueue when parent is ACTIVE** — ✓ score=10.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260527191150-dc1e5559]] **Memory system had 3 wiring gaps (all fixed 2026-05-27)** — ✓ score=10.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260527191150-fb626948]] **parse_status() bug (fixed 2026-05-27): scans all lines in reverse, not just last 10** — ✓ score=10.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260530002751-1cb5b90c]] **Cronos agent worktrees have a .claude/settings.json whose permission rules don't cover the worktree's own .claude/skills** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260530060639-392a09b4]] **Workspace settings.json only covers `.claude/skills/**` writes — tasks that modify `.claude/agents/` files (or any other** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260530142203-427ae39a]] **Cronos-native pipeline plan (`DEVELOPMENT_PIPELINE_PLAN.md`, 2026-05-30) maps pipeline phases to a goal/task DAG rather ** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260530142203-c2133597]] **In this task harness, `ls`/`find`/`Glob` are blocked outside the task workspace, but the **Read tool works on explicit a** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260530151021-631c1637]] **Pipeline Foundation goal (`feature/pipeline-foundation-cc-v1-contract-schem`) — task 1.1 done 2026-05-30. Cronos deviati** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260530153123-ce81cb37]] **Pytest's default `python_functions = "test"` collects ANY function whose name starts with `test` (not just `test_`). Hel** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260530170045-8edcdcaa]] **pipeline-architect agent (CC-v1 design class) committed 2026-05-30 (7439fd2); canonical artifact path uses filename_pref** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260530172629-ab4aa389]] **On this goal (pipeline-phase-agents-under-cc-v1), the feature branch fell behind main after task 2.4; sibling tasks 2.4 ** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260530193205-30b71c33]] **`.claude/skills/pipeline-scaffold/SKILL.md` created on `feature/orchestration-logging-glue-scaffold-gate` (commit `15abb** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260530194142-ac08ec02]] **When the goal feature branch is already checked out by another worktree, edit the file directly in that worktree path an** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260530195242-465bf8b5]] **When testing the pipeline with the in-repo goldens, the review/test/doc fixtures use bare `slug: fixture-test` (not the ** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260530195242-75baa61e]] **Task 3.5 smoke run merged into feature/orchestration-logging-glue-scaffold-gate (f6034bc). Driver at smoke/run_smoke.py ** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260530222635-051b2acc]] **Task 4.1 retro phase agent landed — pipeline-retro CC-v1 agent (Opus 4.7) at `.claude/agents/pipeline-retro.md` extends ** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260530224238-79b896fc]] **Retro findings are written to global scope (not space-scoped) so `memory_retrieval.retrieve` surfaces them in any future** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260602080410-9e098f93]] **When creating feature goals (new UI, new API endpoint, significant refactor), use CC-v1 pipeline structure: one shared s** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260602081004-3657ba32]] **Edit tools write to absolute paths in the main worktree (`/data/spaces/cronos-development/`), not the task worktree. Aft** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260602081634-275366d0]] **Feature branch `feature/ai-tools-detail-screens` was checked out in the backend task's worktree (`2026-06-02-0718-backen** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260602082226-18d27830]] **When the feature branch is already checked out in another task's worktree, copy changed files to that worktree and commi** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260602134228-dc78113f]] **Task worktree edits via `Edit` tool go to the file in the **task worktree's path** if you use the absolute path within `** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260602135830-e8151973]] **A sub-goal task whose immediate parent is itself a sub-goal must still resolve to `feature/<root-goal-slug>`. The rework** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260602144254-f1d25ff5]] **When using `git -C "$SPACE_DIR"` in the goal-task-commit skill, the command targets the **main worktree** (at `/data/spa** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260602150630-07209516]] **The "prominent status indicators" commit (`ff9bd52`) inadvertently dropped the goal-type badge added by the "distinguish** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260603085956-f893261a]] **The Card.tsx file is actively evolving — during the rebase for this bug fix, commit 75ec8d9 ("Inline tree expansion of s** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260603172418-5a8ee974]] **pytest's global `addopts = "--cov=app --cov-report=term-missing --cov-fail-under=60"` in `backend/pyproject.toml` caused** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260603190628-e74c2e10]] **arc6-harness-model Phase 6 review closed at attempt 2 with verdict=pass after one I7 fix iteration (commit c501a98 on fe** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260604044541-cf54a552]] **`Worker._publish` is `async def` but `WorkerProtocol._publish` is sync — passing `Worker` directly as `event_worker` sil** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260604065636-bbd87df1]] **`importlib.reload(app.worker)` inside a pytest test file poisons the module registry for all subsequent tests in the sam** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+- [[mem-20260604095614-ef8a2d1c]] **pipeline-doc-sync commits CLAUDE.md only — it does NOT pick up source files modified by pipeline-reviewer re-spawns or i** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z
+
+## References
+- [[mem-20260530142203-90201f4f]] **The Delivery Notes space (`/data/spaces/delivery-notes/`) hosts a mature Agent Contract v1.0 pipeline harness — `.claude** — ✓ score=0.00 last_used=2026-06-06T00:56:48Z

@@ -1,0 +1,41 @@
+{
+  "task_id": "2026-06-05-1325-harnesses-usage",
+  "space_id": "cronos-development",
+  "run_index": 0,
+  "session_id": "9bd57f1e-9b92-4980-b339-fd86f50c491d",
+  "model": "opus-4-8",
+  "real_model": "<synthetic>",
+  "mode": "auto",
+  "started_at": "2026-06-05T15:12:02.446923Z",
+  "ended_at": "2026-06-05T15:15:37.946799Z",
+  "duration_seconds": 215.5,
+  "exit_reason": "CRASHED",
+  "turns": [
+    {
+      "turn_index": 0,
+      "text_snippet": "API Error: 529 Overloaded. This is a server-side issue, usually temporary — try again in a moment. If it persists, check status.claude.com.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_read_tokens": 0,
+      "cache_creation_tokens": 0
+    }
+  ],
+  "tool_calls": [],
+  "total_tool_calls": 0,
+  "unique_tools": [],
+  "error_tool_calls": 0,
+  "read_tool_calls": 0,
+  "write_tool_calls": 0,
+  "exploration_ratio": 0.0,
+  "error_recovery_count": 0,
+  "backtrack_count": 0,
+  "final_text_snippet": "API Error: 529 Overloaded. This is a server-side issue, usually temporary — try again in a moment. If it persists, check status.claude.com.",
+  "had_crash": true,
+  "memory_injected": [],
+  "memory_used": [],
+  "memory_written": [],
+  "memory_hit_rate": 0.0,
+  "parent_run_id": null
+}

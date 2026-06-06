@@ -1,0 +1,53 @@
+{
+  "task_id": "2026-05-26-0604-c2-inject-memory-into-build-prompt-agent",
+  "space_id": "cronos-development",
+  "title": "C2: Inject memory into build_prompt in agent.py",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-05-26T17:41:45.397994Z",
+      "ended_at": "2026-05-26T17:50:46.335737Z",
+      "duration_seconds": 540.94,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 42,
+      "output_tokens": 17785,
+      "cache_read_tokens": 2316551,
+      "cache_creation_tokens": 63671,
+      "cost_usd": 1.200633,
+      "tool_uses": {
+        "Agent": 1,
+        "Bash": 33,
+        "Grep": 2,
+        "Glob": 2,
+        "Read": 14,
+        "Edit": 16,
+        "Write": 2
+      },
+      "error_count": 3,
+      "had_crash": false
+    },
+    {
+      "run_index": 1,
+      "started_at": "2026-05-26T20:37:19.866299Z",
+      "ended_at": "2026-05-26T20:39:55.670746Z",
+      "duration_seconds": 155.8,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "NO_STATUS",
+      "input_tokens": 25,
+      "output_tokens": 7320,
+      "cache_read_tokens": 1871860,
+      "cache_creation_tokens": 76755,
+      "cost_usd": 0.959264,
+      "tool_uses": {
+        "Bash": 22
+      },
+      "error_count": 2,
+      "had_crash": false
+    }
+  ]
+}

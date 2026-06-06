@@ -1,0 +1,54 @@
+{
+  "task_id": "2026-05-26-0604-c1-v1-retrieval-keyword-index-walk",
+  "space_id": "cronos-development",
+  "title": "C1: v1 retrieval \u2014 keyword + index walk",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-05-26T16:24:45.576821Z",
+      "ended_at": "2026-05-26T16:28:33.537333Z",
+      "duration_seconds": 227.96,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 18,
+      "output_tokens": 6031,
+      "cache_read_tokens": 503243,
+      "cache_creation_tokens": 26041,
+      "cost_usd": 0.339146,
+      "tool_uses": {
+        "Agent": 1,
+        "Read": 15,
+        "Glob": 5,
+        "Bash": 25,
+        "Grep": 5,
+        "Edit": 1,
+        "Write": 1
+      },
+      "error_count": 2,
+      "had_crash": false
+    },
+    {
+      "run_index": 1,
+      "started_at": "2026-05-26T16:54:38.078100Z",
+      "ended_at": "2026-05-26T16:58:58.893279Z",
+      "duration_seconds": 260.82,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "NO_STATUS",
+      "input_tokens": 31,
+      "output_tokens": 12716,
+      "cache_read_tokens": 1533634,
+      "cache_creation_tokens": 54029,
+      "cost_usd": 0.853532,
+      "tool_uses": {
+        "Bash": 27,
+        "Read": 1
+      },
+      "error_count": 2,
+      "had_crash": false
+    }
+  ]
+}

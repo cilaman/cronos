@@ -1,0 +1,73 @@
+{
+  "task_id": "2026-05-27-1224-name-of-the-tab",
+  "space_id": "cronos-development",
+  "title": "Name of the tab",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-05-27T12:27:22.460360Z",
+      "ended_at": "2026-05-27T12:30:35.005325Z",
+      "duration_seconds": 192.54,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "NO_STATUS",
+      "input_tokens": 31,
+      "output_tokens": 7899,
+      "cache_read_tokens": 1056942,
+      "cache_creation_tokens": 32589,
+      "cost_usd": 0.557869,
+      "tool_uses": {
+        "Grep": 2,
+        "Read": 7,
+        "Bash": 22,
+        "Skill": 1
+      },
+      "error_count": 4,
+      "had_crash": false,
+      "memory_hit_rate": null
+    },
+    {
+      "run_index": 1,
+      "started_at": "2026-05-27T12:41:21.424656Z",
+      "ended_at": "2026-05-27T12:41:39.684159Z",
+      "duration_seconds": 18.26,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "NO_STATUS",
+      "input_tokens": 7,
+      "output_tokens": 579,
+      "cache_read_tokens": 231839,
+      "cache_creation_tokens": 1476,
+      "cost_usd": 0.083793,
+      "tool_uses": {
+        "Bash": 4
+      },
+      "error_count": 0,
+      "had_crash": false,
+      "memory_hit_rate": null
+    },
+    {
+      "run_index": 2,
+      "started_at": "2026-05-27T13:02:54.563021Z",
+      "ended_at": "2026-05-27T13:03:04.977762Z",
+      "duration_seconds": 10.41,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 4,
+      "output_tokens": 255,
+      "cache_read_tokens": 94481,
+      "cache_creation_tokens": 390,
+      "cost_usd": 0.033644,
+      "tool_uses": {
+        "Bash": 1
+      },
+      "error_count": 0,
+      "had_crash": false,
+      "memory_hit_rate": null
+    }
+  ]
+}

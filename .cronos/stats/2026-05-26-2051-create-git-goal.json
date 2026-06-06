@@ -1,0 +1,32 @@
+{
+  "task_id": "2026-05-26-2051-create-git-goal",
+  "space_id": "cronos-development",
+  "title": "Create git goal",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-05-26T20:51:24.033397Z",
+      "ended_at": "2026-05-26T21:03:10.419481Z",
+      "duration_seconds": 706.39,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 86,
+      "output_tokens": 31052,
+      "cache_read_tokens": 3228661,
+      "cache_creation_tokens": 90614,
+      "cost_usd": 1.774439,
+      "tool_uses": {
+        "Agent": 1,
+        "Bash": 72,
+        "Read": 16,
+        "Glob": 6,
+        "Write": 7,
+        "Skill": 1
+      },
+      "error_count": 6,
+      "had_crash": false
+    }
+  ]
+}

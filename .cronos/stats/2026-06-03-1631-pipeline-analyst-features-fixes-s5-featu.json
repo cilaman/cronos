@@ -1,0 +1,34 @@
+{
+  "task_id": "2026-06-03-1631-pipeline-analyst-features-fixes-s5-featu",
+  "space_id": "cronos-development",
+  "title": "pipeline-analyst: Features&Fixes/S5 \u2014 Features board, Tasks rename, cards",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-05T13:05:06.947557Z",
+      "ended_at": "2026-06-05T13:11:40.159033Z",
+      "duration_seconds": 393.21,
+      "model": "sonnet",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 10,
+      "output_tokens": 4191,
+      "cache_read_tokens": 280499,
+      "cache_creation_tokens": 47724,
+      "cost_usd": 0.32601,
+      "tool_uses": {
+        "Bash": 9,
+        "Agent": 1,
+        "Read": 5,
+        "Glob": 1,
+        "Write": 1,
+        "Skill": 1
+      },
+      "error_count": 3,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "task_id": "2026-06-03-1104-pipeline-reviewer-6-1-harness-model-yaml",
+  "space_id": "cronos-development",
+  "title": "pipeline-reviewer: 6.1 Harness model YAML persistence CRUD API",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-03T18:50:48.498095Z",
+      "ended_at": "2026-06-03T19:06:28.154125Z",
+      "duration_seconds": 939.66,
+      "model": "opus",
+      "real_model": "claude-opus-4-7",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 43,
+      "output_tokens": 17782,
+      "cache_read_tokens": 1936740,
+      "cache_creation_tokens": 95093,
+      "cost_usd": 6.022399,
+      "tool_uses": {
+        "Read": 20,
+        "Agent": 3,
+        "Bash": 43,
+        "Write": 5,
+        "Edit": 8,
+        "ToolSearch": 1,
+        "Skill": 3
+      },
+      "error_count": 3,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

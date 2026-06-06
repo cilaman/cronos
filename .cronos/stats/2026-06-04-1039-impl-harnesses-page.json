@@ -1,0 +1,35 @@
+{
+  "task_id": "2026-06-04-1039-impl-harnesses-page",
+  "space_id": "cronos-development",
+  "title": "impl \u2013 harnesses-page",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-04T11:00:03.021919Z",
+      "ended_at": "2026-06-04T11:07:32.379569Z",
+      "duration_seconds": 449.36,
+      "model": "sonnet",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 59,
+      "output_tokens": 21459,
+      "cache_read_tokens": 3839058,
+      "cache_creation_tokens": 85456,
+      "cost_usd": 1.794239,
+      "tool_uses": {
+        "Read": 12,
+        "Glob": 1,
+        "Bash": 29,
+        "Write": 4,
+        "Edit": 6,
+        "Grep": 1,
+        "Skill": 4
+      },
+      "error_count": 4,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

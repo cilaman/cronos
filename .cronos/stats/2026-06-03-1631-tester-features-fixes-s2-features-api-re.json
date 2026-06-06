@@ -1,0 +1,31 @@
+{
+  "task_id": "2026-06-03-1631-tester-features-fixes-s2-features-api-re",
+  "space_id": "cronos-development",
+  "title": "tester: Features&Fixes/S2 \u2014 features API + realize + process",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-04T18:22:52.555337Z",
+      "ended_at": "2026-06-04T18:31:16.400566Z",
+      "duration_seconds": 503.85,
+      "model": "sonnet",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 7,
+      "output_tokens": 2557,
+      "cache_read_tokens": 153341,
+      "cache_creation_tokens": 25819,
+      "cost_usd": 0.1812,
+      "tool_uses": {
+        "Agent": 1,
+        "Bash": 27,
+        "Skill": 1
+      },
+      "error_count": 0,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

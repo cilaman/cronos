@@ -1,0 +1,34 @@
+{
+  "task_id": "2026-06-03-1631-pipeline-reviewer-features-fixes-s1-mode",
+  "space_id": "cronos-development",
+  "title": "pipeline-reviewer: Features&Fixes/S1 \u2014 model, feature_state, numbering, realizes",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-04T17:06:16.210688Z",
+      "ended_at": "2026-06-04T17:09:39.726833Z",
+      "duration_seconds": 203.52,
+      "model": "opus",
+      "real_model": "claude-opus-4-7",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 20,
+      "output_tokens": 5483,
+      "cache_read_tokens": 536841,
+      "cache_creation_tokens": 45005,
+      "cost_usd": 2.06063,
+      "tool_uses": {
+        "Bash": 19,
+        "Read": 20,
+        "Agent": 1,
+        "Grep": 1,
+        "Write": 1,
+        "Skill": 1
+      },
+      "error_count": 1,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

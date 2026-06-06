@@ -1,0 +1,33 @@
+{
+  "task_id": "2026-05-27-1349-task-status-problems",
+  "space_id": "cronos-development",
+  "title": "Task status problems",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-05-27T14:01:35.283675Z",
+      "ended_at": "2026-05-27T14:12:51.883552Z",
+      "duration_seconds": 676.6,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "plan",
+      "exit_reason": "NO_STATUS",
+      "input_tokens": 20,
+      "output_tokens": 20432,
+      "cache_read_tokens": 861700,
+      "cache_creation_tokens": 49750,
+      "cost_usd": 0.751613,
+      "tool_uses": {
+        "Agent": 3,
+        "Read": 19,
+        "Glob": 1,
+        "Grep": 6,
+        "Bash": 70,
+        "Edit": 2
+      },
+      "error_count": 41,
+      "had_crash": false,
+      "memory_hit_rate": null
+    }
+  ]
+}

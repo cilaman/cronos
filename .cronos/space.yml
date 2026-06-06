@@ -1,0 +1,23 @@
+id: cronos-development
+name: Cronos development
+color: '#0f766e'
+icon: ⚙️
+description: Development workspace for the Cronos app itself.
+created_at: '2026-05-17T06:32:00Z'
+updated_at: '2026-05-26T14:07:00Z'
+git_repo_url: https://github.com/cilaman/cronos.git
+git_branch: main
+git_share_cronos: false
+agent_defaults: {}
+autopilot: disabled
+views:
+- id: all
+  name: All lanes
+  lanes:
+  - backlog
+  - active
+  - waiting
+  - done
+  default: true
+  created_at: '2026-05-26T14:07:00Z'
+  updated_at: '2026-05-26T14:07:00Z'

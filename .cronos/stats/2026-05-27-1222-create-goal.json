@@ -1,0 +1,36 @@
+{
+  "task_id": "2026-05-27-1222-create-goal",
+  "space_id": "cronos-development",
+  "title": "Create goal",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-05-27T12:22:35.754767Z",
+      "ended_at": "2026-05-27T12:27:22.443960Z",
+      "duration_seconds": 286.69,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "NO_STATUS",
+      "input_tokens": 19,
+      "output_tokens": 8546,
+      "cache_read_tokens": 486252,
+      "cache_creation_tokens": 24166,
+      "cost_usd": 0.364745,
+      "tool_uses": {
+        "Agent": 2,
+        "Glob": 7,
+        "Bash": 36,
+        "Read": 27,
+        "Grep": 1,
+        "ToolSearch": 1,
+        "TaskCreate": 1,
+        "TaskUpdate": 2,
+        "Write": 2
+      },
+      "error_count": 6,
+      "had_crash": false,
+      "memory_hit_rate": null
+    }
+  ]
+}

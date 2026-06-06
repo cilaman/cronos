@@ -1,0 +1,217 @@
+{
+  "cc_version": "1.0",
+  "goal_slug": "featurefix-data-model",
+  "status": "running",
+  "created_at": "2026-06-03T16:31:36.544184+00:00",
+  "updated_at": "2026-06-04T17:13:07.552613+00:00",
+  "request_text": "# S1 — Data model: types + feature_state machine + numbering + realizes\n\n**Title:** `Features&Fixes/S1 — model, feature_state, numbering, realizes` · **has_ui:** no\n\nExtend `Task` model + storage (no API, no UI).\n- models.py: add `\"feature\"`/`\"fix\"` to `TaskType`; new `FeatureState(str,Enum)` =\n  `backlog/processing/planned/waiting/done`. Flat fields on `Task`/`TaskSummary`:\n  `feature_state: FeatureState|None`, `feature_key: str|None` (`FEAT-001`), `realizes: str|None`,\n  `issue_number: int|None`, `issue_url: str|None`, `proposed_issue_path: str|None` (mirror\n  `pr_url`/`proposed_pr_path`).\n- storage.py: `parse_file`/`dump_task` serialize the new keys (optional via `meta.get` → old files\n  unchanged); **widen the type guards** (note 2). SQLite: add nullable cols\n  `feature_state/feature_key/realizes` via the idempotent `ALTER TABLE ADD COLUMN` loop (~418-426) +\n  index `idx_tasks_space_realizes(space_id, realizes)`; update **both** insert paths (`_db_upsert`\n  ~437-455 and `reload_all` ~520-533).\n- **Transition tables** (like storage.py:41-57): `FEATURE_USER_TRANSITIONS` (`backlog→processing`,\n  `processing→backlog`, `planned→processing`, `waiting→processing`, `waiting→planned`, `planned→done`,\n  `done→backlog`) and `FEATURE_WORKER_TRANSITIONS` (`processing→planned`, `processing→waiting`,\n  `planned→waiting`, `waiting→planned`, `planned→done`). New `transition_feature(task_id, new_state,\n  allowed)` — do **not** reuse `transition()`.\n- `_next_feature_key(space_id, type)` = `max(existing per space+type)+1`, computed **inside `self._lock`**\n  in `create()` (no counter file), zero-padded to 3.\n- **Exclude feature/fix from `board()`/`counts_by_space()`** (note 1); add `feature_board(space_id)`\n  (bucket by `feature_state`) + `realizing_items(feature_id)`.\n- `set_realizes(item_id, feature_id|None)` (mirror `set_parent`) with a same-space + target-is-feature/fix\n  guard (model on `validate_parent`).\n\n**Scope files:** models.py, storage.py (+ optional `feature_state.py`).\n**Acceptance:** creating a `feature` in a git-linked space → `feature_key=FEAT-001`,\n`feature_state=backlog`, `state=backlog`, parseable MD + SQLite row; FEAT/FIX counters independent per\nspace; existing MD files load unchanged after `reload_all`; feature/fix excluded from `board()`; the\ntransition table is enforced; `set_realizes` rejects cross-space/non-feature targets.\n\n---\n\n## Standing Rules (apply to all phases)\n\n**Branch:** all phase work commits to `feature/features-and-fixes` (from `main` if\nmissing; never branch from another base, never merge to `main`). Use [[goal-task-commit]]\nafter review passes.\n**Locked design:** apply the parent goal's **Locked decisions** + **Locked design notes 1–7** verbatim\n(reuse `Task` with `feature`/`fix`; `feature_state` machine; per-space `FEAT-`/`FIX-`; `realizes` field;\none-way `gh` mirror, MD canonical; git-linked only). No new SQLite tables (index columns only), no Redis,\nno HTTP issue API.\n**Test gate:** the pipeline's `test`+`review` phases gate — pytest (≥60%) and vitest/`tsc --strict`\nmust pass before `doc`; commit only on a `pass` verdict. **STATUS/gating** is owned by [[pipeline-gate]].\n",
+  "phases": {
+    "research": {
+      "phase": "research",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-scout",
+      "task_id": "2026-06-03-1631-pipeline-scout-features-fixes-s1-model-f",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/featurefix-data-model/scout-report-featurefix-data-model.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "analysis": {
+      "phase": "analysis",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-analyst",
+      "task_id": "2026-06-03-1631-pipeline-analyst-features-fixes-s1-model",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/featurefix-data-model/analysis-report-featurefix-data-model.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "design": {
+      "phase": "design",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-architect",
+      "task_id": "2026-06-03-1631-pipeline-architect-features-fixes-s1-mod",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/featurefix-data-model/design-report-featurefix-data-model.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "implementation": {
+      "phase": "implementation",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-implementor",
+      "task_id": "2026-06-03-1631-pipeline-implementor-features-fixes-s1-m",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/featurefix-data-model/impl-report-featurefix-data-model--i9.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "test": {
+      "phase": "test",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "tester",
+      "task_id": "2026-06-03-1631-tester-features-fixes-s1-model-feature-s",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/featurefix-data-model/test-report-featurefix-data-model.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "review": {
+      "phase": "review",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-reviewer",
+      "task_id": "2026-06-03-1631-pipeline-reviewer-features-fixes-s1-mode",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/featurefix-data-model/review-report-featurefix-data-model--attempt1.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "doc": {
+      "phase": "doc",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-doc-sync",
+      "task_id": "2026-06-03-1631-pipeline-doc-sync-features-fixes-s1-mode",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/featurefix-data-model/doc-report-featurefix-data-model.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    }
+  },
+  "telemetry": {
+    "total_duration_s": 0.0,
+    "total_token_spend": 0,
+    "total_tool_calls": 0,
+    "total_files_read": 0,
+    "total_memory_hits": 0,
+    "phases_completed": 7,
+    "phases_escalated": 0,
+    "phases_retried": 0,
+    "phases_failed": 0
+  }
+}

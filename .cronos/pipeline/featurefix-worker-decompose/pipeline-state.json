@@ -1,0 +1,224 @@
+{
+  "cc_version": "1.0",
+  "goal_slug": "featurefix-worker-decompose",
+  "status": "running",
+  "created_at": "2026-06-03T16:31:36.853635+00:00",
+  "updated_at": "2026-06-05T12:48:18.357799+00:00",
+  "request_text": "# S4 — Worker: process-from-backlog decomposition + feature_state propagation\n\n**Title:** `Features&Fixes/S4 — decompose-from-backlog + feature_sync` · **has_ui:** no · **dep:** S2\n\n- worker.py: `_run_one` (~231-239) → add a third branch: a feature/fix in `feature_state=processing` →\n  `_run_feature_decompose(feature_id)`. **Never** fall through to `_run_task`.\n- **Decomposition** (note 3): run the feature in `auto` mode with a skill that reads the brief, designs a\n  goal+child tasks, POSTs them, and sets `realizes=<feature_id>` on the root goal. On end: ≥1 realizing\n  item → `processing→planned`; `STATUS:WAIT`/`BLOCKED` or nothing → `processing→waiting` with the question\n  (reuse `_finalize` mapping ~364-392).\n- **New `backend/app/feature_sync.py`** (analogue of goal_sync.py, keyed on `realizes`):\n  `propagate_to_feature(item_id, store, pool)` called from `_finalize` (after `propagate_to_parent` ~435)\n  and the reply path (tasks.py:535). Honor `realizes` only on the directly-linked root goal.\n  Item→`waiting` & feature `planned` ⇒ `planned→waiting` (copy question up); resume ⇒ `waiting→planned`;\n  item→`done`/`archived` ⇒ **Done-detection** (note 4): all items terminal AND\n  `not branch_exists_on_origin(space_dir, \"feature/<slug>\")` after fetch ⇒ `planned→done` +\n  `gh_issue_close` (slug = strip date prefix). Terminal-but-branch-present ⇒ stay `planned`.\n- git_ops.py: read-only `branch_exists_on_origin(space_dir, branch)`.\n\n**Scope files:** worker.py, `feature_sync.py` (new), git_ops.py, a decomposition skill (new, or reuse\n[[pipeline-scaffold]]/[[create-goal]] with a `realizes` arg).\n**Acceptance:** `/process` spawns a run creating a goal+tasks all linked via `realizes`; feature ends\n`planned`; a realizing child→`waiting` bubbles the feature to `waiting` (and resuming back to `planned`);\nfeature→`done` only after the goal is done AND `feature/<slug>` is gone from origin (closes the issue); a\ndone-but-unmerged goal stays `planned`.\n\n---\n\n## Standing Rules (apply to all phases)\n\n**Branch:** all phase work commits to `feature/features-and-fixes` (from `main` if\nmissing; never branch from another base, never merge to `main`). Use [[goal-task-commit]]\nafter review passes.\n**Locked design:** apply the parent goal's **Locked decisions** + **Locked design notes 1–7** verbatim\n(reuse `Task` with `feature`/`fix`; `feature_state` machine; per-space `FEAT-`/`FIX-`; `realizes` field;\none-way `gh` mirror, MD canonical; git-linked only). No new SQLite tables (index columns only), no Redis,\nno HTTP issue API.\n**Test gate:** the pipeline's `test`+`review` phases gate — pytest (≥60%) and vitest/`tsc --strict`\nmust pass before `doc`; commit only on a `pass` verdict. **STATUS/gating** is owned by [[pipeline-gate]].\n",
+  "phases": {
+    "research": {
+      "phase": "research",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-scout",
+      "task_id": "2026-06-03-1631-pipeline-scout-features-fixes-s4-decompo",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/featurefix-worker-decompose/scout-report-featurefix-worker-decompose.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "analysis": {
+      "phase": "analysis",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-analyst",
+      "task_id": "2026-06-03-1631-pipeline-analyst-features-fixes-s4-decom",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/featurefix-worker-decompose/analysis-report-featurefix-worker-decompose.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [
+          "coverage_summary.strategies[3]: dropped unknown free-text strategy 'requirements_decomposition'",
+          "coverage_summary.strategies[4]: dropped unknown free-text strategy 'traceability_mapping'"
+        ],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "design": {
+      "phase": "design",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-architect",
+      "task_id": "2026-06-03-1631-pipeline-architect-features-fixes-s4-dec",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/featurefix-worker-decompose/design-report-featurefix-worker-decompose.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [
+          "coverage_summary.strategies[3]: dropped unknown free-text strategy 'component_decomposition'",
+          "coverage_summary.strategies[4]: dropped unknown free-text strategy 'iteration_planning'",
+          "coverage_summary.strategies[5]: dropped unknown free-text strategy 'risk_identification'"
+        ],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "implementation": {
+      "phase": "implementation",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-implementor",
+      "task_id": "2026-06-03-1631-pipeline-reviewer-features-fixes-s4-deco",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/featurefix-worker-decompose/impl-report-featurefix-worker-decompose--i11.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "I11 fix for review attempt 1 F1 blocker — feature_hooks.configure_pool wired"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "test": {
+      "phase": "test",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "tester",
+      "task_id": "2026-06-03-1631-tester-features-fixes-s4-decompose-from",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/featurefix-worker-decompose/test-report-featurefix-worker-decompose.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "review": {
+      "phase": "review",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-reviewer",
+      "task_id": "2026-06-03-1631-pipeline-reviewer-features-fixes-s4-deco",
+      "run_index": 1,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/featurefix-worker-decompose/review-report-featurefix-worker-decompose--attempt2.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 563.24,
+        "token_spend": 7891930,
+        "tool_calls": 53,
+        "files_read": 8,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "doc": {
+      "phase": "doc",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-doc-sync",
+      "task_id": "2026-06-03-1631-pipeline-doc-sync-features-fixes-s4-deco",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/featurefix-worker-decompose/doc-report-featurefix-worker-decompose.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    }
+  },
+  "telemetry": {
+    "total_duration_s": 563.24,
+    "total_token_spend": 7891930,
+    "total_tool_calls": 53,
+    "total_files_read": 8,
+    "total_memory_hits": 0,
+    "phases_completed": 7,
+    "phases_escalated": 0,
+    "phases_retried": 0,
+    "phases_failed": 0
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "task_id": "2026-05-26-2103-g3-goal-finalize-skill",
+  "space_id": "cronos-development",
+  "title": "g3: Create goal-finalize skill",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-05-26T21:10:19.545581Z",
+      "ended_at": "2026-05-26T21:15:37.458585Z",
+      "duration_seconds": 317.91,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 44,
+      "output_tokens": 12665,
+      "cache_read_tokens": 1745218,
+      "cache_creation_tokens": 41000,
+      "cost_usd": 0.867422,
+      "tool_uses": {
+        "Glob": 3,
+        "Read": 9,
+        "Bash": 46,
+        "Skill": 1,
+        "Agent": 1
+      },
+      "error_count": 8,
+      "had_crash": false
+    }
+  ]
+}
