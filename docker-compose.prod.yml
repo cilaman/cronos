@@ -42,9 +42,6 @@ services:
         BUILD_TIME: ${BUILD_TIME:-}
         BUILD_REPO_URL: ${BUILD_REPO_URL:-}
     environment:
-      BUILD_COMMIT: ${BUILD_COMMIT:-}
-      BUILD_TIME: ${BUILD_TIME:-}
-      BUILD_REPO_URL: ${BUILD_REPO_URL:-}
       # URL the agent calls to trigger a host-side upgrade.
       # Set in .env: UPGRADE_WEBHOOK_URL=http://172.18.0.1:9137/upgrade
       # Leave blank to disable (agent will report it can't upgrade).

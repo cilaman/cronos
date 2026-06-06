@@ -17,9 +17,6 @@ services:
         BUILD_REPO_URL: ${BUILD_REPO_URL:-}
     environment:
       CRONOS_DATA_DIR: /data
-      BUILD_COMMIT: ${BUILD_COMMIT:-}
-      BUILD_TIME: ${BUILD_TIME:-}
-      BUILD_REPO_URL: ${BUILD_REPO_URL:-}
       # Optional: PAT used to authenticate `git clone` for repo-linked spaces
       # over HTTPS. Single-user only — will be replaced by per-user storage
       # once Cronos supports multiple operators. Set in .env, never commit.
