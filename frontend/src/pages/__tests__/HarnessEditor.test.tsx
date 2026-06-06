@@ -342,7 +342,7 @@ describe('HarnessEditor', () => {
     } as any);
     await act(async () => { renderEditor(); });
 
-    const canvas = screen.getByTestId('react-flow').parentElement as HTMLElement;
+    const canvas = screen.getByTestId('react-flow');
     const dataTransfer = { getData: vi.fn().mockReturnValue('agent'), dropEffect: '' };
     await act(async () => {
       fireEvent.drop(canvas, { dataTransfer, clientX: 100, clientY: 200 });

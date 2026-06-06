@@ -294,15 +294,15 @@ describe('HarnessEditor acceptance (R15)', () => {
       renderEditor();
     });
 
-    // The harness-canvas wrapper div handles onDrop
-    const canvasWrapper = screen.getByTestId('react-flow').parentElement as HTMLElement;
+    // ReactFlow component handles onDrop directly
+    const reactFlowCanvas = screen.getByTestId('react-flow');
     const dataTransfer = {
       getData: vi.fn().mockReturnValue('agent'),
       dropEffect: '',
     };
 
     await act(async () => {
-      fireEvent.drop(canvasWrapper, {
+      fireEvent.drop(reactFlowCanvas, {
         dataTransfer,
         clientX: 150,
         clientY: 250,

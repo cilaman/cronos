@@ -20,7 +20,7 @@ import { ChildTaskDrawer } from '../components/harness/ChildTaskDrawer';
 import { useHarness, useSaveHarness } from '../hooks/useHarnesses';
 import { useTriggerHarnessRun } from '../hooks/useHarnessRuns';
 import { toReactFlow, fromReactFlow } from '../components/harness/harnessMapping';
-import type { HarnessNode, HarnessEdge } from '../types';
+import type { HarnessNode, HarnessEdge, NodeType, Position } from '../types';
 import type { OverlayMode } from '../hooks/useRunStateOverlay';
 
 // ---------------------------------------------------------------------------
@@ -217,10 +217,25 @@ function HarnessEditorInner() {
     setSelectedChildTaskId(null);
   }, []);
 
-  // Derive selectedNode and selectedEdge from selectedItem state machine
+  // Derive selectedNode and selectedEdge from selectedItem state machine.
+  // Falls back to live RF nodes for unsaved (freshly-dropped) nodes not yet in harness.
   const selectedNode: HarnessNode | null =
     selectedItem.kind === 'node'
-      ? (harness?.nodes.find((n) => n.id === selectedItem.id) ?? null)
+      ? (() => {
+          const saved = harness?.nodes.find((n) => n.id === selectedItem.id) ?? null;
+          if (saved) return saved;
+          const rfNode = nodes.find((n) => n.id === selectedItem.id);
+          if (!rfNode) return null;
+          const { label, ...data } = rfNode.data as Record<string, unknown>;
+          return {
+            id: rfNode.id,
+            type: rfNode.type as NodeType,
+            label: (label as string) ?? rfNode.type ?? '',
+            position: rfNode.position as Position,
+            ports: {} as Record<string, Record<string, unknown>>,
+            data: data as Record<string, unknown>,
+          };
+        })()
       : null;
 
   const selectedEdge: HarnessEdge | null =
@@ -319,7 +334,7 @@ function HarnessEditorInner() {
         </div>
 
         <NodePalette />
-        <div className="harness-canvas relative flex-1" onDragOver={onDragOver} onDrop={onDrop}>
+        <div className="harness-canvas relative flex-1">
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -328,6 +343,8 @@ function HarnessEditorInner() {
             onConnect={onConnect}
             onNodeClick={onNodeClick}
             onEdgeClick={onEdgeClick}
+            onDragOver={onDragOver}
+            onDrop={onDrop}
             nodeTypes={nodeTypes}
             fitView
           />
