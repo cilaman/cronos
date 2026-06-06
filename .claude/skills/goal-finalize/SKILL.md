@@ -144,7 +144,7 @@ EOF
 ```bash
 REMOTE_URL=$(git -C "$SPACE_DIR" remote get-url origin 2>/dev/null || echo "")
 
-if [ -n "$CRONOS_GIT_TOKEN" ] && echo "$REMOTE_URL" | grep -q "^https://"; then
+if [ -n "$CRONOS_GIT_TOKEN" ] && [[ "$REMOTE_URL" == https://* ]]; then
     AUTH=$(echo -n "x-access-token:${CRONOS_GIT_TOKEN}" | base64 -w0)
     GIT_CONFIG_COUNT=1 \
     GIT_CONFIG_KEY_0="http.extraHeader" \
@@ -165,7 +165,7 @@ git -C "$SPACE_DIR" branch -d "${FEATURE_BRANCH}"
 
 # Delete it on origin (token-injected for HTTPS remotes, mirroring the push block)
 REMOTE_URL=$(git -C "$SPACE_DIR" remote get-url origin 2>/dev/null || echo "")
-if [ -n "$CRONOS_GIT_TOKEN" ] && echo "$REMOTE_URL" | grep -q "^https://"; then
+if [ -n "$CRONOS_GIT_TOKEN" ] && [[ "$REMOTE_URL" == https://* ]]; then
     AUTH=$(echo -n "x-access-token:${CRONOS_GIT_TOKEN}" | base64 -w0)
     GIT_CONFIG_COUNT=1 \
     GIT_CONFIG_KEY_0="http.extraHeader" \
@@ -212,6 +212,7 @@ resolved state, then re-run /goal-finalize.
 
 ## Notes
 
+- Origin URL must not be printed because it inlines the PAT and would be captured into trace JSONs.
 - The `--no-ff` merge creates a single visible merge commit in `main`'s history, making the goal's contribution easy to identify with `git log --merges`.
 - After a successful merge+push the feature branch is deleted locally and on origin; the `--no-ff` merge commit on `main` preserves the full audit trail and revert point.
 - The branch is preserved whenever the skill bails out — failed evals, failed tests, or aborted rebase. Deletion is strictly the last step on the green path.

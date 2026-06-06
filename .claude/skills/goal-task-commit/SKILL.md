@@ -118,7 +118,7 @@ SPACE_DIR="/data/spaces/cronos-development"
 REMOTE_URL=$(git -C "$SPACE_DIR" remote get-url origin 2>/dev/null || echo "")
 
 # Inject CRONOS_GIT_TOKEN credentials for HTTPS remotes
-if [ -n "$CRONOS_GIT_TOKEN" ] && echo "$REMOTE_URL" | grep -q "^https://"; then
+if [ -n "$CRONOS_GIT_TOKEN" ] && [[ "$REMOTE_URL" == https://* ]]; then
     AUTH=$(echo -n "x-access-token:${CRONOS_GIT_TOKEN}" | base64 -w0)
     GIT_CONFIG_COUNT=1 \
     GIT_CONFIG_KEY_0="http.extraHeader" \
@@ -159,6 +159,7 @@ Task: 2026-05-25-0706-arc-4-2-git-ops-commit-rebase-push-gh-pr
 
 ## Notes
 
+- Origin URL must not be printed because it inlines the PAT and would be captured into trace JSONs.
 - The branch is named after the **ROOT** goal; sub-goal tasks push to the same shared branch. A task inside a sub-goal always commits to `feature/<root-goal-slug>`, never `feature/<sub-goal-slug>`.
 - Always run tests before committing — the feature branch is the integration point for the whole goal, so a broken commit blocks subsequent tasks.
 - The commit message intentionally includes the task ID so the git log traces back to Cronos task history.

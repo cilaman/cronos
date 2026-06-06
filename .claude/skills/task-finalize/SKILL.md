@@ -111,7 +111,7 @@ GITEOF
 )"
 
 REMOTE_URL=$(git -C "$SPACE_DIR" remote get-url origin 2>/dev/null || echo "")
-if [ -n "$CRONOS_GIT_TOKEN" ] && echo "$REMOTE_URL" | grep -q "^https://"; then
+if [ -n "$CRONOS_GIT_TOKEN" ] && [[ "$REMOTE_URL" == https://* ]]; then
     AUTH=$(echo -n "x-access-token:${CRONOS_GIT_TOKEN}" | base64 -w0)
     GIT_CONFIG_COUNT=1 \
     GIT_CONFIG_KEY_0="http.extraHeader" \
@@ -168,7 +168,7 @@ This skill should evolve based on real-world failures. When you discover a probl
    git commit -m "improve task-finalize: <what was wrong and how it is fixed>"
 
    REMOTE_URL=$(git remote get-url origin 2>/dev/null || echo "")
-   if [ -n "$CRONOS_GIT_TOKEN" ] && echo "$REMOTE_URL" | grep -q "^https://"; then
+   if [ -n "$CRONOS_GIT_TOKEN" ] && [[ "$REMOTE_URL" == https://* ]]; then
        AUTH=$(echo -n "x-access-token:${CRONOS_GIT_TOKEN}" | base64 -w0)
        GIT_CONFIG_COUNT=1 \
        GIT_CONFIG_KEY_0="http.extraHeader" \
@@ -180,3 +180,4 @@ This skill should evolve based on real-world failures. When you discover a probl
    ```
 
 <!-- Changelog: add entries here as the skill evolves (newest first) -->
+- Origin URL must not be printed because it inlines the PAT and would be captured into trace JSONs.
