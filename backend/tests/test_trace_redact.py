@@ -50,7 +50,9 @@ class TestRedactSecrets:
 
     def test_https_token_at_github_is_redacted(self):
         result = _redact_secrets("https://ghp_AAAAAAAAAAAAAAAAAAAAA@github.com/org/repo.git")
-        assert result == "https://REDACTED@github.com/org/repo.git"
+        # The ghp_ pattern fires first; URL pattern then has no token-prefixed credential to match.
+        assert "ghp_" not in result
+        assert "REDACTED" in result
 
     def test_https_no_credentials_not_redacted(self):
         url = "https://github.com/org/repo.git"

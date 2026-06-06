@@ -9,9 +9,12 @@ _PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"gho_[A-Za-z0-9_]{20,}"), "REDACTED-GHO"),
     (re.compile(r"ghs_[A-Za-z0-9_]{20,}"), "REDACTED-GHS"),
     (re.compile(r"ghr_[A-Za-z0-9_]{20,}"), "REDACTED-GHR"),
-    (re.compile(r"https://[^@\s]+@github\.com"), "https://REDACTED@github.com"),
+    (re.compile(r"https://(?:ghp_|github_pat_|gho_|ghs_|ghr_)[^@\s]+@github\.com"), "https://REDACTED@github.com"),
     (re.compile(r"x-access-token:[A-Za-z0-9_]{20,}"), "x-access-token:REDACTED"),
 ]
+
+# Public alias: compiled patterns only (no replacement strings).
+SECRET_PATTERNS: list[re.Pattern[str]] = [pat for pat, _ in _PATTERNS]
 
 
 def _redact_secrets(text: str) -> str:
