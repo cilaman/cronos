@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -37,9 +37,10 @@ function findFeatureState(
 
 interface ComposerProps {
   spaceId: string;
+  inputRef?: React.RefObject<HTMLInputElement>;
 }
 
-function FeatureComposer({ spaceId }: ComposerProps) {
+function FeatureComposer({ spaceId, inputRef }: ComposerProps) {
   const [title, setTitle] = useState("");
   const [type, setType] = useState<"feature" | "fix">("feature");
   const createFeature = useCreateFeature(spaceId);
@@ -104,6 +105,7 @@ function FeatureComposer({ spaceId }: ComposerProps) {
       </div>
       <div className="flex gap-1">
         <input
+          ref={inputRef}
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
@@ -129,6 +131,7 @@ export function FeaturesBoard({ spaceId }: Props) {
   const transition = useTransitionFeatureState(spaceId);
   const [activeTask, setActiveTask] = useState<TaskSummary | null>(null);
   const [hiddenLanes, setHiddenLanes] = useState<Set<FeatureState>>(new Set());
+  const composerInputRef = useRef<HTMLInputElement>(null);
 
   const hideLane = useCallback((state: string) => {
     setHiddenLanes((prev) => new Set([...prev, state as FeatureState]));
@@ -247,12 +250,12 @@ export function FeaturesBoard({ spaceId }: Props) {
                   label={label}
                   tasks={tasks}
                   onOpen={() => {}}
-                  onAdd={() => {}}
-                  showAdd={false}
+                  onAdd={() => composerInputRef.current?.focus()}
+                  showAdd={isBacklog}
                   onHideLane={hideLane}
                 />
               </SortableContext>
-              {isBacklog && <FeatureComposer spaceId={spaceId} />}
+              {isBacklog && <FeatureComposer spaceId={spaceId} inputRef={composerInputRef} />}
             </div>
           );
         })}

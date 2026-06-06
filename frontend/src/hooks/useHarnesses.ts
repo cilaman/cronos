@@ -17,6 +17,7 @@ export function useHarness(spaceId: string, name: string) {
     queryKey: ['harness', spaceId, name],
     queryFn: () => api.getHarness(spaceId, name),
     enabled: !!spaceId && !!name,
+    refetchOnWindowFocus: false,
   });
 }
 

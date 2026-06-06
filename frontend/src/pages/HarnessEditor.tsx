@@ -91,13 +91,17 @@ function HarnessEditorInner() {
   const [overlayMode, setOverlayMode] = useState<OverlayMode>('live');
   const [selectedChildTaskId, setSelectedChildTaskId] = useState<string | null>(null);
 
-  // Initialize canvas + variables from loaded harness
+  // Initialize canvas + variables from loaded harness — only on first load.
+  // Background refetches from React Query must NOT reset node positions since
+  // the user may have dragged nodes or dropped new ones since the last save.
+  const initializedRef = React.useRef(false);
   React.useEffect(() => {
-    if (harness) {
+    if (harness && !initializedRef.current) {
       const { nodes: rfNodes, edges: rfEdges } = toReactFlow(harness);
       setNodes(rfNodes);
       setEdges(rfEdges);
       setVariables(harness.variables ?? {});
+      initializedRef.current = true;
     }
   }, [harness, setNodes, setEdges]);
 
