@@ -106,7 +106,7 @@ _NOT_IMPLEMENTED = JSONResponse(
 )
 
 
-@router.post("/", response_model=FeatureRead, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=FeatureRead, status_code=status.HTTP_201_CREATED)
 async def create_feature(body: CreateFeatureBody, request: Request) -> FeatureRead:
     """POST /api/features — create a new feature or fix (I5).
 
@@ -145,7 +145,7 @@ async def create_feature(body: CreateFeatureBody, request: Request) -> FeatureRe
     return _build_feature_read(task)
 
 
-@router.get("/", response_model=FeatureBoard, status_code=200)
+@router.get("", response_model=FeatureBoard, status_code=200)
 async def list_features(
     request: Request,
     space_id: str = "",

@@ -169,7 +169,7 @@ def test_post_feature_fires_mirror_with_reason_create(app_client, mock_store_cre
         new_callable=AsyncMock,
     ) as mock_mirror:
         response = app_client.post(
-            "/api/features/",
+            "/api/features",
             json={
                 "space_id": "space-1",
                 "title": "My Feature",
@@ -201,7 +201,7 @@ def test_post_feature_mirror_receives_task_and_space(app_client, mock_store_crea
         new_callable=AsyncMock,
     ) as mock_mirror:
         response = app_client.post(
-            "/api/features/",
+            "/api/features",
             json={"space_id": "space-1", "title": "My Feature", "type": "feature"},
             headers=AUTH_HEADER,
         )
@@ -227,7 +227,7 @@ def test_post_feature_mirror_not_called_on_no_git(app_client):
         new_callable=AsyncMock,
     ) as mock_mirror:
         response = app_client.post(
-            "/api/features/",
+            "/api/features",
             json={"space_id": "space-1", "title": "My Feature", "type": "feature"},
             headers=AUTH_HEADER,
         )
@@ -534,7 +534,7 @@ def test_fire_and_forget_does_not_block_response(app_client, mock_store_create):
         mock_mirror.return_value = None  # instant no-op
         start = time.monotonic()
         response = app_client.post(
-            "/api/features/",
+            "/api/features",
             json={"space_id": "space-1", "title": "My Feature", "type": "feature"},
             headers=AUTH_HEADER,
         )
@@ -568,7 +568,7 @@ def test_mirror_non_blocking_response_with_slow_mock(app_client, mock_store_crea
     ):
         start = time.monotonic()
         response = app_client.post(
-            "/api/features/",
+            "/api/features",
             json={"space_id": "space-1", "title": "My Feature", "type": "feature"},
             headers=AUTH_HEADER,
         )
@@ -621,7 +621,7 @@ async def test_mirror_background_task_observably_executes(monkeypatch, tmp_path)
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
             response = await client.post(
-                "/api/features/",
+                "/api/features",
                 json={"space_id": "space-1", "title": "My Feature", "type": "feature"},
                 headers=AUTH_HEADER,
             )
@@ -645,7 +645,7 @@ async def test_mirror_background_task_observably_executes(monkeypatch, tmp_path)
     [
         # Call site 1
         (
-            "/api/features/",
+            "/api/features",
             "post",
             {"space_id": "space-1", "title": "My Feature", "type": "feature"},
             "create",
@@ -774,7 +774,7 @@ def test_list_features_does_not_fire_mirror(app_client):
         new_callable=AsyncMock,
     ) as mock_mirror:
         response = app_client.get(
-            "/api/features/?space_id=space-1",
+            "/api/features?space_id=space-1",
             headers=AUTH_HEADER,
         )
 
