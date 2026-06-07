@@ -873,6 +873,19 @@ async def test_run_goal_no_children_marks_done(worker, task_store):
     assert task_store.get(goal.id).state == TaskState.DONE
 
 
+async def test_run_goal_skips_already_done_goal(worker, task_store):
+    """Calling _run_goal on an already-DONE goal is a no-op (stale enqueue guard)."""
+    goal = await task_store.create(space_id=SPACE_ID, title="Done goal", brief="g", type="goal")
+    # Manually transition to DONE (simulating a goal that finished but was double-enqueued).
+    await task_store.transition(goal.id, TaskState.ACTIVE, allowed={(TaskState.BACKLOG, TaskState.ACTIVE)})
+    await task_store.transition(goal.id, TaskState.DONE, allowed={(TaskState.ACTIVE, TaskState.DONE)})
+
+    await worker._run_goal(goal.id, None)
+
+    # State unchanged and no history appended by a second run.
+    assert task_store.get(goal.id).state == TaskState.DONE
+
+
 async def test_run_goal_runs_children_in_order_and_marks_done(worker, task_store, monkeypatch):
     """Goal with two BACKLOG children runs them sequentially and marks itself DONE."""
     import app.worker as worker_module
@@ -931,6 +944,28 @@ async def test_run_goal_skips_done_children(worker, task_store, monkeypatch):
     assert c1.id not in ran
     assert c2.id in ran
     assert task_store.get(goal.id).state == TaskState.DONE
+
+
+async def test_run_goal_pauses_silently_when_child_is_active(worker, task_store):
+    """If a child is already ACTIVE when _run_goal starts (e.g. restart after upgrade),
+    the goal goes WAITING with no user-visible waiting_question.
+    goal_sync will re-enqueue the goal once the child finishes."""
+    goal = await task_store.create(space_id=SPACE_ID, title="Goal", brief="g", type="goal")
+    child = await task_store.create(space_id=SPACE_ID, title="C1", brief="b", parent_id=goal.id)
+    # Simulate the post-upgrade state: both goal and child preserved as ACTIVE.
+    await task_store.transition(
+        goal.id, TaskState.ACTIVE, allowed={(TaskState.BACKLOG, TaskState.ACTIVE)}
+    )
+    await task_store.transition(
+        child.id, TaskState.ACTIVE, allowed={(TaskState.BACKLOG, TaskState.ACTIVE)}
+    )
+
+    await worker._run_goal(goal.id, None)
+
+    goal_task = task_store.get(goal.id)
+    assert goal_task.state == TaskState.WAITING
+    # No user-facing question — this resolves automatically when the child finishes.
+    assert goal_task.waiting_question is None
 
 
 async def test_run_goal_pauses_when_child_fails(worker, task_store, monkeypatch):

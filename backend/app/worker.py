@@ -1454,6 +1454,10 @@ class Worker:
         if goal is None:
             log.warning("Skipping unknown goal %s", goal_id)
             return
+        if goal.state == TaskState.DONE:
+            # Guard against stale enqueues (e.g. startup + goal_sync both enqueue the same goal).
+            log.info("Skipping already-done goal %s", goal_id)
+            return
 
         self._current_id = goal_id
         cancel_event = asyncio.Event()
@@ -1498,7 +1502,14 @@ class Worker:
                     })
                     continue
 
-                if child.state != TaskState.BACKLOG:
+                if child.state == TaskState.ACTIVE:
+                    # Child is already in-flight (e.g. re-enqueued after a restart while
+                    # this goal was also mid-run).  Pause here without a user-visible error;
+                    # goal_sync will re-enqueue this goal once the child finishes.
+                    failed_child_id = child_id
+                    fail_reason = None
+                    break
+                elif child.state != TaskState.BACKLOG:
                     failed_child_id = child_id
                     fail_reason = (
                         f"Child '{child.title}' is in {child.state.value} state and needs attention."
@@ -1681,11 +1692,17 @@ class Worker:
             summary = f"Stopped. Completed {len(completed)}, skipped {len(skipped)} already-done."
         elif failed_child_id is not None:
             goal_new_state = TaskState.WAITING
-            goal_waiting_question = fail_reason
-            summary = (
-                f"Paused: {fail_reason} "
-                f"Completed {len(completed)}, skipped {len(skipped)} already-done."
-            )
+            goal_waiting_question = fail_reason  # None means transient/no user action needed
+            if fail_reason:
+                summary = (
+                    f"Paused: {fail_reason} "
+                    f"Completed {len(completed)}, skipped {len(skipped)} already-done."
+                )
+            else:
+                summary = (
+                    f"Waiting for in-flight child task to complete. "
+                    f"Completed {len(completed)}, skipped {len(skipped)} already-done."
+                )
         else:
             goal_new_state = TaskState.DONE
             goal_waiting_question = None
