@@ -1433,3 +1433,148 @@ async def test_finalize_done_publishes_run_end_after_pr_opened(
     pr_idx = event_types.index("pr_opened")
     run_end_idx = event_types.index("run_end")
     assert pr_idx < run_end_idx
+
+
+# ---------------------------------------------------------------------------
+# _run_goal: auto-repair non-sibling dep
+# ---------------------------------------------------------------------------
+
+
+async def test_run_goal_auto_repairs_non_sibling_dep_and_runs_in_order(
+    worker, task_store, monkeypatch, caplog
+):
+    """A direct child (sub-goal) carries a depends_on pointing at a grandchild of the
+    parent goal (non-sibling dep).  _run_goal should auto-repair by replacing the
+    grandchild dep with the proper sibling dep, re-order, and run everything in the
+    correct order.
+
+    Setup:
+      goal
+        ├── alpha-subgoal   (ID sorts first — processed first without repair)
+        │     └── alpha-doc  ← grandchild of goal
+        └── zeta-subgoal    (depends_on=[alpha-doc] — wrong: non-sibling dep)
+              └── zeta-task
+
+    Without repair:  alpha-subgoal runs first (sorts before zeta alphabetically),
+    alpha-doc finishes, zeta tries to activate → dep already met → no error.
+
+    To trigger the repair we need zeta-subgoal to be processed BEFORE alpha-subgoal.
+    We achieve this by giving zeta-subgoal a depends_on=[alpha-doc] (the non-sibling
+    dep) while naming it so it sorts FIRST alphabetically ("aaa-" prefix).
+    """
+    import logging as logging_mod
+    import app.worker as worker_module
+
+    run_order: list[str] = []
+
+    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None, goal_context=None, **kwargs):
+        run_order.append(task.id)
+        return _make_result(exit_code=0, status=Status.DONE)
+
+    monkeypatch.setattr(worker_module, "run_agent", fake_run_agent)
+
+    # Parent goal
+    goal = await task_store.create(space_id=SPACE_ID, title="Parent Goal", brief="g", type="goal")
+
+    # "Beta SG": the prerequisite subgoal (ID ~ "...-beta-sg", sorts second)
+    beta_sg = await task_store.create(
+        space_id=SPACE_ID, title="Beta SG", brief="b", parent_id=goal.id, type="goal"
+    )
+    beta_doc = await task_store.create(
+        space_id=SPACE_ID, title="Beta doc", brief="b", parent_id=beta_sg.id
+    )
+
+    # "Alpha SG": the dependent subgoal (ID ~ "...-alpha-sg", sorts first).
+    # depends_on=[beta_doc] — a grandchild dep, NOT a sibling dep.
+    # _topo_children ignores non-sibling deps, so alpha is ordered before beta
+    # but transition(alpha, ACTIVE) fails because beta_doc is not done.
+    alpha_sg = await task_store.create(
+        space_id=SPACE_ID, title="Alpha SG", brief="b", parent_id=goal.id, type="goal",
+        depends_on=[beta_doc.id],
+    )
+    alpha_task = await task_store.create(
+        space_id=SPACE_ID, title="Alpha task", brief="b", parent_id=alpha_sg.id
+    )
+
+    await task_store.transition(goal.id, TaskState.ACTIVE, allowed={(TaskState.BACKLOG, TaskState.ACTIVE)})
+
+    with caplog.at_level(logging_mod.WARNING, logger="cronos.worker"):
+        await worker._run_goal(goal.id, None)
+
+    # Beta (prerequisite) must run before Alpha
+    assert run_order.index(beta_doc.id) < run_order.index(alpha_task.id)
+    # Auto-repair warning emitted
+    assert any("Auto-repaired missing sibling dep" in r.message for r in caplog.records)
+    # Alpha SG now has Beta SG as a sibling dep
+    alpha_sg_after = task_store.get(alpha_sg.id)
+    assert beta_sg.id in alpha_sg_after.depends_on
+    # Goal completes successfully
+    assert task_store.get(goal.id).state == TaskState.DONE
+
+
+async def test_run_goal_correct_sibling_deps_no_repair_needed(
+    worker, task_store, monkeypatch, caplog
+):
+    """When sibling deps are already correct, no auto-repair fires and goal succeeds."""
+    import logging as logging_mod
+    import app.worker as worker_module
+
+    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None, goal_context=None, **kwargs):
+        return _make_result(exit_code=0, status=Status.DONE)
+
+    monkeypatch.setattr(worker_module, "run_agent", fake_run_agent)
+
+    goal = await task_store.create(space_id=SPACE_ID, title="Goal", brief="g", type="goal")
+    sg_a = await task_store.create(
+        space_id=SPACE_ID, title="SG-A", brief="b", parent_id=goal.id, type="goal"
+    )
+    await task_store.create(space_id=SPACE_ID, title="SG-A task", brief="b", parent_id=sg_a.id)
+    sg_b = await task_store.create(
+        space_id=SPACE_ID, title="SG-B", brief="b", parent_id=goal.id, type="goal",
+        depends_on=[sg_a.id],
+    )
+    await task_store.create(space_id=SPACE_ID, title="SG-B task", brief="b", parent_id=sg_b.id)
+
+    await task_store.transition(goal.id, TaskState.ACTIVE, allowed={(TaskState.BACKLOG, TaskState.ACTIVE)})
+
+    with caplog.at_level(logging_mod.WARNING, logger="cronos.worker"):
+        await worker._run_goal(goal.id, None)
+
+    assert not any("Auto-repaired" in r.message for r in caplog.records)
+    assert task_store.get(goal.id).state == TaskState.DONE
+
+
+async def test_run_goal_auto_repair_capped_at_one_attempt(
+    worker, task_store, monkeypatch, caplog
+):
+    """Auto-repair skips deps it cannot resolve (dep not found in store); goal fails."""
+    import logging as logging_mod
+    import app.worker as worker_module
+
+    async def fake_run_agent(task, *, user_message, on_event, cancel_event=None, space=None, goal_context=None, **kwargs):
+        return _make_result(exit_code=0, status=Status.DONE)
+
+    monkeypatch.setattr(worker_module, "run_agent", fake_run_agent)
+
+    goal = await task_store.create(space_id=SPACE_ID, title="Goal", brief="g", type="goal")
+    # Alpha SG (sorts first) depends on a task that does not exist → unresolvable dep.
+    alpha_sg = await task_store.create(
+        space_id=SPACE_ID, title="Alpha SG", brief="b", parent_id=goal.id, type="goal",
+        depends_on=["nonexistent-task-id"],
+    )
+    await task_store.create(space_id=SPACE_ID, title="Alpha task", brief="b", parent_id=alpha_sg.id)
+
+    beta_sg = await task_store.create(
+        space_id=SPACE_ID, title="Beta SG", brief="b", parent_id=goal.id, type="goal"
+    )
+    await task_store.create(space_id=SPACE_ID, title="Beta task", brief="b", parent_id=beta_sg.id)
+
+    await task_store.transition(goal.id, TaskState.ACTIVE, allowed={(TaskState.BACKLOG, TaskState.ACTIVE)})
+
+    with caplog.at_level(logging_mod.WARNING, logger="cronos.worker"):
+        await worker._run_goal(goal.id, None)
+
+    # Goal fails (dep cannot be resolved — dep_task is None so sibling walk is skipped)
+    assert task_store.get(goal.id).state == TaskState.WAITING
+    # No repair warning: dep_task was None, nothing to repair
+    assert not any("Auto-repaired" in r.message for r in caplog.records)
