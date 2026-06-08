@@ -387,6 +387,48 @@ def test_process_feature_409_includes_detail_message(app_client):
     assert detail, "409 response must include a 'detail' field with a description"
 
 
+def test_process_feature_early_guard_skips_transition_when_already_processing(app_client):
+    """Early guard must short-circuit before calling transition_feature when already PROCESSING.
+
+    This verifies F3: the explicit state check fires *before* transition_feature,
+    preventing a duplicate decomposition agent from being enqueued even if
+    transition_feature would silently no-op the same-state transition.
+    """
+    already_processing_task = _make_task(feature_state=FeatureState.PROCESSING)
+
+    mock_store = MagicMock()
+    mock_store.get.return_value = already_processing_task
+    # transition_feature would NOT raise — it would silently no-op — proving the 409
+    # must come from the early guard, not from transition_feature.
+    mock_store.transition_feature = AsyncMock(return_value=already_processing_task)
+
+    app_client.app.state.store = mock_store
+    app_client.app.state.space_store.get.return_value = _make_space()
+
+    with patch(
+        "app.api.features.mirror_feature_to_github",
+        new_callable=AsyncMock,
+    ) as mock_mirror, patch(
+        "app.api.features.enqueue_feature_decomposition",
+        new_callable=AsyncMock,
+    ) as mock_enqueue:
+        response = app_client.post(
+            "/api/features/2024-01-15-1000-my-feature/process",
+            headers=AUTH_HEADER,
+        )
+
+    assert response.status_code == 409, response.text
+    assert "already" in response.json().get("detail", "").lower(), (
+        "409 detail must mention 'already' to indicate duplicate guard fired"
+    )
+    assert mock_store.transition_feature.call_count == 0, (
+        "transition_feature must NOT be called when the early guard fires; "
+        f"got call_count={mock_store.transition_feature.call_count}"
+    )
+    assert mock_mirror.call_count == 0
+    assert mock_enqueue.call_count == 0
+
+
 def test_process_feature_storage_error_returns_409(app_client):
     """A generic StorageError from transition_feature returns 409."""
     original_task = _make_task(feature_state=FeatureState.DONE)
