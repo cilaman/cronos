@@ -83,7 +83,7 @@ def _fire_mirror(
                 exc_info=exc,
             )
 
-    coro = mirror_feature_to_github(task, space=space, reason=reason)  # type: ignore[arg-type]
+    coro = mirror_feature_to_github(task, space=space, reason=reason)
     bg_task = asyncio.create_task(coro)
     bg_task.add_done_callback(_log_mirror_error)
 
@@ -345,6 +345,13 @@ async def process_feature(feature_id: str, request: Request) -> FeatureRead:
     task = store.get(feature_id)
     if task is None or task.type not in ("feature", "fix"):
         raise HTTPException(status_code=404, detail=f"Feature {feature_id} not found")
+
+    # Guard against double-processing: PROCESSING→PROCESSING would silently no-op in
+    # transition_feature but still fire mirror + enqueue, potentially spawning duplicate agents.
+    if task.feature_state == FeatureState.PROCESSING:
+        raise HTTPException(status_code=409, detail="Feature is already being processed")
+    # Re-processing a PLANNED feature (which may already have realizing items) is allowed —
+    # the user explicitly requested re-decomposition.
 
     # Resolve space for mirror call
     space = space_store.get(task.space_id)
