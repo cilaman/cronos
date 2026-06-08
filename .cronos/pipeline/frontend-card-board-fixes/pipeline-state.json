@@ -3,7 +3,7 @@
   "goal_slug": "frontend-card-board-fixes",
   "status": "running",
   "created_at": "2026-06-08T14:50:29.422417+00:00",
-  "updated_at": "2026-06-08T14:50:29.423959+00:00",
+  "updated_at": "2026-06-08T15:00:02.049419+00:00",
   "request_text": null,
   "phases": {
     "analysis": {
@@ -33,6 +33,38 @@
         "memory_hits": 0
       },
       "header_summary": {}
+    },
+    "design": {
+      "phase": "design",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-architect",
+      "task_id": "2026-06-07-1128-architect-frontend-card-board-fixes",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/frontend-card-board-fixes/design-report-frontend-card-board-fixes.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [
+          "coverage_summary.strategies[3]: dropped unknown free-text strategy 'component_decomposition'",
+          "coverage_summary.strategies[4]: dropped unknown free-text strategy 'iteration_planning'",
+          "coverage_summary.strategies[5]: dropped unknown free-text strategy 'risk_identification'"
+        ],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
     }
   },
   "telemetry": {
@@ -41,7 +73,7 @@
     "total_tool_calls": 0,
     "total_files_read": 0,
     "total_memory_hits": 0,
-    "phases_completed": 1,
+    "phases_completed": 2,
     "phases_escalated": 0,
     "phases_retried": 0,
     "phases_failed": 0
