@@ -53,6 +53,23 @@ function IconFileText({ className }: { className?: string }) {
   );
 }
 
+function IconGitIssue({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="12"
+      height="12"
+      viewBox="0 0 16 16"
+      fill="currentColor"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" />
+      <path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Z" />
+    </svg>
+  );
+}
+
 const PRIORITY_STYLES: Record<number, { badge: string; dot: string }> = {
   1: {
     badge: "border-red-200 bg-red-50 text-red-600 dark:border-red-400/30 dark:bg-red-400/10 dark:text-red-400",
@@ -500,18 +517,34 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
               <IconFileText />
             </button>
           )}
-          {task.issue_url && (
+          {task.issue_url ? (
             <a
               href={task.issue_url}
               target="_blank"
               rel="noopener noreferrer"
-              title="Open issue"
+              title="Open GitHub issue"
               onClick={(e) => e.stopPropagation()}
-              className="inline-flex items-center text-ink-faint transition hover:text-accent-bright"
+              className="inline-flex items-center gap-0.5 text-emerald-600 transition hover:text-emerald-500 dark:text-emerald-400 dark:hover:text-emerald-300"
+            >
+              <IconGitIssue />
+              {task.issue_number != null && (
+                <span className="font-mono text-[10px] leading-none">#{task.issue_number}</span>
+              )}
+            </a>
+          ) : task.proposed_issue_path ? (
+            <button
+              type="button"
+              title="Draft issue (no GitHub remote)"
+              onClick={(e) => {
+                e.stopPropagation();
+                void navigator.clipboard.writeText(task.proposed_issue_path!);
+              }}
+              className="inline-flex items-center gap-0.5 text-ink-faint transition hover:text-ink-muted"
             >
               <IconFileText />
-            </a>
-          )}
+              <span className="font-mono text-[10px] leading-none">Draft issue</span>
+            </button>
+          ) : null}
           {task.feature_key && (
             <span className="inline-flex items-center rounded border border-emerald-200 bg-emerald-50 px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-400">
               {task.feature_key}

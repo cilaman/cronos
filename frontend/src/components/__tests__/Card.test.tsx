@@ -758,28 +758,60 @@ describe("Card — feature_key chip", () => {
 // ---------------------------------------------------------------------------
 
 describe("Card — issue_url anchor", () => {
-  it("renders an issue link anchor when issue_url is present", () => {
+  it("renders a GitHub issue link with #number when issue_url and issue_number are present", () => {
     const task = makeTask({
-      type: "issue",
+      type: "feature",
       issue_url: "https://github.com/owner/repo/issues/42",
+      issue_number: 42,
     });
 
     renderCard({ task, onClick: () => {} });
 
-    const anchor = screen.getByTitle("Open issue");
+    const anchor = screen.getByTitle("Open GitHub issue");
     expect(anchor).toBeInTheDocument();
     expect(anchor.getAttribute("href")).toBe(
       "https://github.com/owner/repo/issues/42",
     );
     expect(anchor.getAttribute("target")).toBe("_blank");
+    expect(screen.getByText("#42")).toBeInTheDocument();
   });
 
-  it("does NOT render the issue link when issue_url is absent", () => {
-    const task = makeTask({ type: "issue", issue_url: null });
+  it("renders GitHub issue link without number when issue_number is null", () => {
+    const task = makeTask({
+      type: "feature",
+      issue_url: "https://github.com/owner/repo/issues/99",
+      issue_number: null,
+    });
 
     renderCard({ task, onClick: () => {} });
 
-    expect(screen.queryByTitle("Open issue")).not.toBeInTheDocument();
+    const anchor = screen.getByTitle("Open GitHub issue");
+    expect(anchor).toBeInTheDocument();
+    expect(screen.queryByText(/#\d+/)).not.toBeInTheDocument();
+  });
+
+  it("renders a Draft issue button when only proposed_issue_path is set", () => {
+    const task = makeTask({
+      type: "feature",
+      issue_url: null,
+      proposed_issue_path: ".cronos/proposed-issues/feat-001.md",
+    });
+
+    renderCard({ task, onClick: () => {} });
+
+    const btn = screen.getByTitle("Draft issue (no GitHub remote)");
+    expect(btn).toBeInTheDocument();
+    expect(screen.getByText("Draft issue")).toBeInTheDocument();
+    expect(screen.queryByTitle("Open GitHub issue")).not.toBeInTheDocument();
+  });
+
+  it("renders nothing for issue when both issue_url and proposed_issue_path are absent", () => {
+    const task = makeTask({ type: "feature", issue_url: null, proposed_issue_path: null });
+
+    renderCard({ task, onClick: () => {} });
+
+    expect(screen.queryByTitle("Open GitHub issue")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Draft issue (no GitHub remote)")).not.toBeInTheDocument();
   });
 });
 

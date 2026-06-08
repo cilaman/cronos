@@ -82,6 +82,32 @@ export interface FeatureBoard {
   done: TaskSummary[];
 }
 
+/** Full feature/fix representation returned by GET /api/features/{id}. */
+export interface FeatureRead {
+  id: string;
+  space_id: string;
+  title: string;
+  state: TaskState;
+  created_at: string;
+  updated_at: string;
+  brief: string;
+  priority: number;
+  manual_order: number;
+  type: TaskType;
+  parent_id: string | null;
+  depends_on: string[];
+  pr_url: string | null;
+  proposed_pr_path: string | null;
+  feature_state: FeatureState | null;
+  feature_key: string | null;
+  realizes: string | null;
+  issue_number: number | null;
+  issue_url: string | null;
+  proposed_issue_path: string | null;
+  waiting_question: string | null;
+  realizing_items: TaskSummary[];
+}
+
 export interface ChildProgressItem {
   id: string;
   title: string;
@@ -122,6 +148,7 @@ export interface TaskSummary {
   feature_key?: string | null;
   issue_number?: number | null;
   issue_url?: string | null;
+  proposed_issue_path?: string | null;
   realizes?: string | null;
   realized_by?: string[];
 }
