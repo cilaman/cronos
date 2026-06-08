@@ -198,6 +198,7 @@ async def mirror_feature_to_github(
             task.id,
             reason,
             exc,
+            exc_info=True,
         )
 
     return None
