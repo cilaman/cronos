@@ -83,7 +83,7 @@ def _fire_mirror(
                 exc_info=exc,
             )
 
-    coro = mirror_feature_to_github(task, space=space, reason=reason)  # type: ignore[arg-type]
+    coro = mirror_feature_to_github(task, space=space, reason=reason)
     bg_task = asyncio.create_task(coro)
     bg_task.add_done_callback(_log_mirror_error)
 

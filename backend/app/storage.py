@@ -228,6 +228,25 @@ def validate_realizes(
         raise CycleError(
             f"Target {feature_id!r} has type {target.type!r}; realizes must point to a feature or fix"
         )
+    # BFS from item_id following existing realizes pointers to detect transitive cycles.
+    # If feature_id is already reachable from item_id's chain, reject.
+    visited: set[str] = {item_id}
+    queue: list[str] = [item_id]
+    hops = 0
+    while queue and hops < 50:
+        current_id = queue.pop(0)
+        hops += 1
+        current = by_id.get(current_id)
+        if current is None or current.realizes is None:
+            continue
+        next_id = current.realizes
+        if next_id == feature_id:
+            raise StorageError(
+                f"Circular realizes reference: {item_id} already transitively realizes {feature_id}"
+            )
+        if next_id not in visited:
+            visited.add(next_id)
+            queue.append(next_id)
 
 
 _TERMINAL_STATES: frozenset[str] = frozenset({"done", "archived"})
@@ -760,6 +779,11 @@ class TaskStore:
                 if task.type not in ("feature", "fix"):
                     continue
                 if task.feature_state is None:
+                    log.warning(
+                        "feature_board: task %s (type=%s) has feature_state=None — skipping",
+                        task.id,
+                        task.type,
+                    )
                     continue
                 summary = summarize(task)
                 buckets[task.feature_state].append(summary)
@@ -876,6 +900,21 @@ class TaskStore:
             self._reindex_locked(path)
             return self._by_id[task_id]
 
+    async def set_feature_waiting_question(self, task_id: str, question: str | None) -> Task:
+        async with self._lock:
+            task = self._by_id.get(task_id)
+            if task is None:
+                raise TaskNotFound(task_id)
+            if task.type not in ("feature", "fix"):
+                raise StorageError(f"Task {task_id} is not a feature or fix")
+            updated = task.model_copy(
+                update={"waiting_question": question, "updated_at": datetime.now(tz=UTC)}
+            )
+            path = self._path_by_id[task_id]
+            atomic_write(path, dump_task(updated))
+            self._reindex_locked(path)
+            return self._by_id[task_id]
+
     async def create(
         self,
         *,
@@ -954,6 +993,10 @@ class TaskStore:
             task = self._by_id.get(task_id)
             if task is None:
                 raise TaskNotFound(task_id)
+            if type is not None and type in ("feature", "fix") and task.type not in ("feature", "fix"):
+                raise StorageError(
+                    "Cannot change task type to feature or fix via update(); create a new feature task instead"
+                )
             update_dict: dict = {
                 "title": title.strip() if title is not None else task.title,
                 "brief": brief.strip() if brief is not None else task.brief,
