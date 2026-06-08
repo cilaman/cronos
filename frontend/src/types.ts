@@ -151,6 +151,7 @@ export interface TaskSummary {
   proposed_issue_path?: string | null;
   realizes?: string | null;
   realized_by?: string[];
+  realizing_count?: number;
 }
 
 export type AgentMode = "plan" | "auto" | "ask";

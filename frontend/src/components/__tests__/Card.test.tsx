@@ -858,71 +858,59 @@ describe("Card — realizes chip", () => {
 });
 
 // ---------------------------------------------------------------------------
-// realized_by list (feature/fix cards only)
+// realizing_count badge (feature/fix cards only)
 // ---------------------------------------------------------------------------
 
-describe("Card — realized_by list", () => {
-  it("renders realized_by entries as click-through items on a feature card", () => {
+describe("Card — realizing_count badge", () => {
+  it("renders 'N linked' badge on a feature card when realizing_count > 0", () => {
     const task = makeTask({
       type: "feature",
-      realized_by: ["fix-task-1", "fix-task-2"],
+      realizing_count: 3,
     });
 
     renderCard({ task, onClick: () => {} });
 
-    expect(screen.getByText(/fix-task-1/i)).toBeInTheDocument();
-    expect(screen.getByText(/fix-task-2/i)).toBeInTheDocument();
+    expect(screen.getByText(/3 linked/i)).toBeInTheDocument();
   });
 
-  it("renders realized_by entries on a fix card", () => {
+  it("renders 'N linked' badge on a fix card", () => {
     const task = makeTask({
       type: "fix",
-      realized_by: ["fix-task-3"],
+      realizing_count: 1,
     });
 
     renderCard({ task, onClick: () => {} });
 
-    expect(screen.getByText(/fix-task-3/i)).toBeInTheDocument();
+    expect(screen.getByText(/1 linked/i)).toBeInTheDocument();
   });
 
-  it("does NOT render realized_by section when the list is empty", () => {
+  it("does NOT render the badge when realizing_count is 0", () => {
     const task = makeTask({
       type: "feature",
-      realized_by: [],
+      realizing_count: 0,
     });
 
     renderCard({ task, onClick: () => {} });
 
-    // No realized_by entries should appear
-    expect(screen.queryByText(/fix-task-/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/linked/i)).not.toBeInTheDocument();
   });
 
-  it("does NOT render realized_by section on a non-feature/fix card type", () => {
+  it("does NOT render the badge when realizing_count is absent", () => {
+    const task = makeTask({ type: "feature" });
+
+    renderCard({ task, onClick: () => {} });
+
+    expect(screen.queryByText(/linked/i)).not.toBeInTheDocument();
+  });
+
+  it("does NOT render the badge on a non-feature/fix card type", () => {
     const task = makeTask({
       type: "goal",
-      realized_by: ["fix-task-1"],
+      realizing_count: 5,
     });
 
     renderCard({ task, onClick: () => {} });
 
-    // goal type should NOT render realized_by
-    expect(screen.queryByText(/fix-task-1/i)).not.toBeInTheDocument();
-  });
-
-  it("calls onOpenTask with the item id when a realized_by entry is clicked", async () => {
-    const onOpenTask = vi.fn();
-    const onClick = vi.fn();
-    const task = makeTask({
-      type: "feature",
-      realized_by: ["fix-task-1", "fix-task-2"],
-    });
-
-    renderCard({ task, onClick, onOpenTask });
-    const user = userEvent.setup();
-    await user.click(screen.getByText(/fix-task-1/i));
-
-    expect(onOpenTask).toHaveBeenCalledTimes(1);
-    expect(onOpenTask).toHaveBeenCalledWith("fix-task-1");
-    expect(onClick).not.toHaveBeenCalled();
+    expect(screen.queryByText(/linked/i)).not.toBeInTheDocument();
   });
 });

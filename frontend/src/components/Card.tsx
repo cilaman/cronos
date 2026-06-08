@@ -343,6 +343,11 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
                 {taskType}
               </span>
             )}
+            {(taskType === "feature" || taskType === "fix") && (task.realizing_count ?? 0) > 0 && (
+              <span className="inline-flex items-center rounded border border-sky-200 bg-sky-50 px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide text-sky-700 dark:border-sky-400/30 dark:bg-sky-400/10 dark:text-sky-400">
+                {task.realizing_count} linked
+              </span>
+            )}
             {blockedBy.length > 0 && (
               <span
                 title={blockedBy.map((d) => d.title).join(", ")}
@@ -550,6 +555,11 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
               {task.feature_key}
             </span>
           )}
+          {(taskType === "feature" || taskType === "fix") && (task.realizing_count ?? 0) > 0 && (
+            <span className="inline-flex items-center rounded border border-sky-200 bg-sky-50 px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide text-sky-700 dark:border-sky-400/30 dark:bg-sky-400/10 dark:text-sky-400">
+              {task.realizing_count} linked
+            </span>
+          )}
         </div>
 
         {task.parent_id && task.parent_title && (
@@ -592,30 +602,6 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
           </span>
         )}
 
-        {(taskType === "feature" || taskType === "fix") && (task.realized_by?.length ?? 0) > 0 && (
-          <div className="mb-1 flex flex-wrap gap-1">
-            {task.realized_by!.map((itemId) => (
-              <span
-                key={itemId}
-                role="button"
-                tabIndex={0}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onOpenTask?.(itemId);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.stopPropagation();
-                    onOpenTask?.(itemId);
-                  }
-                }}
-                className="cursor-pointer font-mono text-[10px] uppercase tracking-[0.1em] text-ink-faint hover:text-ink-muted"
-              >
-                ← {itemId}
-              </span>
-            ))}
-          </div>
-        )}
 
         <h3 className="truncate text-sm font-semibold leading-snug text-ink">{task.title}</h3>
         {isGoal && childrenProgress && childrenProgress.total > 0 && (
