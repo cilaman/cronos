@@ -104,6 +104,15 @@ async def propagate_to_feature(
                 "feature_sync: feature %s already in WAITING — concurrent race, ignoring",
                 feature_id,
             )
+        except AttributeError:
+            # set_feature_waiting_question not yet on this store version — log
+            # the intended question so it is visible in traces.
+            log.debug(
+                "feature_sync: store has no set_feature_waiting_question; "
+                "waiting_question=%r not persisted on feature %s",
+                root_goal.waiting_question,
+                feature_id,
+            )
 
     elif item_state == TaskState.ACTIVE and feature_state == FeatureState.WAITING:
         # I3: item→ACTIVE while feature WAITING (resume) → feature→PLANNED
