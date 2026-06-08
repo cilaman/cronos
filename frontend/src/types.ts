@@ -152,6 +152,8 @@ export interface TaskSummary {
   realizes?: string | null;
   realized_by?: string[];
   realizing_count?: number;
+  realizes_feature_key?: string | null;
+  realized_by_count?: number;
 }
 
 export type AgentMode = "plan" | "auto" | "ask";
