@@ -305,8 +305,8 @@ export function Board({
               <Card
                 key={task.id}
                 task={task}
-                onClick={() => navigate("/features")}
-                onOpenTask={() => navigate("/features")}
+                onClick={() => navigate(`/features?feature=${task.id}`)}
+                onOpenTask={() => navigate(`/features?feature=${task.id}`)}
                 compact={compact}
                 dragDisabled
               />

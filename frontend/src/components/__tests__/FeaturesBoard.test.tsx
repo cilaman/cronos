@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
@@ -21,6 +22,16 @@ vi.mock("../../hooks/useFeatures", () => ({
   useFeatureBoard: () => featureBoardResult,
   useTransitionFeatureState: () => ({ mutate: transitionMutate }),
   useCreateFeature: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+
+vi.mock("../FeatureDetail", () => ({
+  FeatureDetail: ({ featureId, onClose }: { featureId: string; onClose: () => void }) => (
+    <div data-testid="feature-detail-mock" data-feature-id={featureId}>
+      <button type="button" onClick={onClose} aria-label="Close detail">
+        Close
+      </button>
+    </div>
+  ),
 }));
 
 vi.mock("../../hooks/useSpaces", () => ({
@@ -108,10 +119,10 @@ function makeQC() {
   });
 }
 
-function renderBoard(spaceId = "space-1") {
+function renderBoard(spaceId = "space-1", initialUrl = "/features") {
   return render(
     <QueryClientProvider client={makeQC()}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[initialUrl]}>
         <FeaturesBoard spaceId={spaceId} />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -331,5 +342,67 @@ describe("FeaturesPage — space selector", () => {
     renderPageScoped();
     // Scoped page has no SpaceFilterDropdown; no "All spaces" button
     expect(screen.queryByRole("button", { name: /all spaces/i })).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 5. FeaturesBoard — card click opens FeatureDetail via URL param
+// ---------------------------------------------------------------------------
+
+describe("FeaturesBoard — card click opens FeatureDetail", () => {
+  it("renders FeatureDetail when URL has ?feature=<id>", () => {
+    featureBoardResult = {
+      data: { ...emptyBoard, backlog: [makeTask("t10", "My Feature")] },
+      isLoading: false,
+      error: null,
+    };
+    renderBoard("space-1", "/features?feature=t10");
+    expect(screen.getByTestId("feature-detail-mock")).toBeInTheDocument();
+    expect(screen.getByTestId("feature-detail-mock").getAttribute("data-feature-id")).toBe("t10");
+  });
+
+  it("does NOT render FeatureDetail when URL has no ?feature param", () => {
+    featureBoardResult = {
+      data: { ...emptyBoard, backlog: [makeTask("t11", "Another Feature")] },
+      isLoading: false,
+      error: null,
+    };
+    renderBoard("space-1", "/features");
+    expect(screen.queryByTestId("feature-detail-mock")).not.toBeInTheDocument();
+  });
+
+  it("clicking a card sets ?feature=<id> in URL and renders FeatureDetail", async () => {
+    featureBoardResult = {
+      data: { ...emptyBoard, backlog: [makeTask("t12", "Clickable Feature")] },
+      isLoading: false,
+      error: null,
+    };
+    renderBoard("space-1", "/features");
+
+    expect(screen.queryByTestId("feature-detail-mock")).not.toBeInTheDocument();
+
+    const user = userEvent.setup();
+    const card = screen.getByText("Clickable Feature").closest('[role="button"]');
+    expect(card).toBeTruthy();
+    await user.click(card!);
+
+    expect(screen.getByTestId("feature-detail-mock")).toBeInTheDocument();
+    expect(screen.getByTestId("feature-detail-mock").getAttribute("data-feature-id")).toBe("t12");
+  });
+
+  it("closing the FeatureDetail removes it from the DOM", async () => {
+    featureBoardResult = {
+      data: { ...emptyBoard, backlog: [makeTask("t13", "Closeable Feature")] },
+      isLoading: false,
+      error: null,
+    };
+    renderBoard("space-1", "/features?feature=t13");
+
+    expect(screen.getByTestId("feature-detail-mock")).toBeInTheDocument();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Close detail" }));
+
+    expect(screen.queryByTestId("feature-detail-mock")).not.toBeInTheDocument();
   });
 });

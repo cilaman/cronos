@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   DndContext,
   DragOverlay,
@@ -20,6 +21,7 @@ import {
 import { useFeatureBoard, useTransitionFeatureState, useCreateFeature } from "../hooks/useFeatures";
 import { Lane } from "./Lane";
 import { Card } from "./Card";
+import { FeatureDetail } from "./FeatureDetail";
 
 interface Props {
   spaceId: string;
@@ -132,6 +134,20 @@ export function FeaturesBoard({ spaceId }: Props) {
   const [activeTask, setActiveTask] = useState<TaskSummary | null>(null);
   const [hiddenLanes, setHiddenLanes] = useState<Set<FeatureState>>(new Set());
   const composerInputRef = useRef<HTMLInputElement>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const openFeatureId = searchParams.get("feature");
+
+  const setOpenFeatureId = (id: string | null) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (id) next.set("feature", id);
+        else next.delete("feature");
+        return next;
+      },
+      { replace: true },
+    );
+  };
 
   const hideLane = useCallback((state: string) => {
     setHiddenLanes((prev) => new Set([...prev, state as FeatureState]));
@@ -210,6 +226,7 @@ export function FeaturesBoard({ spaceId }: Props) {
     : "lg:grid-cols-5";
 
   return (
+    <>
     <DndContext
       sensors={sensors}
       collisionDetection={closestCenter}
@@ -249,7 +266,7 @@ export function FeaturesBoard({ spaceId }: Props) {
                   state={state}
                   label={label}
                   tasks={tasks}
-                  onOpen={() => {}}
+                  onOpen={setOpenFeatureId}
                   onAdd={() => composerInputRef.current?.focus()}
                   showAdd={isBacklog}
                   onHideLane={hideLane}
@@ -267,5 +284,12 @@ export function FeaturesBoard({ spaceId }: Props) {
         ) : null}
       </DragOverlay>
     </DndContext>
+    {openFeatureId && (
+      <FeatureDetail
+        featureId={openFeatureId}
+        onClose={() => setOpenFeatureId(null)}
+      />
+    )}
+    </>
   );
 }

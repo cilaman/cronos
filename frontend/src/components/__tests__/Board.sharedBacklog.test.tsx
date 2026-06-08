@@ -244,7 +244,7 @@ describe("Board — feature card click navigates to /features", () => {
     expect(card).toBeTruthy();
     await user.click(card!);
 
-    expect(mockNavigate).toHaveBeenCalledWith("/features");
+    expect(mockNavigate).toHaveBeenCalledWith("/features?feature=feat-1");
   });
 });
 
