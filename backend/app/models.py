@@ -135,6 +135,10 @@ class TaskSummary(BaseModel):
     space_autopilot: str | None = None
     # Count of tasks/goals that realize this feature; 0 for non-feature tasks.
     realizing_count: int = 0
+    # Count of tasks/goals that realize this task (parallel field to realizing_count).
+    realized_by_count: int = 0
+    # feature_key of the feature/fix this task realizes (e.g. "FEAT-007"); None if not set.
+    realizes_feature_key: str | None = None
 
 
 class Board(BaseModel):
