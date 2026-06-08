@@ -219,6 +219,7 @@ class FeatureRead(BaseModel):
     issue_number: int | None = None
     issue_url: str | None = None
     proposed_issue_path: str | None = None
+    waiting_question: str | None = None
     # Realizing items — tasks that link to this feature via task.realizes == self.id
     realizing_items: list[TaskSummary] = Field(default_factory=list)
 
