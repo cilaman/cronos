@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
-import type { FeatureState } from "../types";
+import type { FeatureRead, FeatureState } from "../types";
 
 /**
  * Invalidates all three query keys required to keep every feature-related view in sync:
@@ -60,6 +60,77 @@ export function useCreateFeature(spaceId: string) {
       api.createFeature(spaceId, body),
     onSuccess: () => {
       invalidateFeatureQueries(qc, spaceId);
+    },
+  });
+}
+
+/**
+ * Fetches a single feature/fix by ID.
+ * Mirrors useTask() — enabled only when featureId is non-null.
+ */
+export function useFeature(featureId: string | null) {
+  return useQuery<FeatureRead>({
+    queryKey: ["feature", featureId],
+    queryFn: () => api.getFeature(featureId!),
+    enabled: featureId !== null,
+  });
+}
+
+/**
+ * Mutation to edit a feature's title and/or brief.
+ * Invalidates ["feature", featureId] for immediate refetch plus the R4 triple-key.
+ */
+export function usePatchFeature() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      featureId,
+      body,
+    }: {
+      featureId: string;
+      body: { title?: string; brief?: string };
+    }) => api.patchFeature(featureId, body),
+    onSuccess: (result: FeatureRead) => {
+      qc.invalidateQueries({ queryKey: ["feature", result.id] });
+      invalidateFeatureQueries(qc, result.space_id);
+    },
+  });
+}
+
+/**
+ * Mutation to trigger decomposition of a feature (POST /process).
+ * Transitions feature to PROCESSING and enqueues the S4 decomposition agent.
+ * Invalidates ["feature", featureId] and the R4 triple-key.
+ */
+export function useProcessFeature() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (featureId: string) => api.processFeature(featureId),
+    onSuccess: (result: FeatureRead) => {
+      qc.invalidateQueries({ queryKey: ["feature", result.id] });
+      invalidateFeatureQueries(qc, result.space_id);
+    },
+  });
+}
+
+/**
+ * Mutation to link or unlink a task to a feature via PATCH /realize.
+ * Set body.feature_id to null to unlink.
+ * Invalidates ["feature", featureId] and the R4 triple-key.
+ */
+export function useSetRealize() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      featureId,
+      body,
+    }: {
+      featureId: string;
+      body: { item_id: string; feature_id: string | null };
+    }) => api.setRealize(featureId, body),
+    onSuccess: (result: FeatureRead) => {
+      qc.invalidateQueries({ queryKey: ["feature", result.id] });
+      invalidateFeatureQueries(qc, result.space_id);
     },
   });
 }
