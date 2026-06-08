@@ -500,15 +500,8 @@ async def lifespan(app: FastAPI):
     # Recover in-flight runs: any task left in ACTIVE on startup gets
     # re-enqueued on its space's worker. The agent resumes via its stored
     # claude_session_id if any.
-    # Enqueue leaf tasks before goal tasks: within a space's sequential
-    # worker this ordering ensures children run (and finish) before their
-    # parent goal is processed, preventing the goal from seeing children
-    # still in ACTIVE state on the first attempt.
     board = task_store.board()
-    active_summaries = sorted(
-        board.active, key=lambda s: 1 if s.type == "goal" else 0
-    )
-    for summary in active_summaries:
+    for summary in board.active:
         worker = worker_pool.get(summary.space_id)
         if worker is None:
             log.warning(

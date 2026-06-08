@@ -215,6 +215,7 @@ class FeatureRead(BaseModel):
     proposed_pr_path: str | None = None
     feature_state: FeatureState | None = None
     feature_key: str | None = None
+    waiting_question: str | None = None
     realizes: str | None = None
     issue_number: int | None = None
     issue_url: str | None = None

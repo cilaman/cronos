@@ -876,6 +876,21 @@ class TaskStore:
             self._reindex_locked(path)
             return self._by_id[task_id]
 
+    async def set_feature_waiting_question(self, task_id: str, question: str | None) -> Task:
+        async with self._lock:
+            task = self._by_id.get(task_id)
+            if task is None:
+                raise TaskNotFound(task_id)
+            if task.type not in ("feature", "fix"):
+                raise StorageError(f"Task {task_id} is not a feature or fix")
+            updated = task.model_copy(
+                update={"waiting_question": question, "updated_at": datetime.now(tz=UTC)}
+            )
+            path = self._path_by_id[task_id]
+            atomic_write(path, dump_task(updated))
+            self._reindex_locked(path)
+            return self._by_id[task_id]
+
     async def create(
         self,
         *,

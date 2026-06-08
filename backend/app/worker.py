@@ -1454,10 +1454,6 @@ class Worker:
         if goal is None:
             log.warning("Skipping unknown goal %s", goal_id)
             return
-        if goal.state == TaskState.DONE:
-            # Guard against stale enqueues (e.g. startup + goal_sync both enqueue the same goal).
-            log.info("Skipping already-done goal %s", goal_id)
-            return
 
         self._current_id = goal_id
         cancel_event = asyncio.Event()
@@ -1484,206 +1480,146 @@ class Worker:
         stopped = False
         failed_child_id: str | None = None
         fail_reason: str | None = None
-        _repaired = False
 
-        while True:
-            _restart = False
-            for child_id in ordered_child_ids:
-                child = self.store.get(child_id)
-                if child is None:
-                    continue
+        for child_id in ordered_child_ids:
+            child = self.store.get(child_id)
+            if child is None:
+                continue
 
-                if child.state.value in ("done", "archived"):
-                    skipped.append(child_id)
-                    await self._publish(goal_id, {
-                        "type": "goal_child_skipped",
-                        "child_id": child_id,
-                        "title": child.title,
-                    })
-                    continue
+            if child.state.value in ("done", "archived"):
+                skipped.append(child_id)
+                await self._publish(goal_id, {
+                    "type": "goal_child_skipped",
+                    "child_id": child_id,
+                    "title": child.title,
+                })
+                continue
 
-                if child.state == TaskState.ACTIVE:
-                    # Child is already in-flight (e.g. re-enqueued after a restart while
-                    # this goal was also mid-run).  Pause here without a user-visible error;
-                    # goal_sync will re-enqueue this goal once the child finishes.
-                    failed_child_id = child_id
-                    fail_reason = None
-                    break
-                elif child.state != TaskState.BACKLOG:
-                    failed_child_id = child_id
-                    fail_reason = (
-                        f"Child '{child.title}' is in {child.state.value} state and needs attention."
-                    )
-                    break
+            if child.state != TaskState.BACKLOG:
+                failed_child_id = child_id
+                fail_reason = (
+                    f"Child '{child.title}' is in {child.state.value} state and needs attention."
+                )
+                break
 
-                try:
-                    await self.store.transition(child_id, TaskState.ACTIVE, allowed=USER_TRANSITIONS)
-                except InvalidTransition as e:
-                    err = str(e)
-                    if not _repaired and err.startswith("Cannot start task: unmet dependencies:"):
-                        dep_ids_str = err[len("Cannot start task: unmet dependencies:"):].strip()
-                        dep_ids = [d.strip() for d in dep_ids_str.split(",") if d.strip()]
-                        repaired_any = False
-                        child = self.store.get(child_id)
-                        if child is not None:
-                            for dep_id in dep_ids:
-                                dep_task = self.store.get(dep_id)
-                                if dep_task is None or dep_task.parent_id == goal_id:
-                                    continue
-                                # Walk parent chain to find the ancestor whose parent_id == goal_id.
-                                sibling_id: str | None = None
-                                cursor = dep_task
-                                for _ in range(50):
-                                    if cursor.parent_id == goal_id:
-                                        sibling_id = cursor.id
-                                        break
-                                    if cursor.parent_id is None:
-                                        break
-                                    parent = self.store.get(cursor.parent_id)
-                                    if parent is None:
-                                        break
-                                    cursor = parent
-                                if sibling_id is None or sibling_id in child.depends_on:
-                                    continue
-                                try:
-                                    await self.store.set_depends_on(
-                                        child_id, child.depends_on + [sibling_id]
-                                    )
-                                except Exception:
-                                    log.exception("Auto-repair set_depends_on failed for %s", child_id)
-                                    continue
-                                log.warning(
-                                    "Auto-repaired missing sibling dep: %s → %s (was referencing non-sibling %s)",
-                                    child_id, sibling_id, dep_id,
-                                )
-                                repaired_any = True
-                        if repaired_any:
-                            _repaired = True
-                            ordered_child_ids = _topo_children(goal_id, self.store)
-                            completed = []
-                            skipped = []
-                            failed_child_id = None
-                            fail_reason = None
-                            _restart = True
-                            break
-                    failed_child_id = child_id
-                    fail_reason = str(e)
-                    break
+            try:
+                await self.store.transition(child_id, TaskState.ACTIVE, allowed=USER_TRANSITIONS)
+            except InvalidTransition as e:
+                failed_child_id = child_id
+                fail_reason = str(e)
+                break
 
-                child = self.store.get(child_id)
-                if child is None:
-                    continue
+            child = self.store.get(child_id)
+            if child is None:
+                continue
 
-                # Sub-goals are orchestrated recursively instead of being sent to run_agent.
-                if child.type == "goal":
-                    await self._publish(goal_id, {
-                        "type": "goal_child_start",
-                        "child_id": child_id,
-                        "title": child.title,
-                    })
-                    await self._run_goal(child_id, user_message=None)
-                    # Restore parent context overwritten by the recursive call.
-                    self._current_id = goal_id
-                    self._current_cancel = cancel_event
-                    child_after = self.store.get(child_id)
-                    child_new_state = child_after.state if child_after is not None else TaskState.WAITING
-                    await self._publish(goal_id, {
-                        "type": "goal_child_end",
-                        "child_id": child_id,
-                        "title": child.title,
-                        "new_state": child_new_state.value,
-                    })
-                    if cancel_event.is_set():
-                        stopped = True
-                        break
-                    if child_new_state != TaskState.DONE:
-                        failed_child_id = child_id
-                        fail_reason = f"Sub-goal '{child.title}' ended in {child_new_state.value} state."
-                        break
-                    completed.append(child_id)
-                    continue
-
+            # Sub-goals are orchestrated recursively instead of being sent to run_agent.
+            if child.type == "goal":
                 await self._publish(goal_id, {
                     "type": "goal_child_start",
                     "child_id": child_id,
                     "title": child.title,
                 })
-
-                self._current_child_id = child_id
-                self._run_buffer[child_id] = []
-                await self._publish(child_id, {"type": "run_start", "task_id": child_id})
-
-                # Capture child_id per-iteration to avoid closure/loop-variable capture.
-                async def on_child_event(event: dict, _cid: str = child_id) -> None:
-                    await self._publish(_cid, event)
-                    await self._publish(goal_id, event)
-
-                space = self.space_store.get(child.space_id) if self.space_store else None
-                child_result: AgentResult | None = None
-                run_exception: str | None = None
-                child_started_at = datetime.now(tz=UTC)
-                child_memory_injected = _memory_injected_for_workspace(
-                    DATA_DIR / child.space_id / CRONOS_SUBDIR / "workspaces" / child_id
-                )
-                child_memory = None
-                if self.memory_store is not None:
-                    try:
-                        child_memory = await memory_retrieval.retrieve(child, child.space_id, self.memory_store) or None
-                    except Exception:
-                        log.exception("Failed to retrieve memory for child %s", child_id)
-
-                try:
-                    child_result = await run_agent(
-                        child,
-                        user_message=None,
-                        on_event=on_child_event,
-                        cancel_event=cancel_event,
-                        space=space,
-                        goal_context=goal_context,
-                        memory_items=child_memory,
-                    )
-                except Exception as e:
-                    run_exception = str(e)
-                    log.exception("Agent error on child %s", child_id)
-
-                self._current_child_id = None
-                child_new_state = await self._finalize_child(
-                    child_id, child_result, run_exception, started_at=child_started_at,
-                    memory_injected=child_memory_injected,
-                )
-
-                await self._publish(child_id, {
-                    "type": "run_end",
-                    "task_id": child_id,
-                    "status": child_result.status.value if child_result and child_result.status else None,
-                    "new_state": child_new_state.value,
-                })
-                for q in list(self._subscribers.get(child_id, [])):
-                    try:
-                        q.put_nowait(_DONE_SENTINEL)
-                    except asyncio.QueueFull:
-                        pass
-
+                await self._run_goal(child_id, user_message=None)
+                # Restore parent context overwritten by the recursive call.
+                self._current_id = goal_id
+                self._current_cancel = cancel_event
+                child_after = self.store.get(child_id)
+                child_new_state = child_after.state if child_after is not None else TaskState.WAITING
                 await self._publish(goal_id, {
                     "type": "goal_child_end",
                     "child_id": child_id,
                     "title": child.title,
                     "new_state": child_new_state.value,
                 })
-
                 if cancel_event.is_set():
                     stopped = True
                     break
-
                 if child_new_state != TaskState.DONE:
                     failed_child_id = child_id
-                    fail_reason = f"Child '{child.title}' ended in {child_new_state.value} state."
+                    fail_reason = f"Sub-goal '{child.title}' ended in {child_new_state.value} state."
                     break
-
                 completed.append(child_id)
+                continue
 
-            if not _restart:
+            await self._publish(goal_id, {
+                "type": "goal_child_start",
+                "child_id": child_id,
+                "title": child.title,
+            })
+
+            self._current_child_id = child_id
+            self._run_buffer[child_id] = []
+            await self._publish(child_id, {"type": "run_start", "task_id": child_id})
+
+            # Capture child_id per-iteration to avoid closure/loop-variable capture.
+            async def on_child_event(event: dict, _cid: str = child_id) -> None:
+                await self._publish(_cid, event)
+                await self._publish(goal_id, event)
+
+            space = self.space_store.get(child.space_id) if self.space_store else None
+            child_result: AgentResult | None = None
+            run_exception: str | None = None
+            child_started_at = datetime.now(tz=UTC)
+            child_memory_injected = _memory_injected_for_workspace(
+                DATA_DIR / child.space_id / CRONOS_SUBDIR / "workspaces" / child_id
+            )
+            child_memory = None
+            if self.memory_store is not None:
+                try:
+                    child_memory = await memory_retrieval.retrieve(child, child.space_id, self.memory_store) or None
+                except Exception:
+                    log.exception("Failed to retrieve memory for child %s", child_id)
+
+            try:
+                child_result = await run_agent(
+                    child,
+                    user_message=None,
+                    on_event=on_child_event,
+                    cancel_event=cancel_event,
+                    space=space,
+                    goal_context=goal_context,
+                    memory_items=child_memory,
+                )
+            except Exception as e:
+                run_exception = str(e)
+                log.exception("Agent error on child %s", child_id)
+
+            self._current_child_id = None
+            child_new_state = await self._finalize_child(
+                child_id, child_result, run_exception, started_at=child_started_at,
+                memory_injected=child_memory_injected,
+            )
+
+            await self._publish(child_id, {
+                "type": "run_end",
+                "task_id": child_id,
+                "status": child_result.status.value if child_result and child_result.status else None,
+                "new_state": child_new_state.value,
+            })
+            for q in list(self._subscribers.get(child_id, [])):
+                try:
+                    q.put_nowait(_DONE_SENTINEL)
+                except asyncio.QueueFull:
+                    pass
+
+            await self._publish(goal_id, {
+                "type": "goal_child_end",
+                "child_id": child_id,
+                "title": child.title,
+                "new_state": child_new_state.value,
+            })
+
+            if cancel_event.is_set():
+                stopped = True
                 break
+
+            if child_new_state != TaskState.DONE:
+                failed_child_id = child_id
+                fail_reason = f"Child '{child.title}' ended in {child_new_state.value} state."
+                break
+
+            completed.append(child_id)
 
         # Finalize the goal
         if stopped:
@@ -1692,17 +1628,11 @@ class Worker:
             summary = f"Stopped. Completed {len(completed)}, skipped {len(skipped)} already-done."
         elif failed_child_id is not None:
             goal_new_state = TaskState.WAITING
-            goal_waiting_question = fail_reason  # None means transient/no user action needed
-            if fail_reason:
-                summary = (
-                    f"Paused: {fail_reason} "
-                    f"Completed {len(completed)}, skipped {len(skipped)} already-done."
-                )
-            else:
-                summary = (
-                    f"Waiting for in-flight child task to complete. "
-                    f"Completed {len(completed)}, skipped {len(skipped)} already-done."
-                )
+            goal_waiting_question = fail_reason
+            summary = (
+                f"Paused: {fail_reason} "
+                f"Completed {len(completed)}, skipped {len(skipped)} already-done."
+            )
         else:
             goal_new_state = TaskState.DONE
             goal_waiting_question = None
