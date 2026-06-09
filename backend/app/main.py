@@ -31,6 +31,8 @@ from .harnesses.triggers import EventBusEvent, fan_out_to_harnesses
 from .memory_store import MemoryStore
 from .space_storage import CRONOS_SUBDIR, RESERVED_SPACE_DIRS, SpaceStore
 from .stats_store import StatsStore
+from .goal_sync import GOAL_SYNC_TRANSITIONS
+from .models import TaskState
 from .storage import TaskStore
 from .test_report_store import TestReportStore
 from .trace_store import TraceStore
@@ -518,6 +520,38 @@ async def lifespan(app: FastAPI):
             continue
         log.info("Resuming task left in active state: %s", summary.id)
         await worker.enqueue(summary.id)
+
+    # Recover stuck goals: goals in BACKLOG or WAITING whose children are all done/archived.
+    # These arise when children complete while the parent was never activated (e.g. after
+    # an interrupted upgrade), leaving goal_sync unable to propagate completion.
+    # Re-enqueue so _run_goal skips done children and marks the goal done.
+    all_tasks = task_store.all()
+    children_by_parent: dict[str, list] = {}
+    for t in all_tasks:
+        if t.parent_id:
+            children_by_parent.setdefault(t.parent_id, []).append(t)
+    for task in all_tasks:
+        if task.type != "goal":
+            continue
+        if task.state not in (TaskState.BACKLOG, TaskState.WAITING):
+            continue
+        kids = children_by_parent.get(task.id, [])
+        if not kids:
+            continue
+        if any(k.state.value not in ("done", "archived") for k in kids):
+            continue
+        worker = worker_pool.get(task.space_id)
+        if worker is None:
+            continue
+        log.info(
+            "Recovering stuck goal %s (all children done, state=%s)",
+            task.id, task.state.value,
+        )
+        try:
+            await task_store.transition(task.id, TaskState.ACTIVE, allowed=GOAL_SYNC_TRANSITIONS)
+            await worker.enqueue(task.id)
+        except Exception:
+            log.exception("Failed to recover stuck goal %s", task.id)
 
     try:
         yield

@@ -60,6 +60,7 @@ _TASK_INSERT_COLS: tuple[str, ...] = (
 
 USER_TRANSITIONS: set[tuple[TaskState, TaskState]] = {
     (TaskState.BACKLOG, TaskState.ACTIVE),
+    (TaskState.BACKLOG, TaskState.ARCHIVED),
     (TaskState.ACTIVE, TaskState.BACKLOG),
     (TaskState.WAITING, TaskState.BACKLOG),
     (TaskState.WAITING, TaskState.DONE),

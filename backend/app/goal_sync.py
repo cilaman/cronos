@@ -15,6 +15,7 @@ log = logging.getLogger("cronos.goal_sync")
 # this is a synchronization action, not a user or post-run-worker action.
 GOAL_SYNC_TRANSITIONS: set[tuple[TaskState, TaskState]] = {
     (TaskState.WAITING, TaskState.ACTIVE),
+    (TaskState.BACKLOG, TaskState.ACTIVE),
 }
 
 
@@ -54,13 +55,16 @@ async def propagate_to_parent(
     elif child_state in (TaskState.DONE, TaskState.ARCHIVED) and parent_state in (
         TaskState.WAITING,
         TaskState.ACTIVE,
+        TaskState.BACKLOG,
     ):
         # Child completed → ensure goal is ACTIVE and re-enqueue so orchestration resumes.
         # _run_goal skips already-done children, so it will pick the next eligible one.
         # parent_state == ACTIVE happens when a child was run standalone after the goal was
         # surfaced as ACTIVE by the ACTIVE-child branch above; in that case we skip the
         # redundant transition and go straight to enqueue.
-        if parent_state == TaskState.WAITING:
+        # parent_state == BACKLOG happens when children ran independently while the goal was
+        # never activated; activating it lets _run_goal mark it done.
+        if parent_state in (TaskState.WAITING, TaskState.BACKLOG):
             try:
                 await store.transition(
                     child.parent_id, TaskState.ACTIVE, allowed=GOAL_SYNC_TRANSITIONS

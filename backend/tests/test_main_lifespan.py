@@ -60,6 +60,7 @@ async def test_lifespan_creates_cron_task(tmp_path):
     mock_board = SimpleNamespace(active=[])
     mock_store = AsyncMock()
     mock_store.board = MagicMock(return_value=mock_board)
+    mock_store.all = MagicMock(return_value=[])
     mock_store.reload_all = AsyncMock(return_value=None)
     mock_store.archive_stale_done_tasks = AsyncMock(return_value=0)
     mock_store.count = MagicMock(return_value=0)
@@ -127,6 +128,7 @@ async def test_lifespan_cron_task_cancelled_on_shutdown(tmp_path):
     mock_board = SimpleNamespace(active=[])
     mock_store = AsyncMock()
     mock_store.board = MagicMock(return_value=mock_board)
+    mock_store.all = MagicMock(return_value=[])
     mock_store.reload_all = AsyncMock(return_value=None)
     mock_store.count = MagicMock(return_value=0)
 

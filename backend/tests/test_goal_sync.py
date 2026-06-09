@@ -211,8 +211,40 @@ async def test_none_pool_skips_enqueue(task_store: TaskStore) -> None:
 
 
 async def test_goal_sync_transitions_constant() -> None:
-    """GOAL_SYNC_TRANSITIONS covers exactly WAITING → ACTIVE."""
-    assert GOAL_SYNC_TRANSITIONS == {(TaskState.WAITING, TaskState.ACTIVE)}
+    """GOAL_SYNC_TRANSITIONS covers WAITING → ACTIVE and BACKLOG → ACTIVE."""
+    assert GOAL_SYNC_TRANSITIONS == {
+        (TaskState.WAITING, TaskState.ACTIVE),
+        (TaskState.BACKLOG, TaskState.ACTIVE),
+    }
+
+
+async def test_child_done_parent_backlog_activates_and_enqueues(task_store: TaskStore) -> None:
+    """Child DONE while parent goal is in BACKLOG → parent activates and is re-enqueued."""
+    goal_id = await _create_goal(task_store)
+    child_id = await _create_child(task_store, goal_id)
+
+    # goal stays BACKLOG (default); child moves to DONE independently
+    await _set_state(task_store, child_id, TaskState.DONE)
+
+    pool = _RecordingPool()
+    await propagate_to_parent(child_id, task_store, pool)
+
+    assert task_store.get(goal_id).state == TaskState.ACTIVE
+    assert pool.enqueued == [(SPACE_ID, goal_id)]
+
+
+async def test_child_archived_parent_backlog_activates_and_enqueues(task_store: TaskStore) -> None:
+    """Child ARCHIVED while parent goal is in BACKLOG → parent activates and is re-enqueued."""
+    goal_id = await _create_goal(task_store)
+    child_id = await _create_child(task_store, goal_id)
+
+    await _set_state(task_store, child_id, TaskState.ARCHIVED)
+
+    pool = _RecordingPool()
+    await propagate_to_parent(child_id, task_store, pool)
+
+    assert task_store.get(goal_id).state == TaskState.ACTIVE
+    assert pool.enqueued == [(SPACE_ID, goal_id)]
 
 
 # ---------------------------------------------------------------------------
