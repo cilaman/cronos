@@ -8,6 +8,7 @@ import type {
   BuildInfo,
   DiscoveredTool,
   FeatureBoard,
+  FeatureRead,
   FeatureState,
   GlobalStats,
   Harness,
@@ -419,5 +420,27 @@ export const api = {
         type: body.type,
         brief: body.description ?? "",
       }),
+    }),
+  getFeature: (featureId: string): Promise<FeatureRead> =>
+    request<FeatureRead>(`/api/features/${featureId}`),
+  patchFeature: (
+    featureId: string,
+    body: { title?: string; brief?: string },
+  ): Promise<FeatureRead> =>
+    request<FeatureRead>(`/api/features/${featureId}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  processFeature: (featureId: string): Promise<FeatureRead> =>
+    request<FeatureRead>(`/api/features/${featureId}/process`, {
+      method: "POST",
+    }),
+  setRealize: (
+    featureId: string,
+    body: { item_id: string; feature_id: string | null },
+  ): Promise<FeatureRead> =>
+    request<FeatureRead>(`/api/features/${featureId}/realize`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
     }),
 };
