@@ -474,6 +474,73 @@ def test_patch_feature_state_unauthenticated_returns_401(app_client):
 
 
 # ---------------------------------------------------------------------------
+# P2-B: space not found after feature found → 404 (line 225)
+# ---------------------------------------------------------------------------
+
+
+def test_patch_feature_state_space_not_found_returns_404(app_client):
+    """Returns 404 when space_store.get returns None after feature is found (line 225)."""
+    original_task = _make_task(feature_state=FeatureState.BACKLOG)
+
+    mock_store = MagicMock()
+    mock_store.get.return_value = original_task
+    mock_store.transition_feature = AsyncMock(
+        return_value=_make_task(feature_state=FeatureState.PROCESSING)
+    )
+
+    app_client.app.state.store = mock_store
+    # Space lookup returns None — simulates space deleted after feature was found
+    app_client.app.state.space_store.get.return_value = None
+
+    with patch(
+        "app.api.features.mirror_feature_to_github",
+        new_callable=AsyncMock,
+    ) as mock_mirror:
+        response = app_client.patch(
+            "/api/features/2024-01-15-1000-my-feature/feature-state",
+            json={"feature_state": "processing"},
+            headers=AUTH_HEADER,
+        )
+
+    assert response.status_code == 404, response.text
+    assert mock_mirror.call_count == 0, "mirror must NOT fire when space is missing"
+
+
+# ---------------------------------------------------------------------------
+# P2-C: TaskNotFound TOCTOU in transition_feature → 404 (line 234)
+# ---------------------------------------------------------------------------
+
+
+def test_patch_feature_state_transition_raises_task_not_found_returns_404(app_client):
+    """Returns 404 when transition_feature raises TaskNotFound (TOCTOU race, line 234)."""
+    original_task = _make_task(feature_state=FeatureState.BACKLOG)
+
+    mock_store = MagicMock()
+    # get() returns a valid feature (passes initial type check)
+    mock_store.get.return_value = original_task
+    # transition_feature raises TaskNotFound (task deleted between get and transition)
+    mock_store.transition_feature = AsyncMock(
+        side_effect=TaskNotFound("2024-01-15-1000-my-feature")
+    )
+
+    app_client.app.state.store = mock_store
+    app_client.app.state.space_store.get.return_value = _make_space()
+
+    with patch(
+        "app.api.features.mirror_feature_to_github",
+        new_callable=AsyncMock,
+    ) as mock_mirror:
+        response = app_client.patch(
+            "/api/features/2024-01-15-1000-my-feature/feature-state",
+            json={"feature_state": "processing"},
+            headers=AUTH_HEADER,
+        )
+
+    assert response.status_code == 404, response.text
+    assert mock_mirror.call_count == 0, "mirror must NOT fire on TOCTOU 404"
+
+
+# ---------------------------------------------------------------------------
 # Same-state idempotency
 # ---------------------------------------------------------------------------
 
