@@ -35,6 +35,16 @@ vi.mock("../FeatureDetail", () => ({
   ),
 }));
 
+vi.mock("../FeatureForm", () => ({
+  FeatureForm: ({ onClose }: { spaceId: string; onClose: () => void }) => (
+    <div data-testid="feature-form-mock">
+      <button type="button" onClick={onClose} aria-label="Close feature form">
+        Close
+      </button>
+    </div>
+  ),
+}));
+
 vi.mock("../../hooks/useSpaces", () => ({
   useSpaces: () => ({
     data: { spaces: [{ id: "space-1", name: "Space One", color: "#aaa", icon: null }] },
@@ -484,64 +494,31 @@ describe("FeaturesBoard — toast feedback on drag-end", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 7. FeatureComposer — inline error on 400
+// 7. FeatureForm modal — open/close via backlog "+" button
 // ---------------------------------------------------------------------------
 
-describe("FeatureComposer — inline error on 400", () => {
-  it("shows inline error when createFeature onError fires with a 400 message", async () => {
+describe("FeatureForm modal — open/close via backlog + button", () => {
+  it("opens FeatureForm when the backlog lane + button is clicked", async () => {
     featureBoardResult = { data: emptyBoard, isLoading: false, error: null };
     renderBoard();
 
+    expect(screen.queryByTestId("feature-form-mock")).not.toBeInTheDocument();
+
     const user = userEvent.setup();
-    const input = screen.getByPlaceholderText("New feature title…");
-    await user.type(input, "My feature");
-    await user.click(screen.getByRole("button", { name: "Add feature" }));
+    await user.click(screen.getByRole("button", { name: "New task" }));
 
-    expect(createMutate).toHaveBeenCalled();
-    const callbacks = createMutate.mock.calls[0][1] as {
-      onSuccess: () => void;
-      onError: (err: Error) => void;
-    };
-    act(() => { callbacks.onError(new Error("400 Bad Request: {\"detail\":\"space not linked\"}")); });
-
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "This space must be linked to a git repository to create features.",
-    );
+    expect(screen.getByTestId("feature-form-mock")).toBeInTheDocument();
   });
 
-  it("shows generic error when createFeature onError fires with a non-400 error", async () => {
+  it("closes FeatureForm when onClose is called", async () => {
     featureBoardResult = { data: emptyBoard, isLoading: false, error: null };
     renderBoard();
 
     const user = userEvent.setup();
-    const input = screen.getByPlaceholderText("New feature title…");
-    await user.type(input, "My feature");
-    await user.click(screen.getByRole("button", { name: "Add feature" }));
+    await user.click(screen.getByRole("button", { name: "New task" }));
+    expect(screen.getByTestId("feature-form-mock")).toBeInTheDocument();
 
-    const callbacks = createMutate.mock.calls[0][1] as {
-      onSuccess: () => void;
-      onError: (err: Error) => void;
-    };
-    act(() => { callbacks.onError(new Error("500 Internal Server Error")); });
-
-    expect(screen.getByRole("alert")).toHaveTextContent("Failed to create feature.");
-  });
-
-  it("does not show error when createFeature onSuccess fires", async () => {
-    featureBoardResult = { data: emptyBoard, isLoading: false, error: null };
-    renderBoard();
-
-    const user = userEvent.setup();
-    const input = screen.getByPlaceholderText("New feature title…");
-    await user.type(input, "My feature");
-    await user.click(screen.getByRole("button", { name: "Add feature" }));
-
-    const callbacks = createMutate.mock.calls[0][1] as {
-      onSuccess: () => void;
-      onError: (err: Error) => void;
-    };
-    act(() => { callbacks.onSuccess(); });
-
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Close feature form" }));
+    expect(screen.queryByTestId("feature-form-mock")).not.toBeInTheDocument();
   });
 });
