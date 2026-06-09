@@ -468,3 +468,68 @@ def test_lane_items_contain_task_summary_fields(app_client):
     assert lane_item["space_id"] == SPACE_ID
     assert lane_item["type"] == "feature"
     assert lane_item["feature_state"] == "planned"
+
+
+# ---------------------------------------------------------------------------
+# realizing_count in lane items
+# ---------------------------------------------------------------------------
+
+
+def test_lane_items_contain_realizing_count(app_client):
+    """Lane items expose realizing_count from the TaskSummary."""
+    item = _make_summary(
+        task_id="feat-with-count",
+        title="Feature With Realizers",
+        feature_state=FeatureState.PLANNED,
+    )
+    item.realizing_count = 3
+
+    buckets = _empty_buckets()
+    buckets[FeatureState.PLANNED] = [item]
+
+    mock_store = MagicMock()
+    mock_store.feature_board = AsyncMock(return_value=buckets)
+    app_client.app.state.store = mock_store
+    app_client.app.state.space_store.exists.return_value = True
+
+    with patch("app.api.features.mirror_feature_to_github", new_callable=AsyncMock):
+        response = app_client.get(
+            "/api/features",
+            params={"space_id": SPACE_ID},
+            headers=AUTH_HEADER,
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    lane_item = data["planned"][0]
+    assert lane_item["realizing_count"] == 3
+
+
+def test_lane_items_default_realizing_count_zero(app_client):
+    """Lane items with no realizers have realizing_count == 0."""
+    item = _make_summary(
+        task_id="feat-no-count",
+        title="Feature No Realizers",
+        feature_state=FeatureState.BACKLOG,
+    )
+    # Default: realizing_count not set (should be 0)
+
+    buckets = _empty_buckets()
+    buckets[FeatureState.BACKLOG] = [item]
+
+    mock_store = MagicMock()
+    mock_store.feature_board = AsyncMock(return_value=buckets)
+    app_client.app.state.store = mock_store
+    app_client.app.state.space_store.exists.return_value = True
+
+    with patch("app.api.features.mirror_feature_to_github", new_callable=AsyncMock):
+        response = app_client.get(
+            "/api/features",
+            params={"space_id": SPACE_ID},
+            headers=AUTH_HEADER,
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    lane_item = data["backlog"][0]
+    assert lane_item["realizing_count"] == 0

@@ -45,17 +45,29 @@ interface ComposerProps {
 function FeatureComposer({ spaceId, inputRef }: ComposerProps) {
   const [title, setTitle] = useState("");
   const [type, setType] = useState<"feature" | "fix">("feature");
+  const [formError, setFormError] = useState<string | null>(null);
   const createFeature = useCreateFeature(spaceId);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = title.trim();
     if (!trimmed) return;
+    setFormError(null);
     createFeature.mutate(
       { title: trimmed, type },
       {
         onSuccess: () => {
           setTitle("");
+        },
+        onError: (err) => {
+          const msg = (err as Error).message ?? "";
+          if (msg.includes("400")) {
+            setFormError(
+              "This space must be linked to a git repository to create features.",
+            );
+          } else {
+            setFormError("Failed to create feature.");
+          }
         },
       },
     );
@@ -124,6 +136,11 @@ function FeatureComposer({ spaceId, inputRef }: ComposerProps) {
           Add
         </button>
       </div>
+      {formError && (
+        <p role="alert" className="text-xs text-danger">
+          {formError}
+        </p>
+      )}
     </form>
   );
 }
@@ -133,8 +150,14 @@ export function FeaturesBoard({ spaceId }: Props) {
   const transition = useTransitionFeatureState(spaceId);
   const [activeTask, setActiveTask] = useState<TaskSummary | null>(null);
   const [hiddenLanes, setHiddenLanes] = useState<Set<FeatureState>>(new Set());
+  const [toast, setToast] = useState<{ msg: string; kind: "success" | "error" } | null>(null);
   const composerInputRef = useRef<HTMLInputElement>(null);
   const [searchParams, setSearchParams] = useSearchParams();
+
+  function showToast(msg: string, kind: "success" | "error") {
+    setToast({ msg, kind });
+    setTimeout(() => setToast(null), 3000);
+  }
   const openFeatureId = searchParams.get("feature");
 
   const setOpenFeatureId = (id: string | null) => {
@@ -199,8 +222,23 @@ export function FeaturesBoard({ spaceId }: Props) {
     // (c) guard: canFeatureTransition must pass before calling mutate
     if (!canFeatureTransition(fromState, toState)) return;
 
-    // (d) call mutate
-    transition.mutate({ taskId, state: toState });
+    const laneLabel = FEATURE_LANES.find((l) => l.state === toState)?.label ?? toState;
+
+    // (d) call mutate with feedback callbacks
+    transition.mutate(
+      { taskId, state: toState },
+      {
+        onSuccess: () => showToast(`Feature moved to ${laneLabel}`, "success"),
+        onError: (err) => {
+          const msg = (err as Error).message ?? "";
+          if (msg.includes("409")) {
+            showToast(`Cannot move to ${laneLabel} from current state`, "error");
+          } else {
+            showToast("Failed to update feature state", "error");
+          }
+        },
+      },
+    );
   }
 
   function onDragCancel() {
@@ -289,6 +327,18 @@ export function FeaturesBoard({ spaceId }: Props) {
         featureId={openFeatureId}
         onClose={() => setOpenFeatureId(null)}
       />
+    )}
+    {toast && (
+      <div
+        role="alert"
+        className={`fixed bottom-4 right-4 z-50 rounded-md border px-3 py-2 text-sm shadow-lift ${
+          toast.kind === "success"
+            ? "border-accent bg-surface-1 text-accent"
+            : "border-danger bg-surface-1 text-danger"
+        }`}
+      >
+        {toast.msg}
+      </div>
     )}
     </>
   );

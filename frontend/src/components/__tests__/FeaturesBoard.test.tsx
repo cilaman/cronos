@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -17,11 +17,12 @@ let featureBoardResult: {
 } = { data: null, isLoading: false, error: null };
 
 const transitionMutate = vi.fn();
+const createMutate = vi.fn();
 
 vi.mock("../../hooks/useFeatures", () => ({
   useFeatureBoard: () => featureBoardResult,
   useTransitionFeatureState: () => ({ mutate: transitionMutate }),
-  useCreateFeature: () => ({ mutate: vi.fn(), isPending: false }),
+  useCreateFeature: () => ({ mutate: createMutate, isPending: false }),
 }));
 
 vi.mock("../FeatureDetail", () => ({
@@ -159,6 +160,7 @@ beforeEach(() => {
   featureBoardResult = { data: emptyBoard, isLoading: false, error: null };
   capturedOnDragEnd = null;
   transitionMutate.mockClear();
+  createMutate.mockClear();
 });
 
 // ---------------------------------------------------------------------------
@@ -211,7 +213,10 @@ describe("FeaturesBoard — legal drag-end calls mutation", () => {
     capturedOnDragEnd!({ active: { id: "t1" }, over: { id: "processing" } });
 
     expect(transitionMutate).toHaveBeenCalledTimes(1);
-    expect(transitionMutate).toHaveBeenCalledWith({ taskId: "t1", state: "processing" });
+    expect(transitionMutate).toHaveBeenCalledWith(
+      { taskId: "t1", state: "processing" },
+      expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
+    );
   });
 
   it("calls mutate on legal transition: planned → done", () => {
@@ -224,7 +229,10 @@ describe("FeaturesBoard — legal drag-end calls mutation", () => {
 
     capturedOnDragEnd!({ active: { id: "t2" }, over: { id: "done" } });
 
-    expect(transitionMutate).toHaveBeenCalledWith({ taskId: "t2", state: "done" });
+    expect(transitionMutate).toHaveBeenCalledWith(
+      { taskId: "t2", state: "done" },
+      expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
+    );
   });
 
   it("calls mutate on legal transition: done → backlog", () => {
@@ -237,7 +245,10 @@ describe("FeaturesBoard — legal drag-end calls mutation", () => {
 
     capturedOnDragEnd!({ active: { id: "t3" }, over: { id: "backlog" } });
 
-    expect(transitionMutate).toHaveBeenCalledWith({ taskId: "t3", state: "backlog" });
+    expect(transitionMutate).toHaveBeenCalledWith(
+      { taskId: "t3", state: "backlog" },
+      expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
+    );
   });
 });
 
@@ -404,5 +415,133 @@ describe("FeaturesBoard — card click opens FeatureDetail", () => {
     await user.click(screen.getByRole("button", { name: "Close detail" }));
 
     expect(screen.queryByTestId("feature-detail-mock")).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6. Toast feedback for drag-end transitions
+// ---------------------------------------------------------------------------
+
+describe("FeaturesBoard — toast feedback on drag-end", () => {
+  it("shows a success toast when mutate onSuccess fires", () => {
+    featureBoardResult = {
+      data: { ...emptyBoard, backlog: [makeTask("t20")] },
+      isLoading: false,
+      error: null,
+    };
+    renderBoard();
+
+    capturedOnDragEnd!({ active: { id: "t20" }, over: { id: "processing" } });
+
+    const callbacks = transitionMutate.mock.calls[0][1] as {
+      onSuccess: () => void;
+      onError: (err: Error) => void;
+    };
+    act(() => { callbacks.onSuccess(); });
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Feature moved to Processing");
+  });
+
+  it("shows a 409 error toast when mutate onError fires with a 409 message", () => {
+    featureBoardResult = {
+      data: { ...emptyBoard, backlog: [makeTask("t21")] },
+      isLoading: false,
+      error: null,
+    };
+    renderBoard();
+
+    capturedOnDragEnd!({ active: { id: "t21" }, over: { id: "processing" } });
+
+    const callbacks = transitionMutate.mock.calls[0][1] as {
+      onSuccess: () => void;
+      onError: (err: Error) => void;
+    };
+    act(() => { callbacks.onError(new Error("409 Conflict: {\"detail\":\"illegal transition\"}")); });
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Cannot move to Processing from current state",
+    );
+  });
+
+  it("shows a generic error toast when mutate onError fires with a non-409 error", () => {
+    featureBoardResult = {
+      data: { ...emptyBoard, backlog: [makeTask("t22")] },
+      isLoading: false,
+      error: null,
+    };
+    renderBoard();
+
+    capturedOnDragEnd!({ active: { id: "t22" }, over: { id: "processing" } });
+
+    const callbacks = transitionMutate.mock.calls[0][1] as {
+      onSuccess: () => void;
+      onError: (err: Error) => void;
+    };
+    act(() => { callbacks.onError(new Error("500 Internal Server Error")); });
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Failed to update feature state");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 7. FeatureComposer — inline error on 400
+// ---------------------------------------------------------------------------
+
+describe("FeatureComposer — inline error on 400", () => {
+  it("shows inline error when createFeature onError fires with a 400 message", async () => {
+    featureBoardResult = { data: emptyBoard, isLoading: false, error: null };
+    renderBoard();
+
+    const user = userEvent.setup();
+    const input = screen.getByPlaceholderText("New feature title…");
+    await user.type(input, "My feature");
+    await user.click(screen.getByRole("button", { name: "Add feature" }));
+
+    expect(createMutate).toHaveBeenCalled();
+    const callbacks = createMutate.mock.calls[0][1] as {
+      onSuccess: () => void;
+      onError: (err: Error) => void;
+    };
+    act(() => { callbacks.onError(new Error("400 Bad Request: {\"detail\":\"space not linked\"}")); });
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "This space must be linked to a git repository to create features.",
+    );
+  });
+
+  it("shows generic error when createFeature onError fires with a non-400 error", async () => {
+    featureBoardResult = { data: emptyBoard, isLoading: false, error: null };
+    renderBoard();
+
+    const user = userEvent.setup();
+    const input = screen.getByPlaceholderText("New feature title…");
+    await user.type(input, "My feature");
+    await user.click(screen.getByRole("button", { name: "Add feature" }));
+
+    const callbacks = createMutate.mock.calls[0][1] as {
+      onSuccess: () => void;
+      onError: (err: Error) => void;
+    };
+    act(() => { callbacks.onError(new Error("500 Internal Server Error")); });
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Failed to create feature.");
+  });
+
+  it("does not show error when createFeature onSuccess fires", async () => {
+    featureBoardResult = { data: emptyBoard, isLoading: false, error: null };
+    renderBoard();
+
+    const user = userEvent.setup();
+    const input = screen.getByPlaceholderText("New feature title…");
+    await user.type(input, "My feature");
+    await user.click(screen.getByRole("button", { name: "Add feature" }));
+
+    const callbacks = createMutate.mock.calls[0][1] as {
+      onSuccess: () => void;
+      onError: (err: Error) => void;
+    };
+    act(() => { callbacks.onSuccess(); });
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });

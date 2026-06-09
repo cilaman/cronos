@@ -758,28 +758,60 @@ describe("Card — feature_key chip", () => {
 // ---------------------------------------------------------------------------
 
 describe("Card — issue_url anchor", () => {
-  it("renders an issue link anchor when issue_url is present", () => {
+  it("renders a GitHub issue link with #number when issue_url and issue_number are present", () => {
     const task = makeTask({
-      type: "issue",
+      type: "feature",
       issue_url: "https://github.com/owner/repo/issues/42",
+      issue_number: 42,
     });
 
     renderCard({ task, onClick: () => {} });
 
-    const anchor = screen.getByTitle("Open issue");
+    const anchor = screen.getByTitle("Open GitHub issue");
     expect(anchor).toBeInTheDocument();
     expect(anchor.getAttribute("href")).toBe(
       "https://github.com/owner/repo/issues/42",
     );
     expect(anchor.getAttribute("target")).toBe("_blank");
+    expect(screen.getByText("#42")).toBeInTheDocument();
   });
 
-  it("does NOT render the issue link when issue_url is absent", () => {
-    const task = makeTask({ type: "issue", issue_url: null });
+  it("renders GitHub issue link without number when issue_number is null", () => {
+    const task = makeTask({
+      type: "feature",
+      issue_url: "https://github.com/owner/repo/issues/99",
+      issue_number: null,
+    });
 
     renderCard({ task, onClick: () => {} });
 
-    expect(screen.queryByTitle("Open issue")).not.toBeInTheDocument();
+    const anchor = screen.getByTitle("Open GitHub issue");
+    expect(anchor).toBeInTheDocument();
+    expect(screen.queryByText(/#\d+/)).not.toBeInTheDocument();
+  });
+
+  it("renders a Draft issue button when only proposed_issue_path is set", () => {
+    const task = makeTask({
+      type: "feature",
+      issue_url: null,
+      proposed_issue_path: ".cronos/proposed-issues/feat-001.md",
+    });
+
+    renderCard({ task, onClick: () => {} });
+
+    const btn = screen.getByTitle("Draft issue (no GitHub remote)");
+    expect(btn).toBeInTheDocument();
+    expect(screen.getByText("Draft issue")).toBeInTheDocument();
+    expect(screen.queryByTitle("Open GitHub issue")).not.toBeInTheDocument();
+  });
+
+  it("renders nothing for issue when both issue_url and proposed_issue_path are absent", () => {
+    const task = makeTask({ type: "feature", issue_url: null, proposed_issue_path: null });
+
+    renderCard({ task, onClick: () => {} });
+
+    expect(screen.queryByTitle("Open GitHub issue")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Draft issue (no GitHub remote)")).not.toBeInTheDocument();
   });
 });
 
@@ -826,71 +858,59 @@ describe("Card — realizes chip", () => {
 });
 
 // ---------------------------------------------------------------------------
-// realized_by list (feature/fix cards only)
+// realizing_count badge (feature/fix cards only)
 // ---------------------------------------------------------------------------
 
-describe("Card — realized_by list", () => {
-  it("renders realized_by entries as click-through items on a feature card", () => {
+describe("Card — realizing_count badge", () => {
+  it("renders 'N linked' badge on a feature card when realizing_count > 0", () => {
     const task = makeTask({
       type: "feature",
-      realized_by: ["fix-task-1", "fix-task-2"],
+      realizing_count: 3,
     });
 
     renderCard({ task, onClick: () => {} });
 
-    expect(screen.getByText(/fix-task-1/i)).toBeInTheDocument();
-    expect(screen.getByText(/fix-task-2/i)).toBeInTheDocument();
+    expect(screen.getByText(/3 linked/i)).toBeInTheDocument();
   });
 
-  it("renders realized_by entries on a fix card", () => {
+  it("renders 'N linked' badge on a fix card", () => {
     const task = makeTask({
       type: "fix",
-      realized_by: ["fix-task-3"],
+      realizing_count: 1,
     });
 
     renderCard({ task, onClick: () => {} });
 
-    expect(screen.getByText(/fix-task-3/i)).toBeInTheDocument();
+    expect(screen.getByText(/1 linked/i)).toBeInTheDocument();
   });
 
-  it("does NOT render realized_by section when the list is empty", () => {
+  it("does NOT render the badge when realizing_count is 0", () => {
     const task = makeTask({
       type: "feature",
-      realized_by: [],
+      realizing_count: 0,
     });
 
     renderCard({ task, onClick: () => {} });
 
-    // No realized_by entries should appear
-    expect(screen.queryByText(/fix-task-/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/linked/i)).not.toBeInTheDocument();
   });
 
-  it("does NOT render realized_by section on a non-feature/fix card type", () => {
+  it("does NOT render the badge when realizing_count is absent", () => {
+    const task = makeTask({ type: "feature" });
+
+    renderCard({ task, onClick: () => {} });
+
+    expect(screen.queryByText(/linked/i)).not.toBeInTheDocument();
+  });
+
+  it("does NOT render the badge on a non-feature/fix card type", () => {
     const task = makeTask({
       type: "goal",
-      realized_by: ["fix-task-1"],
+      realizing_count: 5,
     });
 
     renderCard({ task, onClick: () => {} });
 
-    // goal type should NOT render realized_by
-    expect(screen.queryByText(/fix-task-1/i)).not.toBeInTheDocument();
-  });
-
-  it("calls onOpenTask with the item id when a realized_by entry is clicked", async () => {
-    const onOpenTask = vi.fn();
-    const onClick = vi.fn();
-    const task = makeTask({
-      type: "feature",
-      realized_by: ["fix-task-1", "fix-task-2"],
-    });
-
-    renderCard({ task, onClick, onOpenTask });
-    const user = userEvent.setup();
-    await user.click(screen.getByText(/fix-task-1/i));
-
-    expect(onOpenTask).toHaveBeenCalledTimes(1);
-    expect(onOpenTask).toHaveBeenCalledWith("fix-task-1");
-    expect(onClick).not.toHaveBeenCalled();
+    expect(screen.queryByText(/linked/i)).not.toBeInTheDocument();
   });
 });

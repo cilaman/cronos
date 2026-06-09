@@ -772,6 +772,12 @@ class TaskStore:
         Tasks with feature_state=None are excluded (should not exist in practice).
         """
         async with self._lock:
+            # Count realizing items per feature (tasks with realizes=feature_id in this space).
+            realizing_counts: dict[str, int] = {}
+            for t in self._by_id.values():
+                if t.space_id == space_id and t.realizes:
+                    realizing_counts[t.realizes] = realizing_counts.get(t.realizes, 0) + 1
+
             buckets: dict[FeatureState, list[TaskSummary]] = {fs: [] for fs in FeatureState}
             for task in self._by_id.values():
                 if task.space_id != space_id:
@@ -786,6 +792,7 @@ class TaskStore:
                     )
                     continue
                 summary = summarize(task)
+                summary.realizing_count = realizing_counts.get(task.id, 0)
                 buckets[task.feature_state].append(summary)
             # Sort each bucket by manual_order then created_at
             for fs in buckets:

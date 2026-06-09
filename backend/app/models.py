@@ -133,6 +133,8 @@ class TaskSummary(BaseModel):
     space_color: str | None = None
     space_icon: str | None = None
     space_autopilot: str | None = None
+    # Count of tasks/goals that realize this feature; 0 for non-feature tasks.
+    realizing_count: int = 0
 
 
 class Board(BaseModel):

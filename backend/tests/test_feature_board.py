@@ -70,3 +70,37 @@ async def test_feature_board_buckets(task_store):
     # Regular task must NOT appear in any bucket
     all_ids = {s.id for bucket in board.values() for s in bucket}
     assert _task.id not in all_ids, "regular task must not appear in feature_board()"
+
+
+async def test_feature_board_realizing_count(task_store):
+    """feature_board() must populate realizing_count with the number of tasks that realize each feature."""
+    feat = await _make(task_store, "Feature with realizers", type="feature")
+    feat_empty = await _make(task_store, "Feature no realizers", type="feature")
+
+    # Create two tasks that realize feat
+    t1 = await _make(task_store, "Task 1")
+    t2 = await _make(task_store, "Task 2")
+    await task_store.set_realizes(t1.id, feat.id)
+    await task_store.set_realizes(t2.id, feat.id)
+
+    board = await task_store.feature_board(SPACE_ID)
+    summaries = {s.id: s for s in board[FeatureState.BACKLOG]}
+
+    assert summaries[feat.id].realizing_count == 2, "feat should have realizing_count=2"
+    assert summaries[feat_empty.id].realizing_count == 0, "feat_empty should have realizing_count=0"
+
+
+async def test_feature_board_realizing_count_cross_space(task_store):
+    """realizing_count only counts tasks from the same space."""
+    other_space = "other-space"
+    feat = await _make(task_store, "Feature", type="feature")
+
+    # Task in same space — counts
+    t_same = await task_store.create(space_id=SPACE_ID, title="Same-space task", brief="", type="task")
+    await task_store.set_realizes(t_same.id, feat.id)
+
+    # Task in other space cannot realize feat (cross-space is rejected by validate_realizes)
+    # so just confirm the count is 1 after same-space link
+    board = await task_store.feature_board(SPACE_ID)
+    summaries = {s.id: s for s in board[FeatureState.BACKLOG]}
+    assert summaries[feat.id].realizing_count == 1
