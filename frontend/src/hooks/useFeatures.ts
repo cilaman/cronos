@@ -88,7 +88,7 @@ export function usePatchFeature() {
       body,
     }: {
       featureId: string;
-      body: { title?: string; brief?: string };
+      body: { title?: string; brief?: string; type?: "feature" | "fix" };
     }) => api.patchFeature(featureId, body),
     onSuccess: (result: FeatureRead) => {
       qc.invalidateQueries({ queryKey: ["feature", result.id] });

@@ -426,7 +426,7 @@ export const api = {
     request<FeatureRead>(`/api/features/${featureId}`),
   patchFeature: (
     featureId: string,
-    body: { title?: string; brief?: string },
+    body: { title?: string; brief?: string; type?: "feature" | "fix" },
   ): Promise<FeatureRead> =>
     request<FeatureRead>(`/api/features/${featureId}`, {
       method: "PATCH",
