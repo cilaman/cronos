@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   DndContext,
@@ -18,10 +18,11 @@ import {
   type FeatureState,
   type TaskSummary,
 } from "../types";
-import { useFeatureBoard, useTransitionFeatureState, useCreateFeature } from "../hooks/useFeatures";
+import { useFeatureBoard, useTransitionFeatureState } from "../hooks/useFeatures";
 import { Lane } from "./Lane";
 import { Card } from "./Card";
 import { FeatureDetail } from "./FeatureDetail";
+import { FeatureForm } from "./FeatureForm";
 
 interface Props {
   spaceId: string;
@@ -37,113 +38,6 @@ function findFeatureState(
   return null;
 }
 
-interface ComposerProps {
-  spaceId: string;
-  inputRef?: React.RefObject<HTMLInputElement>;
-}
-
-function FeatureComposer({ spaceId, inputRef }: ComposerProps) {
-  const [title, setTitle] = useState("");
-  const [type, setType] = useState<"feature" | "fix">("feature");
-  const [formError, setFormError] = useState<string | null>(null);
-  const createFeature = useCreateFeature(spaceId);
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const trimmed = title.trim();
-    if (!trimmed) return;
-    setFormError(null);
-    createFeature.mutate(
-      { title: trimmed, type },
-      {
-        onSuccess: () => {
-          setTitle("");
-        },
-        onError: (err) => {
-          const msg = (err as Error).message ?? "";
-          if (msg.includes("400")) {
-            setFormError(
-              "This space must be linked to a git repository to create features.",
-            );
-          } else {
-            setFormError("Failed to create feature.");
-          }
-        },
-      },
-    );
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="p-2 space-y-2">
-      <div className="flex gap-1">
-        <label className="flex items-center gap-1 cursor-pointer">
-          <input
-            type="radio"
-            name={`feature-type-${spaceId}`}
-            value="feature"
-            checked={type === "feature"}
-            onChange={() => setType("feature")}
-            className="sr-only"
-            aria-label="Feature"
-          />
-          <span
-            className={`rounded px-2 py-0.5 text-xs font-semibold border transition ${
-              type === "feature"
-                ? "bg-emerald-100 border-emerald-300 text-emerald-700 dark:bg-emerald-400/20 dark:border-emerald-400/50 dark:text-emerald-300"
-                : "border-hairline bg-surface-2 text-ink-muted"
-            }`}
-          >
-            Feature
-          </span>
-        </label>
-        <label className="flex items-center gap-1 cursor-pointer">
-          <input
-            type="radio"
-            name={`feature-type-${spaceId}`}
-            value="fix"
-            checked={type === "fix"}
-            onChange={() => setType("fix")}
-            className="sr-only"
-            aria-label="Fix"
-          />
-          <span
-            className={`rounded px-2 py-0.5 text-xs font-semibold border transition ${
-              type === "fix"
-                ? "bg-rose-100 border-rose-300 text-rose-700 dark:bg-rose-400/20 dark:border-rose-400/50 dark:text-rose-300"
-                : "border-hairline bg-surface-2 text-ink-muted"
-            }`}
-          >
-            Fix
-          </span>
-        </label>
-      </div>
-      <div className="flex gap-1">
-        <input
-          ref={inputRef}
-          type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="New feature title…"
-          aria-label="Feature title"
-          className="min-w-0 flex-1 rounded border border-hairline bg-surface-1 px-2 py-1 text-sm text-ink placeholder:text-ink-faint focus:border-accent focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
-        />
-        <button
-          type="submit"
-          disabled={!title.trim() || createFeature.isPending}
-          aria-label="Add feature"
-          className="rounded border border-hairline bg-surface-2 px-2 py-1 text-xs font-semibold text-ink-muted transition hover:bg-accent hover:text-white disabled:opacity-40 focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
-        >
-          Add
-        </button>
-      </div>
-      {formError && (
-        <p role="alert" className="text-xs text-danger">
-          {formError}
-        </p>
-      )}
-    </form>
-  );
-}
 
 export function FeaturesBoard({ spaceId }: Props) {
   const { data, isLoading, error } = useFeatureBoard(spaceId);
@@ -151,7 +45,7 @@ export function FeaturesBoard({ spaceId }: Props) {
   const [activeTask, setActiveTask] = useState<TaskSummary | null>(null);
   const [hiddenLanes, setHiddenLanes] = useState<Set<FeatureState>>(new Set());
   const [toast, setToast] = useState<{ msg: string; kind: "success" | "error" } | null>(null);
-  const composerInputRef = useRef<HTMLInputElement>(null);
+  const [showFeatureForm, setShowFeatureForm] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
 
   function showToast(msg: string, kind: "success" | "error") {
@@ -305,12 +199,11 @@ export function FeaturesBoard({ spaceId }: Props) {
                   label={label}
                   tasks={tasks}
                   onOpen={setOpenFeatureId}
-                  onAdd={() => composerInputRef.current?.focus()}
+                  onAdd={() => setShowFeatureForm(true)}
                   showAdd={isBacklog}
                   onHideLane={hideLane}
                 />
               </SortableContext>
-              {isBacklog && <FeatureComposer spaceId={spaceId} inputRef={composerInputRef} />}
             </div>
           );
         })}
@@ -322,6 +215,9 @@ export function FeaturesBoard({ spaceId }: Props) {
         ) : null}
       </DragOverlay>
     </DndContext>
+    {showFeatureForm && (
+      <FeatureForm spaceId={spaceId} onClose={() => setShowFeatureForm(false)} />
+    )}
     {openFeatureId && (
       <FeatureDetail
         featureId={openFeatureId}

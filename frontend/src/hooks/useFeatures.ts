@@ -56,7 +56,7 @@ export function useTransitionFeatureState(spaceId: string) {
 export function useCreateFeature(spaceId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { title: string; type: "feature" | "fix"; description?: string }) =>
+    mutationFn: (body: { title: string; type: "feature" | "fix"; description?: string; priority?: number }) =>
       api.createFeature(spaceId, body),
     onSuccess: () => {
       invalidateFeatureQueries(qc, spaceId);
@@ -88,7 +88,7 @@ export function usePatchFeature() {
       body,
     }: {
       featureId: string;
-      body: { title?: string; brief?: string };
+      body: { title?: string; brief?: string; type?: "feature" | "fix" };
     }) => api.patchFeature(featureId, body),
     onSuccess: (result: FeatureRead) => {
       qc.invalidateQueries({ queryKey: ["feature", result.id] });

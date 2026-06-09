@@ -217,13 +217,13 @@ describe("FeatureDetail — waiting_question box", () => {
 // ---------------------------------------------------------------------------
 
 describe("FeatureDetail — Process button", () => {
-  it("renders a Process button", () => {
+  it("renders a Start decomposition button", () => {
     mockUseFeature.mockReturnValue({ data: makeFeature(), isLoading: false, error: null, refetch: vi.fn() });
     renderDetail();
-    expect(screen.getByRole("button", { name: /process feature/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /start decomposition/i })).toBeInTheDocument();
   });
 
-  it("Process button is disabled when feature_state is 'processing'", () => {
+  it("Start decomposition button is disabled when feature_state is 'processing'", () => {
     mockUseFeature.mockReturnValue({
       data: makeFeature({ feature_state: "processing" }),
       isLoading: false,
@@ -231,23 +231,23 @@ describe("FeatureDetail — Process button", () => {
       refetch: vi.fn(),
     });
     renderDetail();
-    expect(screen.getByRole("button", { name: /already processing/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /start decomposition/i })).toBeDisabled();
   });
 
-  it("Process button calls processFeature.mutateAsync after confirm", async () => {
+  it("Start decomposition button calls processFeature.mutateAsync after confirm", async () => {
     mockUseFeature.mockReturnValue({ data: makeFeature(), isLoading: false, error: null, refetch: vi.fn() });
     renderDetail();
     const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: /process feature/i }));
+    await user.click(screen.getByRole("button", { name: /start decomposition/i }));
     expect(processMutateAsync).toHaveBeenCalledWith("feat-1");
   });
 
-  it("Process button does NOT call mutateAsync when confirm is cancelled", async () => {
+  it("Start decomposition button does NOT call mutateAsync when confirm is cancelled", async () => {
     (window.confirm as ReturnType<typeof vi.fn>).mockReturnValue(false);
     mockUseFeature.mockReturnValue({ data: makeFeature(), isLoading: false, error: null, refetch: vi.fn() });
     renderDetail();
     const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: /process feature/i }));
+    await user.click(screen.getByRole("button", { name: /start decomposition/i }));
     expect(processMutateAsync).not.toHaveBeenCalled();
   });
 });
@@ -360,6 +360,48 @@ describe("FeatureDetail — inline edit", () => {
     await user.click(screen.getByRole("button", { name: "Cancel" }));
     expect(screen.queryByRole("textbox", { name: "Title" })).not.toBeInTheDocument();
     expect(patchMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("edit form shows Feature and Fix type toggle buttons", async () => {
+    mockUseFeature.mockReturnValue({ data: makeFeature(), isLoading: false, error: null, refetch: vi.fn() });
+    renderDetail();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    expect(screen.getByRole("button", { name: "Feature" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Fix" })).toBeInTheDocument();
+  });
+
+  it("changing type to Fix includes type: 'fix' in patch payload", async () => {
+    mockUseFeature.mockReturnValue({ data: makeFeature(), isLoading: false, error: null, refetch: vi.fn() });
+    renderDetail();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.click(screen.getByRole("button", { name: "Fix" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(patchMutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        featureId: "feat-1",
+        body: expect.objectContaining({ type: "fix" }),
+      }),
+    );
+  });
+
+  it("type toggle defaults to the feature's current type", async () => {
+    mockUseFeature.mockReturnValue({
+      data: makeFeature({ type: "fix" }),
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    renderDetail();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(patchMutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.objectContaining({ type: "fix" }),
+      }),
+    );
   });
 });
 

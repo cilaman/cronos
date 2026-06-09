@@ -17,12 +17,20 @@ let featureBoardResult: {
 } = { data: null, isLoading: false, error: null };
 
 const transitionMutate = vi.fn();
-const createMutate = vi.fn();
 
 vi.mock("../../hooks/useFeatures", () => ({
   useFeatureBoard: () => featureBoardResult,
   useTransitionFeatureState: () => ({ mutate: transitionMutate }),
-  useCreateFeature: () => ({ mutate: createMutate, isPending: false }),
+}));
+
+vi.mock("../FeatureForm", () => ({
+  FeatureForm: ({ onClose }: { onClose: () => void }) => (
+    <div data-testid="feature-form-mock">
+      <button type="button" onClick={onClose} aria-label="Cancel">
+        Cancel
+      </button>
+    </div>
+  ),
 }));
 
 vi.mock("../FeatureDetail", () => ({
@@ -160,7 +168,6 @@ beforeEach(() => {
   featureBoardResult = { data: emptyBoard, isLoading: false, error: null };
   capturedOnDragEnd = null;
   transitionMutate.mockClear();
-  createMutate.mockClear();
 });
 
 // ---------------------------------------------------------------------------
@@ -484,64 +491,31 @@ describe("FeaturesBoard — toast feedback on drag-end", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 7. FeatureComposer — inline error on 400
+// 7. FeaturesBoard — FeatureForm modal open/close
 // ---------------------------------------------------------------------------
 
-describe("FeatureComposer — inline error on 400", () => {
-  it("shows inline error when createFeature onError fires with a 400 message", async () => {
+describe("FeaturesBoard — FeatureForm modal", () => {
+  it("FeatureForm modal is not shown initially", () => {
     featureBoardResult = { data: emptyBoard, isLoading: false, error: null };
     renderBoard();
-
-    const user = userEvent.setup();
-    const input = screen.getByPlaceholderText("New feature title…");
-    await user.type(input, "My feature");
-    await user.click(screen.getByRole("button", { name: "Add feature" }));
-
-    expect(createMutate).toHaveBeenCalled();
-    const callbacks = createMutate.mock.calls[0][1] as {
-      onSuccess: () => void;
-      onError: (err: Error) => void;
-    };
-    act(() => { callbacks.onError(new Error("400 Bad Request: {\"detail\":\"space not linked\"}")); });
-
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "This space must be linked to a git repository to create features.",
-    );
+    expect(screen.queryByTestId("feature-form-mock")).not.toBeInTheDocument();
   });
 
-  it("shows generic error when createFeature onError fires with a non-400 error", async () => {
+  it("clicking the New task button on the Backlog lane opens FeatureForm modal", async () => {
     featureBoardResult = { data: emptyBoard, isLoading: false, error: null };
     renderBoard();
-
     const user = userEvent.setup();
-    const input = screen.getByPlaceholderText("New feature title…");
-    await user.type(input, "My feature");
-    await user.click(screen.getByRole("button", { name: "Add feature" }));
-
-    const callbacks = createMutate.mock.calls[0][1] as {
-      onSuccess: () => void;
-      onError: (err: Error) => void;
-    };
-    act(() => { callbacks.onError(new Error("500 Internal Server Error")); });
-
-    expect(screen.getByRole("alert")).toHaveTextContent("Failed to create feature.");
+    await user.click(screen.getByRole("button", { name: "New task" }));
+    expect(screen.getByTestId("feature-form-mock")).toBeInTheDocument();
   });
 
-  it("does not show error when createFeature onSuccess fires", async () => {
+  it("clicking Cancel in FeatureForm closes the modal", async () => {
     featureBoardResult = { data: emptyBoard, isLoading: false, error: null };
     renderBoard();
-
     const user = userEvent.setup();
-    const input = screen.getByPlaceholderText("New feature title…");
-    await user.type(input, "My feature");
-    await user.click(screen.getByRole("button", { name: "Add feature" }));
-
-    const callbacks = createMutate.mock.calls[0][1] as {
-      onSuccess: () => void;
-      onError: (err: Error) => void;
-    };
-    act(() => { callbacks.onSuccess(); });
-
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "New task" }));
+    expect(screen.getByTestId("feature-form-mock")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByTestId("feature-form-mock")).not.toBeInTheDocument();
   });
 });

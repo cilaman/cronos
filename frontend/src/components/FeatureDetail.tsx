@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useFeature, usePatchFeature, useProcessFeature, useSetRealize } from "../hooks/useFeatures";
+import { IconButton } from "./ui/IconButton";
 import { Modal } from "./ui/Modal";
 import type { FeatureState } from "../types";
 
@@ -47,6 +48,7 @@ export function FeatureDetail({ featureId, onClose }: Props) {
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editBrief, setEditBrief] = useState("");
+  const [editType, setEditType] = useState<"feature" | "fix">("feature");
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -69,6 +71,7 @@ export function FeatureDetail({ featureId, onClose }: Props) {
     if (!feature) return;
     setEditTitle(feature.title);
     setEditBrief(feature.brief);
+    setEditType(feature.type as "feature" | "fix");
     setEditing(true);
   }
 
@@ -76,7 +79,7 @@ export function FeatureDetail({ featureId, onClose }: Props) {
     if (!feature) return;
     await patchFeature.mutateAsync({
       featureId: feature.id,
-      body: { title: editTitle, brief: editBrief },
+      body: { title: editTitle, brief: editBrief, type: editType },
     });
     setEditing(false);
   }
@@ -183,20 +186,59 @@ export function FeatureDetail({ featureId, onClose }: Props) {
                     Edit
                   </h3>
                   <div className="mt-2 space-y-3">
-                    <input
-                      type="text"
-                      value={editTitle}
-                      onChange={(e) => setEditTitle(e.target.value)}
-                      aria-label="Title"
-                      className="w-full rounded border border-hairline bg-surface-1 px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-                    />
-                    <textarea
-                      value={editBrief}
-                      onChange={(e) => setEditBrief(e.target.value)}
-                      aria-label="Brief"
-                      rows={8}
-                      className="w-full rounded border border-hairline bg-surface-1 px-3 py-2 font-mono text-sm text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-                    />
+                    <div>
+                      <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-faint">
+                        Type
+                      </label>
+                      <div className="inline-flex rounded border border-hairline bg-surface-1 p-0.5">
+                        <button
+                          type="button"
+                          onClick={() => setEditType("feature")}
+                          className={`rounded px-3 py-1 text-xs font-semibold transition ${
+                            editType === "feature"
+                              ? "bg-emerald-500 text-white"
+                              : "text-ink-muted hover:text-ink"
+                          }`}
+                        >
+                          Feature
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditType("fix")}
+                          className={`rounded px-3 py-1 text-xs font-semibold transition ${
+                            editType === "fix"
+                              ? "bg-rose-500 text-white"
+                              : "text-ink-muted hover:text-ink"
+                          }`}
+                        >
+                          Fix
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-faint">
+                        Title
+                      </label>
+                      <input
+                        type="text"
+                        value={editTitle}
+                        onChange={(e) => setEditTitle(e.target.value)}
+                        aria-label="Title"
+                        className="w-full rounded border border-hairline bg-surface-1 px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-faint">
+                        Brief
+                      </label>
+                      <textarea
+                        value={editBrief}
+                        onChange={(e) => setEditBrief(e.target.value)}
+                        aria-label="Brief"
+                        rows={8}
+                        className="w-full rounded border border-hairline bg-surface-1 px-3 py-2 font-mono text-sm text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                      />
+                    </div>
                     <div className="flex gap-2">
                       <button
                         type="button"
@@ -254,22 +296,23 @@ export function FeatureDetail({ featureId, onClose }: Props) {
                 <h3 className="font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
                   Decompose
                 </h3>
-                <div className="mt-2">
-                  <button
-                    type="button"
+                <div className="mt-2 flex items-center gap-2">
+                  <IconButton
+                    variant="accent"
+                    size="sm"
                     onClick={() => void handleProcess()}
                     disabled={isProcessing || processFeature.isPending}
-                    aria-label={isProcessing ? "Already processing" : "Process feature"}
-                    className="rounded border border-hairline bg-surface-2 px-3 py-1.5 text-xs font-semibold text-ink-muted transition hover:bg-accent hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    loading={processFeature.isPending || isProcessing}
+                    aria-label="Start decomposition"
+                    title="Start decomposition"
                   >
-                    {processFeature.isPending
-                      ? "Processing…"
-                      : isProcessing
-                        ? "Processing…"
-                        : "Process"}
-                  </button>
+                    ▶
+                  </IconButton>
+                  <span className="text-xs text-ink-faint">
+                    {isProcessing ? "Processing…" : "Start decomposition"}
+                  </span>
                   {processFeature.error && (
-                    <p className="mt-1 text-xs text-danger">{processFeature.error.message}</p>
+                    <p className="text-xs text-danger">{processFeature.error.message}</p>
                   )}
                 </div>
               </section>
