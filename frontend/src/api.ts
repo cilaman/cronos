@@ -410,7 +410,7 @@ export const api = {
     }),
   createFeature: (
     spaceId: string,
-    body: { title: string; type: "feature" | "fix"; description?: string },
+    body: { title: string; type: "feature" | "fix"; description?: string; priority?: number },
   ): Promise<Task> =>
     request<Task>(`/api/features`, {
       method: "POST",
@@ -419,6 +419,7 @@ export const api = {
         title: body.title,
         type: body.type,
         brief: body.description ?? "",
+        ...(body.priority !== undefined ? { priority: body.priority } : {}),
       }),
     }),
   getFeature: (featureId: string): Promise<FeatureRead> =>
