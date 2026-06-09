@@ -479,6 +479,63 @@ def test_realize_unauthenticated_returns_401(app_client):
 
 
 # ---------------------------------------------------------------------------
+# P2-E: feature not found after set_realizes succeeds → 404 (line 324)
+# ---------------------------------------------------------------------------
+
+
+def test_realize_feature_not_found_after_set_realizes_returns_404(app_client):
+    """Returns 404 when feature is not found after set_realizes succeeds (TOCTOU, line 324)."""
+    mock_store = MagicMock()
+    # set_realizes succeeds (returns normally)
+    mock_store.set_realizes = AsyncMock(return_value=None)
+    # Feature deleted between set_realizes and the subsequent get
+    mock_store.get.return_value = None
+
+    app_client.app.state.store = mock_store
+
+    with patch("app.api.features.mirror_feature_to_github", new_callable=AsyncMock) as mock_mirror:
+        response = app_client.patch(
+            f"/api/features/{FEATURE_ID}/realize",
+            json={"item_id": ITEM_ID, "feature_id": FEATURE_ID},
+            headers=AUTH_HEADER,
+        )
+
+    assert response.status_code == 404, response.text
+    assert mock_mirror.call_count == 0
+
+
+def test_realize_wrong_type_after_set_realizes_returns_404(app_client):
+    """Returns 404 when feature ID resolves to a non-feature task after set_realizes (line 324)."""
+    from app.models import Task
+
+    non_feature = Task(
+        id=FEATURE_ID,
+        space_id=SPACE_ID,
+        title="Regular Task",
+        state=TaskState.BACKLOG,
+        created_at=_NOW,
+        updated_at=_NOW,
+        type="task",  # not feature or fix
+    )
+
+    mock_store = MagicMock()
+    mock_store.set_realizes = AsyncMock(return_value=None)
+    mock_store.get.return_value = non_feature
+
+    app_client.app.state.store = mock_store
+
+    with patch("app.api.features.mirror_feature_to_github", new_callable=AsyncMock) as mock_mirror:
+        response = app_client.patch(
+            f"/api/features/{FEATURE_ID}/realize",
+            json={"item_id": ITEM_ID, "feature_id": FEATURE_ID},
+            headers=AUTH_HEADER,
+        )
+
+    assert response.status_code == 404, response.text
+    assert mock_mirror.call_count == 0
+
+
+# ---------------------------------------------------------------------------
 # Fix type also works
 # ---------------------------------------------------------------------------
 

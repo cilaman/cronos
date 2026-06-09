@@ -428,6 +428,100 @@ def test_storage_error_returns_400(app_client, git_linked_space):
 
 
 # ---------------------------------------------------------------------------
+# store.create raises UnknownSpace → 404 (P2-A, line 139)
+# ---------------------------------------------------------------------------
+
+
+def test_unknown_space_on_create_returns_404(app_client, git_linked_space):
+    """If store.create() raises UnknownSpace, endpoint returns 404 (line 139)."""
+    from app.storage import UnknownSpace
+
+    failing_store = MagicMock()
+    failing_store.create = AsyncMock(side_effect=UnknownSpace("space-1"))
+    app_client.app.state.store = failing_store
+    app_client.app.state.space_store.get.return_value = git_linked_space
+
+    with patch("app.api.features.mirror_feature_to_github", new_callable=AsyncMock) as mock_mirror:
+        response = app_client.post(
+            "/api/features",
+            json={"space_id": "space-1", "title": "Feat", "type": "feature"},
+            headers=AUTH_HEADER,
+        )
+
+    assert response.status_code == 404
+    assert mock_mirror.call_count == 0
+
+
+def test_storage_error_on_create_includes_message(app_client, git_linked_space):
+    """StorageError message is propagated in the 400 detail field."""
+    from app.storage import StorageError
+
+    failing_store = MagicMock()
+    failing_store.create = AsyncMock(side_effect=StorageError("disk full"))
+    app_client.app.state.store = failing_store
+    app_client.app.state.space_store.get.return_value = git_linked_space
+
+    with patch("app.api.features.mirror_feature_to_github", new_callable=AsyncMock):
+        response = app_client.post(
+            "/api/features",
+            json={"space_id": "space-1", "title": "Feat", "type": "feature"},
+            headers=AUTH_HEADER,
+        )
+
+    assert response.status_code == 400
+    assert "disk full" in response.json()["detail"]
+
+
+# ---------------------------------------------------------------------------
+# _log_mirror_error callback logs ERROR when mirror raises (P1-B, line 78)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_log_mirror_error_callback_logs_on_exception():
+    """_log_mirror_error done callback logs ERROR when mirror_feature_to_github raises (line 78)."""
+    import asyncio
+    import logging
+
+    from app.api.features import _fire_mirror
+
+    task = _make_task()
+    space = _make_space()
+
+    errors_logged: list = []
+
+    class _ErrorCapture(logging.Handler):
+        def emit(self, record):
+            if record.levelno >= logging.ERROR:
+                errors_logged.append(record)
+
+    handler = _ErrorCapture()
+    logger = logging.getLogger("app.api.features")
+    logger.addHandler(handler)
+
+    try:
+        with patch(
+            "app.api.features.mirror_feature_to_github",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("simulated mirror failure"),
+        ):
+            _fire_mirror(task, space, "create")
+            # First sleep: run the asyncio task (raises RuntimeError, schedules done callbacks)
+            await asyncio.sleep(0)
+            # Second sleep: run the done callbacks (scheduled via call_soon after task failure)
+            await asyncio.sleep(0)
+    finally:
+        logger.removeHandler(handler)
+
+    assert len(errors_logged) >= 1, (
+        "Expected at least one ERROR log from _log_mirror_error when mirror raises"
+    )
+    assert any("mirror_feature_to_github" in str(r.msg) for r in errors_logged), (
+        "ERROR log must reference 'mirror_feature_to_github'"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Brief defaults and passthrough
 # ---------------------------------------------------------------------------
 

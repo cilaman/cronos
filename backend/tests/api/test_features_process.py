@@ -596,6 +596,42 @@ def test_process_fix_type_succeeds(app_client):
 
 
 # ---------------------------------------------------------------------------
+# P2-B: space not found after feature found → 404 (line ~358)
+# ---------------------------------------------------------------------------
+
+
+def test_process_feature_space_not_found_returns_404(app_client):
+    """Returns 404 when space_store.get returns None after feature is found."""
+    original_task = _make_task(feature_state=FeatureState.BACKLOG)
+
+    mock_store = MagicMock()
+    mock_store.get.return_value = original_task
+    mock_store.transition_feature = AsyncMock(
+        return_value=_make_task(feature_state=FeatureState.PROCESSING)
+    )
+
+    app_client.app.state.store = mock_store
+    # Space lookup returns None — simulates space deleted after feature was found
+    app_client.app.state.space_store.get.return_value = None
+
+    with patch(
+        "app.api.features.mirror_feature_to_github",
+        new_callable=AsyncMock,
+    ) as mock_mirror, patch(
+        "app.api.features.enqueue_feature_decomposition",
+        new_callable=AsyncMock,
+    ) as mock_enqueue:
+        response = app_client.post(
+            "/api/features/2024-01-15-1000-my-feature/process",
+            headers=AUTH_HEADER,
+        )
+
+    assert response.status_code == 404, response.text
+    assert mock_mirror.call_count == 0, "mirror must NOT fire when space is missing"
+    assert mock_enqueue.call_count == 0, "enqueue must NOT fire when space is missing"
+
+
+# ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
 

@@ -244,3 +244,50 @@ def test_configure_pool_function_exists():
 def test_worker_pool_attribute_exists():
     """_worker_pool module-level attribute must exist."""
     assert hasattr(fh, "_worker_pool"), "_worker_pool module attr must exist"
+
+
+# ---------------------------------------------------------------------------
+# P2-H: configure_store wires _task_store (feature_hooks.py line 53)
+# ---------------------------------------------------------------------------
+
+
+def test_configure_store_sets_module_level_store():
+    """configure_store must set fh._task_store to the supplied store (line 53)."""
+    from app.feature_hooks import configure_store
+
+    original = fh._task_store
+    try:
+        mock_store = MagicMock()
+        configure_store(mock_store)
+        assert fh._task_store is mock_store, (
+            "configure_store must assign the store to fh._task_store"
+        )
+    finally:
+        fh._task_store = original
+
+
+def test_configure_store_is_idempotent():
+    """configure_store may be called multiple times; last call wins."""
+    from app.feature_hooks import configure_store
+
+    original = fh._task_store
+    try:
+        store_a = MagicMock()
+        store_b = MagicMock()
+        configure_store(store_a)
+        assert fh._task_store is store_a
+        configure_store(store_b)
+        assert fh._task_store is store_b
+    finally:
+        fh._task_store = original
+
+
+def test_configure_store_function_exists():
+    """configure_store must be exported from feature_hooks."""
+    assert hasattr(fh, "configure_store"), "configure_store must exist in feature_hooks"
+    assert callable(fh.configure_store), "configure_store must be callable"
+
+
+def test_task_store_attribute_exists():
+    """_task_store module-level attribute must exist."""
+    assert hasattr(fh, "_task_store"), "_task_store module attr must exist"

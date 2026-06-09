@@ -366,6 +366,68 @@ def test_patch_feature_task_not_found_from_update_returns_404(app_client, git_li
 
 
 # ---------------------------------------------------------------------------
+# P2-B: space not found after feature found → 404 (line 266)
+# ---------------------------------------------------------------------------
+
+
+def test_patch_feature_space_not_found_returns_404(app_client, git_linked_space):
+    """Returns 404 when space_store.get returns None after feature is found (line 266)."""
+    original = _make_task()
+    store = MagicMock()
+    store.get = MagicMock(return_value=original)
+    store.update = AsyncMock(return_value=original)
+
+    app_client.app.state.store = store
+    # Space lookup returns None — simulates space deleted after feature was found
+    app_client.app.state.space_store.get.return_value = None
+
+    with patch(
+        "app.api.features.mirror_feature_to_github",
+        new_callable=AsyncMock,
+    ) as mock_mirror:
+        response = app_client.patch(
+            "/api/features/2024-01-15-1000-my-feature",
+            json={"title": "New Title"},
+            headers=AUTH_HEADER,
+        )
+
+    assert response.status_code == 404, response.text
+    assert mock_mirror.call_count == 0, "mirror must NOT fire when space is missing"
+
+
+# ---------------------------------------------------------------------------
+# P2-D: StorageError from store.update → 400 (lines 276-277)
+# ---------------------------------------------------------------------------
+
+
+def test_patch_feature_storage_error_from_update_returns_400(app_client, git_linked_space):
+    """Returns 400 when store.update() raises StorageError (lines 276-277)."""
+    from app.storage import StorageError
+
+    original = _make_task()
+    store = MagicMock()
+    store.get = MagicMock(return_value=original)
+    store.update = AsyncMock(side_effect=StorageError("write conflict"))
+
+    app_client.app.state.store = store
+    app_client.app.state.space_store.get.return_value = git_linked_space
+
+    with patch(
+        "app.api.features.mirror_feature_to_github",
+        new_callable=AsyncMock,
+    ) as mock_mirror:
+        response = app_client.patch(
+            "/api/features/2024-01-15-1000-my-feature",
+            json={"title": "New Title"},
+            headers=AUTH_HEADER,
+        )
+
+    assert response.status_code == 400, response.text
+    assert "write conflict" in response.json()["detail"]
+    assert mock_mirror.call_count == 0, "mirror must NOT fire when update raises StorageError"
+
+
+# ---------------------------------------------------------------------------
 # Auth checks
 # ---------------------------------------------------------------------------
 
