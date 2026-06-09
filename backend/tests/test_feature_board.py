@@ -104,3 +104,18 @@ async def test_feature_board_realizing_count_cross_space(task_store):
     board = await task_store.feature_board(SPACE_ID)
     summaries = {s.id: s for s in board[FeatureState.BACKLOG]}
     assert summaries[feat.id].realizing_count == 1
+
+
+async def test_feature_board_both_count_fields_coexist(task_store):
+    """R5: realizing_count and realized_by_count must both be present and equal on feature summaries."""
+    feat = await _make(task_store, "Feature with realizers", type="feature")
+    t1 = await _make(task_store, "Task A")
+    await task_store.set_realizes(t1.id, feat.id)
+
+    board = await task_store.feature_board(SPACE_ID)
+    summaries = {s.id: s for s in board[FeatureState.BACKLOG]}
+    s = summaries[feat.id]
+    # Both fields must coexist — neither removes the other
+    assert hasattr(s, "realizing_count"), "realizing_count must still exist"
+    assert hasattr(s, "realized_by_count"), "realized_by_count must exist"
+    assert s.realizing_count == s.realized_by_count == 1

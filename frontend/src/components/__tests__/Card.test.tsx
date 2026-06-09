@@ -820,15 +820,31 @@ describe("Card — issue_url anchor", () => {
 // ---------------------------------------------------------------------------
 
 describe("Card — realizes chip", () => {
-  it("renders a '→ realizes ...' chip when realizes is present", () => {
+  it("renders feature key when realizes and realizes_feature_key are both set", () => {
     const task = makeTask({
       type: "fix",
       realizes: "feat-task-99",
+      realizes_feature_key: "FEAT-007",
     });
 
     renderCard({ task, onClick: () => {} });
 
-    expect(screen.getByText(/→ realizes feat-task-99/i)).toBeInTheDocument();
+    expect(screen.getByText(/→ FEAT-007/i)).toBeInTheDocument();
+    // raw UUID must not appear
+    expect(screen.queryByText(/feat-task-99/)).not.toBeInTheDocument();
+  });
+
+  it("renders fallback '→ realizes (unknown)' when realizes is set but realizes_feature_key is null", () => {
+    const task = makeTask({
+      type: "fix",
+      realizes: "feat-task-99",
+      realizes_feature_key: null,
+    });
+
+    renderCard({ task, onClick: () => {} });
+
+    expect(screen.getByText(/→ realizes \(unknown\)/i)).toBeInTheDocument();
+    expect(screen.queryByText(/feat-task-99/)).not.toBeInTheDocument();
   });
 
   it("does NOT render the realizes chip when realizes is null", () => {
@@ -836,7 +852,7 @@ describe("Card — realizes chip", () => {
 
     renderCard({ task, onClick: () => {} });
 
-    expect(screen.queryByText(/→ realizes/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/→/)).not.toBeInTheDocument();
   });
 
   it("calls onOpenTask with the realizes id when the chip is clicked", async () => {
@@ -845,11 +861,12 @@ describe("Card — realizes chip", () => {
     const task = makeTask({
       type: "fix",
       realizes: "feat-task-99",
+      realizes_feature_key: "FEAT-007",
     });
 
     renderCard({ task, onClick, onOpenTask });
     const user = userEvent.setup();
-    await user.click(screen.getByText(/→ realizes feat-task-99/i));
+    await user.click(screen.getByText(/→ FEAT-007/i));
 
     expect(onOpenTask).toHaveBeenCalledTimes(1);
     expect(onOpenTask).toHaveBeenCalledWith("feat-task-99");

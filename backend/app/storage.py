@@ -745,6 +745,12 @@ class TaskStore:
         Feature and fix tasks are excluded — they are surfaced via feature_board() instead.
         """
         scope = None if space_id in (None, "all", "") else space_id
+        # Build realizes_feature_key lookup: task_id -> feature_key for feature/fix tasks.
+        feature_key_by_id: dict[str, str] = {
+            t.id: t.feature_key
+            for t in self._by_id.values()
+            if t.feature_key is not None and (scope is None or t.space_id == scope)
+        }
         lanes: dict[TaskState, list[TaskSummary]] = {s: [] for s in TaskState}
         for task in self._by_id.values():
             if scope is not None and task.space_id != scope:
@@ -752,6 +758,8 @@ class TaskStore:
             if task.type in ("feature", "fix"):
                 continue
             s = summarize(task)
+            if task.realizes:
+                s.realizes_feature_key = feature_key_by_id.get(task.realizes)
             blockers = unmet_deps(task, self._by_id)
             if blockers:
                 s = s.model_copy(update={"unmet_dependencies": blockers})
@@ -778,6 +786,13 @@ class TaskStore:
                 if t.space_id == space_id and t.realizes:
                     realizing_counts[t.realizes] = realizing_counts.get(t.realizes, 0) + 1
 
+            # Build realizes_feature_key lookup scoped to this space.
+            feature_key_by_id: dict[str, str] = {
+                t.id: t.feature_key
+                for t in self._by_id.values()
+                if t.space_id == space_id and t.feature_key is not None
+            }
+
             buckets: dict[FeatureState, list[TaskSummary]] = {fs: [] for fs in FeatureState}
             for task in self._by_id.values():
                 if task.space_id != space_id:
@@ -792,7 +807,11 @@ class TaskStore:
                     )
                     continue
                 summary = summarize(task)
-                summary.realizing_count = realizing_counts.get(task.id, 0)
+                count = realizing_counts.get(task.id, 0)
+                summary.realizing_count = count
+                summary.realized_by_count = count
+                if task.realizes:
+                    summary.realizes_feature_key = feature_key_by_id.get(task.realizes)
                 buckets[task.feature_state].append(summary)
             # Sort each bucket by manual_order then created_at
             for fs in buckets:
@@ -1363,10 +1382,18 @@ class TaskStore:
         not load-bearing in S1.
         """
         async with self._lock:
+            # Build feature_key lookup (unscoped — matches the method's cross-space behavior).
+            feature_key_by_id: dict[str, str] = {
+                t.id: t.feature_key
+                for t in self._by_id.values()
+                if t.feature_key is not None
+            }
             result = []
             for task in self._by_id.values():
                 if task.realizes == feature_id:
-                    result.append(summarize(task))
+                    s = summarize(task)
+                    s.realizes_feature_key = feature_key_by_id.get(task.realizes)
+                    result.append(s)
             return result
 
     async def set_realizes(self, item_id: str, feature_id: str | None) -> Task:

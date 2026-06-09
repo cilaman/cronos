@@ -598,7 +598,8 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
             }}
             className="mb-1 block cursor-pointer truncate font-mono text-[10px] uppercase tracking-[0.1em] text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300"
           >
-            → realizes {task.realizes}
+            {/* Fallback when realizes is set but realizes_feature_key is null: render "→ realizes (unknown)" */}
+            → {task.realizes_feature_key ?? "realizes (unknown)"}
           </span>
         )}
 
