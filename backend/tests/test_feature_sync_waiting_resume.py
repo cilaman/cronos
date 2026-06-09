@@ -203,3 +203,63 @@ async def test_waiting_question_is_copied_when_available(task_store):
 
     # Feature should be WAITING regardless of whether waiting_question was persisted.
     assert task_store.get(feat.id).feature_state == FeatureState.WAITING
+
+
+# ---------------------------------------------------------------------------
+# P1-A: waiting_question is propagated to the feature (post F1 backend fix).
+# ---------------------------------------------------------------------------
+
+
+async def test_waiting_question_propagated_to_feature(task_store):
+    """waiting_question on the realizing goal is copied to the feature after the F1 fix."""
+    feat = await _make_feature(task_store)
+    goal = await _make_goal(task_store, realizes=feat.id)
+
+    # Drive goal BACKLOG → ACTIVE, then ACTIVE → WAITING with a waiting_question
+    # using finalize_run (the worker path that sets waiting_question).
+    await task_store.transition(
+        goal.id, TaskState.ACTIVE, allowed={(TaskState.BACKLOG, TaskState.ACTIVE)}
+    )
+    await task_store.finalize_run(
+        goal.id,
+        new_state=TaskState.WAITING,
+        session_id=None,
+        waiting_question="Which provider?",
+        history_entry="Agent stopped with a question",
+    )
+
+    goal_task = task_store.get(goal.id)
+    assert goal_task.state == TaskState.WAITING
+    assert goal_task.waiting_question == "Which provider?"
+
+    await propagate_to_feature(goal.id, task_store, pool=None)
+
+    updated_feat = task_store.get(feat.id)
+    assert updated_feat.feature_state == FeatureState.WAITING
+    assert updated_feat.waiting_question == "Which provider?"
+
+
+# ---------------------------------------------------------------------------
+# P2-F: ACTIVE-resume PLANNED concurrent race — InvalidTransition is swallowed.
+# ---------------------------------------------------------------------------
+
+
+async def test_active_resume_concurrent_race_is_swallowed(task_store):
+    """Concurrent resume: transition_feature(PLANNED) raises InvalidTransition — no exception propagates."""
+    feat = await _make_feature_in_waiting(task_store)
+    goal = await _make_goal(task_store, realizes=feat.id)
+    await _put_goal_in_state(task_store, goal.id, TaskState.ACTIVE)
+
+    # Simulate the concurrent race: feature reads as WAITING but transition_feature
+    # raises InvalidTransition (because another coroutine already moved it to PLANNED).
+    original_transition = task_store.transition_feature
+
+    async def _raise_invalid(task_id, new_state, *, allowed):
+        raise InvalidTransition("concurrent: already PLANNED")
+
+    task_store.transition_feature = _raise_invalid
+    try:
+        # Must not raise — lines 130-132 catch and swallow InvalidTransition.
+        await propagate_to_feature(goal.id, task_store, pool=None)
+    finally:
+        task_store.transition_feature = original_transition

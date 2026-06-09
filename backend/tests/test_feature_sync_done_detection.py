@@ -32,6 +32,7 @@ import app.git_ops  # ensure the module is loaded
 from app.feature_state import FEATURE_USER_TRANSITIONS, FEATURE_WORKER_TRANSITIONS
 from app.feature_sync import propagate_to_feature
 from app.models import FeatureState, TaskState
+from app.storage import InvalidTransition
 
 SPACE_ID = "test-space"
 
@@ -392,3 +393,36 @@ async def test_slug_derivation_strips_date_prefix(task_store):
     slug_part = branch[len("feature/"):]
     assert not _re.match(r"^\d{4}-\d{2}-\d{2}-\d{4}-", slug_part)
     assert task_store.get(feat.id).feature_state == FeatureState.DONE
+
+
+# ---------------------------------------------------------------------------
+# P2-G: done-detection DONE concurrent race — InvalidTransition is swallowed
+# (lines 205-210)
+# ---------------------------------------------------------------------------
+
+
+async def test_done_detection_concurrent_race_is_swallowed(task_store):
+    """Concurrent DONE race: transition_feature(DONE) raises InvalidTransition — no exception propagates."""
+    feat = await _make_feature(task_store)
+    goal = await _make_goal(task_store, realizes=feat.id)
+    await _transition_goal_to_done(task_store, goal.id)
+
+    # Simulate concurrent race: another coroutine already moved feature to DONE,
+    # so our transition_feature(DONE) raises InvalidTransition at lines 205-210.
+    original_transition = task_store.transition_feature
+
+    async def _raise_invalid(task_id, new_state, *, allowed):
+        raise InvalidTransition("concurrent: already DONE")
+
+    task_store.transition_feature = _raise_invalid
+    try:
+        with (
+            patch.object(app.git_ops, "fetch_origin", AsyncMock(return_value=None)),
+            patch.object(
+                app.git_ops, "branch_exists_on_origin", AsyncMock(return_value=False)
+            ),
+        ):
+            # Must not raise — lines 205-210 catch and swallow InvalidTransition.
+            await propagate_to_feature(goal.id, task_store, pool=None)
+    finally:
+        task_store.transition_feature = original_transition

@@ -131,3 +131,44 @@ async def test_root_goal_active_resolves(task_store):
     state_before = task_store.get(feat.id).feature_state
     await propagate_to_feature(goal.id, task_store, pool=None)
     assert task_store.get(feat.id).feature_state == state_before
+
+
+# ---------------------------------------------------------------------------
+# P1-D: propagate_to_feature with non-existent item_id → no-op (line 51, 244)
+# ---------------------------------------------------------------------------
+
+
+async def test_propagate_nonexistent_item_is_noop(task_store):
+    """propagate_to_feature with a non-existent item_id raises no exception and mutates nothing."""
+    # _find_root calls store.get("nonexistent-id") → None → returns None (line 244)
+    # propagate_to_feature returns early at line 51
+    await propagate_to_feature("nonexistent-id", task_store, pool=None)
+    # Test passes if no exception is raised
+
+
+# ---------------------------------------------------------------------------
+# P1-E: _find_root cycle guard — chain > 50 hops returns None (lines 249-250)
+# ---------------------------------------------------------------------------
+
+
+async def test_find_root_cycle_guard_returns_none(task_store):
+    """A parent chain longer than 50 hops hits the cycle guard; _find_root returns None."""
+    import types
+
+    from app.feature_sync import _find_root
+
+    # Build a 55-task chain: task-0 → task-1 → ... → task-54 → "task-55" (missing)
+    # None of the first 55 tasks have parent_id=None, so _find_root never finds the root.
+    chain: dict[str, object] = {}
+    for i in range(55):
+        chain[f"task-{i}"] = types.SimpleNamespace(
+            id=f"task-{i}",
+            parent_id=f"task-{i + 1}",
+        )
+
+    class _ChainStore:
+        def get(self, task_id: str):
+            return chain.get(task_id)  # task-55 is absent → None
+
+    result = await _find_root("task-0", _ChainStore())
+    assert result is None
