@@ -361,6 +361,48 @@ describe("FeatureDetail — inline edit", () => {
     expect(screen.queryByRole("textbox", { name: "Title" })).not.toBeInTheDocument();
     expect(patchMutateAsync).not.toHaveBeenCalled();
   });
+
+  it("edit form shows Feature and Fix type toggle buttons", async () => {
+    mockUseFeature.mockReturnValue({ data: makeFeature(), isLoading: false, error: null, refetch: vi.fn() });
+    renderDetail();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    expect(screen.getByRole("button", { name: "Feature" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Fix" })).toBeInTheDocument();
+  });
+
+  it("changing type to Fix includes type: 'fix' in patch payload", async () => {
+    mockUseFeature.mockReturnValue({ data: makeFeature(), isLoading: false, error: null, refetch: vi.fn() });
+    renderDetail();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.click(screen.getByRole("button", { name: "Fix" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(patchMutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        featureId: "feat-1",
+        body: expect.objectContaining({ type: "fix" }),
+      }),
+    );
+  });
+
+  it("type toggle defaults to the feature's current type", async () => {
+    mockUseFeature.mockReturnValue({
+      data: makeFeature({ type: "fix" }),
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    renderDetail();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(patchMutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.objectContaining({ type: "fix" }),
+      }),
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------

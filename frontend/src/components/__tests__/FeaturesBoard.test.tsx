@@ -17,28 +17,26 @@ let featureBoardResult: {
 } = { data: null, isLoading: false, error: null };
 
 const transitionMutate = vi.fn();
-const createMutate = vi.fn();
 
 vi.mock("../../hooks/useFeatures", () => ({
   useFeatureBoard: () => featureBoardResult,
   useTransitionFeatureState: () => ({ mutate: transitionMutate }),
-  useCreateFeature: () => ({ mutate: createMutate, isPending: false }),
+}));
+
+vi.mock("../FeatureForm", () => ({
+  FeatureForm: ({ onClose }: { onClose: () => void }) => (
+    <div data-testid="feature-form-mock">
+      <button type="button" onClick={onClose} aria-label="Cancel">
+        Cancel
+      </button>
+    </div>
+  ),
 }));
 
 vi.mock("../FeatureDetail", () => ({
   FeatureDetail: ({ featureId, onClose }: { featureId: string; onClose: () => void }) => (
     <div data-testid="feature-detail-mock" data-feature-id={featureId}>
       <button type="button" onClick={onClose} aria-label="Close detail">
-        Close
-      </button>
-    </div>
-  ),
-}));
-
-vi.mock("../FeatureForm", () => ({
-  FeatureForm: ({ onClose }: { spaceId: string; onClose: () => void }) => (
-    <div data-testid="feature-form-mock">
-      <button type="button" onClick={onClose} aria-label="Close feature form">
         Close
       </button>
     </div>
@@ -170,7 +168,6 @@ beforeEach(() => {
   featureBoardResult = { data: emptyBoard, isLoading: false, error: null };
   capturedOnDragEnd = null;
   transitionMutate.mockClear();
-  createMutate.mockClear();
 });
 
 // ---------------------------------------------------------------------------
@@ -494,31 +491,31 @@ describe("FeaturesBoard — toast feedback on drag-end", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 7. FeatureForm modal — open/close via backlog "+" button
+// 7. FeaturesBoard — FeatureForm modal open/close
 // ---------------------------------------------------------------------------
 
-describe("FeatureForm modal — open/close via backlog + button", () => {
-  it("opens FeatureForm when the backlog lane + button is clicked", async () => {
+describe("FeaturesBoard — FeatureForm modal", () => {
+  it("FeatureForm modal is not shown initially", () => {
     featureBoardResult = { data: emptyBoard, isLoading: false, error: null };
     renderBoard();
-
     expect(screen.queryByTestId("feature-form-mock")).not.toBeInTheDocument();
+  });
 
+  it("clicking the New task button on the Backlog lane opens FeatureForm modal", async () => {
+    featureBoardResult = { data: emptyBoard, isLoading: false, error: null };
+    renderBoard();
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "New task" }));
-
     expect(screen.getByTestId("feature-form-mock")).toBeInTheDocument();
   });
 
-  it("closes FeatureForm when onClose is called", async () => {
+  it("clicking Cancel in FeatureForm closes the modal", async () => {
     featureBoardResult = { data: emptyBoard, isLoading: false, error: null };
     renderBoard();
-
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "New task" }));
     expect(screen.getByTestId("feature-form-mock")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Close feature form" }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
     expect(screen.queryByTestId("feature-form-mock")).not.toBeInTheDocument();
   });
 });

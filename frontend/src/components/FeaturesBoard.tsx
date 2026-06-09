@@ -38,13 +38,14 @@ function findFeatureState(
   return null;
 }
 
+
 export function FeaturesBoard({ spaceId }: Props) {
   const { data, isLoading, error } = useFeatureBoard(spaceId);
   const transition = useTransitionFeatureState(spaceId);
   const [activeTask, setActiveTask] = useState<TaskSummary | null>(null);
   const [hiddenLanes, setHiddenLanes] = useState<Set<FeatureState>>(new Set());
   const [toast, setToast] = useState<{ msg: string; kind: "success" | "error" } | null>(null);
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [showFeatureForm, setShowFeatureForm] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
 
   function showToast(msg: string, kind: "success" | "error") {
@@ -198,7 +199,7 @@ export function FeaturesBoard({ spaceId }: Props) {
                   label={label}
                   tasks={tasks}
                   onOpen={setOpenFeatureId}
-                  onAdd={() => setShowAddModal(true)}
+                  onAdd={() => setShowFeatureForm(true)}
                   showAdd={isBacklog}
                   onHideLane={hideLane}
                 />
@@ -214,8 +215,8 @@ export function FeaturesBoard({ spaceId }: Props) {
         ) : null}
       </DragOverlay>
     </DndContext>
-    {showAddModal && (
-      <FeatureForm spaceId={spaceId} onClose={() => setShowAddModal(false)} />
+    {showFeatureForm && (
+      <FeatureForm spaceId={spaceId} onClose={() => setShowFeatureForm(false)} />
     )}
     {openFeatureId && (
       <FeatureDetail
