@@ -18,7 +18,9 @@ function ScopedFeaturesPage({ spaceId }: { spaceId: string }) {
           {space ? space.name : "Features"}
         </h1>
       </StickyToolbar>
-      <FeaturesBoard spaceId={spaceId} />
+      <div className="min-h-0 flex-1 overflow-hidden">
+        <FeaturesBoard spaceId={spaceId} />
+      </div>
     </div>
   );
 }
@@ -104,7 +106,9 @@ function GlobalFeaturesPage() {
       )}
 
       {!spacesLoading && spaces.length > 0 && selectedSpaceId && (
-        <FeaturesBoard spaceId={selectedSpaceId} />
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <FeaturesBoard spaceId={selectedSpaceId} />
+        </div>
       )}
 
       {!spacesLoading && spaces.length > 0 && !selectedSpaceId && (

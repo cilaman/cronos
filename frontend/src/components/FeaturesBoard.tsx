@@ -185,14 +185,14 @@ export function FeaturesBoard({ spaceId }: Props) {
           ))}
         </div>
       )}
-      <div className={`grid h-full grid-cols-1 gap-2 p-2 md:grid-cols-2 ${lgCols} lg:gap-3 lg:p-4`}>
+      <div className={`grid h-full overflow-hidden grid-rows-[minmax(0,1fr)] grid-cols-1 gap-2 p-2 md:grid-cols-2 ${lgCols} lg:gap-3 lg:p-4`}>
         {visibleLanes.map(({ state, label }) => {
           const isBacklog = state === "backlog";
           const tasks = data[state];
           const taskIds = tasks.map((t) => t.id);
 
           return (
-            <div key={state} className="flex min-h-0 flex-col">
+            <div key={state} className="contents">
               <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
                 <Lane
                   state={state}
