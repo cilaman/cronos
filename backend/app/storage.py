@@ -19,7 +19,7 @@ from .models import AgentMode, AgentModel, Board, FeatureState, Task, TaskState,
 from .feature_state import FEATURE_USER_TRANSITIONS, FEATURE_WORKER_TRANSITIONS  # noqa: F401 — used by transition_feature
 
 VALID_AGENT_MODES: tuple[AgentMode, ...] = ("plan", "auto", "ask")
-VALID_AGENT_MODELS: tuple[AgentModel, ...] = ("default", "sonnet", "opus", "haiku", "opus-4-8")
+VALID_AGENT_MODELS: tuple[AgentModel, ...] = ("default", "sonnet", "opus", "haiku", "opus-4-8", "fable-5")
 
 
 @dataclass

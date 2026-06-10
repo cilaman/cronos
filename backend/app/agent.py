@@ -252,6 +252,7 @@ DEFAULT_TOOLS = "Read,Edit,Write,Bash,Skill,Agent"
 
 _MODEL_CLI_NAMES: dict[str, str] = {
     "opus-4-8": "claude-opus-4-8",
+    "fable-5": "claude-fable-5",
 }
 
 
