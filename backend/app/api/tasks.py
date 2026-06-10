@@ -79,7 +79,7 @@ class CreateTaskBody(BaseModel):
     space_id: str = Field(min_length=1, max_length=64)
     title: str = Field(min_length=1, max_length=200)
     brief: str = Field(default="", max_length=20_000)
-    agent_model: Literal["default", "sonnet", "opus", "haiku", "opus-4-8"] = "default"
+    agent_model: Literal["default", "sonnet", "opus", "haiku", "opus-4-8", "fable-5"] = "default"
     agent_mode: Literal["plan", "auto", "ask"] = "auto"
     priority: int = Field(default=3, ge=1, le=5)
     type: Literal["task", "goal", "issue"] = "task"
@@ -91,7 +91,7 @@ class UpdateTaskBody(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     brief: str | None = Field(default=None, max_length=20_000)
     agent_mode: Literal["plan", "auto", "ask"] | None = None
-    agent_model: Literal["default", "sonnet", "opus", "haiku", "opus-4-8"] | None = None
+    agent_model: Literal["default", "sonnet", "opus", "haiku", "opus-4-8", "fable-5"] | None = None
     priority: int | None = Field(default=None, ge=1, le=5)
     type: Literal["task", "goal", "issue"] | None = None
     parent_id: str | None = None

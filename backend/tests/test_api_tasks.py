@@ -148,6 +148,37 @@ async def test_create_task_with_agent_model(async_client):
     assert resp.json()["agent_model"] == "opus"
 
 
+async def test_create_task_with_fable5_model(async_client):
+    resp = await async_client.post(
+        "/api/tasks",
+        json={
+            "space_id": SPACE_ID,
+            "title": "Fable 5 Task",
+            "brief": "",
+            "agent_model": "fable-5",
+        },
+    )
+    assert resp.status_code == 201
+    assert resp.json()["agent_model"] == "fable-5"
+
+
+async def test_update_task_agent_model_to_fable5(async_client):
+    create_resp = await async_client.post(
+        "/api/tasks",
+        json={"space_id": SPACE_ID, "title": "Model Task", "brief": ""},
+    )
+    task_id = create_resp.json()["id"]
+
+    resp = await async_client.patch(
+        f"/api/tasks/{task_id}", json={"agent_model": "fable-5"}
+    )
+    assert resp.status_code == 200
+    assert resp.json()["agent_model"] == "fable-5"
+
+    get_resp = await async_client.get(f"/api/tasks/{task_id}")
+    assert get_resp.json()["agent_model"] == "fable-5"
+
+
 async def test_create_task_with_agent_mode(async_client):
     resp = await async_client.post(
         "/api/tasks",
