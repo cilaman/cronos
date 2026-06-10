@@ -11,6 +11,7 @@ import pytest
 from app.agent import (
     STATUS_CONTRACT,
     Status,
+    _MODEL_CLI_NAMES,
     _extract_assistant_text,
     _load_adopted_dirs,
     _merge_hook_settings,
@@ -25,6 +26,7 @@ from app.agent import (
     workspace_for,
 )
 from app.models import Task, TaskState
+from app.storage import VALID_AGENT_MODELS
 
 
 # ---------------------------------------------------------------------------
@@ -1220,3 +1222,16 @@ async def test_run_agent_workspace_settings_override_hook(tmp_path):
     assert "Write(*)" in allow
     # No duplicate Bash(npm:*)
     assert allow.count("Bash(npm:*)") == 1
+
+
+# ---------------------------------------------------------------------------
+# fable-5 model support
+# ---------------------------------------------------------------------------
+
+
+def test_valid_agent_models_includes_fable5():
+    assert "fable-5" in VALID_AGENT_MODELS
+
+
+def test_model_cli_names_maps_fable5():
+    assert _MODEL_CLI_NAMES["fable-5"] == "claude-fable-5"
