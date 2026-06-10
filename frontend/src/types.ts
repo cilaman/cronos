@@ -166,7 +166,7 @@ export const AGENT_MODES: { value: AgentMode; label: string }[] = [
   { value: "ask", label: "Ask only" },
 ];
 
-export type AgentModel = "default" | "sonnet" | "opus" | "haiku" | "opus-4-8";
+export type AgentModel = "default" | "sonnet" | "opus" | "haiku" | "opus-4-8" | "fable-5";
 
 export const AGENT_MODELS: { value: AgentModel; label: string }[] = [
   { value: "default", label: "Default" },
@@ -174,6 +174,7 @@ export const AGENT_MODELS: { value: AgentModel; label: string }[] = [
   { value: "opus", label: "Opus" },
   { value: "haiku", label: "Haiku" },
   { value: "opus-4-8", label: "Opus 4.8" },
+  { value: "fable-5", label: "Fable 5" },
 ];
 
 export interface Task {
