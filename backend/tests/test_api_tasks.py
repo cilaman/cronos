@@ -552,6 +552,54 @@ async def test_delete_task_then_get_returns_404(async_client):
     assert get_resp.status_code == 404
 
 
+async def test_delete_goal_cascades_to_children(async_client):
+    """DELETE /api/tasks/{goal_id} removes all child tasks."""
+    root_resp = await async_client.post(
+        "/api/tasks",
+        json={"space_id": SPACE_ID, "title": "Root Goal", "brief": "", "type": "goal"},
+    )
+    root_id = root_resp.json()["id"]
+    child_resp = await async_client.post(
+        "/api/tasks",
+        json={"space_id": SPACE_ID, "title": "Child", "brief": "", "parent_id": root_id},
+    )
+    child_id = child_resp.json()["id"]
+    grandchild_resp = await async_client.post(
+        "/api/tasks",
+        json={"space_id": SPACE_ID, "title": "Grandchild", "brief": "", "parent_id": child_id},
+    )
+    grandchild_id = grandchild_resp.json()["id"]
+
+    resp = await async_client.delete(f"/api/tasks/{root_id}")
+    assert resp.status_code == 204
+
+    assert (await async_client.get(f"/api/tasks/{root_id}")).status_code == 404
+    assert (await async_client.get(f"/api/tasks/{child_id}")).status_code == 404
+    assert (await async_client.get(f"/api/tasks/{grandchild_id}")).status_code == 404
+
+
+async def test_delete_goal_leaves_unrelated_tasks(async_client):
+    """Deleting a goal does not remove unrelated tasks."""
+    root_resp = await async_client.post(
+        "/api/tasks",
+        json={"space_id": SPACE_ID, "title": "Root Goal", "brief": "", "type": "goal"},
+    )
+    root_id = root_resp.json()["id"]
+    await async_client.post(
+        "/api/tasks",
+        json={"space_id": SPACE_ID, "title": "Child", "brief": "", "parent_id": root_id},
+    )
+    unrelated_resp = await async_client.post(
+        "/api/tasks",
+        json={"space_id": SPACE_ID, "title": "Unrelated", "brief": ""},
+    )
+    unrelated_id = unrelated_resp.json()["id"]
+
+    await async_client.delete(f"/api/tasks/{root_id}")
+
+    assert (await async_client.get(f"/api/tasks/{unrelated_id}")).status_code == 200
+
+
 # ---------------------------------------------------------------------------
 # Hierarchy fields (type / parent_id / depends_on) over HTTP — arc-1 task 1
 # ---------------------------------------------------------------------------

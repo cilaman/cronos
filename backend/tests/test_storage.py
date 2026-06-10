@@ -468,6 +468,47 @@ async def test_task_store_delete_missing_raises(task_store):
         await task_store.delete("nonexistent-id")
 
 
+async def test_task_store_delete_returns_deleted_ids(task_store):
+    task = await task_store.create(space_id=SPACE_ID, title="Root", brief="")
+    deleted = await task_store.delete(task.id)
+    assert deleted == [task.id]
+
+
+async def test_task_store_delete_cascades_to_children(task_store, tmp_spaces_dir):
+    root = await task_store.create(space_id=SPACE_ID, title="Root", brief="", type="goal")
+    child1 = await task_store.create(space_id=SPACE_ID, title="Child1", brief="", parent_id=root.id)
+    child2 = await task_store.create(space_id=SPACE_ID, title="Child2", brief="", parent_id=root.id)
+    grandchild = await task_store.create(space_id=SPACE_ID, title="GC", brief="", parent_id=child1.id)
+
+    deleted = await task_store.delete(root.id)
+
+    assert set(deleted) == {root.id, child1.id, child2.id, grandchild.id}
+    for tid in [root.id, child1.id, child2.id, grandchild.id]:
+        assert task_store.get(tid) is None
+
+
+async def test_task_store_delete_cascade_moves_all_to_trash(task_store, tmp_spaces_dir):
+    root = await task_store.create(space_id=SPACE_ID, title="Root", brief="", type="goal")
+    child = await task_store.create(space_id=SPACE_ID, title="Child", brief="", parent_id=root.id)
+
+    await task_store.delete(root.id)
+
+    trash_dir = tmp_spaces_dir / SPACE_ID / ".cronos" / ".trash"
+    assert len(list(trash_dir.glob(f"{root.id}.*.md"))) == 1
+    assert len(list(trash_dir.glob(f"{child.id}.*.md"))) == 1
+
+
+async def test_task_store_delete_cascade_leaves_unrelated_tasks(task_store):
+    root = await task_store.create(space_id=SPACE_ID, title="Root", brief="", type="goal")
+    child = await task_store.create(space_id=SPACE_ID, title="Child", brief="", parent_id=root.id)
+    unrelated = await task_store.create(space_id=SPACE_ID, title="Unrelated", brief="")
+
+    await task_store.delete(root.id)
+
+    assert task_store.get(unrelated.id) is not None
+    assert task_store.get(child.id) is None
+
+
 # ---------------------------------------------------------------------------
 # TaskStore.board
 # ---------------------------------------------------------------------------

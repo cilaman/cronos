@@ -757,22 +757,24 @@ async def delete_task(task_id: str, request: Request) -> Response:
     space = (
         get_space_store(request).get(task.space_id) if task is not None else None
     )
+    # Collect the full subtree before deletion for worktree/trace cleanup.
+    subtree = store.subtree(task_id) if task is not None else []
     try:
         await store.delete(task_id)
     except TaskNotFound:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found") from None
-    # Tear down the per-task worktree (keep the branch — soft delete only).
-    if task is not None and space is not None and space.git_repo_url:
-        try:
-            await git_ops.remove_task_worktree(space_dir_for(task.space_id), task_id)
-        except git_ops.GitError:
-            log.exception("Worktree cleanup failed for %s", task_id)
-    # Delete traces — they live with the task (unlike stats which survive deletion).
-    if task is not None:
-        trace_store = getattr(request.app.state, "trace_store", None)
+    trace_store = getattr(request.app.state, "trace_store", None)
+    for deleted_task in subtree:
+        # Tear down the per-task worktree (keep the branch — soft delete only).
+        if space is not None and space.git_repo_url:
+            try:
+                await git_ops.remove_task_worktree(space_dir_for(deleted_task.space_id), deleted_task.id)
+            except git_ops.GitError:
+                log.exception("Worktree cleanup failed for %s", deleted_task.id)
+        # Delete traces — they live with the task (unlike stats which survive deletion).
         if trace_store is not None:
             try:
-                await trace_store.delete_task_traces(task.space_id, task_id)
+                await trace_store.delete_task_traces(deleted_task.space_id, deleted_task.id)
             except Exception:
-                log.exception("Trace cleanup failed for %s", task_id)
+                log.exception("Trace cleanup failed for %s", deleted_task.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

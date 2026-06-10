@@ -1436,22 +1436,32 @@ class TaskStore:
             self._reindex_locked(path)
             return self._by_id[task_id]
 
-    async def delete(self, task_id: str) -> None:
-        """Soft-delete: move the file into the per-space `.trash/` so nothing is destroyed."""
+    async def delete(self, task_id: str) -> list[str]:
+        """Soft-delete the task and all its descendants into the per-space `.trash/`.
+
+        Returns the list of all deleted task IDs (root first, BFS order).
+        """
         async with self._lock:
-            task = self._by_id.get(task_id)
-            path = self._path_by_id.get(task_id)
-            if task is None or path is None:
+            if task_id not in self._by_id:
                 raise TaskNotFound(task_id)
-            trash = self.trash_dir_for(task.space_id)
+            to_delete = self.subtree(task_id)
+            space_id = to_delete[0].space_id
+            trash = self.trash_dir_for(space_id)
             trash.mkdir(parents=True, exist_ok=True)
             stamp = datetime.now(tz=UTC).strftime("%Y%m%dT%H%M%SZ")
-            dest = trash / f"{path.stem}.{stamp}.md"
-            os.replace(path, dest)
-            self._by_id.pop(task_id, None)
-            self._path_by_id.pop(task_id, None)
-            self._db_delete(task_id)
-            log.info("Trashed task %s -> %s", task_id, dest.name)
+            deleted_ids: list[str] = []
+            for t in to_delete:
+                path = self._path_by_id.get(t.id)
+                if path is None:
+                    continue
+                dest = trash / f"{path.stem}.{stamp}.md"
+                os.replace(path, dest)
+                self._by_id.pop(t.id, None)
+                self._path_by_id.pop(t.id, None)
+                self._db_delete(t.id)
+                deleted_ids.append(t.id)
+                log.info("Trashed task %s -> %s", t.id, dest.name)
+            return deleted_ids
 
     async def reorder(self, task_ids: list[str], lane: TaskState) -> None:
         """Set manual_order for tasks in a lane based on their position in task_ids."""
