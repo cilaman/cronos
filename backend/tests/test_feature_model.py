@@ -146,17 +146,30 @@ def test_feature_user_transitions():
 
 
 def test_feature_worker_transitions():
-    """FEATURE_WORKER_TRANSITIONS must include all 5 allowed worker-initiated moves."""
+    """FEATURE_WORKER_TRANSITIONS must cover all state-derivation transitions."""
     from app.feature_state import FEATURE_WORKER_TRANSITIONS
 
     FS = FeatureState
+    # All reachable worker transitions based on combined-state derivation logic.
     expected = frozenset(
         {
+            # From BACKLOG
+            (FS.BACKLOG, FS.PLANNED),
+            (FS.BACKLOG, FS.PROCESSING),
+            (FS.BACKLOG, FS.WAITING),
+            (FS.BACKLOG, FS.DONE),
+            # From PLANNED
+            (FS.PLANNED, FS.PROCESSING),
+            (FS.PLANNED, FS.WAITING),
+            (FS.PLANNED, FS.DONE),
+            # From PROCESSING
             (FS.PROCESSING, FS.PLANNED),
             (FS.PROCESSING, FS.WAITING),
-            (FS.PLANNED, FS.WAITING),
+            (FS.PROCESSING, FS.DONE),
+            # From WAITING
             (FS.WAITING, FS.PLANNED),
-            (FS.PLANNED, FS.DONE),
+            (FS.WAITING, FS.PROCESSING),
+            (FS.WAITING, FS.DONE),
         }
     )
     assert FEATURE_WORKER_TRANSITIONS == expected

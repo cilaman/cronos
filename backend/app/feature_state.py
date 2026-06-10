@@ -34,10 +34,22 @@ FEATURE_USER_TRANSITIONS: frozenset[tuple[FeatureState, FeatureState]] = frozens
 # ---------------------------------------------------------------------------
 FEATURE_WORKER_TRANSITIONS: frozenset[tuple[FeatureState, FeatureState]] = frozenset(
     {
+        # From BACKLOG (first realizing items created)
+        (FeatureState.BACKLOG, FeatureState.PLANNED),
+        (FeatureState.BACKLOG, FeatureState.PROCESSING),
+        (FeatureState.BACKLOG, FeatureState.WAITING),
+        (FeatureState.BACKLOG, FeatureState.DONE),
+        # From PLANNED
+        (FeatureState.PLANNED, FeatureState.PROCESSING),
+        (FeatureState.PLANNED, FeatureState.WAITING),
+        (FeatureState.PLANNED, FeatureState.DONE),
+        # From PROCESSING
         (FeatureState.PROCESSING, FeatureState.PLANNED),
         (FeatureState.PROCESSING, FeatureState.WAITING),
-        (FeatureState.PLANNED, FeatureState.WAITING),
+        (FeatureState.PROCESSING, FeatureState.DONE),
+        # From WAITING
         (FeatureState.WAITING, FeatureState.PLANNED),
-        (FeatureState.PLANNED, FeatureState.DONE),
+        (FeatureState.WAITING, FeatureState.PROCESSING),
+        (FeatureState.WAITING, FeatureState.DONE),
     }
 )

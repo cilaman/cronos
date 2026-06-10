@@ -1,29 +1,15 @@
-"""Tests for feature_sync.propagate_to_feature — done-detection branch (I4).
+"""Tests for feature_sync.propagate_to_feature — DONE detection.
 
-Covers acceptance criteria:
-- All realizing items terminal + feature PLANNED + branch absent → PLANNED→DONE
-- All realizing items terminal + feature PLANNED + branch present → stay PLANNED
-- fetch_origin failure → stay PLANNED
+Covers:
+- All realizing items terminal (DONE or ARCHIVED) → feature transitions to DONE
+  regardless of current feature_state (PLANNED, PROCESSING, WAITING)
 - DONE transition + issue_number set → gh_issue_close called (failure still DONE)
-- Zero realizing items → no-op (never attempt done-detection)
+- Zero realizing items → no-op (feature stays in current state)
 - Partial-terminal (some items not DONE/ARCHIVED) → no-op
-- Feature not in PLANNED state when items are terminal → no-op
-- Slug derivation strips YYYY-MM-DD-HHMM- prefix; falls back to raw id
-
-Implementation note
--------------------
-``feature_sync`` lazy-imports ``fetch_origin`` and ``branch_exists_on_origin``
-from ``app.git_ops`` inside the done-detection code path.  The feature
-workspace's ``app.git_ops`` may not yet have these symbols (added by I1 to the
-main worktree).  We inject them as attributes on the ``app.git_ops`` module
-object before each test so the ``from .git_ops import …`` lookup succeeds.
-This is the same mechanism ``unittest.mock.patch`` uses internally.
+- Multiple items all terminal → DONE
 """
 from __future__ import annotations
 
-import importlib
-import sys
-from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -35,21 +21,6 @@ from app.models import FeatureState, TaskState
 from app.storage import InvalidTransition
 
 SPACE_ID = "test-space"
-
-# ---------------------------------------------------------------------------
-# Module-level injection: ensure app.git_ops has the symbols I4 needs even if
-# the workspace's git_ops.py predates the I1 additions.
-# ---------------------------------------------------------------------------
-
-if not hasattr(app.git_ops, "fetch_origin"):
-    async def _stub_fetch_origin(space_dir: Path) -> None:  # pragma: no cover
-        pass
-    app.git_ops.fetch_origin = _stub_fetch_origin  # type: ignore[attr-defined]
-
-if not hasattr(app.git_ops, "branch_exists_on_origin"):
-    async def _stub_branch_exists(space_dir: Path, branch: str) -> bool:  # pragma: no cover
-        return False
-    app.git_ops.branch_exists_on_origin = _stub_branch_exists  # type: ignore[attr-defined]
 
 
 # ---------------------------------------------------------------------------
@@ -113,23 +84,15 @@ async def _transition_goal_to_archived(store, goal_id: str) -> None:
 
 
 async def test_all_items_done_branch_absent_transitions_to_done(task_store):
-    """All realizing items terminal + branch absent → feature transitions to DONE."""
+    """All realizing items terminal → feature transitions to DONE."""
     feat = await _make_feature(task_store)
     assert task_store.get(feat.id).feature_state == FeatureState.PLANNED
 
     goal = await _make_goal(task_store, realizes=feat.id)
     await _transition_goal_to_done(task_store, goal.id)
 
-    mock_fetch = AsyncMock(return_value=None)
-    mock_branch = AsyncMock(return_value=False)
-    with (
-        patch.object(app.git_ops, "fetch_origin", mock_fetch),
-        patch.object(app.git_ops, "branch_exists_on_origin", mock_branch),
-    ):
-        await propagate_to_feature(goal.id, task_store, pool=None)
+    await propagate_to_feature(goal.id, task_store, pool=None)
 
-    mock_fetch.assert_awaited_once()
-    mock_branch.assert_awaited_once()
     assert task_store.get(feat.id).feature_state == FeatureState.DONE
 
 
@@ -139,16 +102,12 @@ async def test_all_items_done_branch_absent_transitions_to_done(task_store):
 
 
 async def test_all_items_archived_branch_absent_transitions_to_done(task_store):
-    """All realizing items ARCHIVED + branch absent → feature transitions to DONE."""
+    """All realizing items ARCHIVED → feature transitions to DONE."""
     feat = await _make_feature(task_store)
     goal = await _make_goal(task_store, realizes=feat.id)
     await _transition_goal_to_archived(task_store, goal.id)
 
-    with (
-        patch.object(app.git_ops, "fetch_origin", AsyncMock(return_value=None)),
-        patch.object(app.git_ops, "branch_exists_on_origin", AsyncMock(return_value=False)),
-    ):
-        await propagate_to_feature(goal.id, task_store, pool=None)
+    await propagate_to_feature(goal.id, task_store, pool=None)
 
     assert task_store.get(feat.id).feature_state == FeatureState.DONE
 
@@ -158,19 +117,15 @@ async def test_all_items_archived_branch_absent_transitions_to_done(task_store):
 # ---------------------------------------------------------------------------
 
 
-async def test_branch_present_stays_planned(task_store):
-    """All realizing items terminal + branch still on origin → feature stays PLANNED."""
+async def test_all_items_done_transitions_to_done(task_store):
+    """All realizing items terminal → feature transitions to DONE (branch state irrelevant)."""
     feat = await _make_feature(task_store)
     goal = await _make_goal(task_store, realizes=feat.id)
     await _transition_goal_to_done(task_store, goal.id)
 
-    with (
-        patch.object(app.git_ops, "fetch_origin", AsyncMock(return_value=None)),
-        patch.object(app.git_ops, "branch_exists_on_origin", AsyncMock(return_value=True)),
-    ):
-        await propagate_to_feature(goal.id, task_store, pool=None)
+    await propagate_to_feature(goal.id, task_store, pool=None)
 
-    assert task_store.get(feat.id).feature_state == FeatureState.PLANNED
+    assert task_store.get(feat.id).feature_state == FeatureState.DONE
 
 
 # ---------------------------------------------------------------------------
@@ -178,26 +133,21 @@ async def test_branch_present_stays_planned(task_store):
 # ---------------------------------------------------------------------------
 
 
-async def test_fetch_origin_failure_stays_planned(task_store):
-    """fetch_origin raises → feature stays PLANNED (safe default)."""
+async def test_all_items_done_from_processing_transitions_to_done(task_store):
+    """All realizing items terminal when feature is PROCESSING → transitions to DONE."""
     feat = await _make_feature(task_store)
+    # Manually move feature to PROCESSING state first.
+    await task_store.transition_feature(
+        feat.id, FeatureState.PROCESSING, allowed=FEATURE_USER_TRANSITIONS
+    )
+    assert task_store.get(feat.id).feature_state == FeatureState.PROCESSING
+
     goal = await _make_goal(task_store, realizes=feat.id)
     await _transition_goal_to_done(task_store, goal.id)
 
-    mock_branch = AsyncMock(return_value=False)
-    with (
-        patch.object(
-            app.git_ops,
-            "fetch_origin",
-            AsyncMock(side_effect=Exception("network error")),
-        ),
-        patch.object(app.git_ops, "branch_exists_on_origin", mock_branch),
-    ):
-        await propagate_to_feature(goal.id, task_store, pool=None)
+    await propagate_to_feature(goal.id, task_store, pool=None)
 
-    # branch_exists_on_origin must NOT be called when fetch fails.
-    mock_branch.assert_not_awaited()
-    assert task_store.get(feat.id).feature_state == FeatureState.PLANNED
+    assert task_store.get(feat.id).feature_state == FeatureState.DONE
 
 
 # ---------------------------------------------------------------------------
@@ -339,10 +289,9 @@ async def test_partial_terminal_is_noop(task_store):
 # ---------------------------------------------------------------------------
 
 
-async def test_feature_not_planned_is_noop(task_store):
-    """Feature in WAITING state when all items terminal → no transition."""
+async def test_all_items_done_from_waiting_transitions_to_done(task_store):
+    """All realizing items terminal when feature is WAITING → transitions to DONE."""
     feat = await _make_feature(task_store)
-    # Transition feature to WAITING.
     await task_store.transition_feature(
         feat.id, FeatureState.WAITING, allowed=FEATURE_WORKER_TRANSITIONS
     )
@@ -351,15 +300,9 @@ async def test_feature_not_planned_is_noop(task_store):
     goal = await _make_goal(task_store, realizes=feat.id)
     await _transition_goal_to_done(task_store, goal.id)
 
-    mock_fetch = AsyncMock(return_value=None)
-    with (
-        patch.object(app.git_ops, "fetch_origin", mock_fetch),
-        patch.object(app.git_ops, "branch_exists_on_origin", AsyncMock(return_value=False)),
-    ):
-        await propagate_to_feature(goal.id, task_store, pool=None)
+    await propagate_to_feature(goal.id, task_store, pool=None)
 
-    mock_fetch.assert_not_awaited()
-    assert task_store.get(feat.id).feature_state == FeatureState.WAITING
+    assert task_store.get(feat.id).feature_state == FeatureState.DONE
 
 
 # ---------------------------------------------------------------------------
@@ -367,31 +310,17 @@ async def test_feature_not_planned_is_noop(task_store):
 # ---------------------------------------------------------------------------
 
 
-async def test_slug_derivation_strips_date_prefix(task_store):
-    """Branch name is feature/<stripped-slug>, verifying prefix strip is applied."""
+async def test_multiple_items_all_done_transitions_to_done(task_store):
+    """Multiple realizing items all terminal → feature transitions to DONE."""
     feat = await _make_feature(task_store)
-    goal = await _make_goal(task_store, realizes=feat.id)
-    await _transition_goal_to_done(task_store, goal.id)
+    goal1 = await _make_goal(task_store, title="Goal 1", realizes=feat.id)
+    goal2 = await _make_goal(task_store, title="Goal 2", realizes=feat.id)
 
-    captured_branch: list[str] = []
+    await _transition_goal_to_done(task_store, goal1.id)
+    await _transition_goal_to_archived(task_store, goal2.id)
 
-    async def _capture_branch(space_dir, branch):
-        captured_branch.append(branch)
-        return False  # absent → transition to DONE
+    await propagate_to_feature(goal1.id, task_store, pool=None)
 
-    with (
-        patch.object(app.git_ops, "fetch_origin", AsyncMock(return_value=None)),
-        patch.object(app.git_ops, "branch_exists_on_origin", _capture_branch),
-    ):
-        await propagate_to_feature(goal.id, task_store, pool=None)
-
-    assert len(captured_branch) == 1
-    branch = captured_branch[0]
-    assert branch.startswith("feature/")
-    # Verify the slug portion has no YYYY-MM-DD-HHMM- prefix.
-    import re as _re
-    slug_part = branch[len("feature/"):]
-    assert not _re.match(r"^\d{4}-\d{2}-\d{2}-\d{4}-", slug_part)
     assert task_store.get(feat.id).feature_state == FeatureState.DONE
 
 

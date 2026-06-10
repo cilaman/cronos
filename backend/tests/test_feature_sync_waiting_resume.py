@@ -103,8 +103,8 @@ async def test_item_waiting_feature_planned_transitions_to_waiting(task_store):
 # ---------------------------------------------------------------------------
 
 
-async def test_item_active_feature_waiting_transitions_to_planned(task_store):
-    """Root goal becomes ACTIVE while feature is WAITING → feature transitions to PLANNED."""
+async def test_item_active_feature_waiting_transitions_to_processing(task_store):
+    """Root goal becomes ACTIVE while feature is WAITING → feature transitions to PROCESSING."""
     feat = await _make_feature_in_waiting(task_store)
     assert task_store.get(feat.id).feature_state == FeatureState.WAITING
 
@@ -113,7 +113,7 @@ async def test_item_active_feature_waiting_transitions_to_planned(task_store):
 
     await propagate_to_feature(goal.id, task_store, pool=None)
 
-    assert task_store.get(feat.id).feature_state == FeatureState.PLANNED
+    assert task_store.get(feat.id).feature_state == FeatureState.PROCESSING
 
 
 # ---------------------------------------------------------------------------
@@ -141,8 +141,8 @@ async def test_item_waiting_feature_not_planned_is_noop(task_store):
 # ---------------------------------------------------------------------------
 
 
-async def test_item_active_feature_not_waiting_is_noop(task_store):
-    """Root goal becomes ACTIVE while feature is PLANNED → no transition (wrong guard)."""
+async def test_item_active_feature_planned_transitions_to_processing(task_store):
+    """Root goal becomes ACTIVE while feature is PLANNED → feature transitions to PROCESSING."""
     feat = await _make_feature(task_store)
     assert task_store.get(feat.id).feature_state == FeatureState.PLANNED
 
@@ -151,9 +151,7 @@ async def test_item_active_feature_not_waiting_is_noop(task_store):
 
     await propagate_to_feature(goal.id, task_store, pool=None)
 
-    # Feature state must remain PLANNED (no PLANNED→PLANNED attempt; guard says
-    # we only go PLANNED when feature was WAITING)
-    assert task_store.get(feat.id).feature_state == FeatureState.PLANNED
+    assert task_store.get(feat.id).feature_state == FeatureState.PROCESSING
 
 
 # ---------------------------------------------------------------------------
@@ -245,7 +243,7 @@ async def test_waiting_question_propagated_to_feature(task_store):
 
 
 async def test_active_resume_concurrent_race_is_swallowed(task_store):
-    """Concurrent resume: transition_feature(PLANNED) raises InvalidTransition — no exception propagates."""
+    """Concurrent resume: transition_feature(PROCESSING) raises InvalidTransition — no exception propagates."""
     feat = await _make_feature_in_waiting(task_store)
     goal = await _make_goal(task_store, realizes=feat.id)
     await _put_goal_in_state(task_store, goal.id, TaskState.ACTIVE)

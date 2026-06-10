@@ -122,15 +122,14 @@ async def test_root_goal_with_realizes_resolves(task_store):
     assert task_store.get(feat.id).feature_state == state_before
 
 
-async def test_root_goal_active_resolves(task_store):
-    """Root goal in ACTIVE state with realizes → resolution path reached, feature unchanged."""
+async def test_root_goal_active_transitions_to_processing(task_store):
+    """Root goal in ACTIVE state with realizes → feature transitions to PROCESSING."""
     feat = await _make_feature(task_store)
     goal = await _make_goal(task_store, realizes=feat.id)
     await task_store.transition(goal.id, TaskState.ACTIVE, allowed={(TaskState.BACKLOG, TaskState.ACTIVE)})
 
-    state_before = task_store.get(feat.id).feature_state
     await propagate_to_feature(goal.id, task_store, pool=None)
-    assert task_store.get(feat.id).feature_state == state_before
+    assert task_store.get(feat.id).feature_state == FeatureState.PROCESSING
 
 
 # ---------------------------------------------------------------------------

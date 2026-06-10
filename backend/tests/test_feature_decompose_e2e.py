@@ -234,16 +234,12 @@ async def test_full_feature_lifecycle(task_store):
         allowed={(TaskState.WAITING, TaskState.ACTIVE)},
     )
 
-    with (
-        patch.object(app.git_ops, "fetch_origin", mock_fetch),
-        patch.object(app.git_ops, "branch_exists_on_origin", mock_branch),
-    ):
-        await feature_sync.propagate_to_feature(goal_id, task_store, pool=None)
+    await feature_sync.propagate_to_feature(goal_id, task_store, pool=None)
 
-    # feature_state must be PLANNED again.
+    # feature_state must be PROCESSING (goal is ACTIVE → any active → PROCESSING).
     feat_resumed = task_store.get(feature_id)
-    assert feat_resumed.feature_state == FeatureState.PLANNED, (
-        f"Expected PLANNED after realizing goal resumed ACTIVE, got {feat_resumed.feature_state}"
+    assert feat_resumed.feature_state == FeatureState.PROCESSING, (
+        f"Expected PROCESSING after realizing goal resumed ACTIVE, got {feat_resumed.feature_state}"
     )
 
     # Step f: all realizing items DONE, branch absent → feature → DONE + issue closed.
@@ -389,12 +385,8 @@ async def test_decompose_failure_feature_stays_waiting(task_store):
 
 
 @pytest.mark.asyncio
-async def test_branch_present_feature_stays_planned(task_store):
-    """When branch exists on origin after all realizing items DONE, feature stays PLANNED."""
-    import app.git_ops
-
-    _inject_git_ops_stubs()
-
+async def test_all_items_done_transitions_to_done_from_processing(task_store):
+    """All realizing items DONE → feature transitions to DONE (regardless of branch state)."""
     feat = await _create_feature_processing(task_store, issue_number=None)
     feature_id = feat.id
 
@@ -404,7 +396,7 @@ async def test_branch_present_feature_stays_planned(task_store):
     async def _mock_run_agent(task, *, user_message, **kwargs):
         goal = await task_store.create(
             space_id=SPACE_ID,
-            title="Goal for branch test",
+            title="Goal for done test",
             brief="",
             type="goal",
         )
@@ -433,17 +425,9 @@ async def test_branch_present_feature_stays_planned(task_store):
 
     from app import feature_sync
 
-    mock_fetch = AsyncMock(return_value=None)
-    # Branch is still present — should NOT transition to DONE.
-    mock_branch = AsyncMock(return_value=True)
+    await feature_sync.propagate_to_feature(goal_id, task_store, pool=None)
 
-    with (
-        patch.object(app.git_ops, "fetch_origin", mock_fetch),
-        patch.object(app.git_ops, "branch_exists_on_origin", mock_branch),
-    ):
-        await feature_sync.propagate_to_feature(goal_id, task_store, pool=None)
-
-    feat_still_planned = task_store.get(feature_id)
-    assert feat_still_planned.feature_state == FeatureState.PLANNED, (
-        f"Expected PLANNED (branch still on origin), got {feat_still_planned.feature_state}"
+    feat_done = task_store.get(feature_id)
+    assert feat_done.feature_state == FeatureState.DONE, (
+        f"Expected DONE (all realizing items terminal), got {feat_done.feature_state}"
     )

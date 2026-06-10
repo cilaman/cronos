@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import os
-import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -18,9 +17,6 @@ log = logging.getLogger("cronos.feature_sync")
 _DATA_DIR = Path(os.environ.get("CRONOS_DATA_DIR", "/data"))
 _SPACES_DIR = _DATA_DIR / "spaces"
 
-# Regex matching the `YYYY-MM-DD-HHMM-` date prefix used in feature/fix IDs.
-_DATE_PREFIX_RE = re.compile(r"^\d{4}-\d{2}-\d{2}-\d{4}-")
-
 
 async def propagate_to_feature(
     item_id: str,
@@ -29,17 +25,17 @@ async def propagate_to_feature(
 ) -> None:
     """Propagate a realizing item's new state to the feature/fix it realizes.
 
-    Resolution rules
-    ----------------
-    1. Walk ``item_id`` up via ``store.get`` until finding the root goal
-       (a task whose ``parent_id`` is ``None``).
-    2. Read ``root_goal.realizes`` — this is the ``feature_id`` to propagate to.
-    3. If ``realizes`` is None/empty → no-op (item is not linked to a feature).
-    4. Fetch the feature task; if not found → no-op (stale reference).
-    5. If ``item_id`` is NOT the root goal itself (i.e. it's a child task within
-       a realizing goal) → no-op; only the root goal's state drives transitions.
-    6. Dispatch based on the current item/feature state combination (I3/I4 extend
-       this with real transition logic).
+    State derivation rules (applied to ALL realizing items for the feature)
+    -----------------------------------------------------------------------
+    - No realizing items          → no-op (feature stays BACKLOG)
+    - All items DONE or ARCHIVED  → DONE
+    - Any item ACTIVE             → PROCESSING
+    - Any item WAITING (no ACTIVE)→ WAITING
+    - All items BACKLOG           → PLANNED
+    - Mixed non-terminal states   → no-op
+
+    On DONE: linked GitHub issue is closed (failure does not roll back).
+    On WAITING: waiting_question copied from the first WAITING item that has one.
 
     Called after ``goal_sync.propagate_to_parent`` in both ``worker._finalize``
     and the ``api/tasks.py`` reply path.  Errors are caught by the caller's
@@ -75,159 +71,96 @@ async def propagate_to_feature(
         )
         return
 
-    # --- Step 6: dispatch on state (placeholders for I3/I4) ---
-    item_state = root_goal.state
-    feature_state = feature.feature_state
+    # --- Step 6: derive target feature_state from all realizing items ---
+    items = await store.realizing_items(feature_id)
 
-    if item_state == TaskState.WAITING and feature_state == FeatureState.PLANNED:
-        # I3: item→WAITING while feature PLANNED → feature→WAITING
-        # Also copy item's waiting_question to the feature so the feature
-        # card surfaces the blocking question.
-        try:
-            await store.transition_feature(
-                feature_id,
-                FeatureState.WAITING,
-                allowed=FEATURE_WORKER_TRANSITIONS,
-            )
-            log.info(
-                "feature_sync: feature %s → WAITING (realizing goal %s entered WAITING)",
-                feature_id,
-                root_goal.id,
-            )
-            # Copy waiting_question from the item to the feature if present.
-            waiting_q = root_goal.waiting_question
-            if waiting_q is not None:
+    if not items:
+        log.debug(
+            "feature_sync: feature %s has no realizing items — no-op",
+            feature_id,
+        )
+        return
+
+    states = {item.state for item in items}
+    _terminal = frozenset({TaskState.DONE, TaskState.ARCHIVED})
+
+    if all(s in _terminal for s in states):
+        target = FeatureState.DONE
+    elif TaskState.ACTIVE in states:
+        target = FeatureState.PROCESSING
+    elif TaskState.WAITING in states:
+        target = FeatureState.WAITING
+    elif all(s == TaskState.BACKLOG for s in states):
+        target = FeatureState.PLANNED
+    else:
+        # Mixed non-terminal states (e.g. some done, some backlog) — no-op.
+        log.debug(
+            "feature_sync: feature %s has mixed states %s — no-op",
+            feature_id,
+            {s.value for s in states},
+        )
+        return
+
+    current = feature.feature_state
+    if current == target:
+        return
+
+    try:
+        await store.transition_feature(feature_id, target, allowed=FEATURE_WORKER_TRANSITIONS)
+        log.info(
+            "feature_sync: feature %s %s → %s (realizing goal %s)",
+            feature_id,
+            current.value if current else "?",
+            target.value,
+            root_goal.id,
+        )
+    except InvalidTransition:
+        log.debug(
+            "feature_sync: transition %s → %s not allowed — concurrent race or invalid",
+            current,
+            target,
+        )
+        return
+
+    # WAITING: copy waiting_question from the first WAITING item that has one.
+    if target == FeatureState.WAITING:
+        waiting_q = next(
+            (
+                item.waiting_question
+                for item in items
+                if item.state == TaskState.WAITING and item.waiting_question
+            ),
+            None,
+        )
+        if waiting_q is not None:
+            try:
                 await store.set_feature_waiting_question(feature_id, waiting_q)
-        except InvalidTransition:
-            # Already WAITING (concurrent race) — idempotent.
-            log.debug(
-                "feature_sync: feature %s already in WAITING — concurrent race, ignoring",
-                feature_id,
-            )
-        except AttributeError:
-            # set_feature_waiting_question not yet on this store version — log
-            # the intended question so it is visible in traces.
-            log.debug(
-                "feature_sync: store has no set_feature_waiting_question; "
-                "waiting_question=%r not persisted on feature %s",
-                root_goal.waiting_question,
-                feature_id,
-            )
+            except AttributeError:
+                log.debug(
+                    "feature_sync: store has no set_feature_waiting_question; "
+                    "waiting_question=%r not persisted on feature %s",
+                    waiting_q,
+                    feature_id,
+                )
 
-    elif item_state == TaskState.ACTIVE and feature_state == FeatureState.WAITING:
-        # I3: item→ACTIVE while feature WAITING (resume) → feature→PLANNED
-        try:
-            await store.transition_feature(
-                feature_id,
-                FeatureState.PLANNED,
-                allowed=FEATURE_WORKER_TRANSITIONS,
-            )
-            log.info(
-                "feature_sync: feature %s → PLANNED (realizing goal %s resumed to ACTIVE)",
-                feature_id,
-                root_goal.id,
-            )
-        except InvalidTransition:
-            # Already PLANNED (concurrent resume) — idempotent.
-            log.debug(
-                "feature_sync: feature %s already in PLANNED — concurrent race, ignoring",
-                feature_id,
-            )
-
-    elif item_state in (TaskState.DONE, TaskState.ARCHIVED):
-        # I4: done-detection — all realizing items terminal AND feature PLANNED
-        #     → attempt PLANNED→DONE if branch is absent on origin.
-        if feature_state != FeatureState.PLANNED:
-            # Only fire done-detection from PLANNED state.
-            return
-
-        # Zero-items guard: never attempt done-detection with no realizing items.
-        items = await store.realizing_items(feature_id)
-        if not items:
-            log.debug(
-                "feature_sync: feature %s has no realizing items — done-detection skipped",
-                feature_id,
-            )
-            return
-
-        # All items must be terminal (DONE or ARCHIVED).
-        terminal = {TaskState.DONE, TaskState.ARCHIVED}
-        non_terminal = [it for it in items if it.state not in terminal]
-        if non_terminal:
-            log.debug(
-                "feature_sync: feature %s has %d non-terminal realizing items — no-op",
-                feature_id,
-                len(non_terminal),
-            )
-            return
-
-        # Derive the branch slug: strip the YYYY-MM-DD-HHMM- prefix from feature.id.
-        slug = _DATE_PREFIX_RE.sub("", feature.id)
-
-        # Fetch origin before checking branch existence so pruned refs are accurate.
+    # DONE: close the linked GitHub issue (failure does NOT roll back the transition).
+    if target == FeatureState.DONE and feature.issue_number is not None:
         space_dir = _SPACES_DIR / feature.space_id
         try:
-            from .git_ops import fetch_origin as _fetch_origin
+            from . import git_issues
 
-            await _fetch_origin(space_dir)
+            await git_issues.gh_issue_close(space_dir, feature.issue_number)
+            log.info(
+                "feature_sync: closed issue #%d for feature %s",
+                feature.issue_number,
+                feature_id,
+            )
         except Exception:
             log.warning(
-                "feature_sync: feature %s — fetch_origin failed; staying PLANNED",
+                "feature_sync: gh_issue_close failed for feature %s issue #%d — DONE not rolled back",
                 feature_id,
+                feature.issue_number,
             )
-            return
-
-        # Branch present → stay PLANNED (work may still be on the branch).
-        branch_name = f"feature/{slug}"
-        from .git_ops import branch_exists_on_origin as _branch_exists_on_origin
-
-        branch_present = await _branch_exists_on_origin(space_dir, branch_name)
-        if branch_present:
-            log.info(
-                "feature_sync: feature %s — branch %r still on origin; staying PLANNED",
-                feature_id,
-                branch_name,
-            )
-            return
-
-        # Branch absent → transition to DONE.
-        try:
-            await store.transition_feature(
-                feature_id,
-                FeatureState.DONE,
-                allowed=FEATURE_WORKER_TRANSITIONS,
-            )
-            log.info(
-                "feature_sync: feature %s → DONE (all realizing items terminal, branch %r absent)",
-                feature_id,
-                branch_name,
-            )
-        except InvalidTransition:
-            log.debug(
-                "feature_sync: feature %s already DONE or invalid transition — concurrent race",
-                feature_id,
-            )
-            return
-
-        # Close the linked GitHub issue (failure does NOT roll back the DONE transition).
-        if feature.issue_number is not None:
-            try:
-                from . import git_issues
-
-                await git_issues.gh_issue_close(space_dir, feature.issue_number)
-                log.info(
-                    "feature_sync: closed issue #%d for feature %s",
-                    feature.issue_number,
-                    feature_id,
-                )
-            except Exception:
-                log.warning(
-                    "feature_sync: gh_issue_close failed for feature %s issue #%d — DONE not rolled back",
-                    feature_id,
-                    feature.issue_number,
-                )
-
-    # All other combinations are no-ops.
 
 
 async def _find_root(item_id: str, store: TaskStore):

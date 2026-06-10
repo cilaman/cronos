@@ -220,12 +220,8 @@ async def test_reply_path_propagate_updates_feature_state(async_client, task_sto
     """POST /api/tasks/{id}/reply on a WAITING realizing task updates feature state.
 
     When the realizing task is WAITING and feature is WAITING, replying
-    (WAITING→ACTIVE) triggers feature_sync(item→ACTIVE, feature→WAITING) → feature→PLANNED.
+    (WAITING→ACTIVE) triggers feature_sync(item→ACTIVE) → feature→PROCESSING.
     """
-    import app.git_ops
-
-    _inject_git_ops_stubs()
-
     feat = await _make_feature_planned(task_store)
     # Manually put feature into WAITING.
     await task_store.transition_feature(
@@ -247,14 +243,14 @@ async def test_reply_path_propagate_updates_feature_state(async_client, task_sto
     )
     assert task_store.get(task.id).state == TaskState.WAITING
 
-    # Reply → task ACTIVE; feature_sync sees ACTIVE + WAITING → PLANNED.
+    # Reply → task ACTIVE; feature_sync sees ACTIVE → PROCESSING.
     resp = await async_client.post(
         f"/api/tasks/{task.id}/reply", json={"message": "continue"}
     )
     assert resp.status_code == 200
 
     final_feat = task_store.get(feat.id)
-    assert final_feat.feature_state == FeatureState.PLANNED
+    assert final_feat.feature_state == FeatureState.PROCESSING
 
 
 # ---------------------------------------------------------------------------
