@@ -46,8 +46,8 @@ export type FeatureState =
  */
 export const FEATURE_LANES: { state: FeatureState; label: string }[] = [
   { state: "backlog", label: "Backlog" },
-  { state: "processing", label: "Processing" },
   { state: "planned", label: "Planned" },
+  { state: "processing", label: "Processing" },
   { state: "waiting", label: "Waiting" },
   { state: "done", label: "Done" },
 ];
