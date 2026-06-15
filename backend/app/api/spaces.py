@@ -11,9 +11,10 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response, UploadFile, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
+from ..file_service import FileEntry, list_files, resolve_safe
 from ..models import (
     FeatureState,
     Space,
@@ -515,3 +516,40 @@ async def import_space(
         raise HTTPException(status_code=500, detail="Import succeeded on disk but space did not load")
     await get_pool(request).start_for_space(imported.id)
     return imported
+
+
+# ---------- space file browser ----------
+
+
+@router.get("/{space_id}/files", response_model=list[FileEntry])
+async def list_space_files(space_id: str, request: Request) -> list[FileEntry]:
+    space_store = get_space_store(request)
+    if space_store.get(space_id) is None:
+        raise HTTPException(status_code=404, detail=f"Space {space_id} not found")
+    workspaces_root = space_store.workspaces_dir(space_id)
+    if not workspaces_root.exists():
+        return []
+    return list_files(workspaces_root)
+
+
+@router.get("/{space_id}/files/{file_path:path}")
+async def get_space_file(
+    space_id: str,
+    file_path: str,
+    request: Request,
+    download: bool = Query(default=False),
+) -> FileResponse:
+    space_store = get_space_store(request)
+    if space_store.get(space_id) is None:
+        raise HTTPException(status_code=404, detail=f"Space {space_id} not found")
+    workspaces_root = space_store.workspaces_dir(space_id)
+    try:
+        full = resolve_safe(workspaces_root, file_path)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid file path")
+    if not full.exists() or full.is_dir():
+        raise HTTPException(status_code=404, detail=f"File not found: {file_path}")
+    headers = {}
+    if download:
+        headers["Content-Disposition"] = f'attachment; filename="{full.name}"'
+    return FileResponse(str(full), headers=headers)
