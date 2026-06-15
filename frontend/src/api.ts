@@ -101,8 +101,13 @@ export function taskFileUrl(taskId: string, filePath: string, download = false):
   return `/api/tasks/${taskId}/files/${encoded}${download ? "?download=true" : ""}`;
 }
 
-// Future mirror for space-level file manager:
-// export function spaceFileUrl(spaceId: string, filePath: string, download = false): string { ... }
+// Mirrors taskFileUrl() for the space-level file browser. Reuses TaskFile as the
+// response type — backend FileEntry has the identical 6-field shape (name, path,
+// size, modified_at, is_dir, category), so no new type is needed.
+export function spaceFileUrl(spaceId: string, filePath: string, download = false): string {
+  const encoded = filePath.split("/").map(encodeURIComponent).join("/");
+  return `/api/spaces/${encodeURIComponent(spaceId)}/files/${encoded}${download ? "?download=true" : ""}`;
+}
 
 export function harnessRunStreamUrl(runId: string): string {
   return `/api/harness-runs/${encodeURIComponent(runId)}/stream`;
@@ -240,6 +245,10 @@ export const api = {
     }),
   deleteView: (spaceId: string, viewId: string) =>
     request<void>(`/api/spaces/${spaceId}/views/${viewId}`, { method: "DELETE" }),
+
+  // --- space files ---
+  spaceFiles: (spaceId: string) =>
+    request<TaskFile[]>(`/api/spaces/${encodeURIComponent(spaceId)}/files`),
 
   // --- task files ---
   taskFiles: (taskId: string) =>
