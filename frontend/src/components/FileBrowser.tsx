@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import type { FileCategory, TaskFile } from "../types";
 import { MarkdownEditorModal } from "./MarkdownEditorModal";
 
@@ -149,6 +150,7 @@ export interface FileBrowserProps {
   uploadPending?: boolean;
   onSave?: (file: TaskFile, content: string) => Promise<void>;
   savePending?: boolean;
+  breadcrumb?: ReactNode;
 }
 
 export function FileBrowser({
@@ -159,6 +161,7 @@ export function FileBrowser({
   uploadPending,
   onSave,
   savePending,
+  breadcrumb,
 }: FileBrowserProps) {
   const [viewing, setViewing] = useState<TaskFile | null>(null);
   const [editingMd, setEditingMd] = useState<TaskFile | null>(null);
@@ -207,6 +210,11 @@ export function FileBrowser({
   return (
     <>
       <div className="flex flex-1 flex-col overflow-hidden">
+        {breadcrumb && (
+          <nav className="shrink-0 border-b border-hairline px-3 py-2 text-sm text-ink-muted">
+            {breadcrumb}
+          </nav>
+        )}
         {/* File list */}
         <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
           {isLoading ? (
