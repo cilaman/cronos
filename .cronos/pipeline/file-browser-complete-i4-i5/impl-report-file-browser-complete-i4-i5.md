@@ -20,19 +20,29 @@ inputs_used:
 - frontend/src/pages/__tests__/HarnessRunsPage.test.tsx
 - frontend/src/__tests__/router.harness-editor.test.tsx
 outputs_produced:
+- .cronos/pipeline/file-browser-complete-i4-i5/impl-report-file-browser-complete-i4-i5.md
 - frontend/src/pages/FileBrowserPage.tsx
 - frontend/src/pages/__tests__/FileBrowserPage.test.tsx
 - frontend/src/components/__tests__/FilesPanel.regression.test.tsx
-- frontend/src/router.tsx (modified)
-- frontend/src/components/Sidebar.tsx (modified)
+- frontend/src/router.tsx
+- frontend/src/components/Sidebar.tsx
 blockers: []
 next_consumer: test
+iteration_id: I4
+files_changed:
+- frontend/src/pages/FileBrowserPage.tsx
+- frontend/src/pages/__tests__/FileBrowserPage.test.tsx
+- frontend/src/components/__tests__/FilesPanel.regression.test.tsx
+- frontend/src/router.tsx
+- frontend/src/components/Sidebar.tsx
+validation_command_passed: true
 metrics:
   tool_calls: 18
   files_read: 14
   memory_hits: 2
-  iterations_planned: 2
-  validation_command_passed: true
+  diff_lines_added: 655
+  diff_lines_removed: 0
+  tests_added: 21
 ---
 
 ## Summary
