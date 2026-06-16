@@ -68,11 +68,12 @@ HTTP Basic Auth via Caddy on every request. `/api/health` is public (no auth). C
 | `backend/app/storage.py` | **CORE** — TaskStore, state machine, dependency DAG validation, cycle detection (41 KB) |
 | `backend/app/space_storage.py` | Space persistence, layouts, settings, `.cronos` subdirectory management |
 | `backend/app/agent.py` | Agent spawning, stdout/stderr capture, status tracking |
+| `backend/app/file_service.py` | File classification and listing utilities (classify_file, list_files, list_git_changed_files, resolve_safe); FileEntry model; used by space file endpoints and task file operations |
 | `backend/app/worker.py` | Background task processor (goals, agent execution, state transitions); harness run lifecycle execution, event publishing for SSE streams |
 | `backend/app/models.py` | Pydantic schemas: TaskState, Task, Space, View, agent modes/models |
 | `backend/app/trace_parser.py` | Parse `STATUS:` fields from agent stdout, extract RunTrace (result, exit_reason, parent_run_id, memory_hit_rate, etc.) |
 | `backend/app/api/tasks.py` | Task CRUD, state transitions, drag-drop reordering, lane overrides (29 KB) |
-| `backend/app/api/spaces.py` | Space CRUD, repo linking, project settings |
+| `backend/app/api/spaces.py` | Space CRUD, repo linking, project settings; space file browsing endpoints (GET /{space_id}/files list and GET /{space_id}/files/{file_path} retrieve) |
 | `backend/app/api/harnesses.py` | Harness CRUD endpoints and run lifecycle (GET/POST/PUT/DELETE, POST /run, GET /runs, POST /webhook) with concurrency contract; webhook authentication via Bearer token |
 | `backend/app/api/harness_runs.py` | Harness run status and control endpoints (GET /{run_id}, POST /{run_id}/cancel, GET /{run_id}/stream SSE) |
 | `backend/app/harnesses/model.py` | Pydantic models with reference integrity validation (HarnessNode, HarnessEdge, Harness); Wait and Aggregator node data conventions; trigger node kinds (`task-state-change`, `webhook`, `file-change`) and their `data` schemas |
@@ -100,7 +101,7 @@ HTTP Basic Auth via Caddy on every request. `/api/health` is public (no auth). C
 | `frontend/src/components/HarnessRunPanel.tsx` | Per-run detail panel with node status badges, live SSE indicator, cancel button, buffer-truncated badge |
 | `frontend/src/hooks/useTasks.ts` | React Query hooks for task CRUD |
 | `frontend/src/hooks/useHarnessRuns.ts` | React Query hooks for harness run queries, mutations (trigger, cancel), and SSE stream subscription |
-| `frontend/src/api.ts` | HTTP client; includes harness run types (RunSummary, NodeState, HarnessRunState) and API functions |
+| `frontend/src/api.ts` | HTTP client with task/space file URL helpers (taskFileUrl, spaceFileUrl) and API functions (taskFiles, spaceFiles); includes harness run types (RunSummary, NodeState, HarnessRunState) |
 | `frontend/src/pages/HarnessEditor.tsx` | Harness visual editor canvas page — React Flow v12 graph layout with 5 custom node types (Agent/Trigger/Decision/Wait/Aggregator), NodePalette drag source, VariableInspector side panel, Save button (GET-then-PUT); live-execution overlay with RunHistory (left panel), RunOverlay (canvas), and ChildTaskDrawer (right panel) |
 | `frontend/src/hooks/useHarnesses.ts` | React Query hooks for harness CRUD and canvas save (`useHarnesses` list, `useHarness` single fetch, `useCreateHarness` and `useDeleteHarness` mutations, `useSaveHarness` GET-then-PUT mutation enforcing created_at preservation) |
 | `frontend/src/components/harness/runStatus.ts` | Single source of truth for node run-status styling: `NodeRunStatus` union type, `RunStatusOverlayData` interface (optional fields: runStatus, startedAt, endedAt, childTaskId), and `runStatusClassName()` mapper returning Tailwind class strings per status |
