@@ -87,6 +87,22 @@ function SpaceRow({ space, onClose }: { space: SpaceSummary; onClose?: () => voi
           <line x1="5.5" y1="5" x2="9.5" y2="7.5"/>
         </svg>
       </NavLink>
+      <NavLink
+        to={`/spaces/${space.id}/files`}
+        onClick={onClose}
+        title="File browser"
+        aria-label={`${space.name} file browser`}
+        className={({ isActive }) =>
+          cn(
+            "flex h-6 w-6 shrink-0 items-center justify-center rounded text-ink-faint opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100",
+            isActive ? "opacity-100 text-accent-bright" : "hover:bg-surface-2 hover:text-ink",
+          )
+        }
+      >
+        <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M1 3.5C1 2.67 1.67 2 2.5 2h2l1 1.5h3c.83 0 1.5.67 1.5 1.5V8.5C10 9.33 9.33 10 8.5 10h-6C1.67 10 1 9.33 1 8.5V3.5z"/>
+        </svg>
+      </NavLink>
     </div>
   );
 }
