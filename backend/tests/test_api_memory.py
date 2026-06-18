@@ -340,8 +340,8 @@ async def test_roundtrip_full_item(memory_client) -> None:
     assert data["body"] == "Some body text"
     assert data["confirmed"] is True
     assert data["confidence"] == pytest.approx(0.85)
-    # GET applies an access-boost: score *= 1.2 and ref_count += 1
-    assert data["score"] == pytest.approx(1.5 * 1.2)
+    # GET applies an access-boost: score += BOOST_AMOUNT (0.5) and ref_count += 1
+    assert data["score"] == pytest.approx(1.5 + 0.5)
     assert data["ref_count"] == 4
     assert data["sources"] == ["task-abc", "task-def"]
     assert data["links"] == ["mem-other"]
