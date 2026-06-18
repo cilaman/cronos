@@ -387,6 +387,57 @@ async def test_prune_stale_rebuilds_index(store: MemoryStore, tmp_path: Path) ->
 
 
 @pytest.mark.asyncio
+async def test_get_applies_decay_then_boost(store: MemoryStore) -> None:
+    """R5: get() decays score first, then boosts; stale item score != boost-only."""
+    from app.memory_lifecycle import BOOST_AMOUNT, DECAY_HALF_LIFE_DAYS, MAX_SCORE, decay
+
+    original_score = 1.0
+    thirty_days_ago = datetime.now(tz=UTC) - timedelta(days=30)
+
+    # Create item with a past last_used_at so decay will reduce the score.
+    item = await store.create(
+        scope="global",
+        kind=MemoryKind.FACT,
+        title="Stale scored item",
+        score=original_score,
+        last_used_at=thirty_days_ago,
+    )
+
+    loaded = await store.get("global", item.id)
+    assert loaded is not None
+
+    # Expected: decay applied first, then additive boost
+    now = loaded.last_used_at  # get() sets last_used_at=now on the returned item
+    expected_decayed = decay(original_score, thirty_days_ago, now)
+    expected_score = min(expected_decayed + BOOST_AMOUNT, MAX_SCORE)
+
+    assert loaded.score == pytest.approx(expected_score, rel=1e-6)
+
+    # Sanity: decay + boost differs from boost-only (verifies decay is actually applied)
+    boost_only_score = min(original_score + BOOST_AMOUNT, MAX_SCORE)
+    assert loaded.score != pytest.approx(boost_only_score, rel=1e-6)
+
+
+@pytest.mark.asyncio
+async def test_get_decay_same_day_preserves_score(store: MemoryStore) -> None:
+    """R2: get() on a freshly-created item (days_elapsed~0) should not decay below original."""
+    from app.memory_lifecycle import BOOST_AMOUNT, MAX_SCORE
+
+    original_score = 1.0
+    item = await store.create(
+        scope="global",
+        kind=MemoryKind.FACT,
+        title="Fresh item",
+        score=original_score,
+    )
+    loaded = await store.get("global", item.id)
+    assert loaded is not None
+    # With ~0 elapsed days, decay is identity; score should be original + BOOST_AMOUNT
+    expected = min(original_score + BOOST_AMOUNT, MAX_SCORE)
+    assert loaded.score == pytest.approx(expected, rel=1e-4)
+
+
+@pytest.mark.asyncio
 async def test_prune_stale_per_space_scope(store: MemoryStore, tmp_path: Path) -> None:
     scope = "space:test-space"
     item = await store.create(

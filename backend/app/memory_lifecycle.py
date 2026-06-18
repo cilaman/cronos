@@ -4,7 +4,9 @@ import math
 from datetime import UTC, datetime, timedelta
 
 DECAY_HALF_LIFE_DAYS: float = 14.0
-BOOST_FACTOR: float = 1.2
+# Additive boost per access (replaces the old multiplicative BOOST_FACTOR=1.2).
+# +0.5 lifts a brand-new item (score=0.0) to 0.5, well above PRUNE_THRESHOLD=0.1.
+BOOST_AMOUNT: float = 0.5
 MAX_SCORE: float = 10.0
 PRUNE_THRESHOLD: float = 0.1
 TTL_EXTENSION_PER_BOOST_DAYS: int = 7
@@ -24,10 +26,10 @@ def boost(
 ) -> tuple[float, datetime]:
     """Return (boosted_score, new_ttl) after an access boost.
 
-    Score is multiplied by BOOST_FACTOR, capped at MAX_SCORE.
+    Score is incremented by BOOST_AMOUNT, capped at MAX_SCORE.
     TTL is extended by TTL_EXTENSION_PER_BOOST_DAYS from the later of now or current ttl_until.
     """
-    new_score = min(score * BOOST_FACTOR, MAX_SCORE)
+    new_score = min(score + BOOST_AMOUNT, MAX_SCORE)
     base = max(ttl_until, now) if ttl_until is not None else now
     new_ttl = base + timedelta(days=TTL_EXTENSION_PER_BOOST_DAYS)
     return new_score, new_ttl

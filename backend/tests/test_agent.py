@@ -1235,3 +1235,82 @@ def test_valid_agent_models_includes_fable5():
 
 def test_model_cli_names_maps_fable5():
     assert _MODEL_CLI_NAMES["fable-5"] == "claude-fable-5"
+
+
+# ---------------------------------------------------------------------------
+# build_prompt: memory injection (R6) — full body must reach the agent
+# ---------------------------------------------------------------------------
+
+
+def _make_memory_item(
+    *,
+    title: str,
+    body: str = "",
+    kind: str = "fact",
+) -> "MemoryItem":
+    from datetime import timezone
+    from app.models import MemoryItem, MemoryKind
+
+    return MemoryItem(
+        id="mem-1",
+        scope="global",
+        kind=MemoryKind(kind),
+        title=title,
+        body=body,
+        confirmed=True,
+        confidence=1.0,
+        score=0.5,
+        last_used_at=datetime.now(tz=timezone.utc),
+        ref_count=1,
+    )
+
+
+def test_build_prompt_memory_full_body_all_lines_present():
+    """R6: build_prompt() with a multi-line body emits ALL lines in the prompt."""
+    task = _make_task()
+    item = _make_memory_item(
+        title="My procedure",
+        body="Line one\nLine two\nLine three",
+        kind="procedure",
+    )
+    prompt = build_prompt(task, None, memory_items=[item])
+
+    assert "Line one" in prompt
+    assert "Line two" in prompt
+    assert "Line three" in prompt
+    # The title and kind appear as the bullet header
+    assert "**My procedure**" in prompt
+    assert "(procedure)" in prompt
+
+
+def test_build_prompt_memory_body_equals_title_still_emits_body():
+    """R6: when body's first line equals the title, the body is STILL included.
+
+    The old bug: first-line-equals-title caused the detail to be omitted.
+    After the fix the full body always follows the bullet header.
+    """
+    task = _make_task()
+    title = "Deploy procedure"
+    item = _make_memory_item(
+        title=title,
+        body=f"{title}\nStep 1: pull\nStep 2: restart",
+        kind="procedure",
+    )
+    prompt = build_prompt(task, None, memory_items=[item])
+
+    # All body lines must appear
+    assert "Step 1: pull" in prompt
+    assert "Step 2: restart" in prompt
+    # The title appears as the bullet header and inside the body — both fine
+    assert f"**{title}**" in prompt
+
+
+def test_build_prompt_memory_empty_body_no_trailing_colon():
+    """R6: when body is empty, bullet is emitted without trailing colon or blank."""
+    task = _make_task()
+    item = _make_memory_item(title="Simple fact", body="", kind="fact")
+    prompt = build_prompt(task, None, memory_items=[item])
+
+    assert "**Simple fact** (fact)" in prompt
+    # No stray ": " after the closing paren when body is absent
+    assert "**Simple fact** (fact):" not in prompt

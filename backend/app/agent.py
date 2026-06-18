@@ -287,9 +287,9 @@ def build_prompt(
     if memory_items:
         lines = ["\n# Memory Context\n"]
         for item in memory_items:
-            first_body_line = item.body.split("\n")[0] if item.body else ""
-            detail = f": {first_body_line}" if first_body_line and first_body_line != item.title else ""
-            lines.append(f"- **{item.title}** ({item.kind.value}){detail}")
+            lines.append(f"- **{item.title}** ({item.kind.value})")
+            if item.body:
+                lines.append(item.body)
         memory_section = "\n".join(lines) + "\n"
     return (
         f"You are working on task `{task.id}`.\n\n"
