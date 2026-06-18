@@ -1,0 +1,140 @@
+{
+  "cc_version": "1.0",
+  "goal_slug": "memory-bug-fixing",
+  "status": "running",
+  "created_at": "2026-06-18T16:06:02.971524+00:00",
+  "updated_at": "2026-06-18T18:05:24.504150+00:00",
+  "request_text": "# Memory Bug Fixes\n\nThree critical correctness bugs in the memory system that defeat its purpose.\n\n## Bug 1 — Multiplicative boost from zero (memory_lifecycle.py)\n\nboost() computes min(score * 1.2, 10.0). New items are created with score=0.0, and 0.0 * 1.2 = 0.0 forever. Fix: use additive boost so zero-scored items can actually rise. Add test for boost(0.0, ...).\n\n## Bug 2 — decay() is dead code (memory_lifecycle.py)\n\ndecay() is defined but never called. Wire it into MemoryStore.get() before boost() so scores actually age.\n\n## Bug 3 — Injection drops the body (agent.py build_prompt())\n\nbuild_prompt() only injects first body line if it differs from title. Full body (file paths, procedures, etc.) never reaches the agent. Fix: include full body in memory context.\n\n## Test gaps to fill\n\n- boost(0.0, ...) case\n- decay applied at get() time\n- full body in build_prompt() memory section\n- should_prune() correctly protects boosted items\n\n## Files to change\n\n- backend/app/memory_lifecycle.py (bugs 1 + 2 definition side)\n- backend/app/memory_store.py (bug 2 call site)\n- backend/app/agent.py (bug 3)\n- backend/tests/test_memory_lifecycle.py (new tests)\n- backend/tests/test_memory_store.py (new tests)\n- backend/tests/test_agent.py (new tests)\n\nAll changes on a single feature branch: feature/memory-bug-fixing",
+  "phases": {
+    "research": {
+      "phase": "research",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-scout",
+      "task_id": "2026-06-18-1606-pipeline-scout-fix-memory-scoring-and-in",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/memory-bug-fixing/scout-report-memory-bug-fixing.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "analysis": {
+      "phase": "analysis",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-analyst",
+      "task_id": "2026-06-18-1606-pipeline-analyst-fix-memory-scoring-and",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/memory-bug-fixing/analysis-report-memory-bug-fixing.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [
+          "coverage_summary.strategies[2]: dropped unknown free-text strategy 'requirements_decomposition'",
+          "coverage_summary.strategies[3]: dropped unknown free-text strategy 'traceability_mapping'"
+        ],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "design": {
+      "phase": "design",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-architect",
+      "task_id": "2026-06-18-1606-pipeline-architect-fix-memory-scoring-an",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/memory-bug-fixing/design-report-memory-bug-fixing.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [
+          "coverage_summary.strategies[2]: dropped unknown free-text strategy 'component_decomposition'",
+          "coverage_summary.strategies[3]: dropped unknown free-text strategy 'iteration_planning'",
+          "coverage_summary.strategies[4]: dropped unknown free-text strategy 'risk_identification'"
+        ],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "implementation": {
+      "phase": "implementation",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-implementor",
+      "task_id": "2026-06-18-1606-pipeline-implementor-fix-memory-scoring",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/memory-bug-fixing/impl-report-memory-bug-fixing--i4.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    }
+  },
+  "telemetry": {
+    "total_duration_s": 0.0,
+    "total_token_spend": 0,
+    "total_tool_calls": 0,
+    "total_files_read": 0,
+    "total_memory_hits": 0,
+    "phases_completed": 4,
+    "phases_escalated": 0,
+    "phases_retried": 0,
+    "phases_failed": 0
+  }
+}

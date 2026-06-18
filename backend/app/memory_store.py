@@ -9,7 +9,7 @@ from pathlib import Path
 
 import frontmatter
 
-from .memory_lifecycle import boost, should_auto_confirm, should_prune
+from .memory_lifecycle import boost, decay, should_auto_confirm, should_prune
 from .models import MemoryItem, MemoryKind
 
 log = logging.getLogger("cronos.memory_store")
@@ -248,7 +248,8 @@ class MemoryStore:
                 log.exception("Failed to load memory item %s/%s", scope, item_id)
                 return None
             now = datetime.now(tz=UTC)
-            new_score, new_ttl = boost(item.score, item.ttl_until, now)
+            decayed_score = decay(item.score, item.last_used_at, now)
+            new_score, new_ttl = boost(decayed_score, item.ttl_until, now)
             new_ref_count = item.ref_count + 1
             boosted = item.model_copy(update={
                 "score": new_score,
