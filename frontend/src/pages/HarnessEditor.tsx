@@ -368,6 +368,7 @@ function HarnessEditorInner() {
           onVariableChange={handleVariableChange}
           onVariableAdd={handleVariableAdd}
           onVariableRemove={handleVariableRemove}
+          spaceId={spaceId}
         />
         {/* Right panel: ChildTaskDrawer */}
         <ChildTaskDrawer

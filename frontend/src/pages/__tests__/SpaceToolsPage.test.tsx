@@ -36,6 +36,11 @@ vi.mock("../../components/ToolDetailPanel", () => ({
   ToolDetailPanel: () => <div data-testid="tool-detail-panel">ToolDetailPanel</div>,
 }));
 
+// PluginsPanel stub
+vi.mock("../../components/PluginsPanel", () => ({
+  PluginsPanel: () => <div data-testid="plugins-panel">PluginsPanel</div>,
+}));
+
 // AdoptedToolTelemetry stub — telemetry is tested separately
 vi.mock("../../components/AdoptedToolTelemetry", () => ({
   AdoptedToolTelemetry: ({ name }: { name: string }) => (
@@ -240,5 +245,54 @@ describe("SpaceToolsPage — Unadopt confirm dialog", () => {
     fireEvent.click(screen.getByRole("button", { name: /unadopt my-agent/i }));
     fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
     expect(screen.getByRole("button", { name: /unadopt my-agent/i })).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Plugins tab (R5)
+// ---------------------------------------------------------------------------
+
+describe("SpaceToolsPage — Plugins tab", () => {
+  beforeEach(() => {
+    mockUnadoptMutate.mockReset();
+    mockUnadoptIsPending = false;
+    mockSpaceTools = makeTools([]);
+    mockSpacesResponse = {
+      spaces: [{ id: "space-1", name: "Test Space", color: "#15803D", icon: null, task_counts: { backlog: 0, active: 0, waiting: 0, done: 0, archived: 0 }, last_activity_at: null, autopilot: "disabled" }],
+      totals: { backlog: 0, active: 0, waiting: 0, done: 0, archived: 0 },
+    };
+  });
+
+  it("renders a Plugins tab button in the tab switcher", () => {
+    renderPage();
+    expect(screen.getByRole("button", { name: /plugins/i })).toBeInTheDocument();
+  });
+
+  it("mounts PluginsPanel when the Plugins tab is selected", () => {
+    renderPage();
+    fireEvent.click(screen.getByRole("button", { name: /plugins/i }));
+    expect(screen.getByTestId("plugins-panel")).toBeInTheDocument();
+  });
+
+  it("does not render PluginsPanel when a different tab is active", () => {
+    renderPage();
+    // Default tab is 'installed', not 'plugins'
+    expect(screen.queryByTestId("plugins-panel")).not.toBeInTheDocument();
+  });
+
+  it("hides the space selector when the Plugins tab is active", () => {
+    renderPage();
+    fireEvent.click(screen.getByRole("button", { name: /plugins/i }));
+    // The select element for choosing a space should not be present
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+  });
+
+  it("shows the space selector on the Installed tab but not on the Plugins tab", () => {
+    renderPage();
+    // Installed tab (default): selector present
+    expect(screen.getByRole("combobox")).toBeInTheDocument();
+    // Switch to Plugins tab: selector gone
+    fireEvent.click(screen.getByRole("button", { name: /plugins/i }));
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
   });
 });
