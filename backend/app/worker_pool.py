@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import TYPE_CHECKING
 
 from .autopilot import pickup_next, start_picked
 from .memory_store import MemoryStore
@@ -10,6 +11,9 @@ from .stats_store import StatsStore
 from .storage import TaskStore
 from .trace_store import TraceStore
 from .worker import Worker
+
+if TYPE_CHECKING:
+    from .harnesses.store import HarnessStore
 
 log = logging.getLogger("cronos.worker_pool")
 
@@ -30,12 +34,14 @@ class WorkerPool:
         stats_store: StatsStore | None = None,
         trace_store: TraceStore | None = None,
         memory_store: MemoryStore | None = None,
+        harness_store: "HarnessStore | None" = None,
     ) -> None:
         self._task_store = task_store
         self._space_store = space_store
         self._stats_store = stats_store
         self._trace_store = trace_store
         self._memory_store = memory_store
+        self._harness_store = harness_store
         self._workers: dict[str, Worker] = {}
         self._lock = asyncio.Lock()
 
@@ -64,6 +70,7 @@ class WorkerPool:
                 stats_store=self._stats_store,
                 trace_store=self._trace_store,
                 memory_store=self._memory_store,
+                harness_store=self._harness_store,
                 on_idle=_on_idle,
                 pool=self,
             )
