@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+import yaml
 
 _VALID_KINDS = frozenset({"fact", "procedure", "observation", "reference"})
 
@@ -76,5 +79,74 @@ def parse_memory_blocks(text: str) -> list[MemoryBlock]:
                     blocks.append(MemoryBlock(content=content, kind_hint=fence_kind))
             else:
                 fence_content_lines.append(line)
+
+    return blocks
+
+
+_CR_FENCE_OPEN = re.compile(r"^```cronos_remember\s*$", re.IGNORECASE)
+
+
+@dataclass
+class CronosRememberBlock:
+    name: str
+    type: str
+    description: str
+    body: str = ""
+    metadata: dict = field(default_factory=dict)
+
+
+def parse_cronos_remember_blocks(text: str) -> list[CronosRememberBlock]:
+    """Parse CRONOS_REMEMBER fenced blocks from agent output.
+
+    Blocks are returned in document order. Silently skips blocks that are
+    unclosed, have malformed YAML, are missing required fields (name, type,
+    description), or have an unknown type value.
+    """
+    if not text:
+        return []
+
+    blocks: list[CronosRememberBlock] = []
+    lines = text.splitlines()
+    in_fence = False
+    fence_lines: list[str] = []
+
+    for line in lines:
+        if not in_fence:
+            if _CR_FENCE_OPEN.match(line):
+                in_fence = True
+                fence_lines = []
+        else:
+            if _FENCE_CLOSE.match(line):
+                in_fence = False
+                try:
+                    data = yaml.safe_load("\n".join(fence_lines))
+                except Exception:
+                    continue
+                if not isinstance(data, dict):
+                    continue
+                name = data.get("name")
+                cr_type = data.get("type")
+                description = data.get("description")
+                if not (
+                    isinstance(name, str) and name.strip()
+                    and isinstance(cr_type, str) and cr_type.lower() in _VALID_KINDS
+                    and isinstance(description, str) and description.strip()
+                ):
+                    continue
+                body = data.get("body", "")
+                if not isinstance(body, str):
+                    body = ""
+                metadata = data.get("metadata", {})
+                if not isinstance(metadata, dict):
+                    metadata = {}
+                blocks.append(CronosRememberBlock(
+                    name=name[:120],
+                    type=cr_type.lower(),
+                    description=description.strip(),
+                    body=body,
+                    metadata=metadata,
+                ))
+            else:
+                fence_lines.append(line)
 
     return blocks
