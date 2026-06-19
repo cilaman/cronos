@@ -42,6 +42,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request, status
+from fastapi.responses import Response
 from pydantic import BaseModel, ValidationError
 
 from ..harnesses import (
@@ -243,8 +244,8 @@ async def update_harness(
     return updated
 
 
-@router.delete("/{name}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_harness(space_id: str, name: str, request: Request) -> None:
+@router.delete("/{name}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+async def delete_harness(space_id: str, name: str, request: Request) -> Response:
     """Delete a harness by name.
 
     Returns 409 if any run for this harness is currently in 'running' status.
@@ -268,6 +269,7 @@ async def delete_harness(space_id: str, name: str, request: Request) -> None:
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
         ) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # ---------------------------------------------------------------------------

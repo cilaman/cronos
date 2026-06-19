@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, HTTPException, Request, Response, status
 from pydantic import BaseModel
 
 from ..space_storage import SpaceStore
@@ -53,7 +53,7 @@ async def adopt_tool(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.delete("/{space_id}/adopt/{kind}/{name}", status_code=204)
+@router.delete("/{space_id}/adopt/{kind}/{name}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 async def unadopt_tool(
     space_id: str,
     kind: str,
@@ -69,4 +69,4 @@ async def unadopt_tool(
     except NotAdopted as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    return Response(status_code=204)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
