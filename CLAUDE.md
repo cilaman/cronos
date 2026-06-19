@@ -54,7 +54,7 @@ HTTP Basic Auth via Caddy on every request. `/api/health` is public (no auth). C
 
 ### Memory store
 
-`app/memory_store.py` — shared context per space, scope-indexed, I/O atomic writes, rebuild on space sync.
+`app/memory_store.py` — shared context per space, scope-indexed (space-scoped or global), I/O atomic writes, rebuild on space sync. Supports outcome-linked confidence updates via `nudge_confidence()`: when a task completes, retrieved memory items are nudged +0.05 on success and -0.1 on failure, clamped to [0.0, 1.0].
 
 ### Agent execution
 
@@ -69,9 +69,9 @@ HTTP Basic Auth via Caddy on every request. `/api/health` is public (no auth). C
 | `backend/app/space_storage.py` | Space persistence, layouts, settings, `.cronos` subdirectory management |
 | `backend/app/agent.py` | Agent spawning, stdout/stderr capture, status tracking |
 | `backend/app/file_service.py` | File classification and listing utilities (classify_file, list_files, list_git_changed_files, resolve_safe); FileEntry model; used by space file endpoints and task file operations |
-| `backend/app/worker.py` | Background task processor (goals, agent execution, state transitions); harness run lifecycle execution, event publishing for SSE streams |
+| `backend/app/worker.py` | Background task processor (goals, agent execution, state transitions); harness run lifecycle execution, event publishing for SSE streams; post-task-completion trust-loop hook nudges retrieved memory confidence (±0.05/±0.1) based on task outcome |
 | `backend/app/models.py` | Pydantic schemas: TaskState, Task, Space, View, agent modes/models |
-| `backend/app/trace_parser.py` | Parse `STATUS:` fields from agent stdout, extract RunTrace (result, exit_reason, parent_run_id, memory_hit_rate, etc.) |
+| `backend/app/trace_parser.py` | Parse `STATUS:` fields from agent stdout, extract RunTrace (result, exit_reason, parent_run_id, memory_hit_rate, `memory_used` bare IDs, etc.); `_memory_slug()` strips `.md` suffix from memory file paths |
 | `backend/app/api/tasks.py` | Task CRUD, state transitions, drag-drop reordering, lane overrides (29 KB) |
 | `backend/app/api/spaces.py` | Space CRUD, repo linking, project settings; space file browsing endpoints (GET /{space_id}/files list and GET /{space_id}/files/{file_path} retrieve) |
 | `backend/app/api/harnesses.py` | Harness CRUD endpoints and run lifecycle (GET/POST/PUT/DELETE, POST /run, GET /runs, POST /webhook) with concurrency contract; webhook authentication via Bearer token |
@@ -89,7 +89,7 @@ HTTP Basic Auth via Caddy on every request. `/api/health` is public (no auth). C
 | `backend/app/harnesses/run_index.py` | Append-only per-harness run history index with concurrent-safe locking; `read_index()`, `append_run()`, `update_run_status()` |
 | `backend/app/harnesses/run_trigger.py` | Shared `enqueue_harness_run` helper — task creation, run index append, worker registration; used by POST /run endpoint and cron loop |
 | `backend/app/harnesses/cron.py` | Stateless cron-trigger background loop — `should_fire(expression, timezone, prev_tick, now)`, `has_active_run()`, `cron_loop()` with overlap guard and croniter integration |
-| `backend/app/memory_store.py` | Shared context storage |
+| `backend/app/memory_store.py` | Shared context storage (list, retrieve, prune); `nudge_confidence(scope, item_id, delta)` adjusts memory item confidence (clamped to [0.0, 1.0]) to implement outcome-linked trust updates |
 | `backend/app/harnesses/triggers.py` | Event routing core — `EventBusEvent` dataclass, `EventDebouncer` in-memory dedup, `fan_out_to_harnesses()` async dispatcher with pattern matching and harness selection |
 | `backend/app/git_ops.py` | `git clone/commit/push` wrappers for repo-linked spaces |
 | `backend/app/goal_sync.py` | Goal state propagation |
