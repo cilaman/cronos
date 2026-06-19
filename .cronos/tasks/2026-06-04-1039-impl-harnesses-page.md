@@ -5,18 +5,24 @@ claude_session_id: 9e0160e0-fc79-4ff5-a7d6-46ad7098bd09
 created_at: '2026-06-04T10:39:23Z'
 depends_on:
 - 2026-06-04-1039-architect-harnesses-page
+feature_key: null
+feature_state: null
 id: 2026-06-04-1039-impl-harnesses-page
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-04-1039-harnesses-landing-page-sidebar-nav
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: impl – harnesses-page
 type: task
-updated_at: '2026-06-04T11:07:32Z'
+updated_at: '2026-06-19T12:17:49Z'
 waiting_question: null
 ---
 

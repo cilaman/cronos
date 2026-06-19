@@ -6,18 +6,24 @@ created_at: '2026-05-31T15:07:53Z'
 depends_on:
 - 2026-05-31-1507-pipeline-implementor-show-running-commit
 - 2026-05-31-1507-tester-show-running-commit-and-upgrade-t
+feature_key: null
+feature_state: null
 id: 2026-05-31-1507-pipeline-reviewer-show-running-commit-an
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-05-31-1507-showing-commit
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 'pipeline-reviewer: Show running commit and upgrade time in the sidebar'
 type: task
-updated_at: '2026-06-01T11:42:11Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

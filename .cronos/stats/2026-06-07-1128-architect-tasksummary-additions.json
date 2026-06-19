@@ -1,0 +1,35 @@
+{
+  "task_id": "2026-06-07-1128-architect-tasksummary-additions",
+  "space_id": "cronos-development",
+  "title": "architect \u2013 tasksummary-additions",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-08T14:04:11.798511Z",
+      "ended_at": "2026-06-08T14:14:08.320282Z",
+      "duration_seconds": 596.52,
+      "model": "opus",
+      "real_model": "claude-opus-4-7",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 67,
+      "output_tokens": 28785,
+      "cache_read_tokens": 3753133,
+      "cache_creation_tokens": 130992,
+      "cost_usd": 10.24568,
+      "tool_uses": {
+        "Bash": 36,
+        "Read": 15,
+        "Agent": 1,
+        "Grep": 1,
+        "Write": 2,
+        "Skill": 4,
+        "Edit": 1
+      },
+      "error_count": 3,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

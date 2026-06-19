@@ -5,18 +5,24 @@ claude_session_id: 56c84575-c9cf-477e-bfb4-11cb3bd101c4
 created_at: '2026-06-03T09:08:41Z'
 depends_on:
 - 2026-06-03-0908-a4-refresh-api-periodic-scheduler
+feature_key: null
+feature_state: null
 id: 2026-06-03-0908-a5-frontend-discover-tab-on-tools-page
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-03-0908-arc-5-a-discovery-tool-sources-yml-index
 pending_messages: []
 pr_url: null
 priority: 3
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 'A5 — Frontend: Discover tab on tools page'
 type: task
-updated_at: '2026-06-03T12:18:54Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

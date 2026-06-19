@@ -5,18 +5,24 @@ claude_session_id: f0d71fae-136f-4016-a65e-5054c5d44e80
 created_at: '2026-05-30T14:37:55Z'
 depends_on:
 - 2026-05-30-1437-2-1-scout-research-agent
+feature_key: null
+feature_state: null
 id: 2026-05-30-1437-2-2-analyst-requirements-agent
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-05-30-1437-pipeline-phase-agents-under-cc-v1
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 2.2 analyst (requirements) agent
 type: task
-updated_at: '2026-05-30T16:53:22Z'
+updated_at: '2026-06-19T12:17:47Z'
 waiting_question: null
 ---
 

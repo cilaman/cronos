@@ -1,0 +1,33 @@
+{
+  "task_id": "2026-06-12-1434-review-file-browser",
+  "space_id": "cronos-development",
+  "title": "Review: File Browser",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-15T17:31:42.676420Z",
+      "ended_at": "2026-06-15T17:36:14.836436Z",
+      "duration_seconds": 272.16,
+      "model": "opus",
+      "real_model": "claude-opus-4-7",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 20,
+      "output_tokens": 7520,
+      "cache_read_tokens": 552879,
+      "cache_creation_tokens": 67413,
+      "cost_usd": 2.657612,
+      "tool_uses": {
+        "Bash": 33,
+        "Agent": 1,
+        "Read": 8,
+        "Write": 1,
+        "Skill": 1
+      },
+      "error_count": 2,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

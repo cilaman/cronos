@@ -1,0 +1,32 @@
+{
+  "task_id": "2026-06-07-1049-frontend-ux-wiring-audit",
+  "space_id": "cronos-development",
+  "title": "Frontend UX & Wiring Audit",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-07T11:06:11.095585Z",
+      "ended_at": "2026-06-07T11:12:28.491030Z",
+      "duration_seconds": 377.4,
+      "model": "opus",
+      "real_model": "claude-opus-4-7",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 51,
+      "output_tokens": 19963,
+      "cache_read_tokens": 3967687,
+      "cache_creation_tokens": 141707,
+      "cost_usd": 10.106527,
+      "tool_uses": {
+        "Bash": 15,
+        "Read": 20,
+        "Write": 1,
+        "Skill": 2
+      },
+      "error_count": 0,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

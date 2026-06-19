@@ -4,18 +4,24 @@ agent_model: default
 claude_session_id: null
 created_at: '2026-06-03T16:31:36Z'
 depends_on: []
+feature_key: null
+feature_state: null
 id: 2026-06-03-1631-features-and-fixes
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: null
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: features and fixes
 type: goal
-updated_at: '2026-06-05T15:12:02Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

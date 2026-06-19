@@ -4,18 +4,24 @@ agent_model: opus
 claude_session_id: 6a38022d-032f-49fc-9b67-afec8793437d
 created_at: '2026-05-30T14:37:55Z'
 depends_on: []
+feature_key: null
+feature_state: null
 id: 2026-05-30-1437-4-1-retro-phase-agent
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-05-30-1437-self-improvement-loop-retro-known-issues
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 4.1 retro phase agent
 type: task
-updated_at: '2026-05-30T22:26:35Z'
+updated_at: '2026-06-19T12:17:47Z'
 waiting_question: null
 ---
 

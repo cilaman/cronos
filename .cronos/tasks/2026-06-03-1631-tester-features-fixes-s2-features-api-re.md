@@ -5,18 +5,24 @@ claude_session_id: b1039c52-5b87-4f38-bc8a-ed9c8a02c9e2
 created_at: '2026-06-03T16:31:36Z'
 depends_on:
 - 2026-06-03-1631-pipeline-implementor-features-fixes-s2-f
+feature_key: null
+feature_state: null
 id: 2026-06-03-1631-tester-features-fixes-s2-features-api-re
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-03-1631-featurefix-api
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 'tester: Features&Fixes/S2 — features API + realize + process'
 type: task
-updated_at: '2026-06-04T18:31:16Z'
+updated_at: '2026-06-19T12:17:49Z'
 waiting_question: null
 ---
 

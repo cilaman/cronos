@@ -5,18 +5,24 @@ claude_session_id: 9dc53534-46b9-46a7-a191-8515d404745c
 created_at: '2026-06-03T16:31:36Z'
 depends_on:
 - 2026-06-03-1631-pipeline-doc-sync-features-fixes-s2-feat
+feature_key: null
+feature_state: null
 id: 2026-06-03-1631-pipeline-scout-features-fixes-s3-github
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-03-1631-featurefix-github-issues
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 'pipeline-scout: Features&Fixes/S3 — GitHub issue mirror (one-way)'
 type: task
-updated_at: '2026-06-04T18:46:00Z'
+updated_at: '2026-06-19T12:17:49Z'
 waiting_question: null
 ---
 

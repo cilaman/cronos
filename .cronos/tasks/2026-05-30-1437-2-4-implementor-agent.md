@@ -5,18 +5,24 @@ claude_session_id: ddbbb757-76cd-4124-924b-4df81c997756
 created_at: '2026-05-30T14:37:55Z'
 depends_on:
 - 2026-05-30-1437-2-3-architect-design-agent
+feature_key: null
+feature_state: null
 id: 2026-05-30-1437-2-4-implementor-agent
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-05-30-1437-pipeline-phase-agents-under-cc-v1
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 2.4 implementor agent
 type: task
-updated_at: '2026-05-30T17:10:41Z'
+updated_at: '2026-06-19T12:17:47Z'
 waiting_question: null
 ---
 

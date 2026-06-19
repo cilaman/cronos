@@ -5,18 +5,24 @@ claude_session_id: d6051894-5210-4395-9c7d-cba00124f361
 created_at: '2026-06-03T09:08:41Z'
 depends_on:
 - 2026-06-03-0908-c1-tag-tool-invocations-with-adopted-too
+feature_key: null
+feature_state: null
 id: 2026-06-03-0908-c2-per-tool-telemetry-rollup-api
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-03-0908-arc-5-c-evolution-tagged-traces-evolve-t
 pending_messages: []
 pr_url: null
 priority: 3
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: C2 — Per-tool telemetry rollup + API
 type: task
-updated_at: '2026-06-03T14:14:36Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

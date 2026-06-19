@@ -1,0 +1,35 @@
+{
+  "task_id": "2026-06-09-0746-update-featuredetail-to-align-with-task",
+  "space_id": "cronos-development",
+  "title": "Update FeatureDetail to align with task/goal editing UX",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-09T08:08:06.883704Z",
+      "ended_at": "2026-06-09T08:19:43.571601Z",
+      "duration_seconds": 696.69,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 45,
+      "output_tokens": 13707,
+      "cache_read_tokens": 2216686,
+      "cache_creation_tokens": 60657,
+      "cost_usd": 1.09821,
+      "tool_uses": {
+        "Read": 22,
+        "Glob": 4,
+        "Agent": 1,
+        "Bash": 27,
+        "Grep": 2,
+        "Edit": 8,
+        "Skill": 3
+      },
+      "error_count": 8,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

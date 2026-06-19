@@ -6,18 +6,24 @@ created_at: '2026-06-03T09:08:41Z'
 depends_on:
 - 2026-06-03-0908-c3-evolve-tools-agent-scheduled-task-pr
 - 2026-06-03-0908-c4-frontend-per-tool-telemetry-panel
+feature_key: null
+feature_state: null
 id: 2026-06-03-0908-c5-end-to-end-test-5a-5b-5c-integration
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-03-0908-arc-5-c-evolution-tagged-traces-evolve-t
 pending_messages: []
 pr_url: null
 priority: 3
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 'C5 — End-to-end test: 5a→5b→5c integration'
 type: task
-updated_at: '2026-06-03T15:04:47Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

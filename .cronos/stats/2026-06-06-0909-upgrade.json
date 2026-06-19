@@ -1,0 +1,51 @@
+{
+  "task_id": "2026-06-06-0909-upgrade",
+  "space_id": "cronos-development",
+  "title": "Upgrade",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-06T09:09:19.907059Z",
+      "ended_at": "2026-06-06T09:10:27.330456Z",
+      "duration_seconds": 67.42,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 7,
+      "output_tokens": 1744,
+      "cache_read_tokens": 164787,
+      "cache_creation_tokens": 70346,
+      "cost_usd": 0.339415,
+      "tool_uses": {
+        "Bash": 9
+      },
+      "error_count": 0,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    },
+    {
+      "run_index": 1,
+      "started_at": "2026-06-06T14:35:41.613580Z",
+      "ended_at": "2026-06-06T14:35:52.249370Z",
+      "duration_seconds": 10.64,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 5,
+      "output_tokens": 329,
+      "cache_read_tokens": 99765,
+      "cache_creation_tokens": 29160,
+      "cost_usd": 0.14423,
+      "tool_uses": {
+        "Bash": 2
+      },
+      "error_count": 0,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

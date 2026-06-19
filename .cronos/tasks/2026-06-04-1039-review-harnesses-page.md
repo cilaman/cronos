@@ -5,18 +5,24 @@ claude_session_id: 007b38f4-6368-40f2-8f95-cb7c40511d57
 created_at: '2026-06-04T10:39:23Z'
 depends_on:
 - 2026-06-04-1039-impl-harnesses-page
+feature_key: null
+feature_state: null
 id: 2026-06-04-1039-review-harnesses-page
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-04-1039-harnesses-landing-page-sidebar-nav
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: review – harnesses-page
 type: task
-updated_at: '2026-06-04T11:15:18Z'
+updated_at: '2026-06-19T12:17:49Z'
 waiting_question: null
 ---
 

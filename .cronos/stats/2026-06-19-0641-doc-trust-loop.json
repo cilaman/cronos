@@ -1,0 +1,33 @@
+{
+  "task_id": "2026-06-19-0641-doc-trust-loop",
+  "space_id": "cronos-development",
+  "title": "doc \u2013 trust-loop",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-19T07:22:10.976614Z",
+      "ended_at": "2026-06-19T07:26:46.870534Z",
+      "duration_seconds": 275.89,
+      "model": "haiku",
+      "real_model": "claude-haiku-4-5-20251001",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 448,
+      "output_tokens": 22217,
+      "cache_read_tokens": 4294002,
+      "cache_creation_tokens": 79429,
+      "cost_usd": 0.512176,
+      "tool_uses": {
+        "Read": 10,
+        "Bash": 41,
+        "Edit": 11,
+        "Write": 1,
+        "Skill": 2
+      },
+      "error_count": 7,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

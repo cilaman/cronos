@@ -4,18 +4,24 @@ agent_model: default
 claude_session_id: b0e058b9-79cd-4ea6-8491-4fff8681ed38
 created_at: '2026-06-05T14:02:12Z'
 depends_on: []
+feature_key: null
+feature_state: null
 id: 2026-06-05-1402-goals-still-do-not-record-traces
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: null
 pending_messages: []
 pr_url: null
 priority: 3
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: Goals still do not record traces
 type: task
-updated_at: '2026-06-05T15:31:42Z'
+updated_at: '2026-06-19T12:17:49Z'
 waiting_question: null
 ---
 

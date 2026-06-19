@@ -4,7 +4,11 @@ agent_model: sonnet
 claude_session_id: 558e7bc2-d64a-44fd-80b3-c68ea83115f7
 created_at: '2026-06-02T07:18:50Z'
 depends_on: []
+feature_key: null
+feature_state: null
 id: 2026-06-02-0718-backend-tool-content-endpoint
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-02-0718-ai-tools-detail-screens
 pending_messages:
@@ -12,12 +16,14 @@ pending_messages:
 - why didn't you realise tasks from this goal?
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: Backend – Tool content endpoint
 type: goal
-updated_at: '2026-06-02T08:26:41Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

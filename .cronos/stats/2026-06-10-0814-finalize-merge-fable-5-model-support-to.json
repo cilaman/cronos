@@ -1,0 +1,31 @@
+{
+  "task_id": "2026-06-10-0814-finalize-merge-fable-5-model-support-to",
+  "space_id": "cronos-development",
+  "title": "Finalize: merge fable-5 model support to main",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-10T08:50:09.507468Z",
+      "ended_at": "2026-06-10T08:57:30.028430Z",
+      "duration_seconds": 440.52,
+      "model": "sonnet",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 30,
+      "output_tokens": 6826,
+      "cache_read_tokens": 1249348,
+      "cache_creation_tokens": 46125,
+      "cost_usd": 0.650253,
+      "tool_uses": {
+        "Skill": 2,
+        "Bash": 25,
+        "Agent": 1
+      },
+      "error_count": 1,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

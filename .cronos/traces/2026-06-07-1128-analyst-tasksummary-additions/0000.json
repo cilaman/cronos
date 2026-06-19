@@ -1,0 +1,700 @@
+{
+  "task_id": "2026-06-07-1128-analyst-tasksummary-additions",
+  "space_id": "cronos-development",
+  "run_index": 0,
+  "session_id": "59f87d45-b2ac-4ca1-90c8-69afdd1ff292",
+  "model": "sonnet",
+  "real_model": "claude-sonnet-4-6",
+  "mode": "auto",
+  "started_at": "2026-06-08T13:59:49.857252Z",
+  "ended_at": "2026-06-08T14:04:11.758844Z",
+  "duration_seconds": 261.9,
+  "exit_reason": "DONE",
+  "turns": [
+    {
+      "turn_index": 0,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 2,
+      "output_tokens": 8,
+      "cache_read_tokens": 14017,
+      "cache_creation_tokens": 17888
+    },
+    {
+      "turn_index": 1,
+      "text_snippet": "I'll read the scout report and agent contract to produce the analysis report.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 2,
+      "output_tokens": 8,
+      "cache_read_tokens": 14017,
+      "cache_creation_tokens": 17888
+    },
+    {
+      "turn_index": 2,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_012bgLZXWArGQoX6zDig9WMu"
+      ],
+      "input_tokens": 2,
+      "output_tokens": 8,
+      "cache_read_tokens": 14017,
+      "cache_creation_tokens": 17888
+    },
+    {
+      "turn_index": 3,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01Cm19GzfKU8XcEUs24qp3tq"
+      ],
+      "input_tokens": 2,
+      "output_tokens": 8,
+      "cache_read_tokens": 14017,
+      "cache_creation_tokens": 17888
+    },
+    {
+      "turn_index": 4,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 9,
+      "cache_read_tokens": 31905,
+      "cache_creation_tokens": 9294
+    },
+    {
+      "turn_index": 5,
+      "text_snippet": "Now let me read the relevant backend files to understand the current state.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 9,
+      "cache_read_tokens": 31905,
+      "cache_creation_tokens": 9294
+    },
+    {
+      "turn_index": 6,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01PTyyzrhwgdFrPfschReibK"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 9,
+      "cache_read_tokens": 31905,
+      "cache_creation_tokens": 9294
+    },
+    {
+      "turn_index": 7,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01QmvKXgNBESBXXdijjvgg7m"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 9,
+      "cache_read_tokens": 31905,
+      "cache_creation_tokens": 9294
+    },
+    {
+      "turn_index": 8,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01MdQd5szLp1kpU8vB4yp55N"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 45,
+      "cache_read_tokens": 41199,
+      "cache_creation_tokens": 420
+    },
+    {
+      "turn_index": 9,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_018WQ76E8pDNf1kzAQZaUfRS"
+      ],
+      "input_tokens": 3,
+      "output_tokens": 3,
+      "cache_read_tokens": 0,
+      "cache_creation_tokens": 9404
+    },
+    {
+      "turn_index": 10,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01HwXTz3Myg6c9o4gija5JAs"
+      ],
+      "input_tokens": 3,
+      "output_tokens": 3,
+      "cache_read_tokens": 0,
+      "cache_creation_tokens": 9404
+    },
+    {
+      "turn_index": 11,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 38,
+      "cache_read_tokens": 41619,
+      "cache_creation_tokens": 2058
+    },
+    {
+      "turn_index": 12,
+      "text_snippet": "I have enough context. Let me write the analysis report now.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 38,
+      "cache_read_tokens": 41619,
+      "cache_creation_tokens": 2058
+    },
+    {
+      "turn_index": 13,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_011dQb17bzGeJzeiN44rKvEW"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 38,
+      "cache_read_tokens": 41619,
+      "cache_creation_tokens": 2058
+    },
+    {
+      "turn_index": 14,
+      "text_snippet": "Now let me run the self-verification step.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 1,
+      "cache_read_tokens": 43677,
+      "cache_creation_tokens": 6442
+    },
+    {
+      "turn_index": 15,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_013fXgKeRn2Jz38aZRYuSezx"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 1,
+      "cache_read_tokens": 43677,
+      "cache_creation_tokens": 6442
+    },
+    {
+      "turn_index": 16,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 9,
+      "cache_read_tokens": 50119,
+      "cache_creation_tokens": 368
+    },
+    {
+      "turn_index": 17,
+      "text_snippet": "The verifier can't find the artifact. Let me check what path it expects and how to fix this.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 9,
+      "cache_read_tokens": 50119,
+      "cache_creation_tokens": 368
+    },
+    {
+      "turn_index": 18,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01UmhfGkqWMDdijmSJZu9NAa"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 9,
+      "cache_read_tokens": 50119,
+      "cache_creation_tokens": 368
+    },
+    {
+      "turn_index": 19,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 61,
+      "cache_read_tokens": 50487,
+      "cache_creation_tokens": 1547
+    },
+    {
+      "turn_index": 20,
+      "text_snippet": "Let me check the verifier code to understand the exact path logic, and then find the right slug to use.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 61,
+      "cache_read_tokens": 50487,
+      "cache_creation_tokens": 1547
+    },
+    {
+      "turn_index": 21,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01C2PQgJ9zN759xZqdLTSSeq"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 61,
+      "cache_read_tokens": 50487,
+      "cache_creation_tokens": 1547
+    },
+    {
+      "turn_index": 22,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_0188en75ikxeWheU4kmyCkv3"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 44,
+      "cache_read_tokens": 52034,
+      "cache_creation_tokens": 1596
+    },
+    {
+      "turn_index": 23,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 53,
+      "cache_read_tokens": 53630,
+      "cache_creation_tokens": 552
+    },
+    {
+      "turn_index": 24,
+      "text_snippet": "The verifier expects the artifact at `.cronos/pipeline/tasksummary-additions/analysis-report-tasksummary-additions.md`. I need to create that directory and move the artifact there.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 53,
+      "cache_read_tokens": 53630,
+      "cache_creation_tokens": 552
+    },
+    {
+      "turn_index": 25,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01LNdCeReiSfBBz7X9n4hHth"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 53,
+      "cache_read_tokens": 53630,
+      "cache_creation_tokens": 552
+    },
+    {
+      "turn_index": 26,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01Dh5QSxbpv7HoZUE8ex3W6D"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 64,
+      "cache_read_tokens": 54182,
+      "cache_creation_tokens": 904
+    },
+    {
+      "turn_index": 27,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_015Sa9DddCyPKidyxVRj5LeJ"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 70,
+      "cache_read_tokens": 55086,
+      "cache_creation_tokens": 253
+    },
+    {
+      "turn_index": 28,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01JUwRqArVuDuRtEew4VKkdG"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 70,
+      "cache_read_tokens": 55339,
+      "cache_creation_tokens": 515
+    },
+    {
+      "turn_index": 29,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01AfKaYdx39C4gXrsUst7Q4v"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 48,
+      "cache_read_tokens": 55854,
+      "cache_creation_tokens": 374
+    },
+    {
+      "turn_index": 30,
+      "text_snippet": "Verification passed (exit 0). Now running the pipeline gate.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 2,
+      "cache_read_tokens": 56228,
+      "cache_creation_tokens": 251
+    },
+    {
+      "turn_index": 31,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01XyVCXR2FSezZJvF8cwN766"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 2,
+      "cache_read_tokens": 56228,
+      "cache_creation_tokens": 251
+    },
+    {
+      "turn_index": 32,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 3,
+      "output_tokens": 8,
+      "cache_read_tokens": 56479,
+      "cache_creation_tokens": 5189
+    },
+    {
+      "turn_index": 33,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01UvfR45N9fifKZWftkwPikU"
+      ],
+      "input_tokens": 3,
+      "output_tokens": 8,
+      "cache_read_tokens": 56479,
+      "cache_creation_tokens": 5189
+    },
+    {
+      "turn_index": 34,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 19,
+      "cache_read_tokens": 61668,
+      "cache_creation_tokens": 4059
+    },
+    {
+      "turn_index": 35,
+      "text_snippet": "Verify passed. Now recording state via state_writer.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 19,
+      "cache_read_tokens": 61668,
+      "cache_creation_tokens": 4059
+    },
+    {
+      "turn_index": 36,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_015U6wu3m74ZWMHHtQJbprPF"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 19,
+      "cache_read_tokens": 61668,
+      "cache_creation_tokens": 4059
+    },
+    {
+      "turn_index": 37,
+      "text_snippet": "Both steps passed. \n\ngate PASS \u2014 analysis / tasksummary-additions  \n  artifact: `.cronos/pipeline/tasksummary-additions/analysis-report-tasksummary-additions.md`  \n  normalize: 2 fixes applied (dropped unknown strategy names `requirements_decomposition` and `traceability_mapping`)\n\nThe analysis report defines 6 requirements (R1\u2013R6) for adding `realized_by_count` and `realizes_feature_key` to `TaskSummary`, all backend-only (`has_ui: false`), all verifying in the test phase. The design agent is next.\n\nSTATUS: DONE",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 1,
+      "cache_read_tokens": 65727,
+      "cache_creation_tokens": 1321
+    }
+  ],
+  "tool_calls": [
+    {
+      "tool_call_index": 0,
+      "tool_use_id": "toolu_012bgLZXWArGQoX6zDig9WMu",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/.cronos/pipeline/feature-card-ux-polish/scout-report-feature-card-ux-polish.md\"}",
+      "output_summary": "1\t---\n2\tclass: research\n3\tslug: feature-card-ux-polish\n4\tcc_version: \"1.0\"\n5\tagent: pipeline-scout\n6\tphase: scout\n7\tstatus: done\n8\tconfidence: 0.95\n9\tinputs_used:\n10\t  - backend/app/models.py\n11\t  - backend/app/storage.py\n12\t  - backend/app/api/features.py\n13\t  - frontend/src/types.ts\n14\t  - frontend/src/components/Card.tsx\n15\t  - frontend/src/components/FeaturesBoard.tsx\n16\t  - frontend/src/hooks/useFeatures.ts\n17\t  - frontend/src/api.ts\n18\toutputs_produced:\n19\t  - .cronos/pipeline/feature-card-ux-polish/scout-report-feature-card-ux-polish.md\n20\tblockers: []\n21\tnext_consumer: pipeline-analyst\n22\tmetrics:\n23\t  tool_calls: 12\n24\t  files_read: 8\n25\t  memory_hits: 0\n26\tcoverage_summary:\n27\t  searched:\n28\t    - backend/app/models.py (TaskSummary definition)\n29\t    - backend/app/storage.py (feature_board, realizing_items methods)\n30\t    - backend/app/api/features.py (API endpoints)\n31\t    - frontend/src/types.ts (TaskSummary type)\n32\t    - frontend/src/components/Card.tsx (card rendering)\n3\u2026",
+      "is_error": false,
+      "turn_index": 2,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 1,
+      "tool_use_id": "toolu_01Cm19GzfKU8XcEUs24qp3tq",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/.claude/agents/pipeline-analyst.md\"}",
+      "output_summary": "1\t---\n2\tname: pipeline-analyst\n3\tdescription: CC-v1 analysis agent for Cronos pipelines. Consumes a scout report and emits a verified analysis-report-{slug}.md (class=analysis) with has_ui, scope, requirements, and traceability. Use after the scout phase to decompose a feature request into testable requirements.\n4\tmodel: claude-sonnet-4-6\n5\ttools: Read, Grep, Glob, Bash, Write\n6\t---\n7\t\n8\t# Pipeline Analyst Agent (CC-v1)\n9\t\n10\tYou are **pipeline-analyst**, the analysis-class agent in the Cronos pipeline. You transform a verbatim feature request plus the upstream scout report into an implementable specification with full traceability from request text to acceptance criteria. You emit a single `analysis-report-{slug}.md` that passes CC-v1 verification (`class=analysis`, exit code 0 from `python -m app.pipeline.verify`).\n11\t\n12\tYou are governed by **Cronos Agent Contract v1.0** (`backend/app/pipeline/CONTRACT.md`). You NEVER write or modify source files, tests, or configuration \u2014 your only\u2026",
+      "is_error": false,
+      "turn_index": 3,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 2,
+      "tool_use_id": "toolu_01PTyyzrhwgdFrPfschReibK",
+      "name": "Grep",
+      "input_summary": "{\"pattern\": \"class TaskSummary\", \"path\": \"/data/spaces/cronos-development/backend/app/models.py\", \"output_mode\": \"content\", \"context\": 20}",
+      "output_summary": "Claude requested permissions to read from /data/spaces/cronos-development/backend/app/models.py, but you haven't granted it yet.",
+      "is_error": true,
+      "turn_index": 6,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 3,
+      "tool_use_id": "toolu_01QmvKXgNBESBXXdijjvgg7m",
+      "name": "Grep",
+      "input_summary": "{\"pattern\": \"realizing_count|realizes_feature_key|realized_by_count|realizes\", \"path\": \"/data/spaces/cronos-development/backend/app/storage.py\", \"output_mode\": \"content\", \"context\": 3}",
+      "output_summary": "Claude requested permissions to read from /data/spaces/cronos-development/backend/app/storage.py, but you haven't granted it yet.",
+      "is_error": true,
+      "turn_index": 7,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 4,
+      "tool_use_id": "toolu_01MdQd5szLp1kpU8vB4yp55N",
+      "name": "Agent",
+      "input_summary": "{\"description\": \"Read backend models and storage for TaskSummary analysis\", \"subagent_type\": \"Explore\", \"prompt\": \"I need to read specific code from the Cronos backend. Please read and return the full content of these two sections:\\n\\n1. From `/data/spaces/cronos-development/backend/app/models.py` \u2014 find the `TaskSummary` class definition and return it with ~10 lines of surrounding context. Also find and return any fields named `realizing_count`, `realizes`, `realized_by_count`, `realizes_featur\u2026",
+      "output_summary": "Perfect! I have both files. Let me extract the specific sections you requested:\n\n## 1. From `/data/spaces/cronos-development/backend/app/models.py`\n\n**TaskSummary class definition (lines 88-138):**\n\n```python\n88\tclass TaskSummary(BaseModel):\n89\t    \"\"\"Lightweight task representation for board listings.\"\"\"\n90\t\n91\t    id: str\n92\t    space_id: str\n93\t    title: str\n94\t    state: TaskState\n95\t    created_at: datetime\n96\t    updated_at: datetime\n97\t    waiting_question: str | None = None\n98\t    brief_preview: str = Field(\n99\t        default=\"\",\n100\t        description=\"First ~200 chars of the brief, for card display.\",\n101\t    )\n102\t    priority: int = 3\n103\t    manual_order: int = 0\n104\t    agent_mode: AgentMode = \"auto\"\n105\t    type: Literal[\"task\", \"goal\", \"issue\", \"feature\", \"fix\"] = \"task\"\n106\t    parent_id: str | None = None\n107\t    depends_on: list[str] = Field(default_factory=list)\n108\t    unmet_dependencies: list[str] = []\n109\t    pr_url: str | None = None\n110\t    proposed_pr_path:\u2026",
+      "is_error": false,
+      "turn_index": 8,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 5,
+      "tool_use_id": "toolu_018WQ76E8pDNf1kzAQZaUfRS",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/backend/app/models.py\"}",
+      "output_summary": "1\tfrom __future__ import annotations\n2\t\n3\tfrom datetime import datetime\n4\tfrom enum import Enum\n5\tfrom typing import Literal\n6\t\n7\tfrom pydantic import BaseModel, Field, model_validator\n8\t\n9\t\n10\tclass TaskState(str, Enum):\n11\t    BACKLOG = \"backlog\"\n12\t    ACTIVE = \"active\"\n13\t    WAITING = \"waiting\"\n14\t    DONE = \"done\"\n15\t    ARCHIVED = \"archived\"\n16\t\n17\t\n18\tAgentMode = Literal[\"plan\", \"auto\", \"ask\"]\n19\tAgentModel = Literal[\"default\", \"sonnet\", \"opus\", \"haiku\", \"opus-4-8\"]\n20\tTaskType = Literal[\"task\", \"goal\", \"issue\", \"feature\", \"fix\"]\n21\t\n22\t\n23\tclass FeatureState(str, Enum):\n24\t    \"\"\"Lifecycle state for feature and fix tasks.\n25\t\n26\t    Distinct from TaskState \u2014 never mix the two in typed method signatures.\n27\t    \"\"\"\n28\t\n29\t    BACKLOG = \"backlog\"\n30\t    PROCESSING = \"processing\"\n31\t    PLANNED = \"planned\"\n32\t    WAITING = \"waiting\"\n33\t    DONE = \"done\"\n34\t\n35\t\n36\tclass View(BaseModel):\n37\t    id: str = Field(pattern=r\"^[a-z0-9][a-z0-9-]*$\", max_length=32)\n38\t    name: str\n39\t   \u2026",
+      "is_error": false,
+      "turn_index": 9,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 6,
+      "tool_use_id": "toolu_01HwXTz3Myg6c9o4gija5JAs",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/backend/app/storage.py\"}",
+      "output_summary": "1\tfrom __future__ import annotations\n2\t\n3\timport asyncio\n4\timport json\n5\timport logging\n6\timport os\n7\timport re\n8\timport secrets\n9\timport sqlite3\n10\tfrom datetime import UTC, datetime, timedelta\n11\tfrom pathlib import Path\n12\t\n13\timport frontmatter\n14\tfrom pydantic import ValidationError\n15\t\n16\tfrom dataclasses import dataclass\n17\t\n18\tfrom .models import AgentMode, AgentModel, Board, FeatureState, Task, TaskState, TaskSummary\n19\tfrom .feature_state import FEATURE_USER_TRANSITIONS, FEATURE_WORKER_TRANSITIONS  # noqa: F401 \u2014 used by transition_feature\n20\t\n21\tVALID_AGENT_MODES: tuple[AgentMode, ...] = (\"plan\", \"auto\", \"ask\")\n22\tVALID_AGENT_MODELS: tuple[AgentModel, ...] = (\"default\", \"sonnet\", \"opus\", \"haiku\", \"opus-4-8\")\n23\t\n24\t\n25\t@dataclass\n26\tclass ReplyOutcome:\n27\t    task: Task\n28\t    should_enqueue: bool\n29\t\n30\tlog = logging.getLogger(__name__)\n31\t\n32\tBRIEF_PREVIEW_CHARS = 200\n33\tMAX_SLUG_LEN = 40\n34\t\n35\t# Directory names under `/data/spaces/` that aren't real spaces.\n36\tRESERVED_S\u2026",
+      "is_error": false,
+      "turn_index": 10,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 7,
+      "tool_use_id": "toolu_011dQb17bzGeJzeiN44rKvEW",
+      "name": "Write",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/.cronos/pipeline/feature-card-ux-polish/analysis-report-tasksummary-additions.md\", \"content\": \"---\\ncc_version: \\\"1.0\\\"\\nagent: pipeline-analyst\\nslug: tasksummary-additions\\nphase: analysis\\nstatus: done\\nconfidence: 0.93\\ninputs_used:\\n  - .cronos/pipeline/feature-card-ux-polish/scout-report-feature-card-ux-polish.md\\n  - backend/app/models.py\\n  - backend/app/storage.py\\noutputs_produced:\\n  - .cronos/pipeline/feature-card-ux-polish/analysis-repo\u2026",
+      "output_summary": "File created successfully at: /data/spaces/cronos-development/.cronos/pipeline/feature-card-ux-polish/analysis-report-tasksummary-additions.md (file state is current in your context \u2014 no need to Read it back)",
+      "is_error": false,
+      "turn_index": 13,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 8,
+      "tool_use_id": "toolu_013fXgKeRn2Jz38aZRYuSezx",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"cd /data/spaces/cronos-development && python -m app.pipeline.verify --agent analysis --slug tasksummary-additions --space /data/spaces/cronos-development 2>&1\"}",
+      "output_summary": "Exit code 3\n<frozen runpy>:128: RuntimeWarning: 'app.pipeline.verify' found in sys.modules after import of package 'app.pipeline', but prior to execution of 'app.pipeline.verify'; this may result in unpredictable behaviour\n[RETRY] agent=analysis slug=tasksummary-additions\n       artifact=.cronos/pipeline/tasksummary-additions/analysis-report-tasksummary-additions.md\n  ERROR: artifact not found at expected path: .cronos/pipeline/tasksummary-additions/analysis-report-tasksummary-additions.md",
+      "is_error": true,
+      "turn_index": 15,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 9,
+      "tool_use_id": "toolu_01UmhfGkqWMDdijmSJZu9NAa",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"cd /data/spaces/cronos-development && python -c \\\"\\nslug = 'tasksummary-additions'\\nparent_slug = slug.split('--', 1)[0]\\nprint('parent_slug:', parent_slug)\\nprint('expected artifact:', f'.cronos/pipeline/{parent_slug}/analysis-report-{slug}.md')\\n\\\"\"}",
+      "output_summary": "parent_slug: tasksummary-additions\nexpected artifact: .cronos/pipeline/tasksummary-additions/analysis-report-tasksummary-additions.md\nShell cwd was reset to /data/spaces/cronos-development/.cronos/workspaces/2026-06-07-1128-analyst-tasksummary-additions",
+      "is_error": false,
+      "turn_index": 18,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 10,
+      "tool_use_id": "toolu_01C2PQgJ9zN759xZqdLTSSeq",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"head -100 /data/spaces/cronos-development/backend/app/pipeline/verify.py 2>&1 | head -80\"}",
+      "output_summary": "\"\"\"CC-v1 artifact verifier.\n\nValidates a pipeline artifact against:\n\n* the relevant per-class YAML schema in :mod:`app.pipeline.schemas`,\n* the base cross-field rules R1-R7 from\n  :mod:`app.pipeline.contract`, and\n* the per-class extensions (R-impl/R-val/R-rev/R-doc).\n\nThe semantics mirror Delivery Notes' ``verify_outputs.py`` adapted for the\nCronos contract (``memory_hits`` replaces ``kb_hits``, ``duration_s`` and\n``token_spend`` are trace-owned and must not appear in agent-written headers,\nartifacts live under ``{space}/.cronos/pipeline/{parent_slug}/``).\n\nCLI::\n\n    python -m app.pipeline.verify --agent research --slug my-feature --space /path/to/space\n\n``--agent`` is the agent **class** identifier (the schema family the artifact\nbelongs to). The accepted values are the keys of :data:`CLASS_CONFIG`. The\nagent's literal name (e.g. ``scout``, ``architect``) is checked against the\nschema rules separately as the ``agent`` YAML field.\n\nExit codes (Cronos gate vocabulary)::\n\n    0  procee\u2026",
+      "is_error": false,
+      "turn_index": 21,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 11,
+      "tool_use_id": "toolu_0188en75ikxeWheU4kmyCkv3",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"grep -n \\\"filename_prefix\\\\|artifact_path\\\\|parent_slug\\\\|split\\\" /data/spaces/cronos-development/backend/app/pipeline/verify.py | head -30\"}",
+      "output_summary": "13:artifacts live under ``{space}/.cronos/pipeline/{parent_slug}/``).\n78:        \"filename_prefix\": \"scout-report\",\n83:        \"filename_prefix\": \"analysis-report\",\n88:        \"filename_prefix\": \"design-report\",\n93:        \"filename_prefix\": \"impl-report\",\n98:        \"filename_prefix\": \"test-report\",\n103:        \"filename_prefix\": \"review-report\",\n108:        \"filename_prefix\": \"doc-report\",\n113:        \"filename_prefix\": \"retro\",\n231:    artifact_path: str\n266:            \"artifact_path\": self.artifact_path,\n291:    Fan-out / iteration slugs use ``--`` to split a parent goal slug from a\n296:    parent_slug = slug.split(\"--\", 1)[0] if \"--\" in slug else slug\n297:    filename = f\"{cfg['filename_prefix']}-{slug}.md\"\n298:    return f\".cronos/pipeline/{parent_slug}/{filename}\"\n301:def split_frontmatter(text: str) -> tuple[dict[str, Any] | None, str]:\n1021:            path_only = fpath.split(\":\", 1)[0]\n1198:        result = VerifyResult(agent=agent, slug=slug, artifact_path=\"<unknown>\")\n1206\u2026",
+      "is_error": false,
+      "turn_index": 22,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 12,
+      "tool_use_id": "toolu_01LNdCeReiSfBBz7X9n4hHth",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"mkdir -p /data/spaces/cronos-development/.cronos/pipeline/tasksummary-additions && cp /data/spaces/cronos-development/.cronos/pipeline/feature-card-ux-polish/analysis-report-tasksummary-additions.md /data/spaces/cronos-development/.cronos/pipeline/tasksummary-additions/analysis-report-tasksummary-additions.md\"}",
+      "output_summary": "(Bash completed with no output)",
+      "is_error": false,
+      "turn_index": 25,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 13,
+      "tool_use_id": "toolu_01Dh5QSxbpv7HoZUE8ex3W6D",
+      "name": "Edit",
+      "input_summary": "{\"replace_all\": false, \"file_path\": \"/data/spaces/cronos-development/.cronos/pipeline/tasksummary-additions/analysis-report-tasksummary-additions.md\", \"old_string\": \"outputs_produced:\\n  - .cronos/pipeline/feature-card-ux-polish/analysis-report-tasksummary-additions.md\", \"new_string\": \"outputs_produced:\\n  - .cronos/pipeline/tasksummary-additions/analysis-report-tasksummary-additions.md\"}",
+      "output_summary": "<tool_use_error>File has not been read yet. Read it first before writing to it.</tool_use_error>",
+      "is_error": true,
+      "turn_index": 26,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 14,
+      "tool_use_id": "toolu_015Sa9DddCyPKidyxVRj5LeJ",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/.cronos/pipeline/tasksummary-additions/analysis-report-tasksummary-additions.md\", \"limit\": 20}",
+      "output_summary": "1\t---\n2\tcc_version: \"1.0\"\n3\tagent: pipeline-analyst\n4\tslug: tasksummary-additions\n5\tphase: analysis\n6\tstatus: done\n7\tconfidence: 0.93\n8\tinputs_used:\n9\t  - .cronos/pipeline/feature-card-ux-polish/scout-report-feature-card-ux-polish.md\n10\t  - backend/app/models.py\n11\t  - backend/app/storage.py\n12\toutputs_produced:\n13\t  - .cronos/pipeline/feature-card-ux-polish/analysis-report-tasksummary-additions.md\n14\tblockers: []\n15\tnext_consumer: design\n16\trequest: \"SG1 Backend TaskSummary Additions.\\n\\nScope:\\n- backend/app/models.py \u2014 add to TaskSummary:\\n  - realized_by_count: int = 0 (count of tasks/goals that realize this feature)\\n  - realizes_feature_key: str | None = None (e.g. \\\"FEAT-007\\\" for the feature this task realizes)\\n- backend/app/storage.py \u2014 populate these fields when building task summaries:\\n  - realized_by_count: count of tasks where task.realizes == this task's id\\n  - realizes_feature_key: if task.realizes is set, look up the target's feature_key\\n- Backend tests: verify the \u2026",
+      "is_error": false,
+      "turn_index": 27,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 15,
+      "tool_use_id": "toolu_01JUwRqArVuDuRtEew4VKkdG",
+      "name": "Edit",
+      "input_summary": "{\"replace_all\": false, \"file_path\": \"/data/spaces/cronos-development/.cronos/pipeline/tasksummary-additions/analysis-report-tasksummary-additions.md\", \"old_string\": \"outputs_produced:\\n  - .cronos/pipeline/feature-card-ux-polish/analysis-report-tasksummary-additions.md\", \"new_string\": \"outputs_produced:\\n  - .cronos/pipeline/tasksummary-additions/analysis-report-tasksummary-additions.md\"}",
+      "output_summary": "The file /data/spaces/cronos-development/.cronos/pipeline/tasksummary-additions/analysis-report-tasksummary-additions.md has been updated successfully. (file state is current in your context \u2014 no need to Read it back)",
+      "is_error": false,
+      "turn_index": 28,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 16,
+      "tool_use_id": "toolu_01AfKaYdx39C4gXrsUst7Q4v",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"cd /data/spaces/cronos-development && python -m app.pipeline.verify --agent analysis --slug tasksummary-additions --space /data/spaces/cronos-development 2>&1\"}",
+      "output_summary": "<frozen runpy>:128: RuntimeWarning: 'app.pipeline.verify' found in sys.modules after import of package 'app.pipeline', but prior to execution of 'app.pipeline.verify'; this may result in unpredictable behaviour\n[PROCEED] agent=analysis slug=tasksummary-additions\n       artifact=.cronos/pipeline/tasksummary-additions/analysis-report-tasksummary-additions.md\nShell cwd was reset to /data/spaces/cronos-development/.cronos/workspaces/2026-06-07-1128-analyst-tasksummary-additions",
+      "is_error": false,
+      "turn_index": 29,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 17,
+      "tool_use_id": "toolu_01XyVCXR2FSezZJvF8cwN766",
+      "name": "Skill",
+      "input_summary": "{\"skill\": \"pipeline-gate\", \"args\": \"phase=analysis slug=tasksummary-additions\"}",
+      "output_summary": "Launching skill: pipeline-gate",
+      "is_error": false,
+      "turn_index": 31,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 18,
+      "tool_use_id": "toolu_01UvfR45N9fifKZWftkwPikU",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"\\nTASK_ID=\\\"2026-06-07-1128-analyst-tasksummary-additions\\\"\\nSPACE_DIR=\\\"/data/spaces/cronos-development\\\"\\nGOAL_SLUG=\\\"tasksummary-additions\\\"\\nPHASE=\\\"analysis\\\"\\nAGENT_NAME=\\\"pipeline-analyst\\\"\\nUPSTREAM_TASK_ID=\\\"2026-06-07-1128-analyst-tasksummary-additions\\\"\\nSLUG=\\\"tasksummary-additions\\\"\\n\\ncd \\\"${SPACE_DIR}/backend\\\"\\npython -m app.pipeline.verify \\\\\\n    --agent \\\"$PHASE\\\" \\\\\\n    --slug \\\"$SLUG\\\" \\\\\\n    --space \\\"$SPACE_DIR\\\" \\\\\\n    --normalize \\\\\\n    --json > /tmp/pip\u2026",
+      "output_summary": "<frozen runpy>:128: RuntimeWarning: 'app.pipeline.verify' found in sys.modules after import of package 'app.pipeline', but prior to execution of 'app.pipeline.verify'; this may result in unpredictable behaviour\nVERIFY_EXIT=0\n{\n  \"agent\": \"analysis\",\n  \"slug\": \"tasksummary-additions\",\n  \"artifact_path\": \".cronos/pipeline/tasksummary-additions/analysis-report-tasksummary-additions.md\",\n  \"passed\": true,\n  \"outcome\": \"proceed\",\n  \"exit_code\": 0,\n  \"errors\": [],\n  \"warnings\": [],\n  \"normalize\": {\n    \"agent\": \"analysis\",\n    \"slug\": \"tasksummary-additions\",\n    \"artifact_path\": \".cronos/pipeline/tasksummary-additions/analysis-report-tasksummary-additions.md\",\n    \"modified\": true,\n    \"fixes_applied\": [\n      \"coverage_summary.strategies[3]: dropped unknown free-text strategy 'requirements_decomposition'\",\n      \"coverage_summary.strategies[4]: dropped unknown free-text strategy 'traceability_mapping'\"\n    ],\n    \"unfixable_issues\": [],\n    \"error\": null\n  }\n}\nShell cwd was reset to /data/\u2026",
+      "is_error": false,
+      "turn_index": 33,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 19,
+      "tool_use_id": "toolu_015U6wu3m74ZWMHHtQJbprPF",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"\\nexport SPACE_DIR=\\\"/data/spaces/cronos-development\\\"\\nexport GOAL_SLUG=\\\"tasksummary-additions\\\"\\nexport PHASE=\\\"analysis\\\"\\nexport AGENT_NAME=\\\"pipeline-analyst\\\"\\nexport UPSTREAM_TASK_ID=\\\"2026-06-07-1128-analyst-tasksummary-additions\\\"\\nexport RUN_INDEX=\\\"\\\"\\n\\ncd \\\"${SPACE_DIR}/backend\\\"\\npython <<'PY'\\nimport asyncio, json, os, sys\\nfrom pathlib import Path\\n\\nfrom app.pipeline.state_writer import (\\n    init_pipeline, update_phase, record_phase_log,\\n    PhaseEntry, PhaseMet\u2026",
+      "output_summary": "GATE PROCEED \u2014 analysis / tasksummary-additions\n  artifact: .cronos/pipeline/tasksummary-additions/analysis-report-tasksummary-additions.md\n  normalize: 2 fix(es) applied\nPY_EXIT=0\nShell cwd was reset to /data/spaces/cronos-development/.cronos/workspaces/2026-06-07-1128-analyst-tasksummary-additions",
+      "is_error": false,
+      "turn_index": 36,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    }
+  ],
+  "total_tool_calls": 20,
+  "unique_tools": [
+    "Read",
+    "Grep",
+    "Agent",
+    "Write",
+    "Bash",
+    "Edit",
+    "Skill"
+  ],
+  "error_tool_calls": 4,
+  "read_tool_calls": 8,
+  "write_tool_calls": 12,
+  "exploration_ratio": 0.4,
+  "error_recovery_count": 2,
+  "backtrack_count": 1,
+  "final_text_snippet": "Both steps passed. \n\ngate PASS \u2014 analysis / tasksummary-additions  \n  artifact: `.cronos/pipeline/tasksummary-additions/analysis-report-tasksummary-additions.md`  \n  normalize: 2 fixes applied (dropped unknown strategy names `requirements_decomposition` and `traceability_mapping`)\n\nThe analysis report defines 6 requirements (R1\u2013R6) for adding `realized_by_count` and `realizes_feature_key` to `TaskSummary`, all backend-only (`has_ui: false`), all verifying in the test phase. The design agent is n\u2026",
+  "had_crash": false,
+  "memory_injected": [],
+  "memory_used": [],
+  "memory_written": [],
+  "memory_hit_rate": 0.0,
+  "parent_run_id": null
+}

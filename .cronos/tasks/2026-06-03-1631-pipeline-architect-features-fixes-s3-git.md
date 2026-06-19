@@ -5,18 +5,24 @@ claude_session_id: 8253d4b9-68ee-49d5-a895-99ba39c2ea75
 created_at: '2026-06-03T16:31:36Z'
 depends_on:
 - 2026-06-03-1631-pipeline-analyst-features-fixes-s3-githu
+feature_key: null
+feature_state: null
 id: 2026-06-03-1631-pipeline-architect-features-fixes-s3-git
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-03-1631-featurefix-github-issues
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 'pipeline-architect: Features&Fixes/S3 — GitHub issue mirror (one-way)'
 type: task
-updated_at: '2026-06-04T18:56:32Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

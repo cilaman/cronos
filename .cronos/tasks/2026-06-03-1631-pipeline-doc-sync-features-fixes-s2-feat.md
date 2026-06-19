@@ -5,18 +5,24 @@ claude_session_id: c50aadce-3d70-49ad-a502-26814669cddf
 created_at: '2026-06-03T16:31:36Z'
 depends_on:
 - 2026-06-03-1631-pipeline-reviewer-features-fixes-s2-feat
+feature_key: null
+feature_state: null
 id: 2026-06-03-1631-pipeline-doc-sync-features-fixes-s2-feat
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-03-1631-featurefix-api
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 'pipeline-doc-sync: Features&Fixes/S2 — features API + realize + process'
 type: task
-updated_at: '2026-06-04T18:41:35Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

@@ -5,18 +5,24 @@ claude_session_id: be37695c-d1af-4823-bce8-e2d8f2c00a08
 created_at: '2026-06-03T11:04:55Z'
 depends_on:
 - 2026-06-03-1104-pipeline-doc-sync-6-1-harness-model-yaml
+feature_key: null
+feature_state: null
 id: 2026-06-03-1104-pipeline-scout-6-2-harness-executor-core
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-03-1104-arc6-executor
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 'pipeline-scout: 6.2 Harness executor core interpreter'
 type: task
-updated_at: '2026-06-03T19:17:58Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

@@ -6,18 +6,24 @@ created_at: '2026-05-30T14:37:55Z'
 depends_on:
 - 2026-05-30-1437-3-2-pipeline-gate-skill
 - 2026-05-30-1437-pipeline-phase-agents-under-cc-v1
+feature_key: null
+feature_state: null
 id: 2026-05-30-1437-3-3-pipeline-scaffold-skill
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-05-30-1437-orchestration-logging-glue-scaffold-gate
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 3.3 pipeline-scaffold skill
 type: task
-updated_at: '2026-05-30T19:32:05Z'
+updated_at: '2026-06-19T12:17:47Z'
 waiting_question: null
 ---
 

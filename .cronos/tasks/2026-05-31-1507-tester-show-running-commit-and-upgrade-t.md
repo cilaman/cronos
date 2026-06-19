@@ -5,18 +5,24 @@ claude_session_id: 8f81e6e5-8fee-45cb-a38a-ce1c3910c4aa
 created_at: '2026-05-31T15:07:53Z'
 depends_on:
 - 2026-05-31-1507-pipeline-implementor-show-running-commit
+feature_key: null
+feature_state: null
 id: 2026-05-31-1507-tester-show-running-commit-and-upgrade-t
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-05-31-1507-showing-commit
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 'tester: Show running commit and upgrade time in the sidebar'
 type: task
-updated_at: '2026-05-31T16:01:53Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

@@ -1,0 +1,36 @@
+{
+  "task_id": "2026-06-07-1129-write-tests-api-error-paths-hooks-config",
+  "space_id": "cronos-development",
+  "title": "Write tests: API error paths + hooks config (P1-B, P1-C, P2-A through P2-E, P2-H)",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-09T05:41:28.351627Z",
+      "ended_at": "2026-06-09T06:05:17.596668Z",
+      "duration_seconds": 1429.25,
+      "model": "sonnet",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 57,
+      "output_tokens": 62070,
+      "cache_read_tokens": 5954781,
+      "cache_creation_tokens": 144173,
+      "cost_usd": 3.258304,
+      "tool_uses": {
+        "Agent": 1,
+        "Glob": 4,
+        "Read": 26,
+        "Grep": 2,
+        "Bash": 24,
+        "Edit": 9,
+        "Write": 2,
+        "Skill": 3
+      },
+      "error_count": 4,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

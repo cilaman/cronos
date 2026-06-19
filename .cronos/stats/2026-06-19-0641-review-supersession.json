@@ -1,0 +1,55 @@
+{
+  "task_id": "2026-06-19-0641-review-supersession",
+  "space_id": "cronos-development",
+  "title": "review \u2013 supersession",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-19T07:56:57.354094Z",
+      "ended_at": "2026-06-19T08:03:19.773505Z",
+      "duration_seconds": 382.42,
+      "model": "opus",
+      "real_model": "claude-opus-4-8",
+      "mode": "auto",
+      "exit_reason": "BLOCKED",
+      "input_tokens": 5627,
+      "output_tokens": 25927,
+      "cache_read_tokens": 1377088,
+      "cache_creation_tokens": 82576,
+      "cost_usd": 5.642862,
+      "tool_uses": {
+        "Bash": 20,
+        "Write": 1,
+        "Skill": 1
+      },
+      "error_count": 1,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    },
+    {
+      "run_index": 1,
+      "started_at": "2026-06-19T08:32:15.403395Z",
+      "ended_at": "2026-06-19T08:35:09.759532Z",
+      "duration_seconds": 174.36,
+      "model": "opus",
+      "real_model": "claude-opus-4-8",
+      "mode": "auto",
+      "exit_reason": "NO_STATUS",
+      "input_tokens": 280,
+      "output_tokens": 3723,
+      "cache_read_tokens": 1121643,
+      "cache_creation_tokens": 7064,
+      "cost_usd": 2.09834,
+      "tool_uses": {
+        "Read": 2,
+        "Edit": 4,
+        "Bash": 4
+      },
+      "error_count": 0,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

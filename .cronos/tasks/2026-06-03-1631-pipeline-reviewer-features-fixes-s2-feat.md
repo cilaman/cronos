@@ -6,18 +6,24 @@ created_at: '2026-06-03T16:31:36Z'
 depends_on:
 - 2026-06-03-1631-pipeline-implementor-features-fixes-s2-f
 - 2026-06-03-1631-tester-features-fixes-s2-features-api-re
+feature_key: null
+feature_state: null
 id: 2026-06-03-1631-pipeline-reviewer-features-fixes-s2-feat
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-03-1631-featurefix-api
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 'pipeline-reviewer: Features&Fixes/S2 — features API + realize + process'
 type: task
-updated_at: '2026-06-04T18:37:14Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

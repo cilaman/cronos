@@ -5,18 +5,24 @@ claude_session_id: d73f9dcf-6744-49df-862f-b3a43a6db6b5
 created_at: '2026-06-02T13:17:46Z'
 depends_on:
 - 2026-06-02-1317-fix-run-goal-to-recurse-into-sub-goals
+feature_key: null
+feature_state: null
 id: 2026-06-02-1317-add-backend-tests-for-nested-goal-execut
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-02-1317-fix-nested-task-processing-in-goal-worke
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: Add backend tests for nested goal execution
 type: task
-updated_at: '2026-06-02T13:47:31Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

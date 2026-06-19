@@ -1,0 +1,84 @@
+{
+  "task_id": "2026-06-05-2335-tests-auto-repair-sibling-deps",
+  "space_id": "cronos-development",
+  "title": "tests: auto-repair sibling deps",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-06T07:23:24.800661Z",
+      "ended_at": "2026-06-06T07:34:48.080435Z",
+      "duration_seconds": 683.28,
+      "model": "sonnet",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 37,
+      "output_tokens": 26742,
+      "cache_read_tokens": 2043374,
+      "cache_creation_tokens": 79150,
+      "cost_usd": 1.311066,
+      "tool_uses": {
+        "Agent": 1,
+        "Read": 5,
+        "Grep": 4,
+        "Bash": 38,
+        "Write": 1,
+        "Edit": 1,
+        "Skill": 2
+      },
+      "error_count": 6,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    },
+    {
+      "run_index": 1,
+      "started_at": "2026-06-07T13:35:20.381118Z",
+      "ended_at": "2026-06-07T13:41:28.702189Z",
+      "duration_seconds": 368.32,
+      "model": "sonnet",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 47,
+      "output_tokens": 11524,
+      "cache_read_tokens": 2137155,
+      "cache_creation_tokens": 62811,
+      "cost_usd": 1.049689,
+      "tool_uses": {
+        "Bash": 34,
+        "Glob": 1,
+        "Read": 5,
+        "Skill": 3,
+        "Write": 1,
+        "Edit": 1
+      },
+      "error_count": 3,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    },
+    {
+      "run_index": 2,
+      "started_at": "2026-06-07T13:56:43.525740Z",
+      "ended_at": "2026-06-07T14:00:50.085420Z",
+      "duration_seconds": 246.56,
+      "model": "sonnet",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "NO_STATUS",
+      "input_tokens": 26,
+      "output_tokens": 12274,
+      "cache_read_tokens": 1959850,
+      "cache_creation_tokens": 15091,
+      "cost_usd": 0.828734,
+      "tool_uses": {
+        "Bash": 23
+      },
+      "error_count": 4,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

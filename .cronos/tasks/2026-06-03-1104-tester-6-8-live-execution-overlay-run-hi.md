@@ -5,18 +5,24 @@ claude_session_id: 454e8c8c-a01b-4ad3-85b6-f82f90ef1790
 created_at: '2026-06-03T11:04:56Z'
 depends_on:
 - 2026-06-03-1104-pipeline-implementor-6-8-live-execution
+feature_key: null
+feature_state: null
 id: 2026-06-03-1104-tester-6-8-live-execution-overlay-run-hi
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-03-1104-arc6-live-overlay
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 'tester: 6.8 Live execution overlay run history'
 type: task
-updated_at: '2026-06-04T09:03:12Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

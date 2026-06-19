@@ -5,18 +5,24 @@ claude_session_id: 60de2f2c-b9de-4f11-964d-bbab7435936a
 created_at: '2026-06-04T10:39:23Z'
 depends_on:
 - 2026-06-04-1039-doc-harnesses-page
+feature_key: null
+feature_state: null
 id: 2026-06-04-1039-tests-merge-harnesses-page
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-04-1039-harnesses-page-top-level-nav-landing-pag
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: tests + merge – harnesses-page
 type: task
-updated_at: '2026-06-04T11:33:41Z'
+updated_at: '2026-06-19T12:17:49Z'
 waiting_question: null
 ---
 

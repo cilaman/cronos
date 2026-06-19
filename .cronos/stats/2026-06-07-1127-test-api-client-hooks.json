@@ -1,0 +1,36 @@
+{
+  "task_id": "2026-06-07-1127-test-api-client-hooks",
+  "space_id": "cronos-development",
+  "title": "test \u2013 api-client-hooks",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-08T09:45:26.445941Z",
+      "ended_at": "2026-06-08T09:57:13.669015Z",
+      "duration_seconds": 707.22,
+      "model": "sonnet",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 55,
+      "output_tokens": 24426,
+      "cache_read_tokens": 3377134,
+      "cache_creation_tokens": 80142,
+      "cost_usd": 1.680228,
+      "tool_uses": {
+        "Read": 24,
+        "Glob": 7,
+        "Agent": 1,
+        "Bash": 26,
+        "Edit": 3,
+        "Write": 2,
+        "Skill": 3,
+        "Grep": 2
+      },
+      "error_count": 11,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

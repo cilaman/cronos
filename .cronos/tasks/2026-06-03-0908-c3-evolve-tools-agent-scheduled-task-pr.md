@@ -5,18 +5,24 @@ claude_session_id: b1d18a05-37c2-4ca1-8dcc-27c871631c32
 created_at: '2026-06-03T09:08:41Z'
 depends_on:
 - 2026-06-03-0908-c2-per-tool-telemetry-rollup-api
+feature_key: null
+feature_state: null
 id: 2026-06-03-0908-c3-evolve-tools-agent-scheduled-task-pr
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-03-0908-arc-5-c-evolution-tagged-traces-evolve-t
 pending_messages: []
 pr_url: null
 priority: 3
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: C3 — evolve-tools agent + scheduled task + PR flow
 type: task
-updated_at: '2026-06-03T14:32:31Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

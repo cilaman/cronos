@@ -1,0 +1,34 @@
+{
+  "task_id": "2026-06-19-0641-doc-supersession",
+  "space_id": "cronos-development",
+  "title": "doc \u2013 supersession",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-19T08:37:00.662187Z",
+      "ended_at": "2026-06-19T08:44:22.465359Z",
+      "duration_seconds": 441.8,
+      "model": "haiku",
+      "real_model": "claude-haiku-4-5-20251001",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 318,
+      "output_tokens": 21974,
+      "cache_read_tokens": 4363196,
+      "cache_creation_tokens": 92042,
+      "cost_usd": 0.529248,
+      "tool_uses": {
+        "Read": 11,
+        "Bash": 38,
+        "Write": 2,
+        "Edit": 3,
+        "Monitor": 1,
+        "Skill": 3
+      },
+      "error_count": 2,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "task_id": "2026-06-19-1123-fix-get-harness-runs-run-id-returns-404",
+  "space_id": "cronos-development",
+  "title": "Fix: GET /harness-runs/{run_id} returns 404 when state file missing",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-19T11:37:58.861944Z",
+      "ended_at": "2026-06-19T11:47:55.028533Z",
+      "duration_seconds": 596.17,
+      "model": "sonnet",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 43,
+      "output_tokens": 12511,
+      "cache_read_tokens": 2148941,
+      "cache_creation_tokens": 60753,
+      "cost_usd": 1.0603,
+      "tool_uses": {
+        "Read": 6,
+        "Edit": 2,
+        "Bash": 27,
+        "Skill": 3
+      },
+      "error_count": 3,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "task_id": "2026-06-09-0746-replace-inline-featurecomposer-with-feat",
+  "space_id": "cronos-development",
+  "title": "Replace inline FeatureComposer with FeatureForm modal in FeaturesBoard",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-09T08:19:43.737648Z",
+      "ended_at": "2026-06-09T08:34:33.314865Z",
+      "duration_seconds": 889.58,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 78,
+      "output_tokens": 23732,
+      "cache_read_tokens": 5157458,
+      "cache_creation_tokens": 83775,
+      "cost_usd": 2.217608,
+      "tool_uses": {
+        "Read": 11,
+        "Glob": 2,
+        "Bash": 55,
+        "Write": 2,
+        "Edit": 9,
+        "Skill": 3
+      },
+      "error_count": 5,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

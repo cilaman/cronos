@@ -1,0 +1,33 @@
+{
+  "task_id": "2026-06-12-1434-test-file-browser",
+  "space_id": "cronos-development",
+  "title": "Test: File Browser",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-15T17:13:01.449523Z",
+      "ended_at": "2026-06-15T17:31:42.644402Z",
+      "duration_seconds": 1121.19,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 29,
+      "output_tokens": 13195,
+      "cache_read_tokens": 1099045,
+      "cache_creation_tokens": 46655,
+      "cost_usd": 0.702682,
+      "tool_uses": {
+        "Agent": 2,
+        "Bash": 52,
+        "Grep": 1,
+        "Glob": 1,
+        "Skill": 1
+      },
+      "error_count": 5,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "task_id": "2026-06-06-0603-tests-pytest-guard-that-fails-on-pat-in",
+  "space_id": "cronos-development",
+  "title": "Tests: pytest guard that fails on PAT in trace JSONs",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-06T06:56:01.758133Z",
+      "ended_at": "2026-06-06T07:09:39.445848Z",
+      "duration_seconds": 817.69,
+      "model": "sonnet",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 65,
+      "output_tokens": 26611,
+      "cache_read_tokens": 4123654,
+      "cache_creation_tokens": 82409,
+      "cost_usd": 1.94549,
+      "tool_uses": {
+        "Read": 4,
+        "Glob": 2,
+        "Bash": 51,
+        "Edit": 4,
+        "Write": 2,
+        "Skill": 2,
+        "Agent": 1
+      },
+      "error_count": 7,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

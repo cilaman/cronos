@@ -5,18 +5,24 @@ claude_session_id: 79f9ca6c-85a5-4fac-b384-be9d97973b99
 created_at: '2026-06-03T11:04:56Z'
 depends_on:
 - 2026-06-03-1104-pipeline-reviewer-6-7-visual-harness-edi
+feature_key: null
+feature_state: null
 id: 2026-06-03-1104-pipeline-doc-sync-6-7-visual-harness-edi
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-03-1104-arc6-visual-editor
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 'pipeline-doc-sync: 6.7 Visual harness editor React Flow'
 type: task
-updated_at: '2026-06-04T08:22:21Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

@@ -1,0 +1,33 @@
+{
+  "task_id": "2026-06-18-1606-pipeline-architect-fix-memory-scoring-an",
+  "space_id": "cronos-development",
+  "title": "pipeline-architect: Fix memory scoring and injection bugs",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-18T17:56:36.627199Z",
+      "ended_at": "2026-06-18T17:59:07.955816Z",
+      "duration_seconds": 151.33,
+      "model": "opus",
+      "real_model": "claude-opus-4-8",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 5341,
+      "output_tokens": 3816,
+      "cache_read_tokens": 280754,
+      "cache_creation_tokens": 37714,
+      "cost_usd": 1.494584,
+      "tool_uses": {
+        "Bash": 8,
+        "Agent": 1,
+        "Read": 5,
+        "Write": 1,
+        "Skill": 1
+      },
+      "error_count": 0,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

@@ -5,18 +5,24 @@ claude_session_id: 62f3d894-8f58-4de6-8d45-7a0d0f5331e7
 created_at: '2026-06-03T16:31:36Z'
 depends_on:
 - 2026-06-03-1631-pipeline-implementor-features-fixes-s4-d
+feature_key: null
+feature_state: null
 id: 2026-06-03-1631-tester-features-fixes-s4-decompose-from
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-03-1631-featurefix-worker-decompose
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 'tester: Features&Fixes/S4 — decompose-from-backlog + feature_sync'
 type: task
-updated_at: '2026-06-05T05:42:27Z'
+updated_at: '2026-06-19T12:17:49Z'
 waiting_question: null
 ---
 

@@ -4,18 +4,24 @@ agent_model: haiku
 claude_session_id: a74689d0-13f3-416f-88e1-9d97e23ed846
 created_at: '2026-06-03T11:04:55Z'
 depends_on: []
+feature_key: null
+feature_state: null
 id: 2026-06-03-1104-pipeline-scout-6-1-harness-model-yaml-pe
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-03-1104-arc6-harness-model
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 'pipeline-scout: 6.1 Harness model YAML persistence CRUD API'
 type: task
-updated_at: '2026-06-03T16:40:01Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

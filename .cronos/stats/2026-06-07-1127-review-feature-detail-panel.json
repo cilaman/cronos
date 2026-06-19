@@ -1,0 +1,84 @@
+{
+  "task_id": "2026-06-07-1127-review-feature-detail-panel",
+  "space_id": "cronos-development",
+  "title": "review \u2013 feature-detail-panel",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-08T11:05:57.654652Z",
+      "ended_at": "2026-06-08T11:17:20.580658Z",
+      "duration_seconds": 682.93,
+      "model": "opus",
+      "real_model": "claude-opus-4-7",
+      "mode": "auto",
+      "exit_reason": "NO_STATUS",
+      "input_tokens": 87,
+      "output_tokens": 44231,
+      "cache_read_tokens": 8900427,
+      "cache_creation_tokens": 202068,
+      "cost_usd": 20.458046,
+      "tool_uses": {
+        "Bash": 56,
+        "Read": 13,
+        "ToolSearch": 1,
+        "Grep": 3,
+        "Write": 1,
+        "Edit": 3
+      },
+      "error_count": 3,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    },
+    {
+      "run_index": 1,
+      "started_at": "2026-06-08T11:21:04.820566Z",
+      "ended_at": "2026-06-08T11:26:46.609634Z",
+      "duration_seconds": 341.79,
+      "model": "opus",
+      "real_model": "claude-opus-4-7",
+      "mode": "auto",
+      "exit_reason": "NO_STATUS",
+      "input_tokens": 11,
+      "output_tokens": 4400,
+      "cache_read_tokens": 871805,
+      "cache_creation_tokens": 153266,
+      "cost_usd": 4.51161,
+      "tool_uses": {
+        "Agent": 1,
+        "Read": 11,
+        "Bash": 28,
+        "Write": 2,
+        "Edit": 3
+      },
+      "error_count": 1,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    },
+    {
+      "run_index": 2,
+      "started_at": "2026-06-08T11:59:50.211625Z",
+      "ended_at": "2026-06-08T12:01:26.381339Z",
+      "duration_seconds": 96.17,
+      "model": "opus",
+      "real_model": "claude-opus-4-7",
+      "mode": "auto",
+      "exit_reason": "NO_STATUS",
+      "input_tokens": 12,
+      "output_tokens": 5823,
+      "cache_read_tokens": 1082988,
+      "cache_creation_tokens": 162628,
+      "cost_usd": 5.110662,
+      "tool_uses": {
+        "Read": 1,
+        "Bash": 4,
+        "Write": 1
+      },
+      "error_count": 0,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

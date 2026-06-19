@@ -5,18 +5,24 @@ claude_session_id: ae4369b9-0b6d-4a9c-8467-38b404f6f0ae
 created_at: '2026-06-03T11:04:55Z'
 depends_on:
 - 2026-06-03-1104-pipeline-analyst-6-3-control-flow-node-s
+feature_key: null
+feature_state: null
 id: 2026-06-03-1104-pipeline-architect-6-3-control-flow-node
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-03-1104-arc6-control-flow
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 'pipeline-architect: 6.3 Control flow node semantics'
 type: task
-updated_at: '2026-06-03T20:20:13Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

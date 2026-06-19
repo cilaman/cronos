@@ -5,18 +5,24 @@ claude_session_id: 564199b5-a427-4e21-8720-eb31e96bbf0e
 created_at: '2026-06-02T13:23:30Z'
 depends_on:
 - 2026-06-02-1323-add-root-goal-resolution-rework-goal-bra
+feature_key: null
+feature_state: null
 id: 2026-06-02-1323-update-goal-task-commit-to-target-the-ro
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-02-1322-standardise-git-feature-branch-lifecycle
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: Update goal-task-commit to target the root feature branch
 type: task
-updated_at: '2026-06-02T14:05:41Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

@@ -1,0 +1,34 @@
+{
+  "task_id": "2026-06-07-1127-scout-feature-detail-view",
+  "space_id": "cronos-development",
+  "title": "scout \u2013 feature-detail-view",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-08T09:18:24.633477Z",
+      "ended_at": "2026-06-08T09:22:34.705829Z",
+      "duration_seconds": 250.07,
+      "model": "haiku",
+      "real_model": "claude-haiku-4-5-20251001",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 137,
+      "output_tokens": 8475,
+      "cache_read_tokens": 829743,
+      "cache_creation_tokens": 58808,
+      "cost_usd": 0.159197,
+      "tool_uses": {
+        "Agent": 1,
+        "Read": 15,
+        "Grep": 3,
+        "Bash": 19,
+        "Write": 2,
+        "Skill": 1
+      },
+      "error_count": 6,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

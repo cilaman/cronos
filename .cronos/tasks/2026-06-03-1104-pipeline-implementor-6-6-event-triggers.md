@@ -5,18 +5,24 @@ claude_session_id: 3ec5fc2c-a7db-4958-8c5d-9417ce9ae98a
 created_at: '2026-06-03T11:04:55Z'
 depends_on:
 - 2026-06-03-1104-pipeline-architect-6-6-event-triggers
+feature_key: null
+feature_state: null
 id: 2026-06-03-1104-pipeline-implementor-6-6-event-triggers
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-03-1104-arc6-event-triggers
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 'pipeline-implementor: 6.6 Event triggers'
 type: task
-updated_at: '2026-06-04T06:56:36Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

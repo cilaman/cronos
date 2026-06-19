@@ -5,18 +5,24 @@ claude_session_id: 8ee220e9-7448-406a-87f2-5400a315d83e
 created_at: '2026-06-03T16:31:36Z'
 depends_on:
 - 2026-06-03-1631-pipeline-implementor-features-fixes-s3-g
+feature_key: null
+feature_state: null
 id: 2026-06-03-1631-tester-features-fixes-s3-github-issue-mi
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-03-1631-featurefix-github-issues
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 'tester: Features&Fixes/S3 — GitHub issue mirror (one-way)'
 type: task
-updated_at: '2026-06-04T19:32:54Z'
+updated_at: '2026-06-19T12:17:49Z'
 waiting_question: null
 ---
 

@@ -3,7 +3,7 @@
   "goal_slug": "backend-harness-tools-resolver",
   "status": "running",
   "created_at": "2026-06-05T23:27:18.950017+00:00",
-  "updated_at": "2026-06-06T01:01:51.614691+00:00",
+  "updated_at": "2026-06-19T12:20:17.629612+00:00",
   "request_text": "Implement the harness runtime tools-resolver so agent and skill nodes resolve to a\nreal `AiToolEntry`, and briefs are composed with the correct agent header / skill prefix.\n\nAcceptance criteria:\n1. **Real resolver.** Replace the stub `_tools_resolver` at `backend/app/worker.py:470-471`\n   (signature `(space_id: str, agent_ref: str) -> AiToolEntry | None`) with a real implementation.\n   REUSE the existing scanners — do not re-implement scanning: `_scan_category` and `_scan_skills`\n   in `backend/app/tools/scanner.py`, and `_scan_context` in `backend/app/api/tools.py`. Resolve by\n   matching `agent_ref` against agent, skill, command and context entries, searching the space-scoped\n   `.claude` directory and the global scope. Return `None` on no match.\n2. **Wiring.** The resolver is already passed into `HarnessExecutor` and called at\n   `backend/app/harnesses/executor.py:753`; confirm the resolved `agent_entry` flows into\n   `compose_brief` so the agent header is added.\n3. **Skill prefix.** When `agent_ref` resolves to a skill (path under `.claude/skills/`), the resolved\n   entry must let `brief_composer._is_skill` detect it so the brief is prefixed with `/<skill-name>`\n   (see `backend/app/harnesses/brief_composer.py`). Verify agent vs skill vs plain-ref behaviour.\n4. **Tests.** Add pytest covering: agent match, skill match (asserts `/` prefix in composed brief),\n   command/context match, miss → `None`, and space-vs-global scoping. Keep the 60% coverage floor:\n   `cd backend && pytest tests/ --cov=app --cov-report=term-missing`.\n\nBackend-only changes under `backend/app/`. Do not modify the harness Pydantic models.",
   "phases": {
     "research": {
@@ -176,6 +176,34 @@
         "memory_hits": 0
       },
       "header_summary": {}
+    },
+    "doc": {
+      "phase": "doc",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-doc-sync",
+      "task_id": "2026-06-05-2327-review-backend-harness-tools-resolver",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/backend-harness-tools-resolver/doc-report-backend-harness-tools-resolver.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
     }
   },
   "telemetry": {
@@ -184,7 +212,7 @@
     "total_tool_calls": 0,
     "total_files_read": 0,
     "total_memory_hits": 0,
-    "phases_completed": 6,
+    "phases_completed": 7,
     "phases_escalated": 0,
     "phases_retried": 0,
     "phases_failed": 0

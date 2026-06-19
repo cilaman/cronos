@@ -4,18 +4,24 @@ agent_model: haiku
 claude_session_id: 26961e8e-8ecb-4985-b01a-4454bc6b2797
 created_at: '2026-06-03T16:31:36Z'
 depends_on: []
+feature_key: null
+feature_state: null
 id: 2026-06-03-1631-pipeline-scout-features-fixes-s1-model-f
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-03-1631-featurefix-data-model
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 'pipeline-scout: Features&Fixes/S1 — model, feature_state, numbering, realizes'
 type: task
-updated_at: '2026-06-04T15:58:45Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

@@ -6,18 +6,24 @@ created_at: '2026-06-03T16:31:36Z'
 depends_on:
 - 2026-06-03-1631-pipeline-implementor-features-fixes-s3-g
 - 2026-06-03-1631-tester-features-fixes-s3-github-issue-mi
+feature_key: null
+feature_state: null
 id: 2026-06-03-1631-pipeline-reviewer-features-fixes-s3-gith
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-03-1631-featurefix-github-issues
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 'pipeline-reviewer: Features&Fixes/S3 — GitHub issue mirror (one-way)'
 type: task
-updated_at: '2026-06-05T04:11:48Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

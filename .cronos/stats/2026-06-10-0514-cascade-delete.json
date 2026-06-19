@@ -1,0 +1,35 @@
+{
+  "task_id": "2026-06-10-0514-cascade-delete",
+  "space_id": "cronos-development",
+  "title": "cascade delete",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-10T05:15:14.565625Z",
+      "ended_at": "2026-06-10T05:21:43.481883Z",
+      "duration_seconds": 388.92,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 35,
+      "output_tokens": 10692,
+      "cache_read_tokens": 1391380,
+      "cache_creation_tokens": 56278,
+      "cost_usd": 0.788941,
+      "tool_uses": {
+        "Agent": 1,
+        "Glob": 3,
+        "Read": 12,
+        "Grep": 4,
+        "Bash": 45,
+        "Edit": 4,
+        "Skill": 1
+      },
+      "error_count": 5,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

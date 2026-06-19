@@ -5,18 +5,24 @@ claude_session_id: 21b9469d-a85f-41fd-a398-e0fd413116d4
 created_at: '2026-06-03T11:04:56Z'
 depends_on:
 - 2026-06-03-1104-pipeline-scout-6-8-live-execution-overla
+feature_key: null
+feature_state: null
 id: 2026-06-03-1104-pipeline-analyst-6-8-live-execution-over
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-03-1104-arc6-live-overlay
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 'pipeline-analyst: 6.8 Live execution overlay run history'
 type: task
-updated_at: '2026-06-04T08:30:34Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

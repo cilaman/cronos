@@ -5,18 +5,24 @@ claude_session_id: 31c43506-881c-46b7-bbf6-b9d4723a511b
 created_at: '2026-06-03T16:31:36Z'
 depends_on:
 - 2026-06-03-1631-pipeline-analyst-features-fixes-s1-model
+feature_key: null
+feature_state: null
 id: 2026-06-03-1631-pipeline-architect-features-fixes-s1-mod
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-03-1631-featurefix-data-model
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 'pipeline-architect: Features&Fixes/S1 — model, feature_state, numbering, realizes'
 type: task
-updated_at: '2026-06-04T16:11:23Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

@@ -5,18 +5,24 @@ claude_session_id: 9d2768ec-e444-4416-a6bd-061c03ead0b7
 created_at: '2026-05-30T14:37:55Z'
 depends_on:
 - 2026-05-30-1437-2-3-architect-design-agent
+feature_key: null
+feature_state: null
 id: 2026-05-30-1437-2-7-adapt-existing-tester-to-cc-v1
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-05-30-1437-pipeline-phase-agents-under-cc-v1
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 2.7 adapt existing tester to CC-v1
 type: task
-updated_at: '2026-05-30T17:18:35Z'
+updated_at: '2026-06-19T12:17:47Z'
 waiting_question: null
 ---
 

@@ -1,0 +1,38 @@
+name: test harness
+description: ''
+nodes:
+- id: trigger-1781865587590
+  type: trigger
+  position:
+    x: 768.0
+    y: 249.0
+  ports:
+    out: {}
+  data:
+    expression: '*/5 * * * *'
+  label: trigger
+- id: agent-1781865598173
+  type: agent
+  position:
+    x: 762.0
+    y: 386.25
+  ports:
+    in: {}
+    out: {}
+  data:
+    agent_ref: tester
+    prompt_template: run 1 random test from the test suite
+  label: agent
+edges:
+- id: xy-edge__trigger-1781865587590out-agent-1781865598173in
+  source:
+    node_id: trigger-1781865587590
+    port_id: out
+  target:
+    node_id: agent-1781865598173
+    port_id: in
+  condition: null
+variables: {}
+version: '1.0'
+created_at: '2026-06-19T10:37:56.349868Z'
+updated_at: '2026-06-19T10:46:19.446073Z'

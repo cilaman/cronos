@@ -5,18 +5,24 @@ claude_session_id: 43863514-c15a-416e-a132-a6b740632fe3
 created_at: '2026-06-03T16:31:36Z'
 depends_on:
 - 2026-06-03-1631-pipeline-architect-features-fixes-s5-fea
+feature_key: null
+feature_state: null
 id: 2026-06-03-1631-pipeline-implementor-features-fixes-s5-f
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-03-1631-featurefix-board-ui
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 'pipeline-implementor: Features&Fixes/S5 — Features board, Tasks rename, cards'
 type: task
-updated_at: '2026-06-05T13:56:40Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

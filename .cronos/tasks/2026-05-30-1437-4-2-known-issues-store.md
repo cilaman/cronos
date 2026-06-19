@@ -5,18 +5,24 @@ claude_session_id: a28aa3c1-5fab-4404-89c8-6a14202727c2
 created_at: '2026-05-30T14:37:55Z'
 depends_on:
 - 2026-05-30-1437-4-1-retro-phase-agent
+feature_key: null
+feature_state: null
 id: 2026-05-30-1437-4-2-known-issues-store
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-05-30-1437-self-improvement-loop-retro-known-issues
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 4.2 known-issues store
 type: task
-updated_at: '2026-05-30T22:30:57Z'
+updated_at: '2026-06-19T12:17:47Z'
 waiting_question: null
 ---
 

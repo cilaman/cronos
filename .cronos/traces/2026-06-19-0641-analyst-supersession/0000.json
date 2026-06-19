@@ -1,0 +1,631 @@
+{
+  "task_id": "2026-06-19-0641-analyst-supersession",
+  "space_id": "cronos-development",
+  "run_index": 0,
+  "session_id": "69129383-8f49-484b-b638-dff3bb548d94",
+  "model": "sonnet",
+  "real_model": "claude-sonnet-4-6",
+  "mode": "auto",
+  "started_at": "2026-06-19T07:26:46.916583Z",
+  "ended_at": "2026-06-19T07:32:46.543213Z",
+  "duration_seconds": 359.63,
+  "exit_reason": "DONE",
+  "turns": [
+    {
+      "turn_index": 0,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 2,
+      "output_tokens": 1,
+      "cache_read_tokens": 16950,
+      "cache_creation_tokens": 20737
+    },
+    {
+      "turn_index": 1,
+      "text_snippet": "I'll read the scout report and agent contract before running the pipeline-analyst.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 2,
+      "output_tokens": 1,
+      "cache_read_tokens": 16950,
+      "cache_creation_tokens": 20737
+    },
+    {
+      "turn_index": 2,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01Hi4ZcXrAHLzL3NeegP9UHe"
+      ],
+      "input_tokens": 2,
+      "output_tokens": 1,
+      "cache_read_tokens": 16950,
+      "cache_creation_tokens": 20737
+    },
+    {
+      "turn_index": 3,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01TXjpP4QG17VdzgnhnSvyE6"
+      ],
+      "input_tokens": 2,
+      "output_tokens": 1,
+      "cache_read_tokens": 16950,
+      "cache_creation_tokens": 20737
+    },
+    {
+      "turn_index": 4,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 37687,
+      "cache_creation_tokens": 10321
+    },
+    {
+      "turn_index": 5,
+      "text_snippet": "Let me also check the memory_store.py and pipeline-gate skill to understand the current structure before writing the analysis.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 37687,
+      "cache_creation_tokens": 10321
+    },
+    {
+      "turn_index": 6,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01685jL6Qugaui8s7GNdTiKi"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 37687,
+      "cache_creation_tokens": 10321
+    },
+    {
+      "turn_index": 7,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01WEi6tah5cNTwoJsH1JZAG6"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 37687,
+      "cache_creation_tokens": 10321
+    },
+    {
+      "turn_index": 8,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 10,
+      "cache_read_tokens": 48008,
+      "cache_creation_tokens": 10476
+    },
+    {
+      "turn_index": 9,
+      "text_snippet": "Now I'll read the models.py for MemoryItem schema and look at the archive method in memory_store.py.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 10,
+      "cache_read_tokens": 48008,
+      "cache_creation_tokens": 10476
+    },
+    {
+      "turn_index": 10,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01D4psH9VaZ6RJP7dfoZM1Fi"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 10,
+      "cache_read_tokens": 48008,
+      "cache_creation_tokens": 10476
+    },
+    {
+      "turn_index": 11,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01KoFhutHMtjswpkU3VhFmf9"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 10,
+      "cache_read_tokens": 48008,
+      "cache_creation_tokens": 10476
+    },
+    {
+      "turn_index": 12,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 24,
+      "cache_read_tokens": 58484,
+      "cache_creation_tokens": 2068
+    },
+    {
+      "turn_index": 13,
+      "text_snippet": "Let me check the pipeline-state.json to understand the goal structure.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 24,
+      "cache_read_tokens": 58484,
+      "cache_creation_tokens": 2068
+    },
+    {
+      "turn_index": 14,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_012p28a4ScAqdbjG4SRWae9W"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 24,
+      "cache_read_tokens": 58484,
+      "cache_creation_tokens": 2068
+    },
+    {
+      "turn_index": 15,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 20,
+      "cache_read_tokens": 60552,
+      "cache_creation_tokens": 5897
+    },
+    {
+      "turn_index": 16,
+      "text_snippet": "The pipeline already has an existing analysis report. Let me check it.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 20,
+      "cache_read_tokens": 60552,
+      "cache_creation_tokens": 5897
+    },
+    {
+      "turn_index": 17,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01ASs1W4VKpBmBfaq6EcWszE"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 20,
+      "cache_read_tokens": 60552,
+      "cache_creation_tokens": 5897
+    },
+    {
+      "turn_index": 18,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 19,
+      "cache_read_tokens": 66449,
+      "cache_creation_tokens": 4914
+    },
+    {
+      "turn_index": 19,
+      "text_snippet": "Let me check the doc report and impl report to understand what was already implemented.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 19,
+      "cache_read_tokens": 66449,
+      "cache_creation_tokens": 4914
+    },
+    {
+      "turn_index": 20,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01781JsWimd8H718LxcCDsT5"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 19,
+      "cache_read_tokens": 66449,
+      "cache_creation_tokens": 4914
+    },
+    {
+      "turn_index": 21,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01BjVCc8J1Pb1tpDipUiWsjZ"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 19,
+      "cache_read_tokens": 66449,
+      "cache_creation_tokens": 4914
+    },
+    {
+      "turn_index": 22,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 31,
+      "cache_read_tokens": 71363,
+      "cache_creation_tokens": 2802
+    },
+    {
+      "turn_index": 23,
+      "text_snippet": "Let me check the verifier to understand what artifact paths it expects.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 31,
+      "cache_read_tokens": 71363,
+      "cache_creation_tokens": 2802
+    },
+    {
+      "turn_index": 24,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01M95PZppddgCfc6gb5oyrfo"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 31,
+      "cache_read_tokens": 71363,
+      "cache_creation_tokens": 2802
+    },
+    {
+      "turn_index": 25,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 28,
+      "cache_read_tokens": 74165,
+      "cache_creation_tokens": 3213
+    },
+    {
+      "turn_index": 26,
+      "text_snippet": "The pipeline-state shows all phases already done for a different feature (nudge_confidence). This task is for the supersession sub-feature. I'll write the analysis report to the standard CC-v1 path (`analysis-report-trust-loop-supersession.md`), overwriting the existing nudge_confidence analysis, then run the pipeline-gate.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 28,
+      "cache_read_tokens": 74165,
+      "cache_creation_tokens": 3213
+    },
+    {
+      "turn_index": 27,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_016YFuXqAzswVkncC3eepokb"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 28,
+      "cache_read_tokens": 74165,
+      "cache_creation_tokens": 3213
+    },
+    {
+      "turn_index": 28,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 22,
+      "cache_read_tokens": 77378,
+      "cache_creation_tokens": 5522
+    },
+    {
+      "turn_index": 29,
+      "text_snippet": "Analysis report written. Now running the pipeline-gate.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 22,
+      "cache_read_tokens": 77378,
+      "cache_creation_tokens": 5522
+    },
+    {
+      "turn_index": 30,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01SGaFo6EiKR3HC1cHywvreL"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 22,
+      "cache_read_tokens": 77378,
+      "cache_creation_tokens": 5522
+    },
+    {
+      "turn_index": 31,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 2,
+      "output_tokens": 8,
+      "cache_read_tokens": 82900,
+      "cache_creation_tokens": 5273
+    },
+    {
+      "turn_index": 32,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01TdkCP5jtwjCEkHy6San1DB"
+      ],
+      "input_tokens": 2,
+      "output_tokens": 8,
+      "cache_read_tokens": 82900,
+      "cache_creation_tokens": 5273
+    },
+    {
+      "turn_index": 33,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01HLZS5pbR5goCMgw3N4k2vE"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 64,
+      "cache_read_tokens": 88173,
+      "cache_creation_tokens": 463
+    },
+    {
+      "turn_index": 34,
+      "text_snippet": "Verify passed cleanly. Now recording the gate result.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 2,
+      "cache_read_tokens": 88636,
+      "cache_creation_tokens": 548
+    },
+    {
+      "turn_index": 35,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_013eeg487KsADwCvATppn1WS"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 2,
+      "cache_read_tokens": 88636,
+      "cache_creation_tokens": 548
+    },
+    {
+      "turn_index": 36,
+      "text_snippet": "Both steps passed cleanly (VERIFY_EXIT=0, PY_EXIT=0).\n\ngate PASS \u2014 analysis / trust-loop-supersession\n  artifact: .cronos/pipeline/trust-loop-supersession/analysis-report-trust-loop-supersession.md\n\nSTATUS: DONE",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 1,
+      "cache_read_tokens": 89184,
+      "cache_creation_tokens": 1281
+    }
+  ],
+  "tool_calls": [
+    {
+      "tool_call_index": 0,
+      "tool_use_id": "toolu_01Hi4ZcXrAHLzL3NeegP9UHe",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/.cronos/pipeline/trust-loop-supersession/scout-report-trust-loop-supersession.md\"}",
+      "output_summary": "1\t---\n2\tcc_version: \"1.0\"\n3\tagent: pipeline-scout\n4\tslug: trust-loop-supersession\n5\tphase: scout\n6\tstatus: done\n7\tconfidence: 0.9\n8\tinputs_used:\n9\t  - memory:project-memory-system\n10\t  - memory:project-memory-lifecycle\n11\t  - memory:project-architecture\n12\t  - memory:project-pipeline-foundation\n13\t  - backend/app/memory_store.py\n14\t  - backend/app/models.py\n15\t  - backend/app/trace_parser.py\n16\t  - backend/app/memory_retrieval.py\n17\t  - backend/app/memory_lifecycle.py\n18\t  - backend/app/worker.py\n19\t  - backend/app/storage.py\n20\t  - backend/tests/test_memory_store.py\n21\t  - backend/tests/test_memory_lifecycle.py\n22\toutputs_produced:\n23\t  - .cronos/pipeline/trust-loop-supersession/scout-report-trust-loop-supersession.md\n24\tblockers: []\n25\tnext_consumer: analysis\n26\tcoverage_summary:\n27\t  searched:\n28\t    - backend/app/memory_store.py\n29\t    - backend/app/memory_retrieval.py\n30\t    - backend/app/memory_lifecycle.py\n31\t    - backend/app/trace_parser.py\n32\t    - backend/app/worker.py\n33\t  \u2026",
+      "is_error": false,
+      "turn_index": 2,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 1,
+      "tool_use_id": "toolu_01TXjpP4QG17VdzgnhnSvyE6",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/.claude/agents/pipeline-analyst.md\"}",
+      "output_summary": "1\t---\n2\tname: pipeline-analyst\n3\tdescription: CC-v1 analysis agent for Cronos pipelines. Consumes a scout report and emits a verified analysis-report-{slug}.md (class=analysis) with has_ui, scope, requirements, and traceability. Use after the scout phase to decompose a feature request into testable requirements.\n4\tmodel: claude-sonnet-4-6\n5\ttools: Read, Grep, Glob, Bash, Write\n6\t---\n7\t\n8\t# Pipeline Analyst Agent (CC-v1)\n9\t\n10\tYou are **pipeline-analyst**, the analysis-class agent in the Cronos pipeline. You transform a verbatim feature request plus the upstream scout report into an implementable specification with full traceability from request text to acceptance criteria. You emit a single `analysis-report-{slug}.md` that passes CC-v1 verification (`class=analysis`, exit code 0 from `python -m app.pipeline.verify`).\n11\t\n12\tYou are governed by **Cronos Agent Contract v1.0** (`backend/app/pipeline/CONTRACT.md`). You NEVER write or modify source files, tests, or configuration \u2014 your only\u2026",
+      "is_error": false,
+      "turn_index": 3,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 2,
+      "tool_use_id": "toolu_01685jL6Qugaui8s7GNdTiKi",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/backend/app/memory_store.py\", \"limit\": 80}",
+      "output_summary": "1\tfrom __future__ import annotations\n2\t\n3\timport asyncio\n4\timport logging\n5\timport os\n6\timport secrets\n7\tfrom datetime import UTC, datetime\n8\tfrom pathlib import Path\n9\t\n10\timport frontmatter\n11\t\n12\tfrom .memory_lifecycle import boost, decay, should_auto_confirm, should_prune\n13\tfrom .models import MemoryItem, MemoryKind\n14\t\n15\tlog = logging.getLogger(\"cronos.memory_store\")\n16\t\n17\tCRONOS_SUBDIR = \".cronos\"\n18\tMEMORY_SUBDIR = \"memory\"\n19\tITEMS_SUBDIR = \"items\"\n20\tINDEX_FILE = \"index.md\"\n21\t\n22\t_KIND_ORDER = [\n23\t    MemoryKind.FACT,\n24\t    MemoryKind.PROCEDURE,\n25\t    MemoryKind.OBSERVATION,\n26\t    MemoryKind.REFERENCE,\n27\t]\n28\t_KIND_HEADER = {\n29\t    MemoryKind.FACT: \"Facts\",\n30\t    MemoryKind.PROCEDURE: \"Procedures\",\n31\t    MemoryKind.OBSERVATION: \"Observations\",\n32\t    MemoryKind.REFERENCE: \"References\",\n33\t}\n34\t\n35\t\n36\tCONFIRM_THRESHOLD = 3\n37\t\n38\t\n39\tclass MemoryNotFound(Exception):\n40\t    pass\n41\t\n42\t\n43\tclass MemoryStore:\n44\t    \"\"\"Persist memory items as markdown-with-frontmatte\u2026",
+      "is_error": false,
+      "turn_index": 6,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 3,
+      "tool_use_id": "toolu_01WEi6tah5cNTwoJsH1JZAG6",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/.claude/skills/pipeline-gate/SKILL.md\"}",
+      "output_summary": "1\t---\n2\tname: pipeline-gate\n3\tdescription: Close the gate on one CC-v1 pipeline phase. Resolves the artifact path mechanically from goal_slug + phase, runs normalize then verify, records the result into pipeline-state.json + phases-log.jsonl, and emits STATUS: DONE on pass or STATUS: BLOCKED on fail/escalate so the Cronos worker does not advance the DAG.\n4\tlicense: Internal \u2014 Cronos project.\n5\t---\n6\t\n7\t# Pipeline Gate\n8\t\n9\tThis skill is the Cronos analogue of Delivery Notes' `post_phase_verify` helper. It is invoked from a **gate task** sitting between two pipeline-phase agents \u2014 its job is to mechanically verify the upstream agent's artifact and either greenlight downstream phases (STATUS: DONE) or halt them (STATUS: BLOCKED). It never reads markdown prose to make decisions; every gate outcome derives from the artifact's YAML header via `app.pipeline.verify`.\n10\t\n11\t## When to use\n12\t\n13\tInvoke this skill as the **only** step of any gate task that follows a pipeline-phase agent run (s\u2026",
+      "is_error": false,
+      "turn_index": 7,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 4,
+      "tool_use_id": "toolu_01D4psH9VaZ6RJP7dfoZM1Fi",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/backend/app/models.py\", \"offset\": 360, \"limit\": 40}",
+      "output_summary": "360\t    OBSERVATION = \"observation\"\n361\t    REFERENCE = \"reference\"\n362\t\n363\t\n364\tclass MemoryItem(BaseModel):\n365\t    id: str\n366\t    scope: str  # \"global\" | \"space:{space_id}\"\n367\t    kind: MemoryKind\n368\t    title: str\n369\t    body: str = \"\"\n370\t    confirmed: bool = False\n371\t    confidence: float = Field(default=1.0, ge=0.0, le=1.0)\n372\t    score: float = 0.0\n373\t    last_used_at: datetime\n374\t    ref_count: int = 0\n375\t    ttl_until: datetime | None = None\n376\t    sources: list[str] = Field(default_factory=list)\n377\t    links: list[str] = Field(default_factory=list)\n378\t",
+      "is_error": false,
+      "turn_index": 10,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 5,
+      "tool_use_id": "toolu_01KoFhutHMtjswpkU3VhFmf9",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/backend/app/memory_store.py\", \"offset\": 300, \"limit\": 90}",
+      "output_summary": "300\t                update_dict[\"kind\"] = MemoryKind(kind) if isinstance(kind, str) else kind\n301\t            if confirmed is not None:\n302\t                update_dict[\"confirmed\"] = confirmed\n303\t            if confidence is not None:\n304\t                update_dict[\"confidence\"] = confidence\n305\t            if score is not None:\n306\t                update_dict[\"score\"] = score\n307\t            if last_used_at is not None:\n308\t                update_dict[\"last_used_at\"] = last_used_at\n309\t            if ref_count is not None:\n310\t                update_dict[\"ref_count\"] = ref_count\n311\t            if ttl_until is not None:\n312\t                update_dict[\"ttl_until\"] = ttl_until\n313\t            if sources is not None:\n314\t                update_dict[\"sources\"] = sources\n315\t            if links is not None:\n316\t                update_dict[\"links\"] = links\n317\t            updated = item.model_copy(update=update_dict)\n318\t            self._atomic_write(path, self._dump_item(updated))\n319\u2026",
+      "is_error": false,
+      "turn_index": 11,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 6,
+      "tool_use_id": "toolu_012p28a4ScAqdbjG4SRWae9W",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"ls /data/spaces/cronos-development/.cronos/pipeline/trust-loop-supersession/ 2>/dev/null && cat /data/spaces/cronos-development/.cronos/pipeline/trust-loop-supersession/pipeline-state.json 2>/dev/null | python3 -m json.tool || echo \\\"no pipeline-state.json\\\"\", \"description\": \"Check pipeline directory and state\"}",
+      "output_summary": "analysis-report-trust-loop-supersession.md\ndesign-report-trust-loop-supersession.md\ndoc-report-trust-loop-supersession.md\nimpl-report-trust-loop-supersession--i1.md\nphases-log.jsonl\npipeline-state.json\nreview-report-trust-loop-supersession--attempt1.md\nscout-report-trust-loop-supersession.md\ntest-report-trust-loop-supersession.md\n{\n    \"cc_version\": \"1.0\",\n    \"goal_slug\": \"trust-loop-supersession\",\n    \"status\": \"running\",\n    \"created_at\": \"2026-06-19T06:47:42.325501+00:00\",\n    \"updated_at\": \"2026-06-19T07:26:44.175262+00:00\",\n    \"request_text\": null,\n    \"phases\": {\n        \"research\": {\n            \"phase\": \"research\",\n            \"status\": \"done\",\n            \"cc_version\": \"1.0\",\n            \"agent\": \"pipeline-scout\",\n            \"task_id\": \"2026-06-19-0641-scout-trust-loop-supersession\",\n            \"run_index\": 0,\n            \"gate\": \"auto\",\n            \"started_at\": \"\",\n            \"completed_at\": \"\",\n            \"artifact_path\": \".cronos/pipeline/trust-loop-supersession/scou\u2026",
+      "is_error": false,
+      "turn_index": 14,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 7,
+      "tool_use_id": "toolu_01ASs1W4VKpBmBfaq6EcWszE",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/.cronos/pipeline/trust-loop-supersession/analysis-report-trust-loop-supersession.md\"}",
+      "output_summary": "1\t---\n2\tcc_version: '1.0'\n3\tagent: pipeline-analyst\n4\tslug: trust-loop-supersession\n5\tphase: analysis\n6\tstatus: done\n7\tconfidence: 0.9\n8\tinputs_used:\n9\t- memory:project-memory-system\n10\t- memory:project-memory-lifecycle\n11\t- memory:project-architecture\n12\t- memory:project-pipeline-foundation\n13\t- .cronos/pipeline/trust-loop-supersession/scout-report-trust-loop-supersession.md\n14\t- backend/app/memory_store.py\n15\t- backend/app/trace_parser.py\n16\t- backend/app/worker.py\n17\t- backend/app/pipeline/verify.py\n18\t- .claude/skills/pipeline-gate/SKILL.md\n19\t- .cronos/pipeline/trust-loop-supersession/pipeline-state.json\n20\toutputs_produced:\n21\t- .cronos/pipeline/trust-loop-supersession/analysis-report-trust-loop-supersession.md\n22\tblockers: []\n23\tnext_consumer: design\n24\trequest: 'Implement outcome-linked confidence updates for memory items. When a task\n25\t  completes, the worker checks its RunTrace for retrieved memory IDs (memory_hits).\n26\t  On STATUS: DONE (pass), nudge those memories'' confid\u2026",
+      "is_error": false,
+      "turn_index": 17,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 8,
+      "tool_use_id": "toolu_01781JsWimd8H718LxcCDsT5",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/.cronos/pipeline/trust-loop-supersession/doc-report-trust-loop-supersession.md\", \"limit\": 60}",
+      "output_summary": "1\t---\n2\tcc_version: \"1.0\"\n3\tagent: pipeline-doc-sync\n4\tslug: trust-loop-supersession\n5\tphase: doc\n6\tstatus: done\n7\tconfidence: 0.9\n8\tinputs_used:\n9\t  - memory:trust-loop-impl\n10\t  - .cronos/pipeline/trust-loop-supersession/review-report-trust-loop-supersession--attempt1.md\n11\t  - .cronos/pipeline/trust-loop-supersession/impl-report-trust-loop-supersession--i1.md\n12\t  - CLAUDE.md\n13\t  - README.md\n14\t  - TESTING.md\n15\toutputs_produced:\n16\t  - .cronos/pipeline/trust-loop-supersession/doc-report-trust-loop-supersession.md\n17\t  - CLAUDE.md\n18\tblockers: []\n19\tnext_consumer: user\n20\tintentionally_not_updated:\n21\t  - path: README.md\n22\t    reason: \"Ops/deployment guide; trust-loop is backend-only, no new public API or env vars required.\"\n23\t  - path: TESTING.md\n24\t    reason: \"Test instructions unchanged; new tests in test_memory_trust_loop.py covered by existing pytest suite; no new test infrastructure needed.\"\n25\tmetrics:\n26\t  tool_calls: 20\n27\t  files_read: 5\n28\t  memory_hits: 1\n29\t  docs_u\u2026",
+      "is_error": false,
+      "turn_index": 20,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 9,
+      "tool_use_id": "toolu_01BjVCc8J1Pb1tpDipUiWsjZ",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"grep -n \\\"supersession\\\\|detect_contradiction\\\\|links\\\\|superseded\\\" /data/spaces/cronos-development/backend/app/memory_store.py 2>/dev/null | head -30\", \"description\": \"Check if supersession is implemented in memory_store.py\"}",
+      "output_summary": "99:            \"links\": list(item.links),\n133:            links=list(meta.get(\"links\") or []),\n212:        links: list[str] | None = None,\n232:                links=links or [],\n287:        links: list[str] | None = None,\n315:            if links is not None:\n316:                update_dict[\"links\"] = links",
+      "is_error": false,
+      "turn_index": 21,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 10,
+      "tool_use_id": "toolu_01M95PZppddgCfc6gb5oyrfo",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"grep -n \\\"analysis\\\\|artifact_path\\\\|canonical\\\\|CLASS_CONFIG\\\\|prefix\\\" /data/spaces/cronos-development/backend/app/pipeline/verify.py | head -50\", \"description\": \"Check verifier path resolution\"}",
+      "output_summary": "20:belongs to). The accepted values are the keys of :data:`CLASS_CONFIG`. The\n74:CLASS_CONFIG: dict[str, dict[str, str]] = {\n78:        \"filename_prefix\": \"scout-report\",\n80:    \"analysis\": {\n81:        \"schema_file\": \"analysis.schema.yaml\",\n82:        \"phase_const\": \"analysis\",\n83:        \"filename_prefix\": \"analysis-report\",\n88:        \"filename_prefix\": \"design-report\",\n93:        \"filename_prefix\": \"impl-report\",\n98:        \"filename_prefix\": \"test-report\",\n103:        \"filename_prefix\": \"review-report\",\n108:        \"filename_prefix\": \"doc-report\",\n113:        \"filename_prefix\": \"retro\",\n157:    \"analysis\": (\n231:    artifact_path: str\n266:            \"artifact_path\": self.artifact_path,\n282:    cfg = CLASS_CONFIG[class_name]\n288:def canonical_artifact_relpath(class_name: str, slug: str) -> str:\n295:    cfg = CLASS_CONFIG[class_name]\n297:    filename = f\"{cfg['filename_prefix']}-{slug}.md\"\n396:    expected = CLASS_CONFIG[class_name][\"phase_const\"]\n601:    # R5 \u2014 outputs_produced[0]\u2026",
+      "is_error": false,
+      "turn_index": 24,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 11,
+      "tool_use_id": "toolu_016YFuXqAzswVkncC3eepokb",
+      "name": "Write",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/.cronos/pipeline/trust-loop-supersession/analysis-report-trust-loop-supersession.md\", \"content\": \"---\\ncc_version: \\\"1.0\\\"\\nagent: pipeline-analyst\\nslug: trust-loop-supersession\\nphase: analysis\\nstatus: done\\nconfidence: 0.9\\ninputs_used:\\n  - memory:project-memory-system\\n  - memory:project-memory-lifecycle\\n  - .cronos/pipeline/trust-loop-supersession/scout-report-trust-loop-supersession.md\\n  - backend/app/memory_store.py\\n  - backend/app/model\u2026",
+      "output_summary": "The file /data/spaces/cronos-development/.cronos/pipeline/trust-loop-supersession/analysis-report-trust-loop-supersession.md has been updated successfully. (file state is current in your context \u2014 no need to Read it back)",
+      "is_error": false,
+      "turn_index": 27,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 12,
+      "tool_use_id": "toolu_01SGaFo6EiKR3HC1cHywvreL",
+      "name": "Skill",
+      "input_summary": "{\"skill\": \"pipeline-gate\"}",
+      "output_summary": "Launching skill: pipeline-gate",
+      "is_error": false,
+      "turn_index": 30,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 13,
+      "tool_use_id": "toolu_01TdkCP5jtwjCEkHy6San1DB",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"TASK_ID=$(basename \\\"$PWD\\\")\\nSPACE_DIR=$(echo \\\"$PWD\\\" | sed 's|/.cronos/workspaces/.*||')\\n\\nexport GOAL_SLUG=\\\"trust-loop-supersession\\\"\\nexport PHASE=\\\"analysis\\\"\\nexport AGENT_NAME=\\\"pipeline-analyst\\\"\\nexport UPSTREAM_TASK_ID=\\\"2026-06-19-0641-analyst-supersession\\\"\\nexport RUN_INDEX=\\\"\\\"\\nexport SLUG=\\\"${GOAL_SLUG}\\\"\\nexport SPACE_DIR\\n\\necho \\\"TASK_ID=$TASK_ID\\\"\\necho \\\"SPACE_DIR=$SPACE_DIR\\\"\\necho \\\"SLUG=$SLUG\\\"\\necho \\\"Expected artifact: ${SPACE_DIR}/.cronos/pipeline/${GOA\u2026",
+      "output_summary": "TASK_ID=2026-06-19-0641-analyst-supersession\nSPACE_DIR=/data/spaces/cronos-development\nSLUG=trust-loop-supersession\nExpected artifact: /data/spaces/cronos-development/.cronos/pipeline/trust-loop-supersession/analysis-report-trust-loop-supersession.md",
+      "is_error": false,
+      "turn_index": 32,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 14,
+      "tool_use_id": "toolu_01HLZS5pbR5goCMgw3N4k2vE",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"export GOAL_SLUG=\\\"trust-loop-supersession\\\"\\nexport PHASE=\\\"analysis\\\"\\nexport AGENT_NAME=\\\"pipeline-analyst\\\"\\nexport UPSTREAM_TASK_ID=\\\"2026-06-19-0641-analyst-supersession\\\"\\nexport RUN_INDEX=\\\"\\\"\\nexport SLUG=\\\"${GOAL_SLUG}\\\"\\nexport SPACE_DIR=\\\"/data/spaces/cronos-development\\\"\\n\\ncd \\\"${SPACE_DIR}/backend\\\"\\npython -m app.pipeline.verify \\\\\\n    --agent \\\"$PHASE\\\" \\\\\\n    --slug \\\"$SLUG\\\" \\\\\\n    --space \\\"$SPACE_DIR\\\" \\\\\\n    --normalize \\\\\\n    --json > /tmp/pipeline-gate-v\u2026",
+      "output_summary": "<frozen runpy>:128: RuntimeWarning: 'app.pipeline.verify' found in sys.modules after import of package 'app.pipeline', but prior to execution of 'app.pipeline.verify'; this may result in unpredictable behaviour\n{\n  \"agent\": \"analysis\",\n  \"slug\": \"trust-loop-supersession\",\n  \"artifact_path\": \".cronos/pipeline/trust-loop-supersession/analysis-report-trust-loop-supersession.md\",\n  \"passed\": true,\n  \"outcome\": \"proceed\",\n  \"exit_code\": 0,\n  \"errors\": [],\n  \"warnings\": [],\n  \"normalize\": {\n    \"agent\": \"analysis\",\n    \"slug\": \"trust-loop-supersession\",\n    \"artifact_path\": \".cronos/pipeline/trust-loop-supersession/analysis-report-trust-loop-supersession.md\",\n    \"modified\": false,\n    \"fixes_applied\": [],\n    \"unfixable_issues\": [],\n    \"error\": null\n  }\n}\nShell cwd was reset to /data/spaces/cronos-development/.cronos/workspaces/2026-06-19-0641-analyst-supersession",
+      "is_error": false,
+      "turn_index": 33,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 15,
+      "tool_use_id": "toolu_013eeg487KsADwCvATppn1WS",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"export GOAL_SLUG=\\\"trust-loop-supersession\\\"\\nexport PHASE=\\\"analysis\\\"\\nexport AGENT_NAME=\\\"pipeline-analyst\\\"\\nexport UPSTREAM_TASK_ID=\\\"2026-06-19-0641-analyst-supersession\\\"\\nexport RUN_INDEX=\\\"\\\"\\nexport SLUG=\\\"${GOAL_SLUG}\\\"\\nexport SPACE_DIR=\\\"/data/spaces/cronos-development\\\"\\n\\ncd \\\"${SPACE_DIR}/backend\\\"\\npython <<'PY'\\nimport asyncio, json, os, sys\\nfrom pathlib import Path\\n\\nfrom app.pipeline.state_writer import (\\n    init_pipeline, update_phase, record_phase_log,\\n   \u2026",
+      "output_summary": "GATE PROCEED \u2014 analysis / trust-loop-supersession\n  artifact: .cronos/pipeline/trust-loop-supersession/analysis-report-trust-loop-supersession.md\nPY_EXIT=0\nShell cwd was reset to /data/spaces/cronos-development/.cronos/workspaces/2026-06-19-0641-analyst-supersession",
+      "is_error": false,
+      "turn_index": 35,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    }
+  ],
+  "total_tool_calls": 16,
+  "unique_tools": [
+    "Read",
+    "Bash",
+    "Write",
+    "Skill"
+  ],
+  "error_tool_calls": 0,
+  "read_tool_calls": 9,
+  "write_tool_calls": 7,
+  "exploration_ratio": 0.562,
+  "error_recovery_count": 0,
+  "backtrack_count": 0,
+  "final_text_snippet": "Both steps passed cleanly (VERIFY_EXIT=0, PY_EXIT=0).\n\ngate PASS \u2014 analysis / trust-loop-supersession\n  artifact: .cronos/pipeline/trust-loop-supersession/analysis-report-trust-loop-supersession.md\n\nSTATUS: DONE",
+  "had_crash": false,
+  "memory_injected": [],
+  "memory_used": [],
+  "memory_written": [],
+  "memory_hit_rate": 0.0,
+  "parent_run_id": null
+}

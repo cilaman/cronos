@@ -1,0 +1,34 @@
+{
+  "task_id": "2026-06-07-1127-doc-feature-detail-panel",
+  "space_id": "cronos-development",
+  "title": "doc \u2013 feature-detail-panel",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-08T12:03:47.392992Z",
+      "ended_at": "2026-06-08T12:07:22.921005Z",
+      "duration_seconds": 215.53,
+      "model": "haiku",
+      "real_model": "claude-haiku-4-5-20251001",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 214,
+      "output_tokens": 18714,
+      "cache_read_tokens": 1852238,
+      "cache_creation_tokens": 88796,
+      "cost_usd": 0.312002,
+      "tool_uses": {
+        "Read": 12,
+        "Glob": 1,
+        "Grep": 1,
+        "Bash": 19,
+        "Write": 1,
+        "Skill": 1
+      },
+      "error_count": 2,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

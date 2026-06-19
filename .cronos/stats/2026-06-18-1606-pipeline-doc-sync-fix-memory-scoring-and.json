@@ -1,0 +1,33 @@
+{
+  "task_id": "2026-06-18-1606-pipeline-doc-sync-fix-memory-scoring-and",
+  "space_id": "cronos-development",
+  "title": "pipeline-doc-sync: Fix memory scoring and injection bugs",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-18T18:35:06.086152Z",
+      "ended_at": "2026-06-18T18:49:27.063209Z",
+      "duration_seconds": 860.98,
+      "model": "haiku",
+      "real_model": "claude-haiku-4-5-20251001",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 286,
+      "output_tokens": 11775,
+      "cache_read_tokens": 2543098,
+      "cache_creation_tokens": 67715,
+      "cost_usd": 0.318492,
+      "tool_uses": {
+        "Bash": 61,
+        "Read": 14,
+        "Agent": 3,
+        "Write": 3,
+        "Skill": 2
+      },
+      "error_count": 2,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

@@ -4,18 +4,24 @@ agent_model: sonnet
 claude_session_id: 870ffbc1-2372-4366-90d5-46dfc07b376f
 created_at: '2026-06-02T07:18:50Z'
 depends_on: []
+feature_key: null
+feature_state: null
 id: 2026-06-02-0718-frontend-tool-detail-panel
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-02-0718-ai-tools-detail-screens
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: Frontend – Tool detail panel
 type: goal
-updated_at: '2026-06-02T08:16:34Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

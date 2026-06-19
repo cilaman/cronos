@@ -6,18 +6,24 @@ created_at: '2026-06-02T13:23:30Z'
 depends_on:
 - 2026-06-02-1323-update-goal-task-commit-to-target-the-ro
 - 2026-06-02-1323-update-goal-finalize-gate-on-root-goal-d
+feature_key: null
+feature_state: null
 id: 2026-06-02-1323-sync-task-finalize-create-goal-docs-to-t
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-02-1322-standardise-git-feature-branch-lifecycle
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: Sync task-finalize / create-goal docs to the new standard
 type: task
-updated_at: '2026-06-02T14:17:19Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

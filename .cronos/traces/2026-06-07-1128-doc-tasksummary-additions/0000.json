@@ -1,0 +1,1378 @@
+{
+  "task_id": "2026-06-07-1128-doc-tasksummary-additions",
+  "space_id": "cronos-development",
+  "run_index": 0,
+  "session_id": "0e29c19e-f28a-4e06-b635-5f58a9177110",
+  "model": "haiku",
+  "real_model": "claude-haiku-4-5-20251001",
+  "mode": "auto",
+  "started_at": "2026-06-08T14:42:17.226872Z",
+  "ended_at": "2026-06-08T14:44:49.583675Z",
+  "duration_seconds": 152.36,
+  "exit_reason": "DONE",
+  "turns": [
+    {
+      "turn_index": 0,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 9,
+      "output_tokens": 1,
+      "cache_read_tokens": 14218,
+      "cache_creation_tokens": 18286
+    },
+    {
+      "turn_index": 1,
+      "text_snippet": "I'll handle the doc phase for the tasksummary-additions CC-v1 pipeline. Let me start by reviewing what was implemented and then update the documentation.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 9,
+      "output_tokens": 1,
+      "cache_read_tokens": 14218,
+      "cache_creation_tokens": 18286
+    },
+    {
+      "turn_index": 2,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01VRmmfKCpkYzR24Zfz1RZzU"
+      ],
+      "input_tokens": 9,
+      "output_tokens": 1,
+      "cache_read_tokens": 14218,
+      "cache_creation_tokens": 18286
+    },
+    {
+      "turn_index": 3,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 7,
+      "cache_read_tokens": 32504,
+      "cache_creation_tokens": 563
+    },
+    {
+      "turn_index": 4,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01TpkL4CQ1rF4rAWS1tEVuuY"
+      ],
+      "input_tokens": 7,
+      "output_tokens": 7,
+      "cache_read_tokens": 32504,
+      "cache_creation_tokens": 563
+    },
+    {
+      "turn_index": 5,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 33067,
+      "cache_creation_tokens": 1061
+    },
+    {
+      "turn_index": 6,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01Nh3qJ8wbNU49x1a1FjcSWp"
+      ],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 33067,
+      "cache_creation_tokens": 1061
+    },
+    {
+      "turn_index": 7,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 7,
+      "cache_read_tokens": 34128,
+      "cache_creation_tokens": 406
+    },
+    {
+      "turn_index": 8,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01HtobfB1TowygkTGvxRw3H3"
+      ],
+      "input_tokens": 7,
+      "output_tokens": 7,
+      "cache_read_tokens": 34128,
+      "cache_creation_tokens": 406
+    },
+    {
+      "turn_index": 9,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 3,
+      "cache_read_tokens": 34534,
+      "cache_creation_tokens": 471
+    },
+    {
+      "turn_index": 10,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01RNe6ENYQ4eJ9pEQd7gKRDY"
+      ],
+      "input_tokens": 7,
+      "output_tokens": 3,
+      "cache_read_tokens": 34534,
+      "cache_creation_tokens": 471
+    },
+    {
+      "turn_index": 11,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 35005,
+      "cache_creation_tokens": 1636
+    },
+    {
+      "turn_index": 12,
+      "text_snippet": "Let me check the current CLAUDE.md and any API documentation that might reference TaskSummary:",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 35005,
+      "cache_creation_tokens": 1636
+    },
+    {
+      "turn_index": 13,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_019n9NrsuhvJ4Hab4AxdbP6Z"
+      ],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 35005,
+      "cache_creation_tokens": 1636
+    },
+    {
+      "turn_index": 14,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 5,
+      "cache_read_tokens": 36641,
+      "cache_creation_tokens": 2783
+    },
+    {
+      "turn_index": 15,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01DEP3R1kK47NbUwWUkD8PgX"
+      ],
+      "input_tokens": 7,
+      "output_tokens": 5,
+      "cache_read_tokens": 36641,
+      "cache_creation_tokens": 2783
+    },
+    {
+      "turn_index": 16,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 39424,
+      "cache_creation_tokens": 2850
+    },
+    {
+      "turn_index": 17,
+      "text_snippet": "Let me check the pipeline-doc-sync agent contract:",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 39424,
+      "cache_creation_tokens": 2850
+    },
+    {
+      "turn_index": 18,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01DhLV5boqmZK75eqsfgFccT"
+      ],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 39424,
+      "cache_creation_tokens": 2850
+    },
+    {
+      "turn_index": 19,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 42274,
+      "cache_creation_tokens": 5547
+    },
+    {
+      "turn_index": 20,
+      "text_snippet": "Let me check what reports are available in the pipeline directory:",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 42274,
+      "cache_creation_tokens": 5547
+    },
+    {
+      "turn_index": 21,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_018pPaz8v4YPuMBsewr4eLC9"
+      ],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 42274,
+      "cache_creation_tokens": 5547
+    },
+    {
+      "turn_index": 22,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 2,
+      "cache_read_tokens": 47821,
+      "cache_creation_tokens": 547
+    },
+    {
+      "turn_index": 23,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_018qgg3uzd8HPaQcz5XivTKV"
+      ],
+      "input_tokens": 7,
+      "output_tokens": 2,
+      "cache_read_tokens": 47821,
+      "cache_creation_tokens": 547
+    },
+    {
+      "turn_index": 24,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 3,
+      "cache_read_tokens": 48368,
+      "cache_creation_tokens": 524
+    },
+    {
+      "turn_index": 25,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01Ru5NaDaAGp5SfEL4tWYcQX"
+      ],
+      "input_tokens": 7,
+      "output_tokens": 3,
+      "cache_read_tokens": 48368,
+      "cache_creation_tokens": 524
+    },
+    {
+      "turn_index": 26,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 48892,
+      "cache_creation_tokens": 1520
+    },
+    {
+      "turn_index": 27,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_013ToWRU6QNrKicu5nqYgxWL"
+      ],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 48892,
+      "cache_creation_tokens": 1520
+    },
+    {
+      "turn_index": 28,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 3,
+      "cache_read_tokens": 50412,
+      "cache_creation_tokens": 302
+    },
+    {
+      "turn_index": 29,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01RFqiedfXWhsFS58XHoFwAC"
+      ],
+      "input_tokens": 7,
+      "output_tokens": 3,
+      "cache_read_tokens": 50412,
+      "cache_creation_tokens": 302
+    },
+    {
+      "turn_index": 30,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 50714,
+      "cache_creation_tokens": 871
+    },
+    {
+      "turn_index": 31,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01PQRQFRM6KevUoyxF53bVjx"
+      ],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 50714,
+      "cache_creation_tokens": 871
+    },
+    {
+      "turn_index": 32,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 8,
+      "cache_read_tokens": 51585,
+      "cache_creation_tokens": 2296
+    },
+    {
+      "turn_index": 33,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01B9vLa4u69tAndgdQgYBtBb"
+      ],
+      "input_tokens": 7,
+      "output_tokens": 8,
+      "cache_read_tokens": 51585,
+      "cache_creation_tokens": 2296
+    },
+    {
+      "turn_index": 34,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 53881,
+      "cache_creation_tokens": 2242
+    },
+    {
+      "turn_index": 35,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_014trT5DemPrJ6FyC7zH7xJw"
+      ],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 53881,
+      "cache_creation_tokens": 2242
+    },
+    {
+      "turn_index": 36,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 56123,
+      "cache_creation_tokens": 1541
+    },
+    {
+      "turn_index": 37,
+      "text_snippet": "Now let me check what documentation exists that might reference these fields. Let me look for API documentation or schema docs:",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 56123,
+      "cache_creation_tokens": 1541
+    },
+    {
+      "turn_index": 38,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01FWuqgh2oQSGCymTBr1buAB"
+      ],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 56123,
+      "cache_creation_tokens": 1541
+    },
+    {
+      "turn_index": 39,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 57664,
+      "cache_creation_tokens": 1283
+    },
+    {
+      "turn_index": 40,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01JurF8Tv82EwoAUp4Ts4wCQ"
+      ],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 57664,
+      "cache_creation_tokens": 1283
+    },
+    {
+      "turn_index": 41,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 58947,
+      "cache_creation_tokens": 242
+    },
+    {
+      "turn_index": 42,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01YNEsZ9abvp1SwvDgsvHioB"
+      ],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 58947,
+      "cache_creation_tokens": 242
+    },
+    {
+      "turn_index": 43,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 59189,
+      "cache_creation_tokens": 1335
+    },
+    {
+      "turn_index": 44,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01WmA3naapah8dcztnkvotyD"
+      ],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 59189,
+      "cache_creation_tokens": 1335
+    },
+    {
+      "turn_index": 45,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 60524,
+      "cache_creation_tokens": 170
+    },
+    {
+      "turn_index": 46,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01UKem1HdQKkDe7VyFkkN3ue"
+      ],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 60524,
+      "cache_creation_tokens": 170
+    },
+    {
+      "turn_index": 47,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 60694,
+      "cache_creation_tokens": 634
+    },
+    {
+      "turn_index": 48,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01GM15YBo2ceWA5N2QfrM8eT"
+      ],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 60694,
+      "cache_creation_tokens": 634
+    },
+    {
+      "turn_index": 49,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 61328,
+      "cache_creation_tokens": 369
+    },
+    {
+      "turn_index": 50,
+      "text_snippet": "Let me create a working artifact first and then determine what docs need updating. Let me start by creating a stub artifact:",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 61328,
+      "cache_creation_tokens": 369
+    },
+    {
+      "turn_index": 51,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01ThR4yk9bW25PPcvWNyyhy6"
+      ],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 61328,
+      "cache_creation_tokens": 369
+    },
+    {
+      "turn_index": 52,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 61697,
+      "cache_creation_tokens": 483
+    },
+    {
+      "turn_index": 53,
+      "text_snippet": "Now let me write the doc-report artifact with my findings:",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 61697,
+      "cache_creation_tokens": 483
+    },
+    {
+      "turn_index": 54,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01VHw48urrr1aiCJNGf7vmuD"
+      ],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 61697,
+      "cache_creation_tokens": 483
+    },
+    {
+      "turn_index": 55,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 62180,
+      "cache_creation_tokens": 1539
+    },
+    {
+      "turn_index": 56,
+      "text_snippet": "Now let me verify the artifact:",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 62180,
+      "cache_creation_tokens": 1539
+    },
+    {
+      "turn_index": 57,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01DBTfcR3VVdgy5PoBr24omX"
+      ],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 62180,
+      "cache_creation_tokens": 1539
+    },
+    {
+      "turn_index": 58,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 63719,
+      "cache_creation_tokens": 412
+    },
+    {
+      "turn_index": 59,
+      "text_snippet": "I need to fix the artifact. Let me update it:",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 63719,
+      "cache_creation_tokens": 412
+    },
+    {
+      "turn_index": 60,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01SqL4YF4dJXseRJ7DJPALFd"
+      ],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 63719,
+      "cache_creation_tokens": 412
+    },
+    {
+      "turn_index": 61,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 64131,
+      "cache_creation_tokens": 1057
+    },
+    {
+      "turn_index": 62,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01EnFvokfDzbDGvvakDmbjAL"
+      ],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 64131,
+      "cache_creation_tokens": 1057
+    },
+    {
+      "turn_index": 63,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 65188,
+      "cache_creation_tokens": 272
+    },
+    {
+      "turn_index": 64,
+      "text_snippet": "Perfect! Now let me run the pipeline-gate to close the doc phase:",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 65188,
+      "cache_creation_tokens": 272
+    },
+    {
+      "turn_index": 65,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01ACEB4PewJUKLtALHj12oky"
+      ],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 65188,
+      "cache_creation_tokens": 272
+    },
+    {
+      "turn_index": 66,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 9,
+      "output_tokens": 2,
+      "cache_read_tokens": 65460,
+      "cache_creation_tokens": 5278
+    },
+    {
+      "turn_index": 67,
+      "text_snippet": "I'll now execute the pipeline-gate steps to verify the doc artifact and update pipeline state.\n\n**Step 1 \u2014 Resolve paths and environment**",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 9,
+      "output_tokens": 2,
+      "cache_read_tokens": 65460,
+      "cache_creation_tokens": 5278
+    },
+    {
+      "turn_index": 68,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_012Xa6MsFCSUUvAGGfnHFe7Z"
+      ],
+      "input_tokens": 9,
+      "output_tokens": 2,
+      "cache_read_tokens": 65460,
+      "cache_creation_tokens": 5278
+    },
+    {
+      "turn_index": 69,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 70738,
+      "cache_creation_tokens": 698
+    },
+    {
+      "turn_index": 70,
+      "text_snippet": "**Step 2 \u2014 Run normalize + verify**",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 70738,
+      "cache_creation_tokens": 698
+    },
+    {
+      "turn_index": 71,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01UnkdUySGkYoqAy1QQqfrNM"
+      ],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 70738,
+      "cache_creation_tokens": 698
+    },
+    {
+      "turn_index": 72,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 6,
+      "cache_read_tokens": 71436,
+      "cache_creation_tokens": 521
+    },
+    {
+      "turn_index": 73,
+      "text_snippet": "**Step 3 \u2014 Record state + log via state_writer**",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 6,
+      "cache_read_tokens": 71436,
+      "cache_creation_tokens": 521
+    },
+    {
+      "turn_index": 74,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01BYDBAyEuBxdKfXbLJHfprz"
+      ],
+      "input_tokens": 7,
+      "output_tokens": 6,
+      "cache_read_tokens": 71436,
+      "cache_creation_tokens": 521
+    },
+    {
+      "turn_index": 75,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 71957,
+      "cache_creation_tokens": 1537
+    },
+    {
+      "turn_index": 76,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01VoAS39pf9vT2VkoBXnE8UR"
+      ],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 71957,
+      "cache_creation_tokens": 1537
+    },
+    {
+      "turn_index": 77,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 4,
+      "cache_read_tokens": 73494,
+      "cache_creation_tokens": 404
+    },
+    {
+      "turn_index": 78,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01Jq277Fy6QBLesJQxJxcRS9"
+      ],
+      "input_tokens": 7,
+      "output_tokens": 4,
+      "cache_read_tokens": 73494,
+      "cache_creation_tokens": 404
+    },
+    {
+      "turn_index": 79,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 73898,
+      "cache_creation_tokens": 1542
+    },
+    {
+      "turn_index": 80,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01GMhscCTQizfefHCi6c3aLt"
+      ],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 73898,
+      "cache_creation_tokens": 1542
+    },
+    {
+      "turn_index": 81,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 75440,
+      "cache_creation_tokens": 351
+    },
+    {
+      "turn_index": 82,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_0172nQRGN3CeDRdyqr97sP2G"
+      ],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 75440,
+      "cache_creation_tokens": 351
+    },
+    {
+      "turn_index": 83,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 75791,
+      "cache_creation_tokens": 1215
+    },
+    {
+      "turn_index": 84,
+      "text_snippet": "**Step 4 \u2014 Emit final STATUS**\n\nGate PASS \u2014 doc / tasksummary-additions\n  artifact: .cronos/pipeline/tasksummary-additions/doc-report-tasksummary-additions.md\n  verify: passed with no errors or warnings\n  state: updated in pipeline-state.json and phases-log.jsonl\n\nSTATUS: DONE",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 7,
+      "output_tokens": 1,
+      "cache_read_tokens": 75791,
+      "cache_creation_tokens": 1215
+    }
+  ],
+  "tool_calls": [
+    {
+      "tool_call_index": 0,
+      "tool_use_id": "toolu_01VRmmfKCpkYzR24Zfz1RZzU",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"cd /data/spaces/cronos-development && git log --oneline -5\"}",
+      "output_summary": "aa089d0 Add getFeature, patchFeature, processFeature, setRealize to api.ts\ncd16e5a test \u2013 feature-detail-panel\n3f0d697 impl \u2013 feature-detail-panel\n184e8d6 architect \u2013 feature-detail-panel\n781d634 test: api-client-hooks \u2014 useFeature, usePatchFeature, useProcessFeature, useSetRealize\nShell cwd was reset to /data/spaces/cronos-development/.cronos/workspaces/2026-06-07-1128-doc-tasksummary-additions",
+      "is_error": false,
+      "turn_index": 2,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 1,
+      "tool_use_id": "toolu_01TpkL4CQ1rF4rAWS1tEVuuY",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"cd /data/spaces/cronos-development && git status && git branch -v\"}",
+      "output_summary": "<persisted-output>\nOutput too large (61KB). Full output saved to: /root/.claude/projects/-data-spaces-cronos-development--cronos-workspaces-2026-06-07-1128-doc-tasksummary-additions/0e29c19e-f28a-4e06-b635-5f58a9177110/tool-results/byncgc6hm.txt\n\nPreview (first 2KB):\nOn branch main\nYour branch is ahead of 'origin/main' by 1 commit.\n  (use \"git push\" to publish your local commits)\n\nChanges not staged for commit:\n  (use \"git add/rm <file>...\" to update what will be committed)\n  (use \"git restore <file>...\" to discard changes in working directory)\n\tmodified:   .coverage\n\tmodified:   .cronos/memory/index.md\n\tmodified:   .cronos/memory/items/mem-20260527191150-04e3c858.md\n\tmodified:   .cronos/memory/items/mem-20260527191150-16760160.md\n\tmodified:   .cronos/memory/items/mem-20260527191150-2573ec85.md\n\tmodified:   .cronos/memory/items/mem-20260527191150-338710ae.md\n\tmodified:   .cronos/memory/items/mem-20260527191150-4cadc9f7.md\n\tmodified:   .cronos/memory/items/mem-20260527191150-6a66db50.md\u2026",
+      "is_error": false,
+      "turn_index": 4,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 2,
+      "tool_use_id": "toolu_01Nh3qJ8wbNU49x1a1FjcSWp",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"cd /data/spaces/cronos-development && git log feature/feature-card-ux-polish --oneline -10\"}",
+      "output_summary": "6047944 review \u2013 tasksummary-additions\n2ad24bf impl \u2013 tasksummary-additions\n069ee2a architect \u2013 tasksummary-additions\ncd16e5a test \u2013 feature-detail-panel\n3f0d697 impl \u2013 feature-detail-panel\n184e8d6 architect \u2013 feature-detail-panel\n781d634 test: api-client-hooks \u2014 useFeature, usePatchFeature, useProcessFeature, useSetRealize\nf02301b fix: add waiting_question to FeatureRead schema\ne14ce4e Merge feature/features-fixes-deep-qa-review: test coverage audit for features backend\n28f17df Merge feature/prevent-pat-leaks-in-committed-trace-jso: FeaturesPage space selector (scoped/global views)\nShell cwd was reset to /data/spaces/cronos-development/.cronos/workspaces/2026-06-07-1128-doc-tasksummary-additions",
+      "is_error": false,
+      "turn_index": 6,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 3,
+      "tool_use_id": "toolu_01HtobfB1TowygkTGvxRw3H3",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"cd /data/spaces/cronos-development && git show --stat 2ad24bf\"}",
+      "output_summary": "commit 2ad24bf2d26ef95669449bb95f47777904059a5f\nAuthor: Martin Cich\u00fd <martin.cichy@gmail.com>\nDate:   Mon Jun 8 14:26:22 2026 +0000\n\n    impl \u2013 tasksummary-additions\n    \n    Task: 2026-06-07-1128-impl-tasksummary-additions\n\n .../impl-report-tasksummary-additions.md           |  83 +++++++++\n .../impl-report-tasksummary-additions.md           |  98 ++++++++++\n .../tasksummary-additions/phases-log.jsonl         |   1 +\n .../tasksummary-additions/pipeline-state.json      |  32 +++-\n backend/app/models.py                              |   6 +\n backend/app/storage.py                             |  36 +++-\n backend/tests/test_feature_board.py                |  49 +++++\n backend/tests/test_tasksummary_realizes_fields.py  | 206 +++++++++++++++++++++\n 8 files changed, 508 insertions(+), 3 deletions(-)\nShell cwd was reset to /data/spaces/cronos-development/.cronos/workspaces/2026-06-07-1128-doc-tasksummary-additions",
+      "is_error": false,
+      "turn_index": 8,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 4,
+      "tool_use_id": "toolu_01RNe6ENYQ4eJ9pEQd7gKRDY",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"cd /data/spaces/cronos-development && git show 2ad24bf -- backend/app/models.py backend/app/storage.py | head -200\"}",
+      "output_summary": "commit 2ad24bf2d26ef95669449bb95f47777904059a5f\nAuthor: Martin Cich\u00fd <martin.cichy@gmail.com>\nDate:   Mon Jun 8 14:26:22 2026 +0000\n\n    impl \u2013 tasksummary-additions\n    \n    Task: 2026-06-07-1128-impl-tasksummary-additions\n\ndiff --git a/backend/app/models.py b/backend/app/models.py\nindex 2b35d0e..9f67e46 100644\n--- a/backend/app/models.py\n+++ b/backend/app/models.py\n@@ -133,6 +133,12 @@ class TaskSummary(BaseModel):\n     space_color: str | None = None\n     space_icon: str | None = None\n     space_autopilot: str | None = None\n+    # Count of tasks/goals that realize this feature; 0 for non-feature tasks.\n+    realizing_count: int = 0\n+    # Count of tasks/goals that realize this task (parallel field to realizing_count).\n+    realized_by_count: int = 0\n+    # feature_key of the feature/fix this task realizes (e.g. \"FEAT-007\"); None if not set.\n+    realizes_feature_key: str | None = None\n \n \n class Board(BaseModel):\ndiff --git a/backend/app/storage.py b/backend/app/storage.py\nindex 3e5c\u2026",
+      "is_error": false,
+      "turn_index": 10,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 5,
+      "tool_use_id": "toolu_019n9NrsuhvJ4Hab4AxdbP6Z",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/CLAUDE.md\", \"limit\": 100}",
+      "output_summary": "1\t# cronos\n2\t\n3\tKanban-style task manager for orchestrating Claude Code agents. Single-user personal platform \u2014 agents run via the Claude Code CLI bundled in the backend container, authenticated against a Claude Pro/Max subscription (no API key needed).\n4\t\n5\t- **Quick-start & ops**: [README.md](README.md)\n6\t- **Testing guide**: [TESTING.md](TESTING.md)\n7\t- **VPS deployment**: [deploy/VPS_SETUP.md](deploy/VPS_SETUP.md)\n8\t\n9\t## Dev commands\n10\t\n11\t```sh\n12\t# Local dev (Docker Compose \u2014 backend :8000 + Caddy on :8080)\n13\texport CLAUDE_CODE_OAUTH_TOKEN=$(claude setup-token)   # optional; needed for agent runs\n14\tdocker compose up --build\n15\t# open http://localhost:8080\n16\t\n17\t# Backend tests (60% coverage floor enforced)\n18\tcd backend && pip install -e \".[dev]\"\n19\tcd backend && pytest tests/ --cov=app --cov-report=term-missing\n20\t\n21\t# Frontend tests & build\n22\tcd frontend && npm test\n23\tcd frontend && npm run build\n24\t\n25\t# Health check (no auth required)\n26\tcurl http://localhost:8080/api\u2026",
+      "is_error": false,
+      "turn_index": 13,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 6,
+      "tool_use_id": "toolu_01DEP3R1kK47NbUwWUkD8PgX",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/CLAUDE.md\", \"limit\": 200, \"offset\": 100}",
+      "output_summary": "100\t| `frontend/src/components/HarnessRunPanel.tsx` | Per-run detail panel with node status badges, live SSE indicator, cancel button, buffer-truncated badge |\n101\t| `frontend/src/hooks/useTasks.ts` | React Query hooks for task CRUD |\n102\t| `frontend/src/hooks/useHarnessRuns.ts` | React Query hooks for harness run queries, mutations (trigger, cancel), and SSE stream subscription |\n103\t| `frontend/src/api.ts` | HTTP client; includes task, space, harness, feature, memory, and stats API functions; harness run types (RunSummary, NodeState, HarnessRunState); feature methods: `getFeature`, `patchFeature`, `processFeature`, `setRealize` |\n104\t| `frontend/src/pages/HarnessEditor.tsx` | Harness visual editor canvas page \u2014 React Flow v12 graph layout with 5 custom node types (Agent/Trigger/Decision/Wait/Aggregator), NodePalette drag source, VariableInspector side panel, Save button (GET-then-PUT); live-execution overlay with RunHistory (left panel), RunOverlay (canvas), and ChildTaskDrawer (righ\u2026",
+      "is_error": false,
+      "turn_index": 15,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 7,
+      "tool_use_id": "toolu_01DhLV5boqmZK75eqsfgFccT",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/.claude/agents/pipeline-doc-sync.md\"}",
+      "output_summary": "1\t---\n2\tname: pipeline-doc-sync\n3\tdescription: CC-v1 doc agent for Cronos pipelines. Updates docs for changed files after implementation; emits doc-report-{slug}.md (class=doc) with intentionally_not_updated[] present and docs_updated==len(outputs_produced)-1. Never edits source files. Use after the review phase to close the pipeline.\n4\tmodel: claude-haiku-4-5-20251001\n5\ttools: Read, Grep, Glob, Bash, Write\n6\t---\n7\t\n8\t# Pipeline Doc-Sync Agent (CC-v1)\n9\t\n10\tYou are **pipeline-doc-sync**, the documentation-class agent in the Cronos pipeline. You inspect what the implementation phase changed, update relevant documentation files (README, CLAUDE.md, API docs, architecture docs), and emit a single `doc-report-{slug}.md` that passes CC-v1 verification (`class=doc`, exit code 0 from `python -m app.pipeline.verify`).\n11\t\n12\tYou are governed by **Cronos Agent Contract v1.0** (`backend/app/pipeline/CONTRACT.md`). You NEVER write to source files, test files, or migration files. Your only writes a\u2026",
+      "is_error": false,
+      "turn_index": 18,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 8,
+      "tool_use_id": "toolu_018pPaz8v4YPuMBsewr4eLC9",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"find /data/spaces/cronos-development/.cronos/pipeline -name \\\"*tasksummary*\\\" -type f | head -20\"}",
+      "output_summary": "/data/spaces/cronos-development/.cronos/pipeline/tasksummary-additions/impl-report-tasksummary-additions.md\n/data/spaces/cronos-development/.cronos/pipeline/tasksummary-additions/design-report-tasksummary-additions.md\n/data/spaces/cronos-development/.cronos/pipeline/tasksummary-additions/test-report-tasksummary-additions.md\n/data/spaces/cronos-development/.cronos/pipeline/tasksummary-additions/analysis-report-tasksummary-additions.md\n/data/spaces/cronos-development/.cronos/pipeline/tasksummary-additions/review-report-tasksummary-additions--attempt1.md\n/data/spaces/cronos-development/.cronos/pipeline/feature-card-ux-polish/impl-report-tasksummary-additions.md\n/data/spaces/cronos-development/.cronos/pipeline/feature-card-ux-polish/design-report-tasksummary-additions.md\n/data/spaces/cronos-development/.cronos/pipeline/feature-card-ux-polish/test-report-tasksummary-additions.md\n/data/spaces/cronos-development/.cronos/pipeline/feature-card-ux-polish/analysis-report-tasksummary-additions.md",
+      "is_error": false,
+      "turn_index": 21,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 9,
+      "tool_use_id": "toolu_018qgg3uzd8HPaQcz5XivTKV",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"ls -la /data/spaces/cronos-development/.cronos/pipeline/feature-card-ux-polish/ | head -20\"}",
+      "output_summary": "total 64\ndrwxr-xr-x  2 root root  4096 Jun  8 14:34 .\ndrwxr-xr-x 37 root root  4096 Jun  8 14:03 ..\n-rw-r--r--  1 root root 11141 Jun  8 14:02 analysis-report-tasksummary-additions.md\n-rw-r--r--  1 root root 14392 Jun  8 14:10 design-report-tasksummary-additions.md\n-rw-r--r--  1 root root  3829 Jun  8 14:22 impl-report-tasksummary-additions.md\n-rw-r--r--  1 root root   213 Jun  8 13:59 phases-log.jsonl\n-rw-r--r--  1 root root  1295 Jun  8 13:59 pipeline-state.json\n-rw-r--r--  1 root root 10466 Jun  8 13:58 scout-report-feature-card-ux-polish.md\n-rw-r--r--  1 root root  2569 Jun  8 14:34 test-report-tasksummary-additions.md",
+      "is_error": false,
+      "turn_index": 23,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 10,
+      "tool_use_id": "toolu_01Ru5NaDaAGp5SfEL4tWYcQX",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/.cronos/pipeline/feature-card-ux-polish/test-report-tasksummary-additions.md\"}",
+      "output_summary": "1\t---\n2\tcc_version: \"1.0\"\n3\tagent: tester\n4\tslug: tasksummary-additions\n5\tphase: test\n6\tclass: test\n7\tstatus: done\n8\tconfidence: 0.95\n9\tgoal_slug: tasksummary-additions\n10\tinputs_used:\n11\t  - backend/app/models.py\n12\t  - backend/app/storage.py\n13\toutputs_produced:\n14\t  - .cronos/pipeline/tasksummary-additions/test-report-tasksummary-additions.md\n15\tblockers: []\n16\tnext_consumer: review\n17\tgate_decision: pass\n18\ttests_added: 0\n19\tpassed: 2501\n20\tfailed: 0\n21\terrors: 0\n22\tcoverage: 84.95\n23\tmetrics:\n24\t  tool_calls: 9\n25\t  files_read: 2\n26\t  memory_hits: 0\n27\t  tests_run: 2501\n28\t  frontend_tests_run: 1183\n29\t---\n30\t\n31\t## Summary\n32\t\n33\tGate run for goal `tasksummary-additions` (parent: `feature-card-ux-polish`) in space `cronos-development`.\n34\t\n35\tImplementation added `realized_by_count: int = 0` and `realizes_feature_key: str | None = None` to `TaskSummary` in `backend/app/models.py`, populated via O(N) lookup dicts in `storage.py` (`board()`, `feature_board()`, `realizing_items()`).\u2026",
+      "is_error": false,
+      "turn_index": 25,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 11,
+      "tool_use_id": "toolu_013ToWRU6QNrKicu5nqYgxWL",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"find /data/spaces/cronos-development/.cronos/pipeline -name \\\"review-report*tasksummary*\\\" -type f\"}",
+      "output_summary": "/data/spaces/cronos-development/.cronos/pipeline/tasksummary-additions/review-report-tasksummary-additions--attempt1.md",
+      "is_error": false,
+      "turn_index": 27,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 12,
+      "tool_use_id": "toolu_01RFqiedfXWhsFS58XHoFwAC",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/.cronos/pipeline/feature-card-ux-polish/pipeline-state.json\"}",
+      "output_summary": "1\t{\n2\t  \"cc_version\": \"1.0\",\n3\t  \"goal_slug\": \"feature-card-ux-polish\",\n4\t  \"status\": \"running\",\n5\t  \"created_at\": \"2026-06-08T13:59:39.506179+00:00\",\n6\t  \"updated_at\": \"2026-06-08T13:59:39.508529+00:00\",\n7\t  \"request_text\": null,\n8\t  \"phases\": {\n9\t    \"research\": {\n10\t      \"phase\": \"research\",\n11\t      \"status\": \"done\",\n12\t      \"cc_version\": \"1.0\",\n13\t      \"agent\": \"pipeline-scout\",\n14\t      \"task_id\": \"2026-06-07-1128-scout-feature-card-ux-polish\",\n15\t      \"run_index\": 0,\n16\t      \"gate\": \"auto\",\n17\t      \"started_at\": \"\",\n18\t      \"completed_at\": \"\",\n19\t      \"artifact_path\": \".cronos/pipeline/feature-card-ux-polish/scout-report-feature-card-ux-polish.md\",\n20\t      \"verify_result\": {\n21\t        \"passed\": true,\n22\t        \"errors\": [],\n23\t        \"warnings\": [],\n24\t        \"normalize_fixes\": [],\n25\t        \"gate_decision\": \"proceed\",\n26\t        \"gate_reason\": \"all checks passed\"\n27\t      },\n28\t      \"metrics\": {\n29\t        \"duration_s\": 0.0,\n30\t        \"token_spend\": 0,\n31\t      \u2026",
+      "is_error": false,
+      "turn_index": 29,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 13,
+      "tool_use_id": "toolu_01PQRQFRM6KevUoyxF53bVjx",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/.cronos/pipeline/tasksummary-additions/pipeline-state.json\"}",
+      "output_summary": "1\t{\n2\t  \"cc_version\": \"1.0\",\n3\t  \"goal_slug\": \"tasksummary-additions\",\n4\t  \"status\": \"running\",\n5\t  \"created_at\": \"2026-06-08T14:04:06.889057+00:00\",\n6\t  \"updated_at\": \"2026-06-08T14:40:14.418626+00:00\",\n7\t  \"request_text\": null,\n8\t  \"phases\": {\n9\t    \"analysis\": {\n10\t      \"phase\": \"analysis\",\n11\t      \"status\": \"done\",\n12\t      \"cc_version\": \"1.0\",\n13\t      \"agent\": \"pipeline-analyst\",\n14\t      \"task_id\": \"2026-06-07-1128-analyst-tasksummary-additions\",\n15\t      \"run_index\": 0,\n16\t      \"gate\": \"auto\",\n17\t      \"started_at\": \"\",\n18\t      \"completed_at\": \"\",\n19\t      \"artifact_path\": \".cronos/pipeline/tasksummary-additions/analysis-report-tasksummary-additions.md\",\n20\t      \"verify_result\": {\n21\t        \"passed\": true,\n22\t        \"errors\": [],\n23\t        \"warnings\": [],\n24\t        \"normalize_fixes\": [\n25\t          \"coverage_summary.strategies[3]: dropped unknown free-text strategy 'requirements_decomposition'\",\n26\t          \"coverage_summary.strategies[4]: dropped unknown free-text st\u2026",
+      "is_error": false,
+      "turn_index": 31,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 14,
+      "tool_use_id": "toolu_01B9vLa4u69tAndgdQgYBtBb",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/.cronos/pipeline/tasksummary-additions/review-report-tasksummary-additions--attempt1.md\"}",
+      "output_summary": "1\t---\n2\tcc_version: \"1.0\"\n3\tagent: pipeline-reviewer\n4\tslug: tasksummary-additions--attempt1\n5\tphase: review\n6\tstatus: done\n7\tconfidence: 0.9\n8\tinputs_used:\n9\t  - memory:project_sg1_tasksummary_impl\n10\t  - memory:project_sg1_architect_phase\n11\t  - memory:project_pipeline_reviewer_agent\n12\t  - .cronos/pipeline/tasksummary-additions/design-report-tasksummary-additions.md\n13\t  - .cronos/pipeline/tasksummary-additions/impl-report-tasksummary-additions.md\n14\t  - .cronos/pipeline/tasksummary-additions/test-report-tasksummary-additions.md\n15\t  - backend/app/models.py\n16\t  - backend/app/storage.py\n17\t  - backend/tests/test_feature_board.py\n18\t  - backend/tests/test_tasksummary_realizes_fields.py\n19\toutputs_produced:\n20\t  - .cronos/pipeline/tasksummary-additions/review-report-tasksummary-additions--attempt1.md\n21\tblockers: []\n22\tnext_consumer: doc\n23\tmetrics:\n24\t  tool_calls: 14\n25\t  files_read: 7\n26\t  memory_hits: 3\n27\t  diff_lines_reviewed: 263\n28\tverdict: pass\n29\tattempt: 1\n30\tfindings:\n31\t \u2026",
+      "is_error": false,
+      "turn_index": 33,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 15,
+      "tool_use_id": "toolu_014trT5DemPrJ6FyC7zH7xJw",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/.cronos/pipeline/tasksummary-additions/impl-report-tasksummary-additions.md\"}",
+      "output_summary": "1\t---\n2\tcc_version: \"1.0\"\n3\tagent: pipeline-implementor\n4\tslug: tasksummary-additions\n5\tphase: impl\n6\tstatus: done\n7\tconfidence: 0.97\n8\tinputs_used:\n9\t  - .cronos/pipeline/feature-card-ux-polish/design-report-tasksummary-additions.md\n10\t  - backend/app/models.py\n11\t  - backend/app/storage.py\n12\t  - backend/tests/test_feature_board.py\n13\toutputs_produced:\n14\t  - .cronos/pipeline/tasksummary-additions/impl-report-tasksummary-additions.md\n15\tblockers: []\n16\tnext_consumer: test\n17\titeration_id: I3\n18\tfiles_changed:\n19\t  - backend/app/models.py\n20\t  - backend/app/storage.py\n21\t  - backend/tests/test_feature_board.py\n22\t  - backend/tests/test_tasksummary_realizes_fields.py\n23\tvalidation_command_passed: true\n24\tmetrics:\n25\t  tool_calls: 28\n26\t  files_read: 10\n27\t  memory_hits: 0\n28\t  diff_lines_added: 215\n29\t  diff_lines_removed: 8\n30\t  tests_added: 11\n31\t---\n32\t\n33\t## Summary\n34\t\n35\tThree-iteration implementation of SG1 backend TaskSummary additions. Added `realized_by_count`\n36\tand `realize\u2026",
+      "is_error": false,
+      "turn_index": 35,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 16,
+      "tool_use_id": "toolu_01FWuqgh2oQSGCymTBr1buAB",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"find /data/spaces/cronos-development -name \\\"*.md\\\" -type f ! -path \\\"./.cronos/*\\\" ! -path \\\"./node_modules/*\\\" ! -path \\\"./.git/*\\\" | head -20\"}",
+      "output_summary": "/data/spaces/cronos-development/.cronos/pipeline/featurefix-data-model/review-report-featurefix-data-model--attempt1.md\n/data/spaces/cronos-development/.cronos/pipeline/featurefix-data-model/impl-report-featurefix-data-model--i3.md\n/data/spaces/cronos-development/.cronos/pipeline/featurefix-data-model/impl-report-featurefix-data-model--i5.md\n/data/spaces/cronos-development/.cronos/pipeline/featurefix-data-model/impl-report-featurefix-data-model--i1.md\n/data/spaces/cronos-development/.cronos/pipeline/featurefix-data-model/design-report-featurefix-data-model.md\n/data/spaces/cronos-development/.cronos/pipeline/featurefix-data-model/scout-report-featurefix-data-model.md\n/data/spaces/cronos-development/.cronos/pipeline/featurefix-data-model/impl-report-featurefix-data-model--i9.md\n/data/spaces/cronos-development/.cronos/pipeline/featurefix-data-model/request.md\n/data/spaces/cronos-development/.cronos/pipeline/featurefix-data-model/analysis-report-featurefix-data-model.md\n/data/spaces/cronos\u2026",
+      "is_error": false,
+      "turn_index": 38,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 17,
+      "tool_use_id": "toolu_01JurF8Tv82EwoAUp4Ts4wCQ",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"find /data/spaces/cronos-development -maxdepth 3 -name \\\"*.md\\\" ! -path \\\"./.cronos/*\\\" ! -path \\\"./node_modules/*\\\" ! -path \\\"./.git/*\\\" | grep -E \\\"^/data/spaces/cronos-development/[^/]+\\\\.md|^/data/spaces/cronos-development/docs/\\\"\"}",
+      "output_summary": "/data/spaces/cronos-development/README.md\n/data/spaces/cronos-development/docs/HARNESSES.md\n/data/spaces/cronos-development/TESTING.md\n/data/spaces/cronos-development/CLAUDE.md",
+      "is_error": false,
+      "turn_index": 40,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 18,
+      "tool_use_id": "toolu_01YNEsZ9abvp1SwvDgsvHioB",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/README.md\", \"limit\": 100}",
+      "output_summary": "1\t# Cronos\n2\t\n3\tPersonal Kanban-style task manager for orchestrating Claude Code agents.\n4\tRuns in Docker on a single VPS, authenticated against a Claude Pro/Max\n5\tsubscription via OAuth.\n6\t\n7\t> **Status:** Iteration 5 \u2014 deploy + ops polish. Task CRUD, drag-and-drop,\n8\t> agent execution, and waiting-state replies all work end-to-end. The stack\n9\t> is ready to deploy to a VPS. See [the plan](../.claude/plans/goal-of-this-workspace-cosmic-minsky.md).\n10\t\n11\t## Quick start (local)\n12\t\n13\t```bash\n14\tdocker compose up --build\n15\t# Open http://localhost:8080\n16\t```\n17\t\n18\tYou should see the Cronos board. Without a Claude OAuth token, agent runs\n19\twill fail (the binary reports \"no credentials\"); CRUD and the file watcher\n20\twork regardless. To run agents locally, export the token before starting:\n21\t\n22\t```bash\n23\texport CLAUDE_CODE_OAUTH_TOKEN=$(claude setup-token)\n24\tdocker compose up --build\n25\t```\n26\t\n27\t`/api/health` reports `claude_on_path: true` (the CLI is baked into the\n28\tbackend i\u2026",
+      "is_error": false,
+      "turn_index": 42,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 19,
+      "tool_use_id": "toolu_01WmA3naapah8dcztnkvotyD",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"grep -r \\\"TaskSummary\\\" /data/spaces/cronos-development/*.md /data/spaces/cronos-development/docs/*.md 2>/dev/null | head -20\"}",
+      "output_summary": "(Bash completed with no output)",
+      "is_error": false,
+      "turn_index": 44,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 20,
+      "tool_use_id": "toolu_01UKem1HdQKkDe7VyFkkN3ue",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"grep -n \\\"TaskSummary\\\\|board\\\\|realizing\\\" /data/spaces/cronos-development/CLAUDE.md\"}",
+      "output_summary": "96:| `frontend/src/pages/BoardPage.tsx` | Kanban board \u2014 dnd-kit drag-drop, lanes by TaskState |\n106:| `frontend/src/hooks/useFeatures.ts` | React Query hooks for feature CRUD and board state (`useFeatureBoard` with 5s polling, `useTransitionFeatureState`, `useCreateFeature`); detail hooks: `useFeature` (fetch by id), `usePatchFeature` (edit title/brief), `useProcessFeature` (decomposition), `useSetRealize` (link/unlink tasks); `invalidateFeatureQueries` helper (R4 triple-key contract) |\n120:| `frontend/src/types.ts` | Type definitions: task/space/harness schemas (TaskState, Task, Space, View, Harness, HarnessNode, HarnessEdge); feature types (FeatureState, FeatureBoard, FeatureRead with fields: feature_state, feature_key, realizes, realizing_items, waiting_question, issue_url, proposed_issue_path); harness editor types (NodeType, Position, NodePort, NodeRef) |\n172:| [create-goal](.claude/skills/create-goal/) | Creates a goal with child tasks in the Cronos board via the backend API |\n1\u2026",
+      "is_error": false,
+      "turn_index": 46,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 21,
+      "tool_use_id": "toolu_01GM15YBo2ceWA5N2QfrM8eT",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"grep -r \\\"realizing\\\\|realizes_feature\\\" /data/spaces/cronos-development/*.md /data/spaces/cronos-development/docs/ 2>/dev/null\"}",
+      "output_summary": "/data/spaces/cronos-development/CLAUDE.md:| `frontend/src/types.ts` | Type definitions: task/space/harness schemas (TaskState, Task, Space, View, Harness, HarnessNode, HarnessEdge); feature types (FeatureState, FeatureBoard, FeatureRead with fields: feature_state, feature_key, realizes, realizing_items, waiting_question, issue_url, proposed_issue_path); harness editor types (NodeType, Position, NodePort, NodeRef) |",
+      "is_error": false,
+      "turn_index": 48,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 22,
+      "tool_use_id": "toolu_01ThR4yk9bW25PPcvWNyyhy6",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"mkdir -p /data/spaces/cronos-development/.cronos/pipeline/tasksummary-additions\"}",
+      "output_summary": "(Bash completed with no output)",
+      "is_error": false,
+      "turn_index": 51,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 23,
+      "tool_use_id": "toolu_01VHw48urrr1aiCJNGf7vmuD",
+      "name": "Write",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/.cronos/pipeline/tasksummary-additions/doc-report-tasksummary-additions.md\", \"content\": \"---\\ncc_version: \\\"1.0\\\"\\nagent: pipeline-doc-sync\\nslug: tasksummary-additions\\nphase: doc\\nstatus: done\\nconfidence: 0.95\\ninputs_used:\\n  - .cronos/pipeline/tasksummary-additions/review-report-tasksummary-additions--attempt1.md\\n  - .cronos/pipeline/tasksummary-additions/impl-report-tasksummary-additions.md\\n  - CLAUDE.md\\n  - README.md\\nblockers: []\\nnext_co\u2026",
+      "output_summary": "File created successfully at: /data/spaces/cronos-development/.cronos/pipeline/tasksummary-additions/doc-report-tasksummary-additions.md (file state is current in your context \u2014 no need to Read it back)",
+      "is_error": false,
+      "turn_index": 54,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 24,
+      "tool_use_id": "toolu_01DBTfcR3VVdgy5PoBr24omX",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"cd /data/spaces/cronos-development && python -m app.pipeline.verify --agent doc --slug tasksummary-additions --space /data/spaces/cronos-development 2>&1\"}",
+      "output_summary": "Exit code 1\n<frozen runpy>:128: RuntimeWarning: 'app.pipeline.verify' found in sys.modules after import of package 'app.pipeline', but prior to execution of 'app.pipeline.verify'; this may result in unpredictable behaviour\n[FAIL] agent=doc slug=tasksummary-additions\n       artifact=.cronos/pipeline/tasksummary-additions/doc-report-tasksummary-additions.md\n  ERROR: missing required header fields: outputs_produced\n  ERROR: R4: metrics.files_read (2) + memory_hits (0) = 2 < len(inputs_used) (4)",
+      "is_error": true,
+      "turn_index": 57,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 25,
+      "tool_use_id": "toolu_01SqL4YF4dJXseRJ7DJPALFd",
+      "name": "Edit",
+      "input_summary": "{\"replace_all\": false, \"file_path\": \"/data/spaces/cronos-development/.cronos/pipeline/tasksummary-additions/doc-report-tasksummary-additions.md\", \"old_string\": \"inputs_used:\\n  - .cronos/pipeline/tasksummary-additions/review-report-tasksummary-additions--attempt1.md\\n  - .cronos/pipeline/tasksummary-additions/impl-report-tasksummary-additions.md\\n  - CLAUDE.md\\n  - README.md\\nblockers: []\\nnext_consumer: user\\nintentionally_not_updated:\\n  - path: CLAUDE.md\\n    reason: \\\"Models.py entry already\u2026",
+      "output_summary": "The file /data/spaces/cronos-development/.cronos/pipeline/tasksummary-additions/doc-report-tasksummary-additions.md has been updated successfully. (file state is current in your context \u2014 no need to Read it back)",
+      "is_error": false,
+      "turn_index": 60,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 26,
+      "tool_use_id": "toolu_01EnFvokfDzbDGvvakDmbjAL",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"cd /data/spaces/cronos-development && python -m app.pipeline.verify --agent doc --slug tasksummary-additions --space /data/spaces/cronos-development 2>&1\"}",
+      "output_summary": "<frozen runpy>:128: RuntimeWarning: 'app.pipeline.verify' found in sys.modules after import of package 'app.pipeline', but prior to execution of 'app.pipeline.verify'; this may result in unpredictable behaviour\n[PROCEED] agent=doc slug=tasksummary-additions\n       artifact=.cronos/pipeline/tasksummary-additions/doc-report-tasksummary-additions.md\nShell cwd was reset to /data/spaces/cronos-development/.cronos/workspaces/2026-06-07-1128-doc-tasksummary-additions",
+      "is_error": false,
+      "turn_index": 62,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 27,
+      "tool_use_id": "toolu_01ACEB4PewJUKLtALHj12oky",
+      "name": "Skill",
+      "input_summary": "{\"skill\": \"pipeline-gate\", \"args\": \"slug=tasksummary-additions phase=doc\"}",
+      "output_summary": "Launching skill: pipeline-gate",
+      "is_error": false,
+      "turn_index": 65,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 28,
+      "tool_use_id": "toolu_012Xa6MsFCSUUvAGGfnHFe7Z",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"\\n# Parse arguments and set up environment\\nTASK_ID=\\\"2026-06-07-1128-doc-tasksummary-additions\\\"\\nSPACE_DIR=\\\"/data/spaces/cronos-development\\\"\\n\\nexport GOAL_SLUG=\\\"tasksummary-additions\\\"\\nexport PHASE=\\\"doc\\\"\\nexport AGENT_NAME=\\\"pipeline-doc-sync\\\"\\nexport UPSTREAM_TASK_ID=\\\"$TASK_ID\\\"\\nexport RUN_INDEX=\\\"\\\"\\nexport SLUG=\\\"$GOAL_SLUG\\\"\\nexport SPACE_DIR\\n\\necho \\\"Gate inputs resolved:\\\"\\necho \\\"  GOAL_SLUG: $GOAL_SLUG\\\"\\necho \\\"  PHASE: $PHASE\\\"\\necho \\\"  SLUG: $SLUG\\\"\\necho \\\"\u2026",
+      "output_summary": "Gate inputs resolved:\n  GOAL_SLUG: tasksummary-additions\n  PHASE: doc\n  SLUG: tasksummary-additions\n  AGENT_NAME: pipeline-doc-sync\n  UPSTREAM_TASK_ID: 2026-06-07-1128-doc-tasksummary-additions\n  SPACE_DIR: /data/spaces/cronos-development",
+      "is_error": false,
+      "turn_index": 68,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 29,
+      "tool_use_id": "toolu_01UnkdUySGkYoqAy1QQqfrNM",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"\\ncd /data/spaces/cronos-development/backend && \\\\\\npython -m app.pipeline.verify \\\\\\n    --agent \\\"doc\\\" \\\\\\n    --slug \\\"tasksummary-additions\\\" \\\\\\n    --space \\\"/data/spaces/cronos-development\\\" \\\\\\n    --normalize \\\\\\n    --json > /tmp/pipeline-gate-verify.json 2>&1\\n\\nexport VERIFY_EXIT=$?\\ncat /tmp/pipeline-gate-verify.json\\necho \\\"\\\"\\necho \\\"Verify exit code: $VERIFY_EXIT\\\"\\n\"}",
+      "output_summary": "<frozen runpy>:128: RuntimeWarning: 'app.pipeline.verify' found in sys.modules after import of package 'app.pipeline', but prior to execution of 'app.pipeline.verify'; this may result in unpredictable behaviour\n{\n  \"agent\": \"doc\",\n  \"slug\": \"tasksummary-additions\",\n  \"artifact_path\": \".cronos/pipeline/tasksummary-additions/doc-report-tasksummary-additions.md\",\n  \"passed\": true,\n  \"outcome\": \"proceed\",\n  \"exit_code\": 0,\n  \"errors\": [],\n  \"warnings\": [],\n  \"normalize\": {\n    \"agent\": \"doc\",\n    \"slug\": \"tasksummary-additions\",\n    \"artifact_path\": \".cronos/pipeline/tasksummary-additions/doc-report-tasksummary-additions.md\",\n    \"modified\": false,\n    \"fixes_applied\": [],\n    \"unfixable_issues\": [],\n    \"error\": null\n  }\n}\n\nVerify exit code: 0\nShell cwd was reset to /data/spaces/cronos-development/.cronos/workspaces/2026-06-07-1128-doc-tasksummary-additions",
+      "is_error": false,
+      "turn_index": 71,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 30,
+      "tool_use_id": "toolu_01BYDBAyEuBxdKfXbLJHfprz",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"\\ncd /data/spaces/cronos-development/backend && \\\\\\npython <<'PY'\\nimport asyncio, json, os, sys\\nfrom pathlib import Path\\n\\nfrom app.pipeline.state_writer import (\\n    init_pipeline, update_phase, record_phase_log,\\n    PhaseEntry, PhaseMetrics, PhaseVerifyResult,\\n    state_path,\\n)\\nfrom app.trace_store import TraceStore\\n\\nSPACE_DIR        = \\\"/data/spaces/cronos-development\\\"\\nSPACE_ID         = Path(SPACE_DIR).name\\nGOAL_SLUG        = \\\"tasksummary-additions\\\"\\nPHASE        \u2026",
+      "output_summary": "Traceback (most recent call last):\n  File \"<stdin>\", line 20, in <module>\n  File \"/usr/local/lib/python3.12/json/__init__.py\", line 293, in load\n    return loads(fp.read(),\n           ^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/json/__init__.py\", line 346, in loads\n    return _default_decoder.decode(s)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/json/decoder.py\", line 338, in decode\n    obj, end = self.raw_decode(s, idx=_w(s, 0).end())\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/json/decoder.py\", line 356, in raw_decode\n    raise JSONDecodeError(\"Expecting value\", s, err.value) from None\njson.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)\nShell cwd was reset to /data/spaces/cronos-development/.cronos/workspaces/2026-06-07-1128-doc-tasksummary-additions",
+      "is_error": false,
+      "turn_index": 74,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 31,
+      "tool_use_id": "toolu_01VoAS39pf9vT2VkoBXnE8UR",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"ls -la /tmp/pipeline-gate-verify.json && cat /tmp/pipeline-gate-verify.json\"}",
+      "output_summary": "-rw-r--r-- 1 root root 730 Jun  8 14:44 /tmp/pipeline-gate-verify.json\n<frozen runpy>:128: RuntimeWarning: 'app.pipeline.verify' found in sys.modules after import of package 'app.pipeline', but prior to execution of 'app.pipeline.verify'; this may result in unpredictable behaviour\n{\n  \"agent\": \"doc\",\n  \"slug\": \"tasksummary-additions\",\n  \"artifact_path\": \".cronos/pipeline/tasksummary-additions/doc-report-tasksummary-additions.md\",\n  \"passed\": true,\n  \"outcome\": \"proceed\",\n  \"exit_code\": 0,\n  \"errors\": [],\n  \"warnings\": [],\n  \"normalize\": {\n    \"agent\": \"doc\",\n    \"slug\": \"tasksummary-additions\",\n    \"artifact_path\": \".cronos/pipeline/tasksummary-additions/doc-report-tasksummary-additions.md\",\n    \"modified\": false,\n    \"fixes_applied\": [],\n    \"unfixable_issues\": [],\n    \"error\": null\n  }\n}",
+      "is_error": false,
+      "turn_index": 76,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 32,
+      "tool_use_id": "toolu_01Jq277Fy6QBLesJQxJxcRS9",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"\\ncd /data/spaces/cronos-development/backend && \\\\\\npython <<'PY'\\nimport asyncio, json, os, sys\\nfrom pathlib import Path\\n\\nfrom app.pipeline.state_writer import (\\n    init_pipeline, update_phase, record_phase_log,\\n    PhaseEntry, PhaseMetrics, PhaseVerifyResult,\\n    state_path,\\n)\\nfrom app.trace_store import TraceStore\\n\\n# Suppress warnings\\nimport warnings\\nwarnings.filterwarnings(\\\"ignore\\\")\\n\\nSPACE_DIR        = \\\"/data/spaces/cronos-development\\\"\\nSPACE_ID         = Path\u2026",
+      "output_summary": "Traceback (most recent call last):\n  File \"<stdin>\", line 30, in <module>\n  File \"/usr/local/lib/python3.12/json/__init__.py\", line 346, in loads\n    return _default_decoder.decode(s)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/json/decoder.py\", line 338, in decode\n    obj, end = self.raw_decode(s, idx=_w(s, 0).end())\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/json/decoder.py\", line 356, in raw_decode\n    raise JSONDecodeError(\"Expecting value\", s, err.value) from None\njson.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)\nState update exit code: 1\nShell cwd was reset to /data/spaces/cronos-development/.cronos/workspaces/2026-06-07-1128-doc-tasksummary-additions",
+      "is_error": false,
+      "turn_index": 78,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 33,
+      "tool_use_id": "toolu_01GMhscCTQizfefHCi6c3aLt",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"\\n# First, clean the JSON file by extracting just the JSON part\\npython3 <<'CLEAN'\\nimport json\\nimport re\\n\\nwith open(\\\"/tmp/pipeline-gate-verify.json\\\") as f:\\n    content = f.read()\\n    \\n# Remove RuntimeWarning lines\\nlines = content.split('\\\\n')\\njson_start = None\\nfor i, line in enumerate(lines):\\n    if line.startswith('{'):\\n        json_start = i\\n        break\\n\\nif json_start is not None:\\n    json_content = '\\\\n'.join(lines[json_start:])\\n    try:\\n        data = json.\u2026",
+      "output_summary": "JSON cleaned successfully",
+      "is_error": false,
+      "turn_index": 80,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 34,
+      "tool_use_id": "toolu_0172nQRGN3CeDRdyqr97sP2G",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"\\ncd /data/spaces/cronos-development/backend && \\\\\\npython <<'PY'\\nimport asyncio, json, os, sys\\nfrom pathlib import Path\\nimport warnings\\nwarnings.filterwarnings(\\\"ignore\\\")\\n\\nfrom app.pipeline.state_writer import (\\n    init_pipeline, update_phase, record_phase_log,\\n    PhaseEntry, PhaseMetrics, PhaseVerifyResult,\\n    state_path,\\n)\\nfrom app.trace_store import TraceStore\\n\\nSPACE_DIR        = \\\"/data/spaces/cronos-development\\\"\\nSPACE_ID         = Path(SPACE_DIR).name\\nGOAL_\u2026",
+      "output_summary": "GATE PROCEED \u2014 doc / tasksummary-additions\n  artifact: .cronos/pipeline/tasksummary-additions/doc-report-tasksummary-additions.md\n\nState writer exit code: 0\nShell cwd was reset to /data/spaces/cronos-development/.cronos/workspaces/2026-06-07-1128-doc-tasksummary-additions",
+      "is_error": false,
+      "turn_index": 82,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    }
+  ],
+  "total_tool_calls": 35,
+  "unique_tools": [
+    "Bash",
+    "Read",
+    "Write",
+    "Edit",
+    "Skill"
+  ],
+  "error_tool_calls": 1,
+  "read_tool_calls": 15,
+  "write_tool_calls": 20,
+  "exploration_ratio": 0.429,
+  "error_recovery_count": 1,
+  "backtrack_count": 0,
+  "final_text_snippet": "**Step 4 \u2014 Emit final STATUS**\n\nGate PASS \u2014 doc / tasksummary-additions\n  artifact: .cronos/pipeline/tasksummary-additions/doc-report-tasksummary-additions.md\n  verify: passed with no errors or warnings\n  state: updated in pipeline-state.json and phases-log.jsonl\n\nSTATUS: DONE",
+  "had_crash": false,
+  "memory_injected": [],
+  "memory_used": [],
+  "memory_written": [],
+  "memory_hit_rate": 0.0,
+  "parent_run_id": null
+}

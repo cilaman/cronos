@@ -5,18 +5,24 @@ claude_session_id: 4e77a0c4-9936-4dd8-9c7a-9f24544d3ad8
 created_at: '2026-06-03T09:08:41Z'
 depends_on:
 - 2026-06-03-0908-b1-adoption-module-manifest-watcher
+feature_key: null
+feature_state: null
 id: 2026-06-03-0908-b3-mount-adopted-tools-into-agent-runs
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-03-0908-arc-5-b-adoption-vendor-mount-merge-upst
 pending_messages: []
 pr_url: null
 priority: 3
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: B3 — Mount adopted tools into agent runs
 type: task
-updated_at: '2026-06-03T13:03:04Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

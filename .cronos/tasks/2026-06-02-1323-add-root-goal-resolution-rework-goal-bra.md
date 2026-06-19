@@ -4,18 +4,24 @@ agent_model: opus
 claude_session_id: 5715a2e5-4428-42c4-9c07-bc81c151209b
 created_at: '2026-06-02T13:23:30Z'
 depends_on: []
+feature_key: null
+feature_state: null
 id: 2026-06-02-1323-add-root-goal-resolution-rework-goal-bra
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-02-1322-standardise-git-feature-branch-lifecycle
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: Add root-goal resolution + rework goal-branch-setup
 type: task
-updated_at: '2026-06-02T13:58:30Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

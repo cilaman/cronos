@@ -4,18 +4,24 @@ agent_model: sonnet
 claude_session_id: beefb7b3-811b-43cf-9b56-8cece7be8d3c
 created_at: '2026-06-02T07:18:50Z'
 depends_on: []
+feature_key: null
+feature_state: null
 id: 2026-06-02-0718-frontend-url-based-tool-navigation
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-02-0718-ai-tools-detail-screens
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: Frontend – URL-based tool navigation
 type: goal
-updated_at: '2026-06-02T08:22:26Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

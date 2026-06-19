@@ -5,18 +5,24 @@ claude_session_id: e3481b6b-f1d6-4ddc-9d32-29445ebd2901
 created_at: '2026-06-03T16:31:37Z'
 depends_on:
 - 2026-06-03-1631-pipeline-analyst-features-fixes-s6-dashb
+feature_key: null
+feature_state: null
 id: 2026-06-03-1631-pipeline-architect-features-fixes-s6-das
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-03-1631-featurefix-dashboard-e2e
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 'pipeline-architect: Features&Fixes/S6 — dashboard impact + e2e'
 type: task
-updated_at: '2026-06-05T14:30:52Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

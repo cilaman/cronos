@@ -1,0 +1,33 @@
+{
+  "task_id": "2026-06-06-1253-pipeline-reviewer-update-to-features-pag",
+  "space_id": "cronos-development",
+  "title": "pipeline-reviewer: Update to Features page",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-06T13:54:45.985778Z",
+      "ended_at": "2026-06-06T14:00:02.454028Z",
+      "duration_seconds": 316.47,
+      "model": "opus",
+      "real_model": "claude-opus-4-7",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 22,
+      "output_tokens": 4788,
+      "cache_read_tokens": 681010,
+      "cache_creation_tokens": 47906,
+      "cost_usd": 2.279183,
+      "tool_uses": {
+        "Bash": 36,
+        "Agent": 1,
+        "Read": 16,
+        "Write": 1,
+        "Skill": 1
+      },
+      "error_count": 1,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

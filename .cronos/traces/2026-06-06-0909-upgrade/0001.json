@@ -1,0 +1,112 @@
+{
+  "task_id": "2026-06-06-0909-upgrade",
+  "space_id": "cronos-development",
+  "run_index": 1,
+  "session_id": "bfcb9ee5-13be-4e32-a829-62225b2e3aca",
+  "model": "default",
+  "real_model": "claude-sonnet-4-6",
+  "mode": "auto",
+  "started_at": "2026-06-06T14:35:41.613580Z",
+  "ended_at": "2026-06-06T14:35:52.249370Z",
+  "duration_seconds": 10.64,
+  "exit_reason": "DONE",
+  "turns": [
+    {
+      "turn_index": 0,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 3,
+      "output_tokens": 8,
+      "cache_read_tokens": 14017,
+      "cache_creation_tokens": 28680
+    },
+    {
+      "turn_index": 1,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_018HrKUgEe5xaeFmo4JznRDc"
+      ],
+      "input_tokens": 3,
+      "output_tokens": 8,
+      "cache_read_tokens": 14017,
+      "cache_creation_tokens": 28680
+    },
+    {
+      "turn_index": 2,
+      "text_snippet": "Main is ahead with a new merge commit. No local changes to push.\n\nSTATUS: DONE",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 1,
+      "cache_read_tokens": 42697,
+      "cache_creation_tokens": 354
+    },
+    {
+      "turn_index": 3,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01634QqMuF91AfyHxv4QToFv"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 1,
+      "cache_read_tokens": 42697,
+      "cache_creation_tokens": 354
+    },
+    {
+      "turn_index": 4,
+      "text_snippet": "Upgrade triggered \u2014 deploying `24fe59d Merge feature/update-to-features-page: Update to Features page`.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 4,
+      "cache_read_tokens": 43051,
+      "cache_creation_tokens": 126
+    }
+  ],
+  "tool_calls": [
+    {
+      "tool_call_index": 0,
+      "tool_use_id": "toolu_018HrKUgEe5xaeFmo4JznRDc",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"cd /data/spaces/cronos-development && git log --oneline origin/main -3 && echo \\\"---\\\" && git log --oneline HEAD -3\", \"description\": \"Check current vs main branch state\"}",
+      "output_summary": "24fe59d Merge feature/update-to-features-page: Update to Features page\n51b8fba fix: drop trailing slash on /api/features root routes to avoid 307 redirect\n8d47ccc fix: align features API client with backend /api/features contract\n---\n51b8fba fix: drop trailing slash on /api/features root routes to avoid 307 redirect\n8d47ccc fix: align features API client with backend /api/features contract\nd6b7a98 Tasks site error\nShell cwd was reset to /data/spaces/cronos-development/.cronos/workspaces/2026-06-06-0909-upgrade",
+      "is_error": false,
+      "turn_index": 1,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 1,
+      "tool_use_id": "toolu_01634QqMuF91AfyHxv4QToFv",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"curl -s -X POST http://172.18.0.1:9137/upgrade\", \"description\": \"Trigger upgrade webhook\"}",
+      "output_summary": "upgrade started",
+      "is_error": false,
+      "turn_index": 3,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    }
+  ],
+  "total_tool_calls": 2,
+  "unique_tools": [
+    "Bash"
+  ],
+  "error_tool_calls": 0,
+  "read_tool_calls": 0,
+  "write_tool_calls": 2,
+  "exploration_ratio": 0.0,
+  "error_recovery_count": 0,
+  "backtrack_count": 0,
+  "final_text_snippet": "Upgrade triggered \u2014 deploying `24fe59d Merge feature/update-to-features-page: Update to Features page`.",
+  "had_crash": false,
+  "memory_injected": [],
+  "memory_used": [],
+  "memory_written": [],
+  "memory_hit_rate": 0.0,
+  "parent_run_id": null
+}

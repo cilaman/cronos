@@ -5,18 +5,24 @@ claude_session_id: 6a2c86b5-4c6d-4403-9e90-ffe3a2e89cc4
 created_at: '2026-06-03T16:31:36Z'
 depends_on:
 - 2026-06-03-1631-pipeline-analyst-features-fixes-s2-featu
+feature_key: null
+feature_state: null
 id: 2026-06-03-1631-pipeline-architect-features-fixes-s2-fea
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-03-1631-featurefix-api
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 'pipeline-architect: Features&Fixes/S2 — features API + realize + process'
 type: task
-updated_at: '2026-06-04T17:29:02Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

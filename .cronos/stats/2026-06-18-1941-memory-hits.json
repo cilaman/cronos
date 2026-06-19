@@ -1,0 +1,31 @@
+{
+  "task_id": "2026-06-18-1941-memory-hits",
+  "space_id": "cronos-development",
+  "title": "Memory hits",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-18T19:41:35.973038Z",
+      "ended_at": "2026-06-18T19:47:33.392119Z",
+      "duration_seconds": 357.42,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 12,
+      "output_tokens": 13461,
+      "cache_read_tokens": 506232,
+      "cache_creation_tokens": 44086,
+      "cost_usd": 0.519143,
+      "tool_uses": {
+        "Agent": 1,
+        "Bash": 44,
+        "Read": 17
+      },
+      "error_count": 0,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

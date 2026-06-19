@@ -5,18 +5,24 @@ claude_session_id: 4373facc-d0b9-463d-8145-c049a670f3e1
 created_at: '2026-06-03T09:08:41Z'
 depends_on:
 - 2026-06-03-0908-b1-adoption-module-manifest-watcher
+feature_key: null
+feature_state: null
 id: 2026-06-03-0908-b2-api-adopt-unadopt-list-adopted
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-03-0908-arc-5-b-adoption-vendor-mount-merge-upst
 pending_messages: []
 pr_url: null
 priority: 3
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 'B2 — API: adopt / unadopt / list adopted'
 type: task
-updated_at: '2026-06-03T12:48:04Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

@@ -5,18 +5,24 @@ claude_session_id: 285863b1-3eae-4272-94cc-8636ecd06305
 created_at: '2026-06-03T11:04:55Z'
 depends_on:
 - 2026-06-03-1104-pipeline-architect-6-4-run-lifecycle-sta
+feature_key: null
+feature_state: null
 id: 2026-06-03-1104-pipeline-implementor-6-4-run-lifecycle-s
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-03-1104-arc6-run-lifecycle
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 'pipeline-implementor: 6.4 Run lifecycle status trigger API SSE'
 type: task
-updated_at: '2026-06-03T22:18:57Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

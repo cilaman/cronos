@@ -4,18 +4,24 @@ agent_model: default
 claude_session_id: null
 created_at: '2026-06-03T09:08:41Z'
 depends_on: []
+feature_key: null
+feature_state: null
 id: 2026-06-03-0908-arc-5-b-adoption-vendor-mount-merge-upst
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: null
 pending_messages: []
 pr_url: null
 priority: 3
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 'Arc 5/B — Adoption: vendor + mount + merge upstream'
 type: goal
-updated_at: '2026-06-03T13:48:25Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

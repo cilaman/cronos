@@ -4,18 +4,24 @@ agent_model: default
 claude_session_id: e3562efc-e676-449c-bd71-d621bd7b61ef
 created_at: '2026-06-02T14:20:22Z'
 depends_on: []
+feature_key: null
+feature_state: null
 id: 2026-06-02-1420-inline-tree-expansion-of-subgoals-in-kan
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-02-1418-task-goal-tile-visualization-improvement
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: Inline tree expansion of subgoals in kanban cards
 type: goal
-updated_at: '2026-06-02T15:18:59Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

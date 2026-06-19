@@ -5,18 +5,24 @@ claude_session_id: fd739140-c50f-435b-aaee-84a8f3b958ae
 created_at: '2026-06-03T09:08:41Z'
 depends_on:
 - 2026-06-03-0908-a3-discovered-tools-sqlite-index-upsert
+feature_key: null
+feature_state: null
 id: 2026-06-03-0908-a4-refresh-api-periodic-scheduler
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-03-0908-arc-5-a-discovery-tool-sources-yml-index
 pending_messages: []
 pr_url: null
 priority: 3
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: A4 — Refresh API + periodic scheduler
 type: task
-updated_at: '2026-06-03T12:03:07Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

@@ -1,0 +1,33 @@
+{
+  "task_id": "2026-06-07-1049-test-coverage-audit",
+  "space_id": "cronos-development",
+  "title": "Test Coverage Audit",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-07T11:12:28.661452Z",
+      "ended_at": "2026-06-07T11:23:52.642560Z",
+      "duration_seconds": 683.98,
+      "model": "sonnet",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 68,
+      "output_tokens": 26168,
+      "cache_read_tokens": 5609327,
+      "cache_creation_tokens": 126491,
+      "cost_usd": 2.549863,
+      "tool_uses": {
+        "Bash": 58,
+        "Read": 11,
+        "Write": 2,
+        "Skill": 4,
+        "Edit": 1
+      },
+      "error_count": 4,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

@@ -5,18 +5,24 @@ claude_session_id: c6892206-2f39-486a-89ff-1b1fa2ba7fbb
 created_at: '2026-06-03T11:04:55Z'
 depends_on:
 - 2026-06-03-1104-pipeline-architect-6-5-cron-trigger
+feature_key: null
+feature_state: null
 id: 2026-06-03-1104-pipeline-implementor-6-5-cron-trigger
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-03-1104-arc6-cron-trigger
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 'pipeline-implementor: 6.5 Cron trigger'
 type: task
-updated_at: '2026-06-04T05:37:12Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

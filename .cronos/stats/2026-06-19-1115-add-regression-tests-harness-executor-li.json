@@ -1,0 +1,32 @@
+{
+  "task_id": "2026-06-19-1115-add-regression-tests-harness-executor-li",
+  "space_id": "cronos-development",
+  "title": "Add regression tests: harness executor lifecycle + run index update",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-19T11:30:18.990518Z",
+      "ended_at": "2026-06-19T11:37:58.771660Z",
+      "duration_seconds": 459.78,
+      "model": "sonnet",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 35,
+      "output_tokens": 18393,
+      "cache_read_tokens": 2515661,
+      "cache_creation_tokens": 97403,
+      "cost_usd": 1.39596,
+      "tool_uses": {
+        "Bash": 17,
+        "Read": 24,
+        "Write": 1,
+        "Skill": 2
+      },
+      "error_count": 1,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

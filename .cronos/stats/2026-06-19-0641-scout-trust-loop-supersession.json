@@ -1,0 +1,33 @@
+{
+  "task_id": "2026-06-19-0641-scout-trust-loop-supersession",
+  "space_id": "cronos-development",
+  "title": "scout \u2013 trust-loop-supersession",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-19T06:44:31.550918Z",
+      "ended_at": "2026-06-19T06:47:44.802446Z",
+      "duration_seconds": 193.25,
+      "model": "haiku",
+      "real_model": "claude-haiku-4-5-20251001",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 74,
+      "output_tokens": 5756,
+      "cache_read_tokens": 432627,
+      "cache_creation_tokens": 34295,
+      "cost_usd": 0.091988,
+      "tool_uses": {
+        "Agent": 1,
+        "Bash": 13,
+        "Read": 12,
+        "Write": 2,
+        "Skill": 1
+      },
+      "error_count": 3,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

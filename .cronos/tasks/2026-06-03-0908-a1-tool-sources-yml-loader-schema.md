@@ -4,18 +4,24 @@ agent_model: default
 claude_session_id: c9aafc6b-68b3-423a-b507-2c76e9dca24a
 created_at: '2026-06-03T09:08:41Z'
 depends_on: []
+feature_key: null
+feature_state: null
 id: 2026-06-03-0908-a1-tool-sources-yml-loader-schema
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-03-0908-arc-5-a-discovery-tool-sources-yml-index
 pending_messages: []
 pr_url: null
 priority: 3
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: A1 — tool_sources.yml loader + schema
 type: task
-updated_at: '2026-06-03T11:34:10Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

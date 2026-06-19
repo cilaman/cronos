@@ -5,18 +5,24 @@ claude_session_id: null
 created_at: '2026-06-03T11:04:55Z'
 depends_on:
 - 2026-06-03-1104-arc6-cron-trigger
+feature_key: null
+feature_state: null
 id: 2026-06-03-1104-arc6-event-triggers
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-03-1104-arc-6-harnesses
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: arc6 event triggers
 type: goal
-updated_at: '2026-06-04T07:11:45Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

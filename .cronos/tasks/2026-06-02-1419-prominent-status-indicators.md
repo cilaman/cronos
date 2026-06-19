@@ -4,18 +4,24 @@ agent_model: default
 claude_session_id: 959c15cf-73db-4e5a-95a6-1d1cda378aa2
 created_at: '2026-06-02T14:19:04Z'
 depends_on: []
+feature_key: null
+feature_state: null
 id: 2026-06-02-1419-prominent-status-indicators
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-02-1418-task-goal-tile-visualization-improvement
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: Prominent status indicators
 type: goal
-updated_at: '2026-06-02T14:59:55Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

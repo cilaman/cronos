@@ -4,18 +4,24 @@ agent_model: haiku
 claude_session_id: aa5f47cc-02fc-4ff3-84ed-b06f29574306
 created_at: '2026-06-04T10:39:23Z'
 depends_on: []
+feature_key: null
+feature_state: null
 id: 2026-06-04-1039-scout-harnesses-page
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-04-1039-harnesses-page-top-level-nav-landing-pag
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: scout – harnesses-page
 type: task
-updated_at: '2026-06-04T10:46:55Z'
+updated_at: '2026-06-19T12:17:49Z'
 waiting_question: null
 ---
 

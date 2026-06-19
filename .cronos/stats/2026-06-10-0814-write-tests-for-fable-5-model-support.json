@@ -1,0 +1,36 @@
+{
+  "task_id": "2026-06-10-0814-write-tests-for-fable-5-model-support",
+  "space_id": "cronos-development",
+  "title": "Write tests for fable-5 model support",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-10T08:42:05.017818Z",
+      "ended_at": "2026-06-10T08:50:09.389516Z",
+      "duration_seconds": 484.37,
+      "model": "sonnet",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 51,
+      "output_tokens": 11807,
+      "cache_read_tokens": 2153159,
+      "cache_creation_tokens": 47260,
+      "cost_usd": 1.000431,
+      "tool_uses": {
+        "Agent": 2,
+        "Glob": 7,
+        "Grep": 2,
+        "Bash": 53,
+        "Read": 23,
+        "Edit": 4,
+        "Write": 1,
+        "Skill": 3
+      },
+      "error_count": 12,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

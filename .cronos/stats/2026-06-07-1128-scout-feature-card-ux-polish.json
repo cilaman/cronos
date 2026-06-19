@@ -1,0 +1,34 @@
+{
+  "task_id": "2026-06-07-1128-scout-feature-card-ux-polish",
+  "space_id": "cronos-development",
+  "title": "scout \u2013 feature-card-ux-polish",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-08T13:55:11.817962Z",
+      "ended_at": "2026-06-08T13:59:49.788904Z",
+      "duration_seconds": 277.97,
+      "model": "haiku",
+      "real_model": "claude-haiku-4-5-20251001",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 298,
+      "output_tokens": 21408,
+      "cache_read_tokens": 2958862,
+      "cache_creation_tokens": 102936,
+      "cost_usd": 0.425515,
+      "tool_uses": {
+        "Read": 25,
+        "Grep": 1,
+        "Glob": 1,
+        "Write": 3,
+        "Skill": 1,
+        "Bash": 12
+      },
+      "error_count": 3,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

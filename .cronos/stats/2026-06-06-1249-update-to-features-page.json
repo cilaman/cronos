@@ -1,0 +1,37 @@
+{
+  "task_id": "2026-06-06-1249-update-to-features-page",
+  "space_id": "cronos-development",
+  "title": "Update to Features page",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-06T12:49:44.859980Z",
+      "ended_at": "2026-06-06T12:55:18.406921Z",
+      "duration_seconds": 333.55,
+      "model": "opus-4-8",
+      "real_model": "claude-opus-4-8",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 13691,
+      "output_tokens": 23410,
+      "cache_read_tokens": 1183230,
+      "cache_creation_tokens": 112263,
+      "cost_usd": 5.840891,
+      "tool_uses": {
+        "Read": 20,
+        "Agent": 1,
+        "Glob": 7,
+        "Grep": 1,
+        "AskUserQuestion": 1,
+        "Bash": 4,
+        "Write": 2,
+        "Skill": 1,
+        "Edit": 2
+      },
+      "error_count": 2,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

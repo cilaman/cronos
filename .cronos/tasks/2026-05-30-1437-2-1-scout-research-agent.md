@@ -4,18 +4,24 @@ agent_model: sonnet
 claude_session_id: f9d4dbea-1091-40ef-87f7-f916b1a1e4be
 created_at: '2026-05-30T14:37:55Z'
 depends_on: []
+feature_key: null
+feature_state: null
 id: 2026-05-30-1437-2-1-scout-research-agent
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-05-30-1437-pipeline-phase-agents-under-cc-v1
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 2.1 scout (research) agent
 type: task
-updated_at: '2026-05-30T16:47:43Z'
+updated_at: '2026-06-19T12:17:47Z'
 waiting_question: null
 ---
 

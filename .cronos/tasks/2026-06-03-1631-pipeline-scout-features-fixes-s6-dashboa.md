@@ -7,18 +7,24 @@ depends_on:
 - 2026-06-03-1631-pipeline-doc-sync-features-fixes-s3-gith
 - 2026-06-03-1631-pipeline-doc-sync-features-fixes-s4-deco
 - 2026-06-03-1631-pipeline-doc-sync-features-fixes-s5-feat
+feature_key: null
+feature_state: null
 id: 2026-06-03-1631-pipeline-scout-features-fixes-s6-dashboa
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-03-1631-featurefix-dashboard-e2e
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 'pipeline-scout: Features&Fixes/S6 — dashboard impact + e2e'
 type: task
-updated_at: '2026-06-05T14:22:48Z'
+updated_at: '2026-06-19T12:17:49Z'
 waiting_question: null
 ---
 

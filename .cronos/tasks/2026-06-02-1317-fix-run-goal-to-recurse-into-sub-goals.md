@@ -4,18 +4,24 @@ agent_model: sonnet
 claude_session_id: b160bb07-87b7-49ab-b11e-db59605f330d
 created_at: '2026-06-02T13:17:46Z'
 depends_on: []
+feature_key: null
+feature_state: null
 id: 2026-06-02-1317-fix-run-goal-to-recurse-into-sub-goals
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-02-1317-fix-nested-task-processing-in-goal-worke
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: Fix _run_goal() to recurse into sub-goals
 type: task
-updated_at: '2026-06-02T13:42:28Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

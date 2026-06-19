@@ -4,18 +4,24 @@ agent_model: default
 claude_session_id: null
 created_at: '2026-06-02T13:22:43Z'
 depends_on: []
+feature_key: null
+feature_state: null
 id: 2026-06-02-1322-standardise-git-feature-branch-lifecycle
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: null
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: Standardise git feature-branch lifecycle for root goals
 type: goal
-updated_at: '2026-06-02T14:17:19Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

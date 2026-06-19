@@ -4,18 +4,24 @@ agent_model: opus
 claude_session_id: a5510705-659e-4636-a944-533eac367a7d
 created_at: '2026-05-30T14:37:55Z'
 depends_on: []
+feature_key: null
+feature_state: null
 id: 2026-05-30-1437-1-1-define-cc-v1-contract
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-05-30-1437-pipeline-foundation-cc-v1-contract-schem
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 1.1 Define CC-v1 contract
 type: task
-updated_at: '2026-05-30T15:10:21Z'
+updated_at: '2026-06-19T12:17:47Z'
 waiting_question: null
 ---
 

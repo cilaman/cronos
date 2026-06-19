@@ -4,18 +4,24 @@ agent_model: default
 claude_session_id: null
 created_at: '2026-06-03T09:08:41Z'
 depends_on: []
+feature_key: null
+feature_state: null
 id: 2026-06-03-0908-arc-5-a-discovery-tool-sources-yml-index
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: null
 pending_messages: []
 pr_url: null
 priority: 3
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 'Arc 5/A — Discovery: tool_sources.yml + indexed scan'
 type: goal
-updated_at: '2026-06-03T12:18:54Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

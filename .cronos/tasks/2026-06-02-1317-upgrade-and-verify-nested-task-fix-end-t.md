@@ -5,18 +5,24 @@ claude_session_id: 2b02fa47-d3cf-4a29-a469-979454d8275c
 created_at: '2026-06-02T13:17:46Z'
 depends_on:
 - 2026-06-02-1317-add-backend-tests-for-nested-goal-execut
+feature_key: null
+feature_state: null
 id: 2026-06-02-1317-upgrade-and-verify-nested-task-fix-end-t
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-02-1317-fix-nested-task-processing-in-goal-worke
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: Upgrade and verify nested task fix end-to-end
 type: task
-updated_at: '2026-06-02T13:51:17Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

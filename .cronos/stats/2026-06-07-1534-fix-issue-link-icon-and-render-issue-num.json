@@ -1,0 +1,33 @@
+{
+  "task_id": "2026-06-07-1534-fix-issue-link-icon-and-render-issue-num",
+  "space_id": "cronos-development",
+  "title": "Fix issue link icon and render issue number (UX-1)",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-08T12:48:05.160013Z",
+      "ended_at": "2026-06-08T12:53:19.782468Z",
+      "duration_seconds": 314.62,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 49,
+      "output_tokens": 12042,
+      "cache_read_tokens": 2505806,
+      "cache_creation_tokens": 60182,
+      "cost_usd": 1.158201,
+      "tool_uses": {
+        "Grep": 7,
+        "Read": 9,
+        "Bash": 20,
+        "Edit": 5,
+        "Skill": 3
+      },
+      "error_count": 10,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

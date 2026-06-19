@@ -378,15 +378,26 @@ When the node runs, the executor:
 or a skill like `frontend-design`. (See the registered agents/skills tables in
 `CLAUDE.md`.)
 
-> **Current caveat — skill vs agent detection is degraded.** The worker wires
-> the executor's tool resolver to a stub that always returns "not found"
-> (`worker.py`, `_tools_resolver → None`). The practical effect: the brief is
-> composed via the *unresolved* path, so it embeds `Agent: <ref>` as plain text
-> rather than emitting the `/<skill-name>` skill-trigger prefix. Plain-agent
-> prompts work (the ref is named in the brief), but skill nodes will **not**
-> auto-fire as a `/skill`. Until the resolver is implemented, prefer plain
-> agents in agent nodes, or put the `/skill` invocation directly at the top of
-> `prompt_template` yourself.
+The executor's **tools resolver** (`backend/app/worker.py:resolve_tool`) looks up
+the `agent_ref` name across multiple sources:
+
+1. **Space-scoped** (under `{space}/.claude/`):
+   - Agents in `agents/` (by folder name, case-sensitive)
+   - Skills in `skills/` (by folder name or flat file name)
+   - Commands in `commands/` (by folder name)
+   - Context in `CONTEXT.md` or `contexts/`
+2. **Global scope** (under `~/.claude/`), with the same structure
+
+Space-scoped entries **shadow** global entries if there is a name collision. The
+resolver returns the first match found (in category order: agents → skills →
+commands → context). If a match is found:
+
+- **For skills**: the brief is prefixed with `/<skill-name>`, triggering the
+  `claude code /skill-name` invocation.
+- **For agents**: the brief starts with `Agent: <agent-name>`.
+
+If the name is not found in either scope, the resolved entry is `None`, and the
+brief falls back to `Agent: <ref>` (unchanged behavior).
 
 ---
 
@@ -596,12 +607,10 @@ executor is sound; the visual editor cannot feed it valid data.
 | 3 | **The prompt field does nothing even if config were saved.** | The inspector writes `config.prompt`; the executor reads `data["prompt_template"]`. Name mismatch. | Use `prompt_template` in YAML/API. |
 | 4 | **You cannot add or edit variables in the UI.** | `VariableInspector` only renders *existing* variables, and the editor passes `onVariableChange={() => {}}` (a no-op). There is no "add variable" control, and `fromReactFlow` preserves the original variables unchanged. | Edit `variables:` in YAML, or `PUT` the harness via API. |
 | 5 | **Decision edge conditions can't be set in the UI.** | The frontend edge model has a `label` field; the backend edge has `condition`. The mapping reads/writes `label`, so `condition` is never populated. | Set `condition` on edges in YAML/API. |
-| 6 | **Skill nodes don't auto-fire as `/skill`.** | The worker passes a stub tool resolver that always returns `None` (`worker.py`), so the brief composer can't detect skills. | Use plain agents, or put `/skill-name` at the top of `prompt_template`. |
 
-If you'd like, these are all fixable on the frontend side (align `config`→`data`,
+If you'd like, items 1–5 are all fixable on the frontend side (align `config`→`data`,
 `prompt`→`prompt_template`, `ports` list→dict, edge `label`→`condition`, add a
-variable editor) plus a real `tools_resolver` in the worker. Ask and I can
-scope that as a follow-up goal.
+variable editor). Ask and I can scope that as a follow-up goal.
 
 ---
 

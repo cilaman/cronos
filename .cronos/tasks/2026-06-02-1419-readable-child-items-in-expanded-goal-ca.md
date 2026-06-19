@@ -4,18 +4,24 @@ agent_model: default
 claude_session_id: 88c2e657-5b09-44ae-a803-bbf93e328656
 created_at: '2026-06-02T14:19:28Z'
 depends_on: []
+feature_key: null
+feature_state: null
 id: 2026-06-02-1419-readable-child-items-in-expanded-goal-ca
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-02-1418-task-goal-tile-visualization-improvement
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: Readable child items in expanded goal cards
 type: goal
-updated_at: '2026-06-02T15:06:30Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

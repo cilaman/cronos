@@ -1,0 +1,33 @@
+{
+  "task_id": "2026-06-18-1606-tester-fix-memory-scoring-and-injection",
+  "space_id": "cronos-development",
+  "title": "tester: Fix memory scoring and injection bugs",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-18T18:12:24.117064Z",
+      "ended_at": "2026-06-18T18:31:00.292422Z",
+      "duration_seconds": 1116.18,
+      "model": "sonnet",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 54,
+      "output_tokens": 23184,
+      "cache_read_tokens": 3027664,
+      "cache_creation_tokens": 71783,
+      "cost_usd": 1.525407,
+      "tool_uses": {
+        "Agent": 3,
+        "Bash": 73,
+        "Read": 5,
+        "Edit": 2,
+        "Skill": 1
+      },
+      "error_count": 2,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

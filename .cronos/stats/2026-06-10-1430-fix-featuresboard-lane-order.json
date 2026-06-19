@@ -1,0 +1,35 @@
+{
+  "task_id": "2026-06-10-1430-fix-featuresboard-lane-order",
+  "space_id": "cronos-development",
+  "title": "Fix FeaturesBoard lane order",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-10T15:49:11.187430Z",
+      "ended_at": "2026-06-10T15:56:17.757580Z",
+      "duration_seconds": 426.57,
+      "model": "sonnet",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 43,
+      "output_tokens": 8857,
+      "cache_read_tokens": 1865681,
+      "cache_creation_tokens": 54173,
+      "cost_usd": 0.895837,
+      "tool_uses": {
+        "Glob": 1,
+        "Read": 7,
+        "Grep": 1,
+        "Edit": 2,
+        "Bash": 18,
+        "Skill": 4,
+        "Write": 2
+      },
+      "error_count": 3,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

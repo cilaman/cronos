@@ -1,0 +1,33 @@
+{
+  "task_id": "2026-06-09-0708-respawning-tasks-and-goals",
+  "space_id": "cronos-development",
+  "title": "Respawning tasks and goals",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-09T07:18:25.817107Z",
+      "ended_at": "2026-06-09T07:43:51.491147Z",
+      "duration_seconds": 1525.67,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 108,
+      "output_tokens": 67143,
+      "cache_read_tokens": 11280488,
+      "cache_creation_tokens": 160447,
+      "cost_usd": 4.993292,
+      "tool_uses": {
+        "Bash": 95,
+        "Read": 22,
+        "Edit": 11,
+        "Skill": 3,
+        "Write": 2
+      },
+      "error_count": 8,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

@@ -1,0 +1,891 @@
+{
+  "task_id": "2026-06-19-0641-analyst-trust-loop",
+  "space_id": "cronos-development",
+  "run_index": 0,
+  "session_id": "0d3a5207-77a8-4ea3-9958-d8e297027987",
+  "model": "sonnet",
+  "real_model": "claude-sonnet-4-6",
+  "mode": "auto",
+  "started_at": "2026-06-19T06:47:44.827835Z",
+  "ended_at": "2026-06-19T06:54:28.952741Z",
+  "duration_seconds": 404.12,
+  "exit_reason": "DONE",
+  "turns": [
+    {
+      "turn_index": 0,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 2,
+      "output_tokens": 8,
+      "cache_read_tokens": 16950,
+      "cache_creation_tokens": 20664
+    },
+    {
+      "turn_index": 1,
+      "text_snippet": "I'll start by reading the scout report and the analyst agent contract to understand what's needed.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 2,
+      "output_tokens": 8,
+      "cache_read_tokens": 16950,
+      "cache_creation_tokens": 20664
+    },
+    {
+      "turn_index": 2,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01JZgkGQfjGKunw5spmHeYCV"
+      ],
+      "input_tokens": 2,
+      "output_tokens": 8,
+      "cache_read_tokens": 16950,
+      "cache_creation_tokens": 20664
+    },
+    {
+      "turn_index": 3,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_015VLx1t5nPZezt7Rr9ZkwVq"
+      ],
+      "input_tokens": 2,
+      "output_tokens": 8,
+      "cache_read_tokens": 16950,
+      "cache_creation_tokens": 20664
+    },
+    {
+      "turn_index": 4,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 37614,
+      "cache_creation_tokens": 10313
+    },
+    {
+      "turn_index": 5,
+      "text_snippet": "Let me do a quick targeted read of the key modules to validate requirements against real code.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 37614,
+      "cache_creation_tokens": 10313
+    },
+    {
+      "turn_index": 6,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_018tzZ5mFWWwEGQctphztXnS"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 37614,
+      "cache_creation_tokens": 10313
+    },
+    {
+      "turn_index": 7,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_016Zvnc8mDPtXdHuoRD6eY4G"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 8,
+      "cache_read_tokens": 37614,
+      "cache_creation_tokens": 10313
+    },
+    {
+      "turn_index": 8,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 9,
+      "cache_read_tokens": 47927,
+      "cache_creation_tokens": 1975
+    },
+    {
+      "turn_index": 9,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01XTWAodtjF88GoRJsj3E3hp"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 9,
+      "cache_read_tokens": 47927,
+      "cache_creation_tokens": 1975
+    },
+    {
+      "turn_index": 10,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_016rKYeduWiUNLiVQj3iKyCT"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 9,
+      "cache_read_tokens": 47927,
+      "cache_creation_tokens": 1975
+    },
+    {
+      "turn_index": 11,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 21,
+      "cache_read_tokens": 49902,
+      "cache_creation_tokens": 2412
+    },
+    {
+      "turn_index": 12,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_019ZQHg3CzmSnCk96ZYjWLaw"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 21,
+      "cache_read_tokens": 49902,
+      "cache_creation_tokens": 2412
+    },
+    {
+      "turn_index": 13,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 24,
+      "cache_read_tokens": 52314,
+      "cache_creation_tokens": 1481
+    },
+    {
+      "turn_index": 14,
+      "text_snippet": "Let me look at more of the worker's finalization flow to see how the run trace is accessed.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 24,
+      "cache_read_tokens": 52314,
+      "cache_creation_tokens": 1481
+    },
+    {
+      "turn_index": 15,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_016GjBhReQBydwWv8dS6LtAE"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 24,
+      "cache_read_tokens": 52314,
+      "cache_creation_tokens": 1481
+    },
+    {
+      "turn_index": 16,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 9,
+      "cache_read_tokens": 53795,
+      "cache_creation_tokens": 3354
+    },
+    {
+      "turn_index": 17,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01Cx6KSFB4v27FV4Bf9Zkeha"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 9,
+      "cache_read_tokens": 53795,
+      "cache_creation_tokens": 3354
+    },
+    {
+      "turn_index": 18,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 24,
+      "cache_read_tokens": 57149,
+      "cache_creation_tokens": 1652
+    },
+    {
+      "turn_index": 19,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01KDrfjVUiftq8gApPTyr7ML"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 24,
+      "cache_read_tokens": 57149,
+      "cache_creation_tokens": 1652
+    },
+    {
+      "turn_index": 20,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_0123TJAku3xTraen2BRE25pd"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 24,
+      "cache_read_tokens": 57149,
+      "cache_creation_tokens": 1652
+    },
+    {
+      "turn_index": 21,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 21,
+      "cache_read_tokens": 58801,
+      "cache_creation_tokens": 1979
+    },
+    {
+      "turn_index": 22,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_015XL5yPZFLjkQkKxdgZZvEo"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 21,
+      "cache_read_tokens": 58801,
+      "cache_creation_tokens": 1979
+    },
+    {
+      "turn_index": 23,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01Cc7JT1sNUZjV67Ks3UXXpL"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 59,
+      "cache_read_tokens": 60780,
+      "cache_creation_tokens": 1316
+    },
+    {
+      "turn_index": 24,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 26,
+      "cache_read_tokens": 62096,
+      "cache_creation_tokens": 360
+    },
+    {
+      "turn_index": 25,
+      "text_snippet": "Let me check the pipeline verifier to understand what path it expects for the analysis artifact.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 26,
+      "cache_read_tokens": 62096,
+      "cache_creation_tokens": 360
+    },
+    {
+      "turn_index": 26,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01RruyVmrq2R6YXS9cFkSNzs"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 26,
+      "cache_read_tokens": 62096,
+      "cache_creation_tokens": 360
+    },
+    {
+      "turn_index": 27,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_0158hUTgViBpiWLkVjpD5mdn"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 65,
+      "cache_read_tokens": 62456,
+      "cache_creation_tokens": 4639
+    },
+    {
+      "turn_index": 28,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01RxM7Me13Qfquezch8jL4XB"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 54,
+      "cache_read_tokens": 67095,
+      "cache_creation_tokens": 831
+    },
+    {
+      "turn_index": 29,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01PFHFfcqLdmroKu3MP7Zxnz"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 62,
+      "cache_read_tokens": 67926,
+      "cache_creation_tokens": 696
+    },
+    {
+      "turn_index": 30,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01L86oqL8VpwcBp3xq7g8j2S"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 60,
+      "cache_read_tokens": 68622,
+      "cache_creation_tokens": 1016
+    },
+    {
+      "turn_index": 31,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_0162iDhQMNnb4sA4YqQB8SNf"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 59,
+      "cache_read_tokens": 69638,
+      "cache_creation_tokens": 163
+    },
+    {
+      "turn_index": 32,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 27,
+      "cache_read_tokens": 69801,
+      "cache_creation_tokens": 429
+    },
+    {
+      "turn_index": 33,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01CksTncrqC5advZ9F4vdeZD"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 27,
+      "cache_read_tokens": 69801,
+      "cache_creation_tokens": 429
+    },
+    {
+      "turn_index": 34,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 23,
+      "cache_read_tokens": 70230,
+      "cache_creation_tokens": 6485
+    },
+    {
+      "turn_index": 35,
+      "text_snippet": "Let me check the pipeline-state.json and directory structure to understand the correct slug.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 23,
+      "cache_read_tokens": 70230,
+      "cache_creation_tokens": 6485
+    },
+    {
+      "turn_index": 36,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01WdkGcPnbfdvzCKjsuA8WG3"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 23,
+      "cache_read_tokens": 70230,
+      "cache_creation_tokens": 6485
+    },
+    {
+      "turn_index": 37,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 38,
+      "cache_read_tokens": 76715,
+      "cache_creation_tokens": 1680
+    },
+    {
+      "turn_index": 38,
+      "text_snippet": "I now have all the information needed. The GOAL_SLUG is `trust-loop-supersession` (from pipeline-state.json), so the artifact is `analysis-report-trust-loop-supersession.md`. Let me write the analysis report.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 38,
+      "cache_read_tokens": 76715,
+      "cache_creation_tokens": 1680
+    },
+    {
+      "turn_index": 39,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01KRiqt8guSpWgDZpSf12f39"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 38,
+      "cache_read_tokens": 76715,
+      "cache_creation_tokens": 1680
+    },
+    {
+      "turn_index": 40,
+      "text_snippet": "Now let me run the pipeline gate to verify the artifact.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 2,
+      "cache_read_tokens": 78395,
+      "cache_creation_tokens": 8035
+    },
+    {
+      "turn_index": 41,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_0164eawL3o3RzPSDzHWMU8hZ"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 2,
+      "cache_read_tokens": 78395,
+      "cache_creation_tokens": 8035
+    },
+    {
+      "turn_index": 42,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 2,
+      "output_tokens": 8,
+      "cache_read_tokens": 86430,
+      "cache_creation_tokens": 5143
+    },
+    {
+      "turn_index": 43,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_013v1p3L9cwvJHg6GYjAS9Kj"
+      ],
+      "input_tokens": 2,
+      "output_tokens": 8,
+      "cache_read_tokens": 86430,
+      "cache_creation_tokens": 5143
+    },
+    {
+      "turn_index": 44,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01XEeAuhccsJbyZJqY6ucbzW"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 64,
+      "cache_read_tokens": 91573,
+      "cache_creation_tokens": 620
+    },
+    {
+      "turn_index": 45,
+      "text_snippet": "",
+      "has_thinking": true,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 20,
+      "cache_read_tokens": 92193,
+      "cache_creation_tokens": 3372
+    },
+    {
+      "turn_index": 46,
+      "text_snippet": "Verify passed (exit 0). Now recording state.",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 20,
+      "cache_read_tokens": 92193,
+      "cache_creation_tokens": 3372
+    },
+    {
+      "turn_index": 47,
+      "text_snippet": "",
+      "has_thinking": false,
+      "tool_calls": [
+        "toolu_01QDiQRvo9DiSvsKKc75FvC4"
+      ],
+      "input_tokens": 1,
+      "output_tokens": 20,
+      "cache_read_tokens": 92193,
+      "cache_creation_tokens": 3372
+    },
+    {
+      "turn_index": 48,
+      "text_snippet": "Both VERIFY_EXIT=0 and PY_EXIT=0. Gate PROCEED.\n\ngate PASS \u2014 analysis / trust-loop-supersession\n  artifact: .cronos/pipeline/trust-loop-supersession/analysis-report-trust-loop-supersession.md\n  normalize: 2 fixes applied (dropped unrecognized strategy names)\n\nSTATUS: DONE",
+      "has_thinking": false,
+      "tool_calls": [],
+      "input_tokens": 1,
+      "output_tokens": 1,
+      "cache_read_tokens": 95565,
+      "cache_creation_tokens": 1359
+    }
+  ],
+  "tool_calls": [
+    {
+      "tool_call_index": 0,
+      "tool_use_id": "toolu_01JZgkGQfjGKunw5spmHeYCV",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/.cronos/pipeline/trust-loop-supersession/scout-report-trust-loop-supersession.md\"}",
+      "output_summary": "1\t---\n2\tcc_version: \"1.0\"\n3\tagent: pipeline-scout\n4\tslug: trust-loop-supersession\n5\tphase: scout\n6\tstatus: done\n7\tconfidence: 0.9\n8\tinputs_used:\n9\t  - memory:project-memory-system\n10\t  - memory:project-memory-lifecycle\n11\t  - memory:project-architecture\n12\t  - memory:project-pipeline-foundation\n13\t  - backend/app/memory_store.py\n14\t  - backend/app/models.py\n15\t  - backend/app/trace_parser.py\n16\t  - backend/app/memory_retrieval.py\n17\t  - backend/app/memory_lifecycle.py\n18\t  - backend/app/worker.py\n19\t  - backend/app/storage.py\n20\t  - backend/tests/test_memory_store.py\n21\t  - backend/tests/test_memory_lifecycle.py\n22\toutputs_produced:\n23\t  - .cronos/pipeline/trust-loop-supersession/scout-report-trust-loop-supersession.md\n24\tblockers: []\n25\tnext_consumer: analysis\n26\tcoverage_summary:\n27\t  searched:\n28\t    - backend/app/memory_store.py\n29\t    - backend/app/memory_retrieval.py\n30\t    - backend/app/memory_lifecycle.py\n31\t    - backend/app/trace_parser.py\n32\t    - backend/app/worker.py\n33\t  \u2026",
+      "is_error": false,
+      "turn_index": 2,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 1,
+      "tool_use_id": "toolu_015VLx1t5nPZezt7Rr9ZkwVq",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/.claude/agents/pipeline-analyst.md\"}",
+      "output_summary": "1\t---\n2\tname: pipeline-analyst\n3\tdescription: CC-v1 analysis agent for Cronos pipelines. Consumes a scout report and emits a verified analysis-report-{slug}.md (class=analysis) with has_ui, scope, requirements, and traceability. Use after the scout phase to decompose a feature request into testable requirements.\n4\tmodel: claude-sonnet-4-6\n5\ttools: Read, Grep, Glob, Bash, Write\n6\t---\n7\t\n8\t# Pipeline Analyst Agent (CC-v1)\n9\t\n10\tYou are **pipeline-analyst**, the analysis-class agent in the Cronos pipeline. You transform a verbatim feature request plus the upstream scout report into an implementable specification with full traceability from request text to acceptance criteria. You emit a single `analysis-report-{slug}.md` that passes CC-v1 verification (`class=analysis`, exit code 0 from `python -m app.pipeline.verify`).\n11\t\n12\tYou are governed by **Cronos Agent Contract v1.0** (`backend/app/pipeline/CONTRACT.md`). You NEVER write or modify source files, tests, or configuration \u2014 your only\u2026",
+      "is_error": false,
+      "turn_index": 3,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 2,
+      "tool_use_id": "toolu_018tzZ5mFWWwEGQctphztXnS",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/backend/app/memory_store.py\", \"limit\": 80}",
+      "output_summary": "1\tfrom __future__ import annotations\n2\t\n3\timport asyncio\n4\timport logging\n5\timport os\n6\timport secrets\n7\tfrom datetime import UTC, datetime\n8\tfrom pathlib import Path\n9\t\n10\timport frontmatter\n11\t\n12\tfrom .memory_lifecycle import boost, decay, should_auto_confirm, should_prune\n13\tfrom .models import MemoryItem, MemoryKind\n14\t\n15\tlog = logging.getLogger(\"cronos.memory_store\")\n16\t\n17\tCRONOS_SUBDIR = \".cronos\"\n18\tMEMORY_SUBDIR = \"memory\"\n19\tITEMS_SUBDIR = \"items\"\n20\tINDEX_FILE = \"index.md\"\n21\t\n22\t_KIND_ORDER = [\n23\t    MemoryKind.FACT,\n24\t    MemoryKind.PROCEDURE,\n25\t    MemoryKind.OBSERVATION,\n26\t    MemoryKind.REFERENCE,\n27\t]\n28\t_KIND_HEADER = {\n29\t    MemoryKind.FACT: \"Facts\",\n30\t    MemoryKind.PROCEDURE: \"Procedures\",\n31\t    MemoryKind.OBSERVATION: \"Observations\",\n32\t    MemoryKind.REFERENCE: \"References\",\n33\t}\n34\t\n35\t\n36\tCONFIRM_THRESHOLD = 3\n37\t\n38\t\n39\tclass MemoryNotFound(Exception):\n40\t    pass\n41\t\n42\t\n43\tclass MemoryStore:\n44\t    \"\"\"Persist memory items as markdown-with-frontmatte\u2026",
+      "is_error": false,
+      "turn_index": 6,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 3,
+      "tool_use_id": "toolu_016Zvnc8mDPtXdHuoRD6eY4G",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/backend/app/trace_parser.py\", \"limit\": 60}",
+      "output_summary": "1\tfrom __future__ import annotations\n2\t\n3\timport json\n4\timport re\n5\tfrom datetime import datetime\n6\tfrom typing import Any\n7\t\n8\tfrom pydantic import BaseModel, Field\n9\t\n10\t# ---------------------------------------------------------------------------\n11\t# Read-only tool heuristic \u2014 used to compute exploration_ratio\n12\t# ---------------------------------------------------------------------------\n13\t\n14\t_READ_TOOLS = frozenset({\"Read\", \"Grep\", \"Glob\", \"WebFetch\", \"WebSearch\"})\n15\t\n16\t_BASH_READ_PREFIXES = (\n17\t    \"cat \", \"head \", \"tail \", \"find \", \"ls \", \"wc \", \"diff \",\n18\t    \"git log\", \"git show\", \"git diff\", \"git status\",\n19\t)\n20\t\n21\t\n22\tdef _is_read_tool(name: str, input_summary: str) -> bool:\n23\t    if name in _READ_TOOLS:\n24\t        return True\n25\t    if name == \"Bash\":\n26\t        cmd = input_summary.lstrip(\"{\").lstrip('\"command\"').lstrip('\"').lstrip(\":\").strip()\n27\t        try:\n28\t            parsed = json.loads(input_summary) if input_summary.startswith(\"{\") else {}\n29\t          \u2026",
+      "is_error": false,
+      "turn_index": 7,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 4,
+      "tool_use_id": "toolu_01XTWAodtjF88GoRJsj3E3hp",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/backend/app/memory_store.py\", \"limit\": 100, \"offset\": 240}",
+      "output_summary": "240\t    async def get(self, scope: str, item_id: str) -> MemoryItem | None:\n241\t        async with self._lock:\n242\t            path = self._item_path(scope, item_id)\n243\t            if not path.exists():\n244\t                return None\n245\t            try:\n246\t                item = self._load_item(path)\n247\t            except Exception:\n248\t                log.exception(\"Failed to load memory item %s/%s\", scope, item_id)\n249\t                return None\n250\t            now = datetime.now(tz=UTC)\n251\t            decayed_score = decay(item.score, item.last_used_at, now)\n252\t            new_score, new_ttl = boost(decayed_score, item.ttl_until, now)\n253\t            new_ref_count = item.ref_count + 1\n254\t            boosted = item.model_copy(update={\n255\t                \"score\": new_score,\n256\t                \"ref_count\": new_ref_count,\n257\t                \"last_used_at\": now,\n258\t                \"ttl_until\": new_ttl,\n259\t            })\n260\t            if should_auto_confirm(new_ref_count):\u2026",
+      "is_error": false,
+      "turn_index": 9,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 5,
+      "tool_use_id": "toolu_016rKYeduWiUNLiVQj3iKyCT",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/backend/app/trace_parser.py\", \"limit\": 60, \"offset\": 140}",
+      "output_summary": "140\t    error_tool_calls: int = 0\n141\t    read_tool_calls: int = 0\n142\t    write_tool_calls: int = 0\n143\t    exploration_ratio: float = 0.0\n144\t    error_recovery_count: int = 0\n145\t    backtrack_count: int = 0\n146\t    final_text_snippet: str = \"\"\n147\t    had_crash: bool = False\n148\t    # Memory tracking\n149\t    memory_injected: list[str] = Field(default_factory=list)\n150\t    memory_used: list[str] = Field(default_factory=list)\n151\t    memory_written: list[str] = Field(default_factory=list)\n152\t    memory_hit_rate: float = 0.0\n153\t    # Harness linkage \u2014 set when this run was spawned from inside a harness\n154\t    parent_run_id: str | None = None\n155\t\n156\t\n157\t# ---------------------------------------------------------------------------\n158\t# Parser\n159\t# ---------------------------------------------------------------------------\n160\t\n161\tdef extract_run_trace(\n162\t    raw_events: list[dict[str, Any]],\n163\t    *,\n164\t    task_id: str,\n165\t    space_id: str,\n166\t    run_index: int,\n167\t \u2026",
+      "is_error": false,
+      "turn_index": 10,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 6,
+      "tool_use_id": "toolu_019ZQHg3CzmSnCk96ZYjWLaw",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/backend/app/worker.py\", \"limit\": 80, \"offset\": 1020}",
+      "output_summary": "1020\t                history_entry=history_entry,\n1021\t            )\n1022\t        except Exception:\n1023\t            log.exception(\"Failed to persist finalize for %s\", task_id)\n1024\t\n1025\t        # Invoke the optional task-state-change callback (wired by main.py to\n1026\t        # fan out harness triggers).  Called only on DONE transitions so that\n1027\t        # harness-trigger fans out exactly once per completed run.  Wrapped in\n1028\t        # try/except so a failing callback never aborts downstream hooks.\n1029\t        if new_state == TaskState.DONE and self._on_task_state_change is not None:\n1030\t            task_after = self.store.get(task_id)\n1031\t            space_id_for_cb = task_after.space_id if task_after is not None else (\n1032\t                task_pre.space_id if task_pre is not None else \"\"\n1033\t            )\n1034\t            try:\n1035\t                await self._on_task_state_change(\n1036\t                    space_id_for_cb,\n1037\t                    task_id,\n1038\t          \u2026",
+      "is_error": false,
+      "turn_index": 12,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 7,
+      "tool_use_id": "toolu_016GjBhReQBydwWv8dS6LtAE",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/backend/app/worker.py\", \"limit\": 100, \"offset\": 870}",
+      "output_summary": "870\t        workspace_path = DATA_DIR / task.space_id / CRONOS_SUBDIR / \"workspaces\" / task.id\n871\t        memory_injected = _memory_injected_for_workspace(workspace_path)\n872\t        retrieved_memory = None\n873\t        if self.memory_store is not None:\n874\t            try:\n875\t                retrieved_memory = await memory_retrieval.retrieve(task, task.space_id, self.memory_store) or None\n876\t            except Exception:\n877\t                log.exception(\"Failed to retrieve memory for %s\", task_id)\n878\t        run_exception: str | None = None\n879\t        result = None\n880\t        try:\n881\t            result = await run_agent(\n882\t                task,\n883\t                user_message=user_message,\n884\t                on_event=on_event,\n885\t                cancel_event=cancel_event,\n886\t                space=space,\n887\t                memory_items=retrieved_memory,\n888\t            )\n889\t        except FileNotFoundError as e:\n890\t            run_exception = f\"claude binary not found: \u2026",
+      "is_error": false,
+      "turn_index": 15,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 8,
+      "tool_use_id": "toolu_01Cx6KSFB4v27FV4Bf9Zkeha",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/backend/app/worker.py\", \"limit\": 100, \"offset\": 970}",
+      "output_summary": "970\t        if result.stopped:\n971\t            body += \"\\n\\n(stopped by user)\"\n972\t        elif result.exit_code != 0:\n973\t            body += f\"\\n\\n(exit code {result.exit_code}; stderr tail: {result.stderr_tail.strip()})\"\n974\t        history_entry = prefix + body + \"\\n```\"\n975\t\n976\t        if result.stopped:\n977\t            new_state = TaskState.WAITING\n978\t            waiting_question = \"Stopped by user.\"\n979\t        elif result.status == Status.DONE:\n980\t            # Trust STATUS:DONE even with non-zero exit (e.g., killed by upgrade webhook).\n981\t            new_state = TaskState.DONE\n982\t            waiting_question = None\n983\t        elif result.exit_code != 0:\n984\t            new_state = TaskState.WAITING\n985\t            waiting_question = f\"Agent crashed with exit code {result.exit_code}.\"\n986\t        elif result.status == Status.WAIT:\n987\t            new_state = TaskState.WAITING\n988\t            waiting_question = result.context or \"(agent asked to wait but gave no question)\"\u2026",
+      "is_error": false,
+      "turn_index": 17,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 9,
+      "tool_use_id": "toolu_01KDrfjVUiftq8gApPTyr7ML",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/backend/app/worker.py\", \"limit\": 60, \"offset\": 1100}",
+      "output_summary": "1100\t            await feature_sync.propagate_to_feature(task_id, self.store, self._pool)\n1101\t        except Exception:\n1102\t            log.exception(\"feature_sync.propagate_to_feature failed for task_id=%s\", task_id)\n1103\t\n1104\t        exit_reason = (\n1105\t            \"STOPPED\" if result.stopped\n1106\t            else (result.status.value if result.status else\n1107\t                  (\"CRASHED\" if result.exit_code != 0 else \"NO_STATUS\"))\n1108\t        )\n1109\t\n1110\t        # Pre-compute run trace when needed for memory_hit_rate, adopted_tool_uses, or saving.\n1111\t        # Doing this before RunStats lets us embed derived signals in the stats record.\n1112\t        computed_trace: RunTrace | None = None\n1113\t        if self.trace_store is not None or bool(memory_injected) or self.stats_store is not None:\n1114\t            task = self.store.get(task_id)\n1115\t            if task is not None:\n1116\t                try:\n1117\t                    from .tools.index import adopted_index_for_space\n11\u2026",
+      "is_error": false,
+      "turn_index": 19,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 10,
+      "tool_use_id": "toolu_0123TJAku3xTraen2BRE25pd",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/backend/app/trace_parser.py\", \"limit\": 60, \"offset\": 330}",
+      "output_summary": "330\t            next_tc = tool_calls[j]\n331\t            if _is_read_tool(next_tc.name, next_tc.input_summary) and write_path in next_tc.input_summary:\n332\t                backtrack_count += 1\n333\t                break\n334\t\n335\t    # Compute memory tracking fields\n336\t    mem_used: list[str] = []\n337\t    mem_written: list[str] = []\n338\t    seen_mem_used: set[str] = set()\n339\t    seen_mem_written: set[str] = set()\n340\t    for tc in tool_calls:\n341\t        m = _FILE_PATH_RE.search(tc.input_summary)\n342\t        if not m:\n343\t            continue\n344\t        slug = _memory_slug(m.group(1))\n345\t        if not slug:\n346\t            continue\n347\t        if tc.name in _MEMORY_READ_TOOLS and slug not in seen_mem_used:\n348\t            mem_used.append(slug)\n349\t            seen_mem_used.add(slug)\n350\t        elif tc.name in _MEMORY_WRITE_TOOLS and slug not in seen_mem_written:\n351\t            mem_written.append(slug)\n352\t            seen_mem_written.add(slug)\n353\t\n354\t    return RunTrace(\n355\t    \u2026",
+      "is_error": false,
+      "turn_index": 20,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 11,
+      "tool_use_id": "toolu_015XL5yPZFLjkQkKxdgZZvEo",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"grep -n \\\"_memory_slug\\\" /data/spaces/cronos-development/backend/app/trace_parser.py\", \"description\": \"Find _memory_slug function definition\"}",
+      "output_summary": "70:def _memory_slug(path: str) -> str | None:\n344:        slug = _memory_slug(m.group(1))",
+      "is_error": false,
+      "turn_index": 22,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 12,
+      "tool_use_id": "toolu_01Cc7JT1sNUZjV67Ks3UXXpL",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/backend/app/trace_parser.py\", \"limit\": 20, \"offset\": 70}",
+      "output_summary": "70\tdef _memory_slug(path: str) -> str | None:\n71\t    \"\"\"Return the filename if path points to a memory file, else None.\"\"\"\n72\t    m = _MEMORY_FILE_RE.search(path)\n73\t    return m.group(1) if m else None\n74\t\n75\t\n76\tdef _summarize_output(content: Any) -> str:\n77\t    if content is None:\n78\t        return \"\"\n79\t    if isinstance(content, str):\n80\t        return _truncate(content, 1000)\n81\t    if isinstance(content, list):\n82\t        parts = []\n83\t        for item in content:\n84\t            if isinstance(item, dict) and item.get(\"type\") == \"text\":\n85\t                parts.append(item.get(\"text\", \"\"))\n86\t            elif isinstance(item, str):\n87\t                parts.append(item)\n88\t        return _truncate(\"\\n\".join(parts), 1000)\n89\t    try:",
+      "is_error": false,
+      "turn_index": 23,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 13,
+      "tool_use_id": "toolu_01RruyVmrq2R6YXS9cFkSNzs",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"grep -n \\\"analysis\\\" /data/spaces/cronos-development/backend/app/pipeline/verify.py | head -40\", \"description\": \"Find analysis-phase path logic in verifier\"}",
+      "output_summary": "80:    \"analysis\": {\n81:        \"schema_file\": \"analysis.schema.yaml\",\n82:        \"phase_const\": \"analysis\",\n83:        \"filename_prefix\": \"analysis-report\",\n157:    \"analysis\": (\n658:def _check_analysis(result: VerifyResult, header: dict[str, Any]) -> None:\n1259:    elif agent == \"analysis\":\n1260:        _check_analysis(result, header)",
+      "is_error": false,
+      "turn_index": 26,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 14,
+      "tool_use_id": "toolu_0158hUTgViBpiWLkVjpD5mdn",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"sed -n '100,180p' /data/spaces/cronos-development/backend/app/pipeline/verify.py\", \"description\": \"Read path resolution logic in verifier\"}",
+      "output_summary": "    \"review\": {\n        \"schema_file\": \"review.schema.yaml\",\n        \"phase_const\": \"review\",\n        \"filename_prefix\": \"review-report\",\n    },\n    \"doc\": {\n        \"schema_file\": \"doc.schema.yaml\",\n        \"phase_const\": \"doc\",\n        \"filename_prefix\": \"doc-report\",\n    },\n    \"retro\": {\n        \"schema_file\": \"retro.schema.yaml\",\n        \"phase_const\": \"retro\",\n        \"filename_prefix\": \"retro\",\n    },\n}\n\n\n# ---------------------------------------------------------------------------\n# Patterns + enums repeated from the schemas for fast in-Python checks.\n# ---------------------------------------------------------------------------\n\nBLOCKER_SEVERITY_ENUM = {\"low\", \"medium\", \"high\", \"critical\"}\nFINDING_SEVERITY_ENUM = {\"critical\", \"high\", \"medium\", \"low\"}\nRETRO_FIX_TYPE_ENUM = {\n    \"normalize_rule\",\n    \"verifier_rule_or_schema_field\",\n    \"agent_prompt_refinement\",\n    \"contract_change\",\n}\nRETRO_SCORE_DIMENSIONS = (\n    \"planning\",\n    \"error_handling\",\n    \"efficiency\",\n    \"comp\u2026",
+      "is_error": false,
+      "turn_index": 27,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 15,
+      "tool_use_id": "toolu_01RxM7Me13Qfquezch8jL4XB",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"sed -n '1220,1280p' /data/spaces/cronos-development/backend/app/pipeline/verify.py\", \"description\": \"Read path resolution in main verify function\"}",
+      "output_summary": "    except OSError as exc:\n        result.retry(f\"cannot read artifact: {exc}\")\n        return result\n\n    try:\n        header, body = split_frontmatter(text)\n    except ValueError as exc:\n        result.retry(str(exc))\n        return result\n\n    if header is None:\n        result.retry(\n            \"artifact has no YAML front-matter block (must start with '---')\"\n        )\n        return result\n\n    result.header = header\n\n    # 3. Schema-driven base checks\n    schema = load_schema(agent)\n    _check_required_header_fields(result, schema, header)\n    _check_cc_version(result, header)\n    _check_agent_field(result, header)\n    _check_phase(result, agent, header)\n    _check_slug_format(result, header)\n    _check_status_value(result, header)\n    _check_blockers(result, header)\n    _check_metrics(result, schema, header)\n    _check_path_lists(result, header)\n\n    # 4. Cross-field rules R1-R6 (R7 is enforced in _check_path_lists)\n    _check_R1_R6(result, header, slug, artifact_rel)\n\n    # 5. \u2026",
+      "is_error": false,
+      "turn_index": 28,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 16,
+      "tool_use_id": "toolu_01PFHFfcqLdmroKu3MP7Zxnz",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"sed -n '1160,1230p' /data/spaces/cronos-development/backend/app/pipeline/verify.py\", \"description\": \"Read artifact path resolution logic\"}",
+      "output_summary": "                    f\"R-retro-4: findings[{idx}].id {fid!r} does not match '^F[0-9]+$'\"\n                )\n            elif fid in seen_ids:\n                result.fail(f\"R-retro-4: findings[{idx}].id {fid!r} is duplicated\")\n            else:\n                seen_ids.add(fid)\n        sev = f.get(\"severity\")\n        if sev is not None and sev not in FINDING_SEVERITY_ENUM:\n            result.fail(\n                f\"findings[{idx}].severity {sev!r} not in \"\n                f\"{sorted(FINDING_SEVERITY_ENUM)}\"\n            )\n        # R-retro-2: every finding has a fix_type from the enum.\n        fix_type = f.get(\"fix_type\")\n        if fix_type is None:\n            # already reported by required-fields check\n            pass\n        elif fix_type not in RETRO_FIX_TYPE_ENUM:\n            result.fail(\n                f\"R-retro-2: findings[{idx}].fix_type {fix_type!r} not in \"\n                f\"{sorted(RETRO_FIX_TYPE_ENUM)}\"\n            )\n        target = f.get(\"target\")\n        if target is not N\u2026",
+      "is_error": false,
+      "turn_index": 29,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 17,
+      "tool_use_id": "toolu_01L86oqL8VpwcBp3xq7g8j2S",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"grep -n \\\"canonical_artifact_relpath\\\" /data/spaces/cronos-development/backend/app/pipeline/verify.py | head -5\", \"description\": \"Find canonical_artifact_relpath function\"}",
+      "output_summary": "288:def canonical_artifact_relpath(class_name: str, slug: str) -> str:\n1205:    artifact_rel = canonical_artifact_relpath(agent, slug)",
+      "is_error": false,
+      "turn_index": 30,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 18,
+      "tool_use_id": "toolu_0162iDhQMNnb4sA4YqQB8SNf",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/backend/app/pipeline/verify.py\", \"limit\": 20, \"offset\": 288}",
+      "output_summary": "288\tdef canonical_artifact_relpath(class_name: str, slug: str) -> str:\n289\t    \"\"\"Workspace-relative path to the artifact for ``class_name`` + ``slug``.\n290\t\n291\t    Fan-out / iteration slugs use ``--`` to split a parent goal slug from a\n292\t    sub-component (e.g. ``pipeline-foundation--i2``). The directory uses the\n293\t    parent part; the filename keeps the full slug verbatim.\n294\t    \"\"\"\n295\t    cfg = CLASS_CONFIG[class_name]\n296\t    parent_slug = slug.split(\"--\", 1)[0] if \"--\" in slug else slug\n297\t    filename = f\"{cfg['filename_prefix']}-{slug}.md\"\n298\t    return f\".cronos/pipeline/{parent_slug}/{filename}\"\n299\t\n300\t\n301\tdef split_frontmatter(text: str) -> tuple[dict[str, Any] | None, str]:\n302\t    \"\"\"Return (header_dict, body). header is None if no `---` frontmatter.\"\"\"\n303\t    if not text.startswith(\"---\"):\n304\t        return None, text\n305\t    end = text.find(\"\\n---\", 3)\n306\t    if end == -1:\n307\t        return None, text",
+      "is_error": false,
+      "turn_index": 31,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 19,
+      "tool_use_id": "toolu_01CksTncrqC5advZ9F4vdeZD",
+      "name": "Read",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/.claude/skills/pipeline-gate/SKILL.md\"}",
+      "output_summary": "1\t---\n2\tname: pipeline-gate\n3\tdescription: Close the gate on one CC-v1 pipeline phase. Resolves the artifact path mechanically from goal_slug + phase, runs normalize then verify, records the result into pipeline-state.json + phases-log.jsonl, and emits STATUS: DONE on pass or STATUS: BLOCKED on fail/escalate so the Cronos worker does not advance the DAG.\n4\tlicense: Internal \u2014 Cronos project.\n5\t---\n6\t\n7\t# Pipeline Gate\n8\t\n9\tThis skill is the Cronos analogue of Delivery Notes' `post_phase_verify` helper. It is invoked from a **gate task** sitting between two pipeline-phase agents \u2014 its job is to mechanically verify the upstream agent's artifact and either greenlight downstream phases (STATUS: DONE) or halt them (STATUS: BLOCKED). It never reads markdown prose to make decisions; every gate outcome derives from the artifact's YAML header via `app.pipeline.verify`.\n10\t\n11\t## When to use\n12\t\n13\tInvoke this skill as the **only** step of any gate task that follows a pipeline-phase agent run (s\u2026",
+      "is_error": false,
+      "turn_index": 33,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 20,
+      "tool_use_id": "toolu_01WdkGcPnbfdvzCKjsuA8WG3",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"ls /data/spaces/cronos-development/.cronos/pipeline/trust-loop-supersession/ 2>/dev/null && cat /data/spaces/cronos-development/.cronos/pipeline/trust-loop-supersession/pipeline-state.json 2>/dev/null || echo \\\"no pipeline-state.json\\\"\", \"description\": \"List pipeline directory and show pipeline state\"}",
+      "output_summary": "phases-log.jsonl\npipeline-state.json\nscout-report-trust-loop-supersession.md\n{\n  \"cc_version\": \"1.0\",\n  \"goal_slug\": \"trust-loop-supersession\",\n  \"status\": \"running\",\n  \"created_at\": \"2026-06-19T06:47:42.325501+00:00\",\n  \"updated_at\": \"2026-06-19T06:47:42.327636+00:00\",\n  \"request_text\": null,\n  \"phases\": {\n    \"research\": {\n      \"phase\": \"research\",\n      \"status\": \"done\",\n      \"cc_version\": \"1.0\",\n      \"agent\": \"pipeline-scout\",\n      \"task_id\": \"2026-06-19-0641-scout-trust-loop-supersession\",\n      \"run_index\": 0,\n      \"gate\": \"auto\",\n      \"started_at\": \"\",\n      \"completed_at\": \"\",\n      \"artifact_path\": \".cronos/pipeline/trust-loop-supersession/scout-report-trust-loop-supersession.md\",\n      \"verify_result\": {\n        \"passed\": true,\n        \"errors\": [],\n        \"warnings\": [],\n        \"normalize_fixes\": [],\n        \"gate_decision\": \"proceed\",\n        \"gate_reason\": \"all checks passed\"\n      },\n      \"metrics\": {\n        \"duration_s\": 0.0,\n        \"token_spend\": 0,\n        \"\u2026",
+      "is_error": false,
+      "turn_index": 36,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 21,
+      "tool_use_id": "toolu_01KRiqt8guSpWgDZpSf12f39",
+      "name": "Write",
+      "input_summary": "{\"file_path\": \"/data/spaces/cronos-development/.cronos/pipeline/trust-loop-supersession/analysis-report-trust-loop-supersession.md\", \"content\": \"---\\ncc_version: \\\"1.0\\\"\\nagent: pipeline-analyst\\nslug: trust-loop-supersession\\nphase: analysis\\nstatus: done\\nconfidence: 0.9\\ninputs_used:\\n  - memory:project-memory-system\\n  - memory:project-memory-lifecycle\\n  - memory:project-architecture\\n  - memory:project-pipeline-foundation\\n  - .cronos/pipeline/trust-loop-supersession/scout-report-trust-loo\u2026",
+      "output_summary": "File created successfully at: /data/spaces/cronos-development/.cronos/pipeline/trust-loop-supersession/analysis-report-trust-loop-supersession.md (file state is current in your context \u2014 no need to Read it back)",
+      "is_error": false,
+      "turn_index": 39,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 22,
+      "tool_use_id": "toolu_0164eawL3o3RzPSDzHWMU8hZ",
+      "name": "Skill",
+      "input_summary": "{\"skill\": \"pipeline-gate\"}",
+      "output_summary": "Launching skill: pipeline-gate",
+      "is_error": false,
+      "turn_index": 41,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 23,
+      "tool_use_id": "toolu_013v1p3L9cwvJHg6GYjAS9Kj",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"TASK_ID=$(basename \\\"$PWD\\\")\\nSPACE_DIR=$(echo \\\"$PWD\\\" | sed 's|/.cronos/workspaces/.*||')\\n\\nexport GOAL_SLUG=\\\"trust-loop-supersession\\\"\\nexport PHASE=\\\"analysis\\\"\\nexport AGENT_NAME=\\\"pipeline-analyst\\\"\\nexport UPSTREAM_TASK_ID=\\\"2026-06-19-0641-analyst-trust-loop\\\"\\nexport RUN_INDEX=\\\"\\\"\\nexport SPACE_DIR\\n\\ncase \\\"$PHASE\\\" in\\n  implementation) export SLUG=\\\"${GOAL_SLUG}--$(echo \\\"$ITERATION_ID\\\" | tr '[:upper:]' '[:lower:]')\\\" ;;\\n  review)         export SLUG=\\\"${GOAL_SLUG}-\u2026",
+      "output_summary": "TASK_ID=2026-06-19-0641-analyst-trust-loop\nSPACE_DIR=/data/spaces/cronos-development\nSLUG=trust-loop-supersession\nGOAL_SLUG=trust-loop-supersession",
+      "is_error": false,
+      "turn_index": 43,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 24,
+      "tool_use_id": "toolu_01XEeAuhccsJbyZJqY6ucbzW",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"export GOAL_SLUG=\\\"trust-loop-supersession\\\"\\nexport PHASE=\\\"analysis\\\"\\nexport AGENT_NAME=\\\"pipeline-analyst\\\"\\nexport UPSTREAM_TASK_ID=\\\"2026-06-19-0641-analyst-trust-loop\\\"\\nexport RUN_INDEX=\\\"\\\"\\nexport SLUG=\\\"trust-loop-supersession\\\"\\nexport SPACE_DIR=\\\"/data/spaces/cronos-development\\\"\\n\\ncd \\\"${SPACE_DIR}/backend\\\"\\npython -m app.pipeline.verify \\\\\\n    --agent \\\"$PHASE\\\" \\\\\\n    --slug \\\"$SLUG\\\" \\\\\\n    --space \\\"$SPACE_DIR\\\" \\\\\\n    --normalize \\\\\\n    --json > /tmp/pipeli\u2026",
+      "output_summary": "<frozen runpy>:128: RuntimeWarning: 'app.pipeline.verify' found in sys.modules after import of package 'app.pipeline', but prior to execution of 'app.pipeline.verify'; this may result in unpredictable behaviour\nVERIFY_EXIT=0\n{\n  \"agent\": \"analysis\",\n  \"slug\": \"trust-loop-supersession\",\n  \"artifact_path\": \".cronos/pipeline/trust-loop-supersession/analysis-report-trust-loop-supersession.md\",\n  \"passed\": true,\n  \"outcome\": \"proceed\",\n  \"exit_code\": 0,\n  \"errors\": [],\n  \"warnings\": [],\n  \"normalize\": {\n    \"agent\": \"analysis\",\n    \"slug\": \"trust-loop-supersession\",\n    \"artifact_path\": \".cronos/pipeline/trust-loop-supersession/analysis-report-trust-loop-supersession.md\",\n    \"modified\": true,\n    \"fixes_applied\": [\n      \"coverage_summary.strategies[3]: dropped unknown free-text strategy 'requirements_decomposition'\",\n      \"coverage_summary.strategies[4]: dropped unknown free-text strategy 'traceability_mapping'\"\n    ],\n    \"unfixable_issues\": [],\n    \"error\": null\n  }\n}\nShell cwd was res\u2026",
+      "is_error": false,
+      "turn_index": 44,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    },
+    {
+      "tool_call_index": 25,
+      "tool_use_id": "toolu_01QDiQRvo9DiSvsKKc75FvC4",
+      "name": "Bash",
+      "input_summary": "{\"command\": \"export GOAL_SLUG=\\\"trust-loop-supersession\\\"\\nexport PHASE=\\\"analysis\\\"\\nexport AGENT_NAME=\\\"pipeline-analyst\\\"\\nexport UPSTREAM_TASK_ID=\\\"2026-06-19-0641-analyst-trust-loop\\\"\\nexport RUN_INDEX=\\\"\\\"\\nexport SPACE_DIR=\\\"/data/spaces/cronos-development\\\"\\n\\ncd \\\"${SPACE_DIR}/backend\\\"\\npython <<'PY'\\nimport asyncio, json, os, sys\\nfrom pathlib import Path\\n\\nfrom app.pipeline.state_writer import (\\n    init_pipeline, update_phase, record_phase_log,\\n    PhaseEntry, PhaseMetrics, Phase\u2026",
+      "output_summary": "GATE PROCEED \u2014 analysis / trust-loop-supersession\n  artifact: .cronos/pipeline/trust-loop-supersession/analysis-report-trust-loop-supersession.md\n  normalize: 2 fix(es) applied\nPY_EXIT=0\nShell cwd was reset to /data/spaces/cronos-development/.cronos/workspaces/2026-06-19-0641-analyst-trust-loop",
+      "is_error": false,
+      "turn_index": 47,
+      "elapsed_seconds": null,
+      "adopted_tool_id": null,
+      "adopted_tool_kind": null
+    }
+  ],
+  "total_tool_calls": 26,
+  "unique_tools": [
+    "Read",
+    "Bash",
+    "Write",
+    "Skill"
+  ],
+  "error_tool_calls": 0,
+  "read_tool_calls": 15,
+  "write_tool_calls": 11,
+  "exploration_ratio": 0.577,
+  "error_recovery_count": 0,
+  "backtrack_count": 0,
+  "final_text_snippet": "Both VERIFY_EXIT=0 and PY_EXIT=0. Gate PROCEED.\n\ngate PASS \u2014 analysis / trust-loop-supersession\n  artifact: .cronos/pipeline/trust-loop-supersession/analysis-report-trust-loop-supersession.md\n  normalize: 2 fixes applied (dropped unrecognized strategy names)\n\nSTATUS: DONE",
+  "had_crash": false,
+  "memory_injected": [],
+  "memory_used": [],
+  "memory_written": [],
+  "memory_hit_rate": 0.0,
+  "parent_run_id": null
+}

@@ -1,0 +1,85 @@
+{
+  "task_id": "2026-06-07-1532-respawning-tasks",
+  "space_id": "cronos-development",
+  "title": "Respawning tasks",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-07T15:34:45.676537Z",
+      "ended_at": "2026-06-07T15:51:53.405174Z",
+      "duration_seconds": 1027.73,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "NO_STATUS",
+      "input_tokens": 51,
+      "output_tokens": 44419,
+      "cache_read_tokens": 3571190,
+      "cache_creation_tokens": 95013,
+      "cost_usd": 2.094094,
+      "tool_uses": {
+        "Skill": 1,
+        "ToolSearch": 2,
+        "EnterPlanMode": 1,
+        "Agent": 3,
+        "Bash": 56,
+        "Read": 53,
+        "Grep": 4,
+        "Write": 1,
+        "Edit": 1,
+        "ExitPlanMode": 1
+      },
+      "error_count": 8,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    },
+    {
+      "run_index": 1,
+      "started_at": "2026-06-07T15:59:40.383836Z",
+      "ended_at": "2026-06-07T16:05:16.058505Z",
+      "duration_seconds": 335.67,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 28,
+      "output_tokens": 10731,
+      "cache_read_tokens": 3083137,
+      "cache_creation_tokens": 49178,
+      "cost_usd": 1.270408,
+      "tool_uses": {
+        "Read": 4,
+        "Edit": 7,
+        "Bash": 12,
+        "Skill": 1
+      },
+      "error_count": 2,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    },
+    {
+      "run_index": 2,
+      "started_at": "2026-06-08T04:39:01.634173Z",
+      "ended_at": "2026-06-08T04:39:10.473328Z",
+      "duration_seconds": 8.84,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "NO_STATUS",
+      "input_tokens": 4,
+      "output_tokens": 100,
+      "cache_read_tokens": 158347,
+      "cache_creation_tokens": 158616,
+      "cost_usd": 0.643826,
+      "tool_uses": {
+        "Bash": 1
+      },
+      "error_count": 0,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

@@ -5,18 +5,24 @@ claude_session_id: 18afa3a1-daa4-4af7-b5a9-57e5d12cf64a
 created_at: '2026-06-03T11:04:55Z'
 depends_on:
 - 2026-06-03-1104-pipeline-implementor-6-1-harness-model-y
+feature_key: null
+feature_state: null
 id: 2026-06-03-1104-tester-6-1-harness-model-yaml-persistenc
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-03-1104-arc6-harness-model
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 'tester: 6.1 Harness model YAML persistence CRUD API'
 type: task
-updated_at: '2026-06-03T17:29:53Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

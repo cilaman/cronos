@@ -5,18 +5,24 @@ claude_session_id: 15b8fcd4-c603-4490-befa-4a86f3973c32
 created_at: '2026-06-03T16:31:36Z'
 depends_on:
 - 2026-06-03-1631-pipeline-reviewer-features-fixes-s4-deco
+feature_key: null
+feature_state: null
 id: 2026-06-03-1631-pipeline-doc-sync-features-fixes-s4-deco
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-03-1631-featurefix-worker-decompose
 pending_messages: []
 pr_url: null
 priority: 2
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 'pipeline-doc-sync: Features&Fixes/S4 — decompose-from-backlog + feature_sync'
 type: task
-updated_at: '2026-06-05T12:49:35Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

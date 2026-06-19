@@ -1,0 +1,33 @@
+{
+  "task_id": "2026-06-06-0603-skills-stop-echoing-remote-url-in-git-sk",
+  "space_id": "cronos-development",
+  "title": "Skills: stop echoing $REMOTE_URL in git skills",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-06T06:52:56.358297Z",
+      "ended_at": "2026-06-06T06:56:01.643447Z",
+      "duration_seconds": 185.29,
+      "model": "sonnet",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 23,
+      "output_tokens": 8333,
+      "cache_read_tokens": 978251,
+      "cache_creation_tokens": 54863,
+      "cost_usd": 0.624276,
+      "tool_uses": {
+        "Read": 4,
+        "Grep": 2,
+        "Bash": 17,
+        "Edit": 1,
+        "Skill": 2
+      },
+      "error_count": 3,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

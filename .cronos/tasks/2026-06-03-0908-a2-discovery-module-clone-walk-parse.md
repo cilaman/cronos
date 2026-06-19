@@ -5,18 +5,24 @@ claude_session_id: 7afc7860-b576-4431-af09-6468f038328a
 created_at: '2026-06-03T09:08:41Z'
 depends_on:
 - 2026-06-03-0908-a1-tool-sources-yml-loader-schema
+feature_key: null
+feature_state: null
 id: 2026-06-03-0908-a2-discovery-module-clone-walk-parse
+issue_number: null
+issue_url: null
 manual_order: 0
 parent_id: 2026-06-03-0908-arc-5-a-discovery-tool-sources-yml-index
 pending_messages: []
 pr_url: null
 priority: 3
+proposed_issue_path: null
 proposed_pr_path: null
+realizes: null
 space_id: cronos-development
-state: done
+state: archived
 title: 'A2 — Discovery module: clone + walk + parse'
 type: task
-updated_at: '2026-06-03T11:45:14Z'
+updated_at: '2026-06-19T12:17:48Z'
 waiting_question: null
 ---
 

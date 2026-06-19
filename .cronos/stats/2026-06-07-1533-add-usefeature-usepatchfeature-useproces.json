@@ -1,0 +1,31 @@
+{
+  "task_id": "2026-06-07-1533-add-usefeature-usepatchfeature-useproces",
+  "space_id": "cronos-development",
+  "title": "Add useFeature, usePatchFeature, useProcessFeature, useSetRealize hooks",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-08T12:22:38.989079Z",
+      "ended_at": "2026-06-08T12:24:08.599540Z",
+      "duration_seconds": 89.61,
+      "model": "default",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 18,
+      "output_tokens": 3676,
+      "cache_read_tokens": 625980,
+      "cache_creation_tokens": 41387,
+      "cost_usd": 0.398189,
+      "tool_uses": {
+        "Read": 2,
+        "Bash": 9,
+        "Skill": 3
+      },
+      "error_count": 2,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}

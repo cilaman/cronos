@@ -1,0 +1,34 @@
+{
+  "task_id": "2026-06-10-0814-add-fable-5-to-backend-model-definitions",
+  "space_id": "cronos-development",
+  "title": "Add fable-5 to backend model definitions",
+  "runs": [
+    {
+      "run_index": 0,
+      "started_at": "2026-06-10T08:37:00.783445Z",
+      "ended_at": "2026-06-10T08:39:31.128387Z",
+      "duration_seconds": 150.34,
+      "model": "sonnet",
+      "real_model": "claude-sonnet-4-6",
+      "mode": "auto",
+      "exit_reason": "DONE",
+      "input_tokens": 36,
+      "output_tokens": 7357,
+      "cache_read_tokens": 1204445,
+      "cache_creation_tokens": 33646,
+      "cost_usd": 0.597969,
+      "tool_uses": {
+        "Grep": 2,
+        "Bash": 18,
+        "Read": 4,
+        "Edit": 5,
+        "Skill": 3,
+        "Write": 1
+      },
+      "error_count": 5,
+      "had_crash": false,
+      "memory_hit_rate": null,
+      "adopted_tool_uses": {}
+    }
+  ]
+}
