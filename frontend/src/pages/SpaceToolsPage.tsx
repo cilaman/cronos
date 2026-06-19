@@ -30,7 +30,7 @@ const KIND_ICON: Record<string, string> = {
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function ScopeBadge({ scope }: { scope: "space" | "global" }) {
+function ScopeBadge({ scope }: { scope: "space" | "global" | "plugin" }) {
   return (
     <span
       className={cn(

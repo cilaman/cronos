@@ -43,7 +43,7 @@ const CATEGORY_STYLE: Record<
   },
 };
 
-function ScopeBadge({ scope }: { scope: "space" | "global" }) {
+function ScopeBadge({ scope }: { scope: "space" | "global" | "plugin" }) {
   return (
     <span
       className={cn(
