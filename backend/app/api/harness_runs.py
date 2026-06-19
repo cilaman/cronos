@@ -94,10 +94,40 @@ async def get_harness_run(run_id: str, request: Request) -> dict:
 
     run_state = load(path)
     if run_state is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Run state file for {run_id!r} not found",
-        )
+        # Fallback: check the run index — run may be pending (executor not started yet)
+        # or state file may have been lost. Return a minimal synthetic state so the UI
+        # shows "running" instead of an error.
+        import json as _json
+
+        index_dir = space_dir / ".cronos" / "harness-runs"
+        found_in_index = False
+        if index_dir.is_dir():
+            for idx_file in index_dir.glob("*-index.json"):
+                try:
+                    entries = _json.loads(idx_file.read_text())
+                    for entry in entries:
+                        if entry.get("run_id") == run_id:
+                            found_in_index = True
+                            break
+                except Exception:
+                    pass
+                if found_in_index:
+                    break
+        if not found_in_index:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Run {run_id!r} not found",
+            )
+        return {
+            "run_id": run_id,
+            "harness_id": "",
+            "goal_task_id": run_id,
+            "status": "running",
+            "waiting_node_id": None,
+            "nodes_executed": {},
+            "started_at": None,
+            "ended_at": None,
+        }
 
     return run_state.to_dict()
 
