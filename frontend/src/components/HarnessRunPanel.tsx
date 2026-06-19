@@ -180,13 +180,23 @@ export function HarnessRunPanel({ runId, spaceId, harnessId }: HarnessRunPanelPr
   }
 
   // Error state
-  if (isError || !run) {
+  if (isError) {
     return (
       <div
         className="rounded-md border border-danger/20 bg-danger/5 px-4 py-3 text-[12px] text-danger"
         data-testid="run-panel-error"
       >
-        Failed to load run state.
+        Run details unavailable. The executor may not have started yet — refresh in a moment.
+      </div>
+    );
+  }
+  if (!run) {
+    return (
+      <div
+        className="rounded-md border border-danger/20 bg-danger/5 px-4 py-3 text-[12px] text-danger"
+        data-testid="run-panel-error"
+      >
+        Run not found.
       </div>
     );
   }

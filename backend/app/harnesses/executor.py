@@ -580,6 +580,25 @@ class HarnessExecutor:
                     )
                 # else: pending — do not enqueue successors; aggregator stays out of queue
 
+            elif node.type == NodeType.trigger:
+                # Trigger nodes are entry points only — treat as immediate pass-through.
+                now = _utcnow_iso()
+                state.nodes_executed[node_id] = NodeState(
+                    status="done",
+                    ended_at=now,
+                )
+                self._publish_event(run_goal_id, {
+                    "type": "node_transition",
+                    "node_id": node_id,
+                    "from_status": "pending",
+                    "to_status": "done",
+                    "timestamp": now,
+                })
+                _maybe_save(state, run_state_path)
+                self._enqueue_successors(
+                    node_id, successors, state, in_degree, in_queue, ready_queue
+                )
+
             else:
                 # Unknown node type — log and skip.
                 log.warning("Node %s has unknown type %r; skipping.", node_id, node.type)

@@ -397,7 +397,7 @@ async def lifespan(app: FastAPI):
     app.state.discovery_db_path = DISCOVERY_DB_PATH
     app.state.discovery_sources_path = DISCOVERY_SOURCES_PATH
 
-    worker_pool = WorkerPool(task_store, space_store, stats_store=stats_store, trace_store=trace_store, memory_store=memory_store)
+    worker_pool = WorkerPool(task_store, space_store, stats_store=stats_store, trace_store=trace_store, memory_store=memory_store, harness_store=harness_store)
     feature_hooks.configure_pool(worker_pool)
 
     # Build the on_task_state_change closure that will be injected into each
