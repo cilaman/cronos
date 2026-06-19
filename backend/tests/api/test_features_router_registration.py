@@ -80,15 +80,31 @@ def authed_client(test_app):
 # ---------------------------------------------------------------------------
 
 
+def _iter_route_paths(routes):
+    """Yield every route path reachable from an app's route table.
+
+    Starlette/FastAPI changed `include_router` to wrap included routers in an
+    `_IncludedRouter` object (exposing `original_router`) rather than copying
+    the sub-routes onto `app.routes` directly. Walk both shapes so the
+    registration check is version-agnostic.
+    """
+    for route in routes:
+        path = getattr(route, "path", "")
+        if path:
+            yield path
+        nested = getattr(route, "routes", None)
+        if nested is None:
+            original = getattr(route, "original_router", None)
+            nested = getattr(original, "routes", None)
+        if nested:
+            yield from _iter_route_paths(nested)
+
+
 def test_features_routes_registered():
     """The features router must expose at least one route under /api/features."""
     from app.main import app
 
-    prefixes = set()
-    for route in app.routes:
-        path = getattr(route, "path", "")
-        if path.startswith("/api/features"):
-            prefixes.add(path)
+    prefixes = {p for p in _iter_route_paths(app.routes) if p.startswith("/api/features")}
 
     assert prefixes, (
         "No routes with prefix /api/features found in app.routes. "

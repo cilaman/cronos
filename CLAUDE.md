@@ -69,7 +69,7 @@ HTTP Basic Auth via Caddy on every request. `/api/health` is public (no auth). C
 | `backend/app/space_storage.py` | Space persistence, layouts, settings, `.cronos` subdirectory management |
 | `backend/app/agent.py` | Agent spawning, stdout/stderr capture, status tracking |
 | `backend/app/file_service.py` | File classification and listing utilities (classify_file, list_files, list_git_changed_files, resolve_safe); FileEntry model; used by space file endpoints and task file operations |
-| `backend/app/worker.py` | Background task processor (goals, agent execution, state transitions); harness run lifecycle execution, event publishing for SSE streams; post-task-completion trust-loop hook nudges retrieved memory confidence (±0.05/±0.1) based on task outcome |
+| `backend/app/worker.py` | Background task processor (goals, agent execution, state transitions); harness run lifecycle execution, event publishing for SSE streams; post-task-completion trust-loop hook nudges retrieved memory confidence (±0.05/±0.1) based on task outcome; `_persist_cronos_remember_blocks()` captures structured CRONOS_REMEMBER sentinel blocks from agent final_text and persists them as unconfirmed MemoryItems (parallel to MEMORY: path) |
 | `backend/app/models.py` | Pydantic schemas: TaskState, Task, Space, View, agent modes/models |
 | `backend/app/trace_parser.py` | Parse `STATUS:` fields from agent stdout, extract RunTrace (result, exit_reason, parent_run_id, memory_hit_rate, `memory_used` bare IDs, etc.); `_memory_slug()` strips `.md` suffix from memory file paths |
 | `backend/app/api/tasks.py` | Task CRUD, state transitions, drag-drop reordering, lane overrides (29 KB) |
@@ -89,6 +89,7 @@ HTTP Basic Auth via Caddy on every request. `/api/health` is public (no auth). C
 | `backend/app/harnesses/run_index.py` | Append-only per-harness run history index with concurrent-safe locking; `read_index()`, `append_run()`, `update_run_status()` |
 | `backend/app/harnesses/run_trigger.py` | Shared `enqueue_harness_run` helper — task creation, run index append, worker registration; used by POST /run endpoint and cron loop |
 | `backend/app/harnesses/cron.py` | Stateless cron-trigger background loop — `should_fire(expression, timezone, prev_tick, now)`, `has_active_run()`, `cron_loop()` with overlap guard and croniter integration |
+| `backend/app/memory_parser.py` | Parse `MEMORY:` inline markers/fenced blocks and structured `CRONOS_REMEMBER` fenced blocks from agent output; `parse_memory_blocks()` → list[MemoryBlock], `parse_cronos_remember_blocks()` → list[CronosRememberBlock]; YAML-safe parsing with silent-skip on malformed/missing-required-fields |
 | `backend/app/memory_store.py` | Shared context storage (list, retrieve, prune); `nudge_confidence(scope, item_id, delta)` adjusts memory item confidence (clamped to [0.0, 1.0]) to implement outcome-linked trust updates |
 | `backend/app/harnesses/triggers.py` | Event routing core — `EventBusEvent` dataclass, `EventDebouncer` in-memory dedup, `fan_out_to_harnesses()` async dispatcher with pattern matching and harness selection |
 | `backend/app/git_ops.py` | `git clone/commit/push` wrappers for repo-linked spaces |

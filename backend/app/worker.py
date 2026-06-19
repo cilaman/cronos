@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import re
@@ -14,7 +15,7 @@ from .agent import AgentResult, CRONOS_SUBDIR, DATA_DIR, Status, run_agent
 from . import feature_sync
 from . import goal_sync
 from . import memory_retrieval
-from .memory_parser import parse_memory_blocks
+from .memory_parser import parse_cronos_remember_blocks, parse_memory_blocks
 from .memory_store import MemoryStore
 from .feature_state import FeatureState
 from .models import AiToolEntry, TaskState
@@ -1212,6 +1213,17 @@ class Worker:
                         except Exception:
                             log.exception("Failed to save memory block for %s", task_id)
 
+        # Capture CRONOS_REMEMBER structured sentinel blocks (parallel to MEMORY:).
+        if self.memory_store is not None and result.final_text:
+            task = self.store.get(task_id)
+            if task is not None:
+                await self._persist_cronos_remember_blocks(
+                    result.final_text,
+                    space_id=task.space_id,
+                    sources=[f"task:{task_id}", f"run:{run_index}"],
+                    log_id=task_id,
+                )
+
         # Auto-resume when the agent hit the turn limit mid-task (up to 3 times
         # per task to prevent infinite loops).
         _MAX_AUTO_RESUMES = 3
@@ -1269,6 +1281,42 @@ class Worker:
                 log.exception("Failed to resume %s for pending messages", task_id)
                 return
             await self.enqueue(task_id, user_message=combined)
+
+    async def _persist_cronos_remember_blocks(
+        self,
+        final_text: str,
+        *,
+        space_id: str,
+        sources: list[str],
+        log_id: str,
+    ) -> None:
+        """Persist CRONOS_REMEMBER structured sentinel blocks as unconfirmed memory.
+
+        Field mapping (design R3): name->title, type->kind, description+body->body,
+        metadata->links=[json.dumps(metadata)]. Items are created confirmed=False.
+        The parser is structured (yaml.safe_load over a fenced block, type
+        whitelisted against MemoryKind) — no regex over model free-text. Note (R7):
+        sentinel-persisted items are intentionally NOT reflected in
+        RunTrace.memory_written, which only tracks the MEMORY: path.
+        """
+        if self.memory_store is None or not final_text:
+            return
+        cr_blocks = parse_cronos_remember_blocks(final_text)
+        for block in cr_blocks:
+            try:
+                body = f"{block.description}\n\n{block.body}" if block.body else block.description
+                links = [json.dumps(block.metadata)] if block.metadata else []
+                await self.memory_store.create(
+                    scope=f"space:{space_id}",
+                    kind=block.type,
+                    title=block.name,
+                    body=body,
+                    confirmed=False,
+                    sources=sources,
+                    links=links,
+                )
+            except Exception:
+                log.exception("Failed to save CRONOS_REMEMBER block for %s", log_id)
 
     async def _finalize_child(
         self,
@@ -1352,6 +1400,17 @@ class Worker:
                             )
                         except Exception:
                             log.exception("Failed to save memory block for child %s", child_id)
+
+        # Capture CRONOS_REMEMBER structured sentinel blocks (parallel to MEMORY:).
+        if self.memory_store is not None and result is not None and result.final_text:
+            child_task = self.store.get(child_id)
+            if child_task is not None:
+                await self._persist_cronos_remember_blocks(
+                    result.final_text,
+                    space_id=child_task.space_id,
+                    sources=[f"task:{child_id}"],
+                    log_id=child_id,
+                )
 
         if result is not None and (self.trace_store is not None or self.stats_store is not None):
             child_task = self.store.get(child_id)
