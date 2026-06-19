@@ -340,6 +340,48 @@ class SpaceToolsResponse(BaseModel):
     adopted: list[AdoptedToolEntry] = []
 
 
+# ---------------------------------------------------------------------------
+# Plugin Management
+# ---------------------------------------------------------------------------
+
+class PluginComponent(BaseModel):
+    name: str
+    kind: Literal["agent", "skill", "command"]
+
+
+class PluginEntry(BaseModel):
+    id: str
+    name: str
+    marketplace: str | None = None
+    version: str | None = None
+    scope: str = "user"
+    enabled: bool = True
+    components: list[PluginComponent] = []
+    installPath: str | None = None
+    installedAt: str | None = None
+    lastUpdated: str | None = None
+
+
+class MarketplacePluginEntry(BaseModel):
+    pluginId: str
+    name: str
+    description: str | None = None
+    marketplaceName: str | None = None
+    source: str | None = None
+    installCount: int = 0
+
+
+class MarketplaceEntry(BaseModel):
+    name: str
+    source: str
+
+
+class PluginsResponse(BaseModel):
+    installed: list[PluginEntry] = []
+    available: list[MarketplacePluginEntry] = []
+    marketplaces: list[MarketplaceEntry] = []
+
+
 class AiToolDetail(BaseModel):
     name: str
     path: str
@@ -375,45 +417,3 @@ class MemoryItem(BaseModel):
     ttl_until: datetime | None = None
     sources: list[str] = Field(default_factory=list)
     links: list[str] = Field(default_factory=list)
-
-
-# ---------------------------------------------------------------------------
-# Plugin Management
-# ---------------------------------------------------------------------------
-
-class PluginComponent(BaseModel):
-    name: str
-    kind: str  # "agent" | "skill" | "command"
-
-
-class PluginEntry(BaseModel):
-    id: str
-    name: str
-    marketplace: str | None = None
-    version: str | None = None
-    scope: str
-    enabled: bool
-    components: list[PluginComponent]
-    installPath: str | None = None
-    installedAt: str | None = None
-    lastUpdated: str | None = None
-
-
-class MarketplacePluginEntry(BaseModel):
-    pluginId: str
-    name: str
-    description: str | None = None
-    marketplaceName: str | None = None
-    source: str | None = None
-    installCount: int
-
-
-class MarketplaceEntry(BaseModel):
-    name: str
-    source: str
-
-
-class PluginsResponse(BaseModel):
-    installed: list[PluginEntry]
-    available: list[MarketplacePluginEntry]
-    marketplaces: list[MarketplaceEntry]
