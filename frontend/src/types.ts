@@ -408,8 +408,48 @@ export interface AiToolEntry {
   name: string;
   path: string;
   description: string | null;
-  scope: "space" | "global";
+  scope: "space" | "global" | "plugin";
   modified_at: string;
+}
+
+// --- Plugin Management ---
+
+export interface PluginComponent {
+  name: string;
+  kind: "agent" | "skill" | "command";
+}
+
+export interface PluginEntry {
+  id: string;
+  name: string;
+  marketplace?: string | null;
+  version?: string | null;
+  scope: string;
+  enabled: boolean;
+  components: PluginComponent[];
+  installPath?: string | null;
+  installedAt?: string | null;
+  lastUpdated?: string | null;
+}
+
+export interface MarketplacePluginEntry {
+  pluginId: string;
+  name: string;
+  description: string | null;
+  marketplaceName: string | null;
+  source: string | null;
+  installCount: number;
+}
+
+export interface MarketplaceEntry {
+  name: string;
+  source: string;
+}
+
+export interface PluginsResponse {
+  installed: PluginEntry[];
+  available: MarketplacePluginEntry[];
+  marketplaces: MarketplaceEntry[];
 }
 
 export interface HookEntry {

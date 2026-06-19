@@ -13,6 +13,7 @@ import type {
   GlobalStats,
   Harness,
   MemoryItem,
+  PluginsResponse,
   ReplyResponse,
   RunTrace,
   Space,
@@ -452,5 +453,38 @@ export const api = {
     request<FeatureRead>(`/api/features/${featureId}/realize`, {
       method: "PATCH",
       body: JSON.stringify(body),
+    }),
+
+  // --- plugins ---
+  plugins: (): Promise<PluginsResponse> =>
+    request<PluginsResponse>("/api/plugins"),
+  installPlugin: (pluginId: string, scope = "user"): Promise<PluginsResponse> =>
+    request<PluginsResponse>("/api/plugins/install", {
+      method: "POST",
+      body: JSON.stringify({ plugin_id: pluginId, scope }),
+    }),
+  uninstallPlugin: (pluginId: string): Promise<PluginsResponse> =>
+    request<PluginsResponse>("/api/plugins/uninstall", {
+      method: "POST",
+      body: JSON.stringify({ plugin_id: pluginId }),
+    }),
+  enablePlugin: (pluginId: string): Promise<PluginsResponse> =>
+    request<PluginsResponse>("/api/plugins/enable", {
+      method: "POST",
+      body: JSON.stringify({ plugin_id: pluginId }),
+    }),
+  disablePlugin: (pluginId: string): Promise<PluginsResponse> =>
+    request<PluginsResponse>("/api/plugins/disable", {
+      method: "POST",
+      body: JSON.stringify({ plugin_id: pluginId }),
+    }),
+  addMarketplace: (source: string): Promise<PluginsResponse> =>
+    request<PluginsResponse>("/api/plugins/marketplaces", {
+      method: "POST",
+      body: JSON.stringify({ source }),
+    }),
+  removeMarketplace: (name: string): Promise<PluginsResponse> =>
+    request<PluginsResponse>(`/api/plugins/marketplaces/${encodeURIComponent(name)}`, {
+      method: "DELETE",
     }),
 };
