@@ -1,7 +1,18 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { VariableInspector } from '../VariableInspector';
 import type { HarnessNode, HarnessEdge, Harness } from '../../../types';
+
+// ---------------------------------------------------------------------------
+// Mock api module for datalist tests
+// ---------------------------------------------------------------------------
+vi.mock('../../../api', () => ({
+  api: {
+    spaceTools: vi.fn(),
+  },
+}));
+
+import { api } from '../../../api';
 
 // ---------------------------------------------------------------------------
 // Fixture helpers
@@ -402,5 +413,136 @@ describe('VariableInspector — variables panel', () => {
       />,
     );
     expect(screen.getByText('No harness loaded.')).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R6: agent_ref datalist (spaceId prop)
+// ---------------------------------------------------------------------------
+
+describe('VariableInspector — agent_ref datalist (R6)', () => {
+  beforeEach(() => {
+    vi.mocked(api.spaceTools).mockReset();
+  });
+
+  it('renders datalist options from api.spaceTools when spaceId is set', async () => {
+    vi.mocked(api.spaceTools).mockResolvedValue({
+      space_id: 'space-1',
+      agents: [
+        { name: 'my-agent', path: 'agents/my-agent.md', description: null, scope: 'space', modified_at: '' },
+      ],
+      skills: [
+        { name: 'my-plugin:my-skill', path: 'skills/my-skill.md', description: null, scope: 'plugin', modified_at: '' },
+      ],
+      commands: [],
+      context_files: [],
+      hooks: [],
+      permissions: [],
+      has_claude_md: false,
+      adopted: [],
+    });
+
+    const node = makeNode('agent', { agent_ref: '', prompt_template: '' });
+    render(
+      <VariableInspector
+        selectedNode={node}
+        harness={makeHarness()}
+        onNodeChange={vi.fn()}
+        onVariableChange={vi.fn()}
+        spaceId="space-1"
+      />,
+    );
+
+    // Wait for the async spaceTools call to resolve and options to appear
+    await waitFor(() => {
+      const datalist = document.getElementById('agent-ref-options');
+      expect(datalist).toBeTruthy();
+      const options = datalist!.querySelectorAll('option');
+      const values = Array.from(options).map((o) => o.getAttribute('value'));
+      expect(values).toContain('my-agent');
+      expect(values).toContain('my-plugin:my-skill');
+    });
+  });
+
+  it('agent_ref input has list attribute referencing the datalist', async () => {
+    vi.mocked(api.spaceTools).mockResolvedValue({
+      space_id: 'space-1',
+      agents: [
+        { name: 'scout', path: '', description: null, scope: 'space', modified_at: '' },
+      ],
+      skills: [],
+      commands: [],
+      context_files: [],
+      hooks: [],
+      permissions: [],
+      has_claude_md: false,
+      adopted: [],
+    });
+
+    const node = makeNode('agent', { agent_ref: '', prompt_template: '' });
+    render(
+      <VariableInspector
+        selectedNode={node}
+        harness={makeHarness()}
+        onNodeChange={vi.fn()}
+        onVariableChange={vi.fn()}
+        spaceId="space-1"
+      />,
+    );
+
+    const input = screen.getByLabelText('agent_ref') as HTMLInputElement;
+    expect(input.getAttribute('list')).toBe('agent-ref-options');
+  });
+
+  it('free-text still updates agent_ref when spaceId is provided', async () => {
+    vi.mocked(api.spaceTools).mockResolvedValue({
+      space_id: 'space-1',
+      agents: [],
+      skills: [],
+      commands: [],
+      context_files: [],
+      hooks: [],
+      permissions: [],
+      has_claude_md: false,
+      adopted: [],
+    });
+
+    const onNodeChange = vi.fn();
+    const node = makeNode('agent', { agent_ref: '', prompt_template: '' });
+    render(
+      <VariableInspector
+        selectedNode={node}
+        harness={makeHarness()}
+        onNodeChange={onNodeChange}
+        onVariableChange={vi.fn()}
+        spaceId="space-1"
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText('agent_ref'), { target: { value: 'custom-agent' } });
+    expect(onNodeChange).toHaveBeenCalledWith('node-1', {
+      agent_ref: 'custom-agent',
+      prompt_template: '',
+    });
+  });
+
+  it('does not crash and leaves datalist empty when spaceId is undefined', () => {
+    const node = makeNode('agent', { agent_ref: '', prompt_template: '' });
+    render(
+      <VariableInspector
+        selectedNode={node}
+        harness={makeHarness()}
+        onNodeChange={vi.fn()}
+        onVariableChange={vi.fn()}
+      />,
+    );
+
+    // api.spaceTools should NOT have been called
+    expect(api.spaceTools).not.toHaveBeenCalled();
+
+    // datalist should be present but empty
+    const datalist = document.getElementById('agent-ref-options');
+    expect(datalist).toBeTruthy();
+    expect(datalist!.querySelectorAll('option').length).toBe(0);
   });
 });

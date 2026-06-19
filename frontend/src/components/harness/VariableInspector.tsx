@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { HarnessNode, HarnessEdge, Harness } from '../../types';
+import { api } from '../../api';
 
 interface VariableInspectorProps {
   selectedNode: HarnessNode | null;
@@ -9,6 +10,7 @@ interface VariableInspectorProps {
   onVariableChange: (key: string, value: string) => void;
   onVariableAdd?: (key: string, value: string) => void;
   onVariableRemove?: (key: string) => void;
+  spaceId?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -39,25 +41,51 @@ const SELECT_CLS =
 // Per-node-type config sections
 // ---------------------------------------------------------------------------
 
+const AGENT_REF_DATALIST_ID = 'agent-ref-options';
+
 function AgentConfig({
   nodeId,
   data,
   onNodeChange,
+  spaceId,
 }: {
   nodeId: string;
   data: Record<string, unknown>;
   onNodeChange: (id: string, d: Record<string, unknown>) => void;
+  spaceId?: string;
 }) {
   const agentRef = typeof data.agent_ref === 'string' ? data.agent_ref : '';
   const promptTemplate =
     typeof data.prompt_template === 'string' ? data.prompt_template : '';
 
+  const [agentOptions, setAgentOptions] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!spaceId) return;
+    let cancelled = false;
+    api.spaceTools(spaceId).then((resp) => {
+      if (cancelled) return;
+      const agentNames = resp.agents.map((a) => a.name);
+      const skillNames = resp.skills.map((s) => s.name);
+      setAgentOptions([...agentNames, ...skillNames]);
+    }).catch(() => {
+      // Graceful degradation: leave datalist empty on error
+    });
+    return () => { cancelled = true; };
+  }, [spaceId]);
+
   return (
     <div className="flex flex-col gap-2">
+      <datalist id={AGENT_REF_DATALIST_ID}>
+        {agentOptions.map((name) => (
+          <option key={name} value={name} />
+        ))}
+      </datalist>
       <Field label="agent_ref">
         <input
           aria-label="agent_ref"
           className={INPUT_CLS}
+          list={AGENT_REF_DATALIST_ID}
           value={agentRef}
           onChange={(e) =>
             onNodeChange(nodeId, { ...data, agent_ref: e.target.value })
@@ -441,6 +469,7 @@ export function VariableInspector({
   onVariableChange,
   onVariableAdd,
   onVariableRemove,
+  spaceId,
 }: VariableInspectorProps) {
   const panelCls =
     'p-3 border-l border-hairline bg-surface-1 w-56 shrink-0 overflow-y-auto';
@@ -489,7 +518,7 @@ export function VariableInspector({
       <div className={panelCls}>
         <div className={headerCls}>{titleMap[type] ?? 'Node Config'}</div>
         {type === 'agent' && (
-          <AgentConfig nodeId={id} data={data} onNodeChange={onNodeChange} />
+          <AgentConfig nodeId={id} data={data} onNodeChange={onNodeChange} spaceId={spaceId} />
         )}
         {type === 'wait' && (
           <WaitConfig nodeId={id} data={data} onNodeChange={onNodeChange} />

@@ -6,6 +6,7 @@ import { formatRelative } from "../utils/format";
 import type { AdoptedTool, AiToolEntry, HookEntry, PermissionEntry } from "../types";
 import { ToolDetailPanel } from "../components/ToolDetailPanel";
 import { DiscoveryPanel } from "../components/DiscoveryPanel";
+import { PluginsPanel } from "../components/PluginsPanel";
 import { AdoptedToolTelemetry } from "../components/AdoptedToolTelemetry";
 
 // ---------------------------------------------------------------------------
@@ -361,11 +362,12 @@ function AdoptedSection({
 // Page
 // ---------------------------------------------------------------------------
 
-type Tab = "installed" | "discover";
+type Tab = "installed" | "discover" | "plugins";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "installed", label: "Installed" },
   { id: "discover", label: "Discover" },
+  { id: "plugins", label: "Plugins" },
 ];
 
 export function SpaceToolsPage() {
@@ -457,7 +459,7 @@ export function SpaceToolsPage() {
           </h1>
         </div>
 
-        {/* Space selector (only relevant for Installed tab) */}
+        {/* Space selector (only relevant for Installed tab; hidden for Discover and Plugins) */}
         {activeTab === "installed" && (
           <div className="flex items-center gap-2">
             {spacesLoading ? (
@@ -512,6 +514,9 @@ export function SpaceToolsPage() {
       {activeTab === "discover" && (
         <DiscoveryPanel spaceId={activeSpaceId} adoptedKeys={adoptedKeys} />
       )}
+
+      {/* Plugins tab */}
+      {activeTab === "plugins" && <PluginsPanel />}
 
       {/* Installed tab */}
       {activeTab === "installed" && (
