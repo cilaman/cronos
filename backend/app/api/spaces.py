@@ -253,7 +253,7 @@ async def update_space(space_id: str, body: UpdateSpaceBody, request: Request) -
         raise HTTPException(status_code=400, detail=str(e)) from None
 
 
-@router.delete("/{space_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{space_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 async def delete_space(
     space_id: str,
     request: Request,

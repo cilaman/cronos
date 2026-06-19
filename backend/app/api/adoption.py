@@ -53,7 +53,7 @@ async def adopt_tool(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.delete("/{space_id}/adopt/{kind}/{name}", status_code=204)
+@router.delete("/{space_id}/adopt/{kind}/{name}", status_code=204, response_class=Response)
 async def unadopt_tool(
     space_id: str,
     kind: str,

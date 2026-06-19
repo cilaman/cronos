@@ -4,7 +4,7 @@ import logging
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
@@ -138,10 +138,11 @@ async def reject_item(scope: str, item_id: str, request: Request) -> MemoryItem:
         raise HTTPException(status_code=404, detail=f"Memory item {item_id!r} not found in scope {scope!r}")
 
 
-@router.delete("/{scope}/{item_id}", status_code=204)
-async def delete_item(scope: str, item_id: str, request: Request) -> None:
+@router.delete("/{scope}/{item_id}", status_code=204, response_class=Response)
+async def delete_item(scope: str, item_id: str, request: Request) -> Response:
     store = get_store(request)
     try:
         await store.delete(scope, item_id)
     except MemoryNotFound:
         raise HTTPException(status_code=404, detail=f"Memory item {item_id!r} not found in scope {scope!r}")
+    return Response(status_code=204)

@@ -330,7 +330,7 @@ async def list_archived_tasks(
     ]
 
 
-@router.put("/reorder", status_code=status.HTTP_204_NO_CONTENT)
+@router.put("/reorder", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 async def reorder_tasks(body: ReorderBody, request: Request) -> Response:
     await get_store(request).reorder(body.task_ids, body.lane)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -750,7 +750,7 @@ async def update_task_file(
     )
 
 
-@router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 async def delete_task(task_id: str, request: Request) -> Response:
     store = get_store(request)
     task = store.get(task_id)
