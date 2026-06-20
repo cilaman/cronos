@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import re
 from pathlib import Path
 
@@ -40,6 +41,28 @@ LIST_MARKETPLACES_CMD = ["claude", "plugin", "marketplace", "list", "--json"]
 
 # Serializes all mutation subprocess calls.
 _plugin_mutation_lock = asyncio.Lock()
+
+# ---------------------------------------------------------------------------
+# Trusted marketplace allowlist
+# ---------------------------------------------------------------------------
+
+# Comma-separated list of trusted marketplace source URLs.
+# When unset (default), no restriction is applied.
+# Set TRUSTED_MARKETPLACE_SOURCES=https://... to restrict to specific sources.
+# Example: TRUSTED_MARKETPLACE_SOURCES=https://claude.ai/marketplace
+TRUSTED_MARKETPLACE_SOURCES_ENV_VAR = "TRUSTED_MARKETPLACE_SOURCES"
+
+
+def _get_trusted_sources() -> frozenset[str]:
+    """Return frozenset of trusted marketplace source URLs, or empty set if unrestricted.
+
+    Reads TRUSTED_MARKETPLACE_SOURCES from environment at call time so it can be
+    overridden in tests via monkeypatch.setenv without import-time side effects.
+    """
+    raw = os.environ.get(TRUSTED_MARKETPLACE_SOURCES_ENV_VAR, "").strip()
+    if not raw:
+        return frozenset()
+    return frozenset(s.strip() for s in raw.split(",") if s.strip())
 
 
 # ---------------------------------------------------------------------------
@@ -203,9 +226,34 @@ async def plugin_components(install_path: str, plugin_name: str) -> list:
 # ---------------------------------------------------------------------------
 
 async def install(plugin_id: str, scope: str = "user") -> PluginsResponse:
-    """Install a plugin by id; returns refreshed PluginsResponse."""
+    """Install a plugin by id; returns refreshed PluginsResponse.
+
+    If TRUSTED_MARKETPLACE_SOURCES is set, the plugin's marketplace source must
+    be in the allowlist. Unknown source (plugin not in available list) is allowed
+    since the marketplace was presumably validated via add_marketplace().
+    """
     if not PLUGIN_ID_PATTERN.fullmatch(plugin_id):
         raise ValueError(f"Invalid plugin_id: {plugin_id!r}")
+    trusted = _get_trusted_sources()
+    if trusted:
+        stdout, _ = await _run_plugin_cmd(LIST_PLUGINS_CMD)
+        try:
+            raw = json.loads(stdout)
+        except json.JSONDecodeError:
+            raw = {}
+        available = raw.get("available", []) if isinstance(raw, dict) else []
+        for item in available:
+            if not isinstance(item, dict):
+                continue
+            item_id = item.get("pluginId") or item.get("id") or item.get("name") or ""
+            if item_id == plugin_id:
+                source = item.get("source") or item.get("marketplace")
+                if source and source not in trusted:
+                    raise ValueError(
+                        f"Plugin source {source!r} is not in TRUSTED_MARKETPLACE_SOURCES. "
+                        f"Allowed sources: {sorted(trusted)}"
+                    )
+                break
     async with _plugin_mutation_lock:
         await _run_plugin_cmd(["claude", "plugin", "install", plugin_id])
         return await list_plugins()
@@ -239,9 +287,19 @@ async def disable(plugin_id: str) -> PluginsResponse:
 
 
 async def add_marketplace(source: str) -> list[MarketplaceEntry]:
-    """Add a marketplace by URL; returns refreshed list of MarketplaceEntry."""
+    """Add a marketplace by URL; returns refreshed list of MarketplaceEntry.
+
+    If TRUSTED_MARKETPLACE_SOURCES is set, the source URL must appear in the
+    allowlist. This is the primary provenance gate for the plugin install path.
+    """
     if not MARKETPLACE_SOURCE_PATTERN.fullmatch(source):
         raise ValueError(f"Invalid marketplace source: {source!r}")
+    trusted = _get_trusted_sources()
+    if trusted and source not in trusted:
+        raise ValueError(
+            f"Marketplace source {source!r} is not in TRUSTED_MARKETPLACE_SOURCES. "
+            f"Allowed sources: {sorted(trusted)}"
+        )
     async with _plugin_mutation_lock:
         await _run_plugin_cmd(["claude", "plugin", "marketplace", "add", source])
         return await list_marketplaces()
