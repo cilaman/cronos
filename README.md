@@ -102,6 +102,24 @@ Never grant `admin`, `workflow`, or org-level scopes. A fine-grained PAT scoped
 to a specific repository limits the blast radius if the token is compromised.
 The `autopilot_pr` gate opens a PR for operator review — it never auto-merges.
 
+## Security posture
+
+Cronos is a **personal project** with no formal vulnerability disclosure process or
+support SLA. These controls are in place for the operator's own protection:
+
+| Control | Status | Goal |
+|---------|--------|------|
+| Agents run as non-root (separate UID inside the backend container) | designed (planned) | G03 |
+| App-layer auth is fail-closed (HTTP 503 when credentials are not set) | active | G04 |
+| Plugin install requires human approval via the UI; Bash-based install guarded | designed (planned) | G06 |
+| Git credentials use a least-privilege fine-grained PAT (Contents-only scope) | active | G11 |
+
+If you find a security issue, contact the operator directly. There is no formal
+disclosure process — this is a personal system.
+
+See [`## Authentication`](#authentication) and [`## Git credential model`](#git-credential-model)
+for the active controls in detail.
+
 ## Layout
 
 ```
