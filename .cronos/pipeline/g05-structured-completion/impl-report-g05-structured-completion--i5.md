@@ -1,10 +1,11 @@
 ---
 cc_version: '1.0'
 agent: pipeline-implementor
-slug: g05-structured-completion
+slug: g05-structured-completion--i5
 phase: impl
 status: done
 confidence: 0.97
+iteration_id: I5
 inputs_used:
 - .cronos/pipeline/g05-structured-completion/design-report-g05-structured-completion.md
 - backend/app/memory_parser.py
@@ -15,7 +16,7 @@ inputs_used:
 - backend/tests/test_cronos_remember_parser.py
 - backend/tests/test_agent.py
 outputs_produced:
-- .cronos/pipeline/g05-structured-completion/impl-report-g05-structured-completion.md
+- .cronos/pipeline/g05-structured-completion/impl-report-g05-structured-completion--i5.md
 - backend/app/memory_parser.py
 - backend/app/agent.py
 - backend/app/worker.py
@@ -39,6 +40,8 @@ metrics:
   tool_calls: 28
   files_read: 9
   memory_hits: 2
+  diff_lines_added: 1115
+  diff_lines_removed: 38
 ---
 
 ## Summary
