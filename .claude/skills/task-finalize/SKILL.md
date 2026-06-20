@@ -34,7 +34,19 @@ Before proceeding, confirm the task objectives were met:
 - Were all stated requirements implemented or addressed?
 - Do tests pass (if code was changed)?
 
-**If the task is incomplete**, describe what remains on the line above, then end with `STATUS: WAIT` or `STATUS: BLOCKED`. **Skip Steps 2–4.**
+**If the task is incomplete**, emit a `cronos_status` block with `WAIT` or `BLOCKED` as your last output. **Skip Steps 2–4.**
+
+```cronos_status
+{"status": "WAIT", "summary": "What remains / what you need from the user."}
+```
+
+or if genuinely blocked:
+
+```cronos_status
+{"status": "BLOCKED", "summary": "What is blocking you and why."}
+```
+
+*(The bare `STATUS: WAIT` / `STATUS: BLOCKED` last-line form is deprecated but still accepted during transition.)*
 
 ---
 
@@ -55,7 +67,7 @@ curl -s "http://backend:8000/api/tasks/${TASK_ID}/traces/latest" | python3 -c "i
 ```
 
 Common patterns:
-- `NO_STATUS` — agent forgot STATUS: DONE in a prior run (the problem this skill solves)
+- `NO_CRONOS_STATUS` — agent emitted neither a `cronos_status` block nor a bare `STATUS:` line (the problem this skill solves)
 - `CRASHED` — unhandled error; check error_tool_calls count
 - `WAIT` — agent explicitly paused in the prior run
 
@@ -142,15 +154,17 @@ Good things to capture: files modified and why, API patterns discovered, command
 
 ---
 
-## Step 5 — Emit STATUS: DONE
+## Step 5 — Emit completion block
 
-**STATUS: DONE must be the absolute last line of your response. Nothing after it.**
+**The `cronos_status` block must be the last thing you output. Nothing after it.**
 
-After writing your MEMORY lines, output:
+After writing your MEMORY lines, emit:
 
+```cronos_status
+{"status": "DONE", "summary": "One-sentence summary of what was accomplished."}
 ```
-STATUS: DONE
-```
+
+*(The bare `STATUS: DONE` last-line form is deprecated but still accepted during transition.)*
 
 ---
 

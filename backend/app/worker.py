@@ -116,7 +116,7 @@ class _WorkerProtocolAdapter:
             started_at=now,
             ended_at=now,
             duration_seconds=0.0,
-            exit_reason=result.status.value if result.status else "NO_STATUS",
+            exit_reason=result.status.value if result.status else "NO_CRONOS_STATUS",
             final_text_snippet=(result.final_text or "")[:500],
             parent_run_id=kwargs.get("parent_run_id"),
         )
@@ -1105,7 +1105,7 @@ class Worker:
         exit_reason = (
             "STOPPED" if result.stopped
             else (result.status.value if result.status else
-                  ("CRASHED" if result.exit_code != 0 else "NO_STATUS"))
+                  ("CRASHED" if result.exit_code != 0 else "NO_CRONOS_STATUS"))
         )
 
         # Pre-compute run trace when needed for memory_hit_rate, adopted_tool_uses, or saving.
@@ -1429,7 +1429,7 @@ class Worker:
                     exit_reason = (
                         "STOPPED" if result.stopped
                         else (result.status.value if result.status else
-                              ("CRASHED" if result.exit_code != 0 else "NO_STATUS"))
+                              ("CRASHED" if result.exit_code != 0 else "NO_CRONOS_STATUS"))
                     )
 
                     computed_trace: RunTrace | None = None

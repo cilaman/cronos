@@ -11,6 +11,7 @@ from enum import Enum
 from pathlib import Path
 
 from . import git_ops
+from .memory_parser import parse_cronos_status_block
 from .models import MemoryItem, Space, Task
 
 log = logging.getLogger("cronos.agent")
@@ -29,31 +30,53 @@ When all work is complete, invoke the **task-finalize** skill as your last actio
   /task-finalize
 
 This skill handles git, memory writing, and the STATUS marker in the correct order.
-Do NOT write STATUS: DONE manually — task-finalize does it.
+Do NOT write the completion block manually — task-finalize does it.
 
-### Exceptions — do not invoke task-finalize for these
+### Completion signal format
 
-If you need user input before continuing:
-  <write your question here>
-  STATUS: WAIT
+Emit a fenced JSON block as your final output. This is the **primary** completion signal:
 
-If you are genuinely blocked and cannot proceed:
-  <explain the blocker here>
-  STATUS: BLOCKED
+```cronos_status
+{"status": "DONE", "summary": "Brief description of what was accomplished."}
+```
 
-### Fallback (only if task-finalize fails to load)
+For WAIT (need user input before continuing):
+```cronos_status
+{"status": "WAIT", "summary": "What you need from the user."}
+```
 
-Write MEMORY lines then STATUS: DONE as your final response:
+For BLOCKED (cannot proceed):
+```cronos_status
+{"status": "BLOCKED", "summary": "What is blocking you and why."}
+```
+
+Fields:
+- `status`: required — one of `DONE`, `WAIT`, `BLOCKED` (uppercase)
+- `summary`: optional string — brief description (used as waiting question / blocker reason)
+- `artifacts`: optional list — file paths produced (reserved for future use)
+
+Rules:
+- The `cronos_status` block must appear after all tool calls are done.
+- Emit it only once per response.
+- Do NOT wrap it in additional markdown formatting.
+- Turn limit approaching: emit STATUS WAIT block describing what's done and what remains.
+- Plan mode: emit WAIT block and ask "Shall I implement this plan?"
+
+### [DEPRECATED fallback — only if task-finalize fails AND the block format is unavailable]
+
+The bare `STATUS:` line form is deprecated and will be removed in a future version.
+Use it only as a last resort when the fenced block cannot be emitted:
 
   MEMORY[fact]: <what was accomplished>
   STATUS: DONE
 
-Rules:
+  STATUS: WAIT   (if waiting for user input — question on the line above)
+  STATUS: BLOCKED   (if blocked — reason on the line above)
+
+Deprecated rules:
 - STATUS must be the VERY LAST LINE. No text after it.
-- Write STATUS only once, after all tool calls are done.
+- Write STATUS only once.
 - Do NOT use markdown formatting: write STATUS: DONE not **STATUS: DONE**
-- Turn limit approaching: use STATUS: WAIT, describe what's done and what remains.
-- Plan mode: end with STATUS: WAIT and ask "Shall I implement this plan?"
 """
 
 
@@ -69,22 +92,33 @@ _STATUS_LINE = re.compile(r"^\s*\*{0,3}STATUS:\s*(DONE|WAIT|BLOCKED)\*{0,3}\s*$"
 def parse_status(text: str) -> tuple[Status | None, str | None]:
     """Return (status, context_line) parsed from the agent's final text.
 
-    The context_line is the immediately preceding non-blank line, used as the
-    waiting question for STATUS: WAIT or the blocker reason for STATUS: BLOCKED.
+    Checks for a structured ```cronos_status fenced JSON block first (primary
+    channel). Falls back to the deprecated free-text _STATUS_LINE scan if no
+    valid block is found, emitting a deprecation warning.
 
-    Scans backwards through the last several lines so that a stray trailing
-    sentence from the model does not hide an otherwise valid STATUS marker.
+    The context_line is the summary from the structured block, or the
+    immediately preceding non-blank line for the free-text fallback.
     """
     if not text:
         return None, None
+
+    # Primary: structured cronos_status block
+    status_str, summary = parse_cronos_status_block(text)
+    if status_str is not None:
+        return Status(status_str), summary
+
+    # Deprecated fallback: free-text STATUS: line scan
     lines = text.rstrip().splitlines()
     if not lines:
         return None, None
-    # Scan the tail of the response (up to 10 lines) for the last STATUS marker.
     scan_from = max(0, len(lines) - 10)
     for i in range(len(lines) - 1, scan_from - 1, -1):
         m = _STATUS_LINE.match(lines[i])
         if m:
+            log.warning(
+                "parse_status: free-text STATUS: line is deprecated; "
+                "use a ```cronos_status fenced JSON block instead"
+            )
             status = Status(m.group(1))
             context: str | None = None
             for line in reversed(lines[:i]):
