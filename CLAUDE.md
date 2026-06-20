@@ -72,6 +72,7 @@ HTTP Basic Auth via Caddy on every request. `/api/health` is public (no auth). C
 | `backend/app/worker.py` | Background task processor (goals, agent execution, state transitions); harness run lifecycle execution, event publishing for SSE streams; post-task-completion trust-loop hook nudges retrieved memory confidence (±0.05/±0.1) based on task outcome; `_persist_cronos_remember_blocks()` captures structured CRONOS_REMEMBER sentinel blocks from agent final_text and persists them as unconfirmed MemoryItems (parallel to MEMORY: path) |
 | `backend/app/models.py` | Pydantic schemas: TaskState, Task, Space, View, agent modes/models; Plugin Management section (PluginComponent, PluginEntry, MarketplacePluginEntry, MarketplaceEntry, PluginsResponse) |
 | `backend/app/trace_parser.py` | Parse `STATUS:` fields from agent stdout, extract RunTrace (result, exit_reason, parent_run_id, memory_hit_rate, `memory_used` bare IDs, etc.); `_memory_slug()` strips `.md` suffix from memory file paths |
+| `backend/app/trace_redact.py` | Secret pattern detection and redaction (GitHub PATs, tokens); `redact_trace_dict()` is the canonical entry point for recursive trace sanitization before persistence |
 | `backend/app/tools/scanner.py` | Scan .claude/ directory for markdown files and tools; extract descriptions from YAML frontmatter or first paragraph; parse settings.json for hooks and permissions |
 | `backend/app/tools/plugins.py` | Claude Code plugin CLI wrapper — `list_plugins()`, `list_marketplaces()`, `plugin_components(install_path)`, mutation functions (install, uninstall, enable, disable, add_marketplace, remove_marketplace); all mutations serialized via asyncio.Lock; PluginCliError for structured error handling |
 | `backend/app/api/tasks.py` | Task CRUD, state transitions, drag-drop reordering, lane overrides (29 KB) |
@@ -148,6 +149,21 @@ deploy/
   backup.sh       Tars /opt/cronos/data → /var/backups/cronos/
 
 data/             Per-deployment state (gitignored)
+.cronos/          Cronos runtime state
+  space.yml       Space config (tracked)
+  harnesses/      Harness definitions (tracked)
+  tasks/          Task working dirs (gitignored, ephemeral)
+  workspaces/     Agent worktrees (gitignored, ephemeral)
+  traces/         Agent run traces (gitignored, ephemeral)
+  stats/          Telemetry stats (gitignored, ephemeral)
+  memory/         Agent memory store (gitignored, ephemeral)
+  .trash/         Soft-deleted items (gitignored, ephemeral)
+  test-reports/   Test run artifacts (gitignored, ephemeral)
+  harness-runs/   Harness execution state (gitignored, ephemeral)
+  test-coverage.md  Coverage summary (gitignored, ephemeral)
+  pipeline/       Pipeline phase reports (tracked, shared across worktrees)
+  issues/         Issue tracking (tracked)
+  qa/             QA reports (tracked)
 .claude/          Claude Code harness: settings, agents, skills
 ```
 
