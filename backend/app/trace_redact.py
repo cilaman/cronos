@@ -24,7 +24,10 @@ def _redact_secrets(text: str) -> str:
 
 
 def redact_trace_dict(obj: Any) -> Any:
-    """Recursively redact secret patterns from all string leaves of a dict/list."""
+    """Canonical entry point for trace redaction. Call this before persisting any trace dict.
+
+    Recursively redacts all SECRET_PATTERNS from string leaves of a dict/list tree.
+    """
     if isinstance(obj, str):
         return _redact_secrets(obj)
     if isinstance(obj, dict):

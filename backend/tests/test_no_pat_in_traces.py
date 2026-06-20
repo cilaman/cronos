@@ -34,7 +34,9 @@ def _scan_files(traces_dir: Path) -> list[Path]:
             cwd=_SPACE_ROOT,
             timeout=15,
         )
-        if result.returncode == 0 and result.stdout.strip():
+        if result.returncode == 0:
+            if not result.stdout.strip():
+                return []  # no tracked traces — nothing to scan
             return [
                 _SPACE_ROOT / line
                 for line in result.stdout.splitlines()
