@@ -92,3 +92,40 @@ def test_no_pat_in_traces__detects_canary(tmp_path, monkeypatch):
 
     assert offenders, "Expected canary PAT to be detected but nothing was found"
     assert any("ghp_" in entry for entry in offenders)
+
+
+# ---------------------------------------------------------------------------
+# Assert that CRONOS_GIT_TOKEN credential forms are covered by SECRET_PATTERNS
+# ---------------------------------------------------------------------------
+
+
+def test_secret_patterns_catch_x_access_token_form() -> None:
+    """The x-access-token form used in git HTTPS Basic Auth headers is caught.
+
+    git_ops._auth_env() encodes the PAT as 'x-access-token:<token>' before
+    base64-encoding it, so the raw 'x-access-token:TOKEN' string should never
+    reach a trace.  This test asserts that SECRET_PATTERNS would catch it if
+    it somehow did, closing the redaction loop.
+    """
+    token_in_header = "x-access-token:ghp_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    assert any(pat.search(token_in_header) for pat in SECRET_PATTERNS), (
+        "SECRET_PATTERNS must catch the 'x-access-token:TOKEN' form "
+        "used by git_ops._auth_env()"
+    )
+
+
+def test_secret_patterns_catch_cronos_git_token_forms() -> None:
+    """Common PAT formats that operators assign to CRONOS_GIT_TOKEN are caught.
+
+    Cronos documents fine-grained PATs (github_pat_*) and classic PATs (ghp_*)
+    as the two token forms for CRONOS_GIT_TOKEN.  Both must be redacted if they
+    ever appear in a trace JSON.
+    """
+    forms = [
+        "ghp_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "github_pat_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    ]
+    for form in forms:
+        assert any(pat.search(form) for pat in SECRET_PATTERNS), (
+            f"SECRET_PATTERNS must catch CRONOS_GIT_TOKEN form: {form!r}"
+        )

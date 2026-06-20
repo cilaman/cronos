@@ -88,6 +88,15 @@ async def _run_or_raise(
 # config and is never visible to the agent subprocess that later runs in
 # the worktree.
 #
+# Required PAT scope (least-privilege):
+#   clone / fetch  → Contents:read  (fine-grained PAT)  or  repo:read (classic)
+#   push           → Contents:write (fine-grained PAT)  or  repo     (classic)
+# Do NOT grant: admin:*, workflow, packages, or any org-level scope.
+# Fine-grained per-repo PATs are strongly preferred over classic PATs because
+# they cannot reach repositories outside the explicit allow-list.
+# Preferred future path: GitHub App installation tokens (short-lived, scoped
+# to the installation; see https://docs.github.com/en/apps/creating-github-apps).
+#
 # When Cronos grows multi-user this should be replaced by a per-space (or
 # per-user) credential lookup — `_clone_env(token=...)` is the only seam.
 _GIT_TOKEN_ENV = "CRONOS_GIT_TOKEN"
@@ -390,7 +399,12 @@ async def push_branch(
     *,
     force_with_lease: bool = False,
 ) -> None:
-    """Push `branch` to origin from `worktree`."""
+    """Push `branch` to origin from `worktree`.
+
+    Credentials are injected via _auth_env() (Contents:write PAT, never admin
+    or workflow scopes).  The token rides GIT_CONFIG_VALUE_0 as a base64-encoded
+    Authorization header — it never appears in subprocess args or log output.
+    """
     validate_branch(branch)
     url = await _space_remote_url(worktree)
     env = _auth_env(url) if url else None
@@ -447,6 +461,11 @@ async def gh_pr_create(
     head: str,
 ) -> str | None:
     """Create a GitHub PR via the `gh` CLI. Returns the PR URL or None.
+
+    This is the intentional human-review gate used by autopilot_pr: it opens
+    a PR for operator review but never merges automatically.  The PR-open step
+    requires Contents:write on the repo via a fine-grained PAT; it does NOT
+    require admin, workflow, or merge scopes.
 
     Returns None (with a log message) when `gh` is absent or not authenticated.
     """

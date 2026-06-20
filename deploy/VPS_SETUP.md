@@ -177,6 +177,82 @@ Leave `CLAUDE_CODE_OAUTH_TOKEN` out of `.env` — it lives in
 files separate means a leaked `.env` (basic-auth creds + domain) doesn't
 leak the OAuth token.
 
+### 5.3 — Git push credentials (CRONOS_GIT_TOKEN) and least-privilege policy
+
+The read-only deploy key in §5.1 handles `git fetch` during upgrades. A *separate*
+credential is required for **push** operations (e.g. when an agent task commits
+and opens a PR via `autopilot_pr`).
+
+#### Push policy (ADR — single-operator decision)
+
+Cronos is a single-user, single-account platform. Push-to-fork (a technique that
+limits blast radius across *distinct* accounts) adds dual-remote plumbing without
+reducing risk for one operator. The chosen policy is:
+
+> **push-to-origin-branch + open a PR** via the `autopilot_pr` gate
+> (`git_ops.gh_pr_create`). The PR is opened for operator review and is **never
+> auto-merged**. The `Contents:write` PAT is the only credential the push path
+> needs.
+
+Push-to-fork is noted as a future option for multi-operator deployments.
+
+#### Least-privilege credential model
+
+Use a **fine-grained PAT** scoped to the specific repo — not a classic "repo" PAT
+that covers your entire GitHub account:
+
+| Operation       | Required scope (fine-grained PAT) |
+|-----------------|-----------------------------------|
+| `git clone / fetch` | Contents: Read                |
+| `git push`          | Contents: Write               |
+
+**Do NOT grant:** `admin:*`, `workflow`, `packages`, or any org-level scope.
+If the token is ever compromised, an attacker can only read/write the repos you
+explicitly listed — not your entire account.
+
+#### Creating the PAT
+
+1. Go to <https://github.com/settings/personal-access-tokens> → **Fine-grained tokens**
+2. **Repository access:** select the specific repo Cronos should push to.
+3. **Repository permissions → Contents:** *Read and write*
+4. Leave all other permissions at *No access* or *Read* only.
+5. Set an expiry (30 or 90 days recommended) and click **Generate token**.
+
+#### Configuring the VPS
+
+Add the token to `/opt/cronos/.env`:
+
+```bash
+# In /opt/cronos/.env — never commit to git
+CRONOS_GIT_TOKEN=github_pat_xxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+Restart the backend so the variable is picked up:
+
+```bash
+sudo systemctl restart cronos.service
+```
+
+#### Token hygiene and rotation
+
+- Treat `CRONOS_GIT_TOKEN` like a password: store it only in `.env` (never in
+  shell history, `.bashrc`, or any committed file).
+- The `.env` file is *not* tracked in git (it is in `.gitignore`) so it will
+  not be included in backups or upgrade pulls.
+- **Rotate** by generating a new fine-grained PAT (step above), updating `.env`,
+  and restarting the backend.
+- **Revoke** the old token in GitHub → Settings → Personal access tokens
+  *before* deploying the replacement if you suspect compromise.
+
+#### Preferred future path
+
+**GitHub App installation tokens** are short-lived (1 hour), scoped per
+installation, and leave a clear audit trail in the repository's security log.
+They are the recommended credential type for automated push operations in
+team environments. A future Cronos release will support App-based credentials
+as an alternative to PATs; for now a fine-grained PAT with the minimal scopes
+above is the practical choice for personal use.
+
 ---
 
 ## 6. First run

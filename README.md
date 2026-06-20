@@ -88,6 +88,20 @@ WEBHOOK_SECRET=<strong-random-value>
 
 All requests are rejected with **403** when `WEBHOOK_SECRET` is unset.
 
+## Git credential model
+
+Repo-linked spaces need a `CRONOS_GIT_TOKEN` for HTTPS operations.
+The least-privilege credential model (see `deploy/VPS_SETUP.md §5.3` and `.env.example`):
+
+| Operation | Minimum scope (fine-grained PAT) |
+|-----------|----------------------------------|
+| clone / fetch | Contents: Read |
+| push / PR | Contents: Write |
+
+Never grant `admin`, `workflow`, or org-level scopes. A fine-grained PAT scoped
+to a specific repository limits the blast radius if the token is compromised.
+The `autopilot_pr` gate opens a PR for operator review — it never auto-merges.
+
 ## Layout
 
 ```
