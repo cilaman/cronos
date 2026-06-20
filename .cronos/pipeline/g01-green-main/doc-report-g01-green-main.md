@@ -19,9 +19,9 @@ outputs_produced:
   - TESTING.md
 blockers: []
 intentionally_not_updated:
-  - file: README.md
+  - path: README.md
     reason: High-level overview is sufficient; detailed `.cronos/` structure documented in CLAUDE.md architecture section
-  - file: deploy/VPS_SETUP.md
+  - path: deploy/VPS_SETUP.md
     reason: Deployment-focused docs; gitignore changes do not affect VPS runtime (instance uses ephemeral `.cronos/` dirs on disk)
 metrics:
   docs_updated: 2
