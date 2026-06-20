@@ -5,10 +5,12 @@ import json
 import logging
 import os
 import re
+import time as _time
 from collections import defaultdict, deque
 from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
+from uuid import uuid4
 
 from . import autopilot_pr
 from .agent import AgentResult, CRONOS_SUBDIR, DATA_DIR, Status, run_agent
@@ -41,6 +43,10 @@ if TYPE_CHECKING:
 log = logging.getLogger("cronos.worker")
 
 _CLAUDE_PROJECTS_DIR = Path(os.environ.get("CLAUDE_PROJECTS_DIR", "/root/.claude/projects"))
+
+# Lease / heartbeat constants (env-overridable).
+LEASE_TTL = float(os.environ.get("CRONOS_LEASE_TTL", "300"))
+HEARTBEAT_INTERVAL = float(os.environ.get("CRONOS_HEARTBEAT_INTERVAL", "15"))
 
 _MERGE_META_RE = re.compile(
     r"<!--\s*merge-meta\s*\n"
@@ -305,6 +311,13 @@ class Worker:
         # without scanning every space's harness-runs index files per request.
         self._run_id_to_space_id: dict[str, str] = {}
         self._rebuild_run_id_cache()
+        # Unique owner token for lease acquisition (per Worker instance / process).
+        self._owner_id = str(uuid4())
+        # Load durable auto-resume counts from SQLite on startup.
+        try:
+            self._auto_resume_counts = store.load_auto_resume_counts()
+        except Exception:
+            log.exception("Failed to load auto_resume_counts from DB; starting fresh")
 
     # ---- run_id cache ----
 
@@ -857,6 +870,16 @@ class Worker:
             })
             return
 
+        # Acquire a lease before running to prevent double-execution.
+        # Use the space_id from the task as part of the owner identity.
+        owner = f"{task.space_id}:{self._owner_id}"
+        lease_won = self.store.acquire_lease(task_id, owner, ttl=LEASE_TTL)
+        if not lease_won:
+            log.info(
+                "Task %s already leased by another worker; skipping this run", task_id
+            )
+            return
+
         self._current_id = task_id
         cancel_event = asyncio.Event()
         self._current_cancel = cancel_event
@@ -866,6 +889,16 @@ class Worker:
 
         async def on_event(event: dict) -> None:
             await self._publish(task_id, event)
+
+        async def _heartbeat_loop() -> None:
+            try:
+                while True:
+                    await asyncio.sleep(HEARTBEAT_INTERVAL)
+                    self.store.heartbeat_lease(task_id, owner)
+            except asyncio.CancelledError:
+                pass
+
+        heartbeat_task = asyncio.create_task(_heartbeat_loop(), name=f"hb-{task_id}")
 
         space = self.space_store.get(task.space_id) if self.space_store else None
         workspace_path = DATA_DIR / task.space_id / CRONOS_SUBDIR / "workspaces" / task.id
@@ -900,6 +933,12 @@ class Worker:
             log.exception("Agent error on %s", task_id)
         finally:
             self._current_cancel = None
+            heartbeat_task.cancel()
+            try:
+                await heartbeat_task
+            except asyncio.CancelledError:
+                pass
+            self.store.release_lease(task_id, owner)
 
         if run_exception is not None:
             # Transition task to WAITING so it doesn't remain stuck in ACTIVE.
@@ -1234,10 +1273,15 @@ class Worker:
             and not result.stopped
             and self._auto_resume_counts.get(task_id, 0) < _MAX_AUTO_RESUMES
         ):
-            self._auto_resume_counts[task_id] = self._auto_resume_counts.get(task_id, 0) + 1
+            new_count = self._auto_resume_counts.get(task_id, 0) + 1
+            self._auto_resume_counts[task_id] = new_count
+            try:
+                self.store.upsert_auto_resume_count(task_id, new_count)
+            except Exception:
+                log.exception("Failed to persist auto_resume_count for %s", task_id)
             log.info(
                 "Auto-resuming %s after max-turns exit (attempt %d/%d)",
-                task_id, self._auto_resume_counts[task_id], _MAX_AUTO_RESUMES,
+                task_id, new_count, _MAX_AUTO_RESUMES,
             )
             try:
                 await self.store.resume_with_message(task_id)
@@ -1249,6 +1293,10 @@ class Worker:
             # Clear the counter on any non-max-turns outcome so it resets
             # between separate task invocations.
             self._auto_resume_counts.pop(task_id, None)
+            try:
+                self.store.delete_auto_resume_count(task_id)
+            except Exception:
+                log.exception("Failed to delete auto_resume_count for %s", task_id)
 
         await self._publish(
             task_id,

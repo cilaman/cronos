@@ -546,6 +546,20 @@ class TaskStore:
             con.execute(
                 "CREATE INDEX IF NOT EXISTS idx_discovered_tools_kind ON discovered_tools(kind)"
             )
+            con.execute("""
+                CREATE TABLE IF NOT EXISTS task_leases (
+                    task_id TEXT PRIMARY KEY,
+                    owner TEXT NOT NULL,
+                    lease_expiry REAL NOT NULL,
+                    heartbeat_at REAL NOT NULL
+                )
+            """)
+            con.execute("""
+                CREATE TABLE IF NOT EXISTS auto_resume_counts (
+                    task_id TEXT PRIMARY KEY,
+                    count INTEGER NOT NULL DEFAULT 0
+                )
+            """)
             con.commit()
         finally:
             con.close()
@@ -615,6 +629,132 @@ class TaskStore:
         con = sqlite3.connect(self._db_path)
         try:
             con.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+            con.commit()
+        finally:
+            con.close()
+
+    # ---- lease CRUD ----
+
+    def acquire_lease(self, task_id: str, owner: str, ttl: float) -> bool:
+        """Acquire or steal an expired lease for task_id.
+
+        Returns True if this caller now holds the lease, False if a live
+        foreign lease already exists (another worker is running the task).
+        Uses INSERT OR IGNORE on the PK so the insert is atomic within
+        SQLite's default locking — rowcount 1 = lease won, 0 = already held.
+        For expired leases: DELETE WHERE lease_expiry < now, then retry INSERT.
+        """
+        import time as _time
+        now = _time.time()
+        expiry = now + ttl
+        con = sqlite3.connect(self._db_path)
+        try:
+            # Delete any expired lease for this task so we can steal it.
+            con.execute(
+                "DELETE FROM task_leases WHERE task_id = ? AND lease_expiry < ?",
+                (task_id, now),
+            )
+            cur = con.execute(
+                "INSERT OR IGNORE INTO task_leases(task_id, owner, lease_expiry, heartbeat_at)"
+                " VALUES (?, ?, ?, ?)",
+                (task_id, owner, expiry, now),
+            )
+            con.commit()
+            return cur.rowcount == 1
+        finally:
+            con.close()
+
+    def heartbeat_lease(self, task_id: str, owner: str) -> None:
+        """Refresh heartbeat_at for an owned lease."""
+        import time as _time
+        now = _time.time()
+        con = sqlite3.connect(self._db_path)
+        try:
+            con.execute(
+                "UPDATE task_leases SET heartbeat_at = ? WHERE task_id = ? AND owner = ?",
+                (now, task_id, owner),
+            )
+            con.commit()
+        finally:
+            con.close()
+
+    def release_lease(self, task_id: str, owner: str) -> None:
+        """Release the lease held by owner."""
+        con = sqlite3.connect(self._db_path)
+        try:
+            con.execute(
+                "DELETE FROM task_leases WHERE task_id = ? AND owner = ?",
+                (task_id, owner),
+            )
+            con.commit()
+        finally:
+            con.close()
+
+    def get_expired_leases(self, now: float, heartbeat_timeout: float) -> list[tuple[str, str]]:
+        """Return (task_id, owner) pairs whose lease_expiry < now OR heartbeat is stale."""
+        stale_before = now - heartbeat_timeout
+        con = sqlite3.connect(self._db_path)
+        try:
+            rows = con.execute(
+                "SELECT task_id, owner FROM task_leases"
+                " WHERE lease_expiry < ? OR heartbeat_at < ?",
+                (now, stale_before),
+            ).fetchall()
+            return [(r[0], r[1]) for r in rows]
+        finally:
+            con.close()
+
+    def delete_expired_lease(self, task_id: str) -> None:
+        """Delete the lease row for task_id unconditionally (called by reaper before re-enqueue)."""
+        con = sqlite3.connect(self._db_path)
+        try:
+            con.execute("DELETE FROM task_leases WHERE task_id = ?", (task_id,))
+            con.commit()
+        finally:
+            con.close()
+
+    def clear_all_leases(self) -> None:
+        """Wipe all lease rows. Called at startup so stale leases from the previous
+        process do not block recovery re-enqueues. No-op if the table doesn't exist
+        yet (handles the case where _ensure_db_schema hasn't run, e.g. tests that
+        mock reload_all)."""
+        con = sqlite3.connect(self._db_path)
+        try:
+            con.execute("DELETE FROM task_leases")
+            con.commit()
+        except sqlite3.OperationalError:
+            pass  # Table not created yet; no stale leases to clear
+        finally:
+            con.close()
+
+    # ---- auto-resume count CRUD ----
+
+    def load_auto_resume_counts(self) -> dict[str, int]:
+        """Load all auto-resume counts from the DB into a dict."""
+        con = sqlite3.connect(self._db_path)
+        try:
+            rows = con.execute("SELECT task_id, count FROM auto_resume_counts").fetchall()
+            return {r[0]: r[1] for r in rows}
+        finally:
+            con.close()
+
+    def upsert_auto_resume_count(self, task_id: str, count: int) -> None:
+        """Persist (or update) the auto-resume count for task_id."""
+        con = sqlite3.connect(self._db_path)
+        try:
+            con.execute(
+                "INSERT OR REPLACE INTO auto_resume_counts(task_id, count) VALUES (?, ?)",
+                (task_id, count),
+            )
+            con.commit()
+        finally:
+            con.close()
+
+    def delete_auto_resume_count(self, task_id: str) -> None:
+        """Remove the auto-resume count row for task_id (task completed or failed)."""
+        con = sqlite3.connect(self._db_path)
+        try:
+            con.execute("DELETE FROM auto_resume_counts WHERE task_id = ?", (task_id,))
             con.commit()
         finally:
             con.close()
