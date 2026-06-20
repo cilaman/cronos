@@ -5,6 +5,7 @@ slug: g01-green-main
 phase: doc
 status: done
 confidence: 0.95
+next_consumer: null
 inputs_used:
   - .cronos/pipeline/g01-green-main/impl-report-g01-green-main.md
   - .cronos/pipeline/g01-green-main/review-report-g01-green-main--attempt1.md
@@ -15,11 +16,14 @@ inputs_used:
 outputs_produced:
   - .cronos/pipeline/g01-green-main/doc-report-g01-green-main.md
 blockers: []
+intentionally_not_updated:
+  - README.md
+  - deploy/VPS_SETUP.md
 metrics:
   docs_updated: 2
-  files_read: 4
+  files_read: 6
+  tool_calls: 2
   memory_hits: 0
-  intentionally_not_updated_count: 2
 ---
 
 ## Summary
@@ -29,9 +33,9 @@ G01 repo hygiene phase complete. Implementation removed ~2,080 runtime files fro
 2. Fixing the PAT guard test to scan only committed traces (via `git ls-files`), preventing false positives on untracked on-disk runtime files
 3. Adding a docstring to `redact_trace_dict()` as the canonical trace-redaction entry point
 
-Documentation updated to reflect these changes. No user-visible API or behavior changes, only repo hygiene.
+Documentation updated in CLAUDE.md (directory layout + key modules section) and TESTING.md (new PAT guard test section) to reflect these changes. No user-visible API or behavior changes, only repo hygiene.
 
-## Files updated
+## Updated docs
 
 | File | Sections updated | Rationale |
 |------|------------------|-----------|
@@ -53,10 +57,6 @@ Documentation updated to reflect these changes. No user-visible API or behavior 
 - The PAT guard test change (scan committed only, via `git ls-files`) is a security/test-correctness improvement, not a user-facing change, so TESTING.md is the appropriate place for detailed explanation
 - New CLAUDE.md section on `.cronos/` structure clarifies the distinction for future developers / deployers who need to understand what's ephemeral vs. legit config
 
-## Open questions
+## Next consumer brief
 
-- None.
-
-## Next steps
-
-G01 is complete. All changes are on `feature/cronos-remediation-plan`. Next: goal-task-commit, then pipeline-gate.
+G01 is complete. All documentation changes have been committed to `feature/cronos-remediation-plan`. The next step in the remediation plan is to proceed with subsequent G-series goals (G02-G14).
