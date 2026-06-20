@@ -10,6 +10,9 @@ Coverage:
   - await_timed_wait() handles missing duration_seconds (defaults to 0)
   - await_timed_wait() handles duration_seconds=0 explicitly
   - await_timed_wait() handles float duration_seconds
+  - await_timed_wait() with wake_at in the future sleeps remaining interval
+  - await_timed_wait() with wake_at already past fires immediately (0-second sleep)
+  - await_timed_wait() with wake_at=None falls back to full duration_seconds
   - Multiple enter_wait() calls update waiting_node_id each time (last-write wins)
   - WaitOutcome.waiting_node_id matches node.id
 """
@@ -17,6 +20,7 @@ Coverage:
 from __future__ import annotations
 
 import asyncio
+import datetime
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -281,6 +285,79 @@ class TestAwaitTimedWait:
             await await_timed_wait(node)
 
         mock_sleep.assert_awaited_once_with(0.25)
+
+
+# ---------------------------------------------------------------------------
+# await_timed_wait() — wake_at resume semantics
+# ---------------------------------------------------------------------------
+
+
+class TestAwaitTimedWaitWakeAt:
+    @pytest.mark.asyncio
+    async def test_wake_at_future_sleeps_remaining(self):
+        """When wake_at is in the future, sleeps only the remaining interval."""
+        node = _make_wait_node("tw-resume", mode="timed", extra_data={"duration_seconds": 3600})
+        now = datetime.datetime.now(datetime.timezone.utc)
+        # wake_at is 30 seconds from now
+        wake_at = (now + datetime.timedelta(seconds=30)).isoformat()
+
+        with patch("app.harnesses.wait.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+            with patch("app.harnesses.wait.datetime") as mock_dt:
+                mock_dt.datetime.now.return_value = now
+                mock_dt.datetime.fromisoformat.return_value = datetime.datetime.fromisoformat(wake_at)
+                mock_dt.timezone.utc = datetime.timezone.utc
+                await await_timed_wait(node, wake_at=wake_at)
+
+        called_with = mock_sleep.call_args[0][0]
+        assert 25.0 <= called_with <= 35.0, f"expected ~30s remaining sleep, got {called_with}"
+
+    @pytest.mark.asyncio
+    async def test_wake_at_past_fires_immediately(self):
+        """When wake_at is already in the past, sleeps 0 seconds (fires immediately)."""
+        node = _make_wait_node("tw-past", mode="timed", extra_data={"duration_seconds": 60})
+        # wake_at 5 seconds in the past
+        past_wake_at = (
+            datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=5)
+        ).isoformat()
+
+        with patch("app.harnesses.wait.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+            await await_timed_wait(node, wake_at=past_wake_at)
+
+        mock_sleep.assert_awaited_once_with(0.0)
+
+    @pytest.mark.asyncio
+    async def test_wake_at_none_falls_back_to_full_duration(self):
+        """When wake_at is None, falls back to full duration_seconds (defensive path)."""
+        node = _make_wait_node("tw-fallback", mode="timed", extra_data={"duration_seconds": 7.5})
+
+        with patch("app.harnesses.wait.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+            await await_timed_wait(node, wake_at=None)
+
+        mock_sleep.assert_awaited_once_with(7.5)
+
+    @pytest.mark.asyncio
+    async def test_wake_at_omitted_falls_back_to_full_duration(self):
+        """Omitting wake_at (default) also falls back to full duration_seconds."""
+        node = _make_wait_node("tw-omit", mode="timed", extra_data={"duration_seconds": 4.0})
+
+        with patch("app.harnesses.wait.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+            await await_timed_wait(node)
+
+        mock_sleep.assert_awaited_once_with(4.0)
+
+    @pytest.mark.asyncio
+    async def test_wake_at_now_fires_immediately(self):
+        """When wake_at is exactly now (or sub-millisecond ahead), sleep is 0."""
+        node = _make_wait_node("tw-now", mode="timed", extra_data={"duration_seconds": 10})
+        # wake_at set to slightly in the past to guarantee 0 sleep
+        wake_at = (
+            datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(milliseconds=1)
+        ).isoformat()
+
+        with patch("app.harnesses.wait.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+            await await_timed_wait(node, wake_at=wake_at)
+
+        mock_sleep.assert_awaited_once_with(0.0)
 
 
 # ---------------------------------------------------------------------------

@@ -50,7 +50,7 @@ from __future__ import annotations
 
 import logging
 from collections import deque
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Protocol, runtime_checkable
 
@@ -416,13 +416,25 @@ class HarnessExecutor:
                 )
             )
         else:
-            # Case 2: Normal start — nodes whose in-degree is 0 (no predecessors),
-            # excluding nodes already completed.
+            # Case 2: Normal start (or timed-Wait resume).
+            # Include in_degree-0 nodes that are either:
+            #   (a) not yet in nodes_executed (fresh execution), OR
+            #   (b) an in-progress timed Wait with a persisted wake_at — these were
+            #       interrupted mid-sleep and should resume with the remaining interval.
             ready_queue = deque(
                 sorted(
                     nid
                     for nid, deg in in_degree.items()
-                    if deg == 0 and nid not in state.nodes_executed
+                    if deg == 0
+                    and (
+                        nid not in state.nodes_executed
+                        or (
+                            state.nodes_executed[nid].status == "in_progress"
+                            and not state.nodes_executed[nid].child_task_id
+                            and node_by_id[nid].type == NodeType.wait
+                            and node_by_id[nid].data.get("mode") != "human"
+                        )
+                    )
                 )
             )
 
@@ -1034,10 +1046,10 @@ class HarnessExecutor:
             should continue (timed mode completed).
         """
         mode = node.data.get("mode", "human")
-        state.nodes_executed[node_id] = NodeState(status="in_progress")
-        _maybe_save(state, run_state_path)
 
         if mode == "human":
+            state.nodes_executed[node_id] = NodeState(status="in_progress")
+            _maybe_save(state, run_state_path)
             outcome = enter_wait(node, state)
             # waiting_node_id is now set on state by enter_wait().
             log.info(
@@ -1050,8 +1062,21 @@ class HarnessExecutor:
             return True
         else:
             # Timed mode.
-            log.info("Wait node %r (timed): sleeping.", node_id)
-            await await_timed_wait(node)
+            # Read prior wake_at BEFORE overwriting node state so resume preserves it.
+            prior_node_state = state.nodes_executed.get(node_id)
+            wake_at: str | None = prior_node_state.wake_at if prior_node_state else None
+
+            if wake_at is None:
+                # First entry: compute absolute wake time and persist before sleeping.
+                raw: float | int | None = node.data.get("duration_seconds")
+                duration: float = float(raw) if raw is not None else 0.0
+                wake_at = (datetime.now(timezone.utc) + timedelta(seconds=duration)).isoformat()
+
+            state.nodes_executed[node_id] = NodeState(status="in_progress", wake_at=wake_at)
+            _maybe_save(state, run_state_path)
+
+            log.info("Wait node %r (timed): sleeping until %s.", node_id, wake_at)
+            await await_timed_wait(node, wake_at=wake_at)
             state.nodes_executed[node_id] = NodeState(status="done")
             _maybe_save(state, run_state_path)
             log.info("Wait node %r (timed): sleep complete.", node_id)
