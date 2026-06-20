@@ -3,7 +3,7 @@
   "goal_slug": "g01-green-main",
   "status": "running",
   "created_at": "2026-06-20T14:58:17.239949+00:00",
-  "updated_at": "2026-06-20T15:10:31.866599+00:00",
+  "updated_at": "2026-06-20T15:22:18.151861+00:00",
   "request_text": null,
   "phases": {
     "analysis": {
@@ -96,6 +96,90 @@
         "memory_hits": 0
       },
       "header_summary": {}
+    },
+    "test": {
+      "phase": "test",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "tester",
+      "task_id": "2026-06-20-1437-test-g01-green-main",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/g01-green-main/test-report-g01-green-main.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "review": {
+      "phase": "review",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-reviewer",
+      "task_id": "2026-06-20-1437-review-g01-green-main",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/g01-green-main/review-report-g01-green-main--attempt1.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "doc": {
+      "phase": "doc",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-doc-sync",
+      "task_id": "2026-06-20-1437-doc-g01-green-main",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/g01-green-main/doc-report-g01-green-main.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
     }
   },
   "telemetry": {
@@ -104,7 +188,7 @@
     "total_tool_calls": 0,
     "total_files_read": 0,
     "total_memory_hits": 0,
-    "phases_completed": 3,
+    "phases_completed": 6,
     "phases_escalated": 0,
     "phases_retried": 0,
     "phases_failed": 0

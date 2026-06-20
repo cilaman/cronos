@@ -32,11 +32,11 @@ curl http://localhost:8080/api/health
 
 | Layer | Technology |
 |-------|-----------|
-| Backend | Python 3.12, FastAPI, Uvicorn, SQLite (aiosqlite), Pydantic v2 |
-| Frontend | React 18, Vite 5, TypeScript 5.6 strict, Tailwind 3.4, TanStack Query 5, dnd-kit |
+| Backend | Python 3.12, FastAPI, Uvicorn, SQLite (aiosqlite), Pydantic v2; runs as non-root UID 1001 (cronos) |
+| Frontend | React 18, Vite 5, TypeScript 5.6 strict, Tailwind 3.4, TanStack Query 5, dnd-kit; served by Caddy as non-root |
 | Agent runtime | Claude Code CLI (Node 22, bundled in backend Docker image) |
 | Web server | Caddy (TLS termination, HTTP Basic Auth, reverse proxy) |
-| Deployment | Docker Compose, Ubuntu 24.04 VPS |
+| Deployment | Docker Compose, Ubuntu 24.04 VPS; hardened with cap_drop:[ALL], no-new-privileges, egress allowlist |
 
 ### Task state machine
 
@@ -59,6 +59,16 @@ HTTP Basic Auth via Caddy on every request. `/api/health` is public (no auth). C
 ### Agent execution
 
 `app/agent.py` spawns `claude code -s <space>` as a subprocess, captures stdout/stderr, tracks status. `app/worker.py` is the background executor driving goals and state transitions.
+
+### Security hardening
+
+Both backend and frontend containers run as non-root users:
+- **Backend** runs as UID 1001 (`cronos`) via `gosu` privilege drop in `docker-entrypoint.sh`
+- **Frontend** runs as the built-in `caddy` user (UID 1000)
+- Both have `cap_drop: [ALL]` + `no-new-privileges:true` applied in `docker-compose.yml`
+- Frontend (caddy) re-grants `NET_BIND_SERVICE` so port 80 still binds
+- Container egress is constrained to an allowlist (api.anthropic.com, github.com, etc.); see `deploy/EGRESS_ALLOWLIST.md`
+- Claude CLI auth paths migrated from `/root/.claude` to `/home/cronos/.claude` (persisted as named volume)
 
 ## Key modules
 
@@ -134,15 +144,17 @@ HTTP Basic Auth via Caddy on every request. `/api/health` is public (no auth). C
 backend/
   app/            FastAPI source (main, storage, agent, worker, models, api/)
   tests/          Pytest suite (60% coverage floor)
-  Dockerfile      Python 3.12 + Node 22, Claude Code CLI bundled
+  Dockerfile      Python 3.12 + Node 22, Claude Code CLI bundled; installs gosu for non-root drop-in entrypoint
+  docker-entrypoint.sh  Restores Claude auth from backup and drops privileges to UID 1001 via gosu
   pyproject.toml  Dependencies and pytest/coverage config
 
 frontend/
   src/            React + TypeScript source (pages/, components/, hooks/)
-  Dockerfile      Node image; served via Caddy
+  Dockerfile      Node builder → Caddy runtime (Alpine); runs as non-root caddy user
 
 deploy/
   VPS_SETUP.md   End-to-end VPS provisioning checklist
+  EGRESS_ALLOWLIST.md         Security: container egress restriction mechanisms and verification checklist
   cronos.service              systemd foreground unit
   cronos-backup.{service,timer}   nightly backup (03:17 UTC, 14-day rotation)
   cronos-upgrade-webhook.service  auto-upgrade webhook
