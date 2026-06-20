@@ -32,11 +32,11 @@ curl http://localhost:8080/api/health
 
 | Layer | Technology |
 |-------|-----------|
-| Backend | Python 3.12, FastAPI, Uvicorn, SQLite (aiosqlite), Pydantic v2; runs as non-root UID 1001 (cronos) |
-| Frontend | React 18, Vite 5, TypeScript 5.6 strict, Tailwind 3.4, TanStack Query 5, dnd-kit; served by Caddy as non-root |
+| Backend | Python 3.12, FastAPI, Uvicorn, SQLite (aiosqlite), Pydantic v2 |
+| Frontend | React 18, Vite 5, TypeScript 5.6 strict, Tailwind 3.4, TanStack Query 5, dnd-kit |
 | Agent runtime | Claude Code CLI (Node 22, bundled in backend Docker image) |
 | Web server | Caddy (TLS termination, HTTP Basic Auth, reverse proxy) |
-| Deployment | Docker Compose, Ubuntu 24.04 VPS; hardened with cap_drop:[ALL], no-new-privileges, egress allowlist |
+| Deployment | Docker Compose, Ubuntu 24.04 VPS |
 
 ### Task state machine
 
@@ -60,16 +60,6 @@ HTTP Basic Auth via Caddy on every request. `/api/health` is public (no auth). C
 
 `app/agent.py` spawns `claude code -s <space>` as a subprocess, captures stdout/stderr, tracks status. `app/worker.py` is the background executor driving goals and state transitions.
 
-### Security hardening
-
-Both backend and frontend containers run as non-root users:
-- **Backend** runs as UID 1001 (`cronos`) via `gosu` privilege drop in `docker-entrypoint.sh`
-- **Frontend** runs as the built-in `caddy` user (UID 1000)
-- Both have `cap_drop: [ALL]` + `no-new-privileges:true` applied in `docker-compose.yml`
-- Frontend (caddy) re-grants `NET_BIND_SERVICE` so port 80 still binds
-- Container egress is constrained to an allowlist (api.anthropic.com, github.com, etc.); see `deploy/EGRESS_ALLOWLIST.md`
-- Claude CLI auth paths migrated from `/root/.claude` to `/home/cronos/.claude` (persisted as named volume)
-
 ## Key modules
 
 | Path | Purpose |
@@ -82,7 +72,6 @@ Both backend and frontend containers run as non-root users:
 | `backend/app/worker.py` | Background task processor (goals, agent execution, state transitions); harness run lifecycle execution, event publishing for SSE streams; post-task-completion trust-loop hook nudges retrieved memory confidence (±0.05/±0.1) based on task outcome; `_persist_cronos_remember_blocks()` captures structured CRONOS_REMEMBER sentinel blocks from agent final_text and persists them as unconfirmed MemoryItems (parallel to MEMORY: path) |
 | `backend/app/models.py` | Pydantic schemas: TaskState, Task, Space, View, agent modes/models; Plugin Management section (PluginComponent, PluginEntry, MarketplacePluginEntry, MarketplaceEntry, PluginsResponse) |
 | `backend/app/trace_parser.py` | Parse `STATUS:` fields from agent stdout, extract RunTrace (result, exit_reason, parent_run_id, memory_hit_rate, `memory_used` bare IDs, etc.); `_memory_slug()` strips `.md` suffix from memory file paths |
-| `backend/app/trace_redact.py` | Secret pattern detection and redaction (GitHub PATs, tokens); `redact_trace_dict()` is the canonical entry point for recursive trace sanitization before persistence |
 | `backend/app/tools/scanner.py` | Scan .claude/ directory for markdown files and tools; extract descriptions from YAML frontmatter or first paragraph; parse settings.json for hooks and permissions |
 | `backend/app/tools/plugins.py` | Claude Code plugin CLI wrapper — `list_plugins()`, `list_marketplaces()`, `plugin_components(install_path)`, mutation functions (install, uninstall, enable, disable, add_marketplace, remove_marketplace); all mutations serialized via asyncio.Lock; PluginCliError for structured error handling |
 | `backend/app/api/tasks.py` | Task CRUD, state transitions, drag-drop reordering, lane overrides (29 KB) |
@@ -116,12 +105,10 @@ Both backend and frontend containers run as non-root users:
 | `frontend/src/pages/SpaceToolsPage.tsx` | AI Tools landing page at `/spaces/:spaceId/tools` — tabs for installed tools, available tools, and plugins (plugin management UI) |
 | `frontend/src/components/HarnessRunPanel.tsx` | Per-run detail panel with node status badges, live SSE indicator, cancel button, buffer-truncated badge |
 | `frontend/src/components/ToolDetailPanel.tsx` | Detail panel for tools displaying name, description, type badge (space/global/plugin), and components list |
-| `frontend/src/components/PluginsPanel.tsx` | Three-section plugin management UI (Installed / Available / Marketplaces): enable/disable toggle, confirm-gated uninstall, expandable component list with kind icons (agent/skill/command), install button, marketplace add/remove; rendered in the Plugins tab of SpaceToolsPage |
 | `frontend/src/hooks/useTasks.ts` | React Query hooks for task CRUD |
 | `frontend/src/hooks/useHarnessRuns.ts` | React Query hooks for harness run queries, mutations (trigger, cancel), and SSE stream subscription |
-| `frontend/src/hooks/usePlugins.ts` | React Query hooks for plugin management: `usePlugins()` query + 6 mutations (`useInstallPlugin`, `useUninstallPlugin`, `useEnablePlugin`, `useDisablePlugin`, `useAddMarketplace`, `useRemoveMarketplace`), all invalidating `['plugins']` on success |
 | `frontend/src/api.ts` | HTTP client with task/space file URL helpers (taskFileUrl, spaceFileUrl), task/space file API functions (taskFiles, spaceFiles), and plugin management functions (plugins, installPlugin, uninstallPlugin, enablePlugin, disablePlugin, addMarketplace, removeMarketplace); includes harness run types (RunSummary, NodeState, HarnessRunState) and plugin types (PluginsResponse) |
-| `frontend/src/pages/HarnessEditor.tsx` | Harness visual editor canvas page — React Flow v12 graph layout with 5 custom node types (Agent/Trigger/Decision/Wait/Aggregator), NodePalette drag source, VariableInspector side panel (receives `spaceId` for agent_ref datalist), Save button (GET-then-PUT); live-execution overlay with RunHistory (left panel), RunOverlay (canvas), and ChildTaskDrawer (right panel) |
+| `frontend/src/pages/HarnessEditor.tsx` | Harness visual editor canvas page — React Flow v12 graph layout with 5 custom node types (Agent/Trigger/Decision/Wait/Aggregator), NodePalette drag source, VariableInspector side panel, Save button (GET-then-PUT); live-execution overlay with RunHistory (left panel), RunOverlay (canvas), and ChildTaskDrawer (right panel) |
 | `frontend/src/hooks/useHarnesses.ts` | React Query hooks for harness CRUD and canvas save (`useHarnesses` list, `useHarness` single fetch, `useCreateHarness` and `useDeleteHarness` mutations, `useSaveHarness` GET-then-PUT mutation enforcing created_at preservation) |
 | `frontend/src/components/harness/runStatus.ts` | Single source of truth for node run-status styling: `NodeRunStatus` union type, `RunStatusOverlayData` interface (optional fields: runStatus, startedAt, endedAt, childTaskId), and `runStatusClassName()` mapper returning Tailwind class strings per status |
 | `frontend/src/components/harness/harnessMapping.ts` | Round-trip module converting between React Flow flat graph shape (nodes[], edges[]) and backend nested NodeRef payload; `toReactFlow()` and `fromReactFlow()` pure functions |
@@ -135,7 +122,7 @@ Both backend and frontend containers run as non-root users:
 | `frontend/src/components/harness/ChildTaskDrawer.tsx` | Right-side drawer component — accepts `child_task_id` prop, fetches task via `useTask()`, renders loading skeleton, then delegates to `ConversationStream` for task detail display |
 | `frontend/src/hooks/useRunStateOverlay.ts` | Central hook for run-state reduction: consumes SSE events (`useHarnessRunStream` live mode) or REST snapshots (`useHarnessRun` replay mode); coalesces events into `NodeRunStatus` and edge-coloring maps with `requestAnimationFrame` batching (R7) |
 | `frontend/src/components/harness/NodePalette.tsx` | Right-side draggable palette of 5 node types with React Flow dataTransfer semantics (effectAllowed=move) |
-| `frontend/src/components/harness/VariableInspector.tsx` | Right-side inspector panel — per-node-type config editing: AgentNode (agent_ref + prompt_template with datalist autocomplete from `api.spaceTools(spaceId)`, incl. plugin-namespaced names; graceful degradation when spaceId absent), WaitNode (mode + max_wait_seconds), AggregatorNode (mode all/any), TriggerNode (kind + per-kind fields), edge condition editing; harness-level variables add/remove UI |
+| `frontend/src/components/harness/VariableInspector.tsx` | Right-side inspector panel — per-node-type config editing: AgentNode (agent_ref + prompt_template), WaitNode (mode + max_wait_seconds), AggregatorNode (mode all/any), TriggerNode (kind + per-kind fields), edge condition editing; harness-level variables add/remove UI |
 | `frontend/src/types.ts` | Harness visual editor type definitions (NodeType, Position, NodePort, HarnessNode, NodeRef, HarnessEdge, Harness interfaces mirroring backend Pydantic v2 models); plugin management types (PluginComponent, PluginEntry, MarketplacePluginEntry, MarketplaceEntry, PluginsResponse); AiToolEntry.scope widened to include `"plugin"` |
 
 ## Directory layout
@@ -144,38 +131,21 @@ Both backend and frontend containers run as non-root users:
 backend/
   app/            FastAPI source (main, storage, agent, worker, models, api/)
   tests/          Pytest suite (60% coverage floor)
-  Dockerfile      Python 3.12 + Node 22, Claude Code CLI bundled; installs gosu for non-root drop-in entrypoint
-  docker-entrypoint.sh  Restores Claude auth from backup and drops privileges to UID 1001 via gosu
+  Dockerfile      Python 3.12 + Node 22, Claude Code CLI bundled
   pyproject.toml  Dependencies and pytest/coverage config
 
 frontend/
   src/            React + TypeScript source (pages/, components/, hooks/)
-  Dockerfile      Node builder → Caddy runtime (Alpine); runs as non-root caddy user
+  Dockerfile      Node image; served via Caddy
 
 deploy/
   VPS_SETUP.md   End-to-end VPS provisioning checklist
-  EGRESS_ALLOWLIST.md         Security: container egress restriction mechanisms and verification checklist
   cronos.service              systemd foreground unit
   cronos-backup.{service,timer}   nightly backup (03:17 UTC, 14-day rotation)
   cronos-upgrade-webhook.service  auto-upgrade webhook
   backup.sh       Tars /opt/cronos/data → /var/backups/cronos/
 
 data/             Per-deployment state (gitignored)
-.cronos/          Cronos runtime state
-  space.yml       Space config (tracked)
-  harnesses/      Harness definitions (tracked)
-  tasks/          Task working dirs (gitignored, ephemeral)
-  workspaces/     Agent worktrees (gitignored, ephemeral)
-  traces/         Agent run traces (gitignored, ephemeral)
-  stats/          Telemetry stats (gitignored, ephemeral)
-  memory/         Agent memory store (gitignored, ephemeral)
-  .trash/         Soft-deleted items (gitignored, ephemeral)
-  test-reports/   Test run artifacts (gitignored, ephemeral)
-  harness-runs/   Harness execution state (gitignored, ephemeral)
-  test-coverage.md  Coverage summary (gitignored, ephemeral)
-  pipeline/       Pipeline phase reports (tracked, shared across worktrees)
-  issues/         Issue tracking (tracked)
-  qa/             QA reports (tracked)
 .claude/          Claude Code harness: settings, agents, skills
 ```
 

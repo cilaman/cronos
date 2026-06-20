@@ -351,15 +351,16 @@ Once the webhook is running and `UPGRADE_WEBHOOK_URL` is set, you can open a
 Cronos task and say **"upgrade the app"** — the agent will call the webhook,
 which runs `upgrade.sh` on the host.
 
-**Optional shared secret** — prevent other containers from triggering upgrades:
+**Mandatory shared secret** — required to authorize webhook requests:
 
 ```bash
 # In /opt/cronos/.env
-UPGRADE_WEBHOOK_SECRET=choose-a-random-string
+WEBHOOK_SECRET=choose-a-random-strong-value
 ```
 
-The webhook checks the `X-Upgrade-Secret` header when the env var is set. The
-backend agent passes the same secret automatically.
+The webhook rejects all requests (403) when `WEBHOOK_SECRET` is unset. When set,
+the `X-Upgrade-Secret` header must match the env var value (constant-time compare).
+The backend agent passes the same secret automatically when calling the webhook.
 
 ---
 
