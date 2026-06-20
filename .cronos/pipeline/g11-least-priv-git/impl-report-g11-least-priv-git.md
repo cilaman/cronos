@@ -5,6 +5,15 @@ slug: g11-least-priv-git
 phase: impl
 status: done
 confidence: 0.88
+iteration_id: I1
+files_changed:
+- backend/tests/test_git_ops_auth_env.py
+- backend/tests/test_no_pat_in_traces.py
+- backend/app/git_ops.py
+- .env.example
+- deploy/VPS_SETUP.md
+- README.md
+validation_command_passed: true
 inputs_used:
 - .cronos/pipeline/g11-least-priv-git/design-report-g11-least-priv-git.md
 - backend/app/git_ops.py
@@ -30,6 +39,8 @@ metrics:
   files_read: 9
   memory_hits: 2
   iterations_completed: 4
+  diff_lines_added: 414
+  diff_lines_removed: 9
 ---
 
 ## Summary
