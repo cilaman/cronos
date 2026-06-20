@@ -15,14 +15,26 @@ inputs_used:
 outputs_produced:
 - .cronos/pipeline/g12-lightweight-docs/doc-report-g12-lightweight-docs.md
 - CLAUDE.md
+intentionally_not_updated:
+- path: deploy/VPS_SETUP.md
+  reason: Scope is operational setup, not architectural decisions; README security posture already cross-links (§5.3)
+- path: TESTING.md
+  reason: Unchanged by G12; no new test patterns introduced
+- path: .claude/agents/
+  reason: Agent/skill documentation unchanged; G12 is documentation-only
+- path: .claude/skills/
+  reason: Agent/skill documentation unchanged; G12 is documentation-only
+- path: backend/app/storage.py
+  reason: Module docstrings already document G08 correctly; CLAUDE.md key-modules table indexes them
+- path: backend/app/worker.py
+  reason: Module docstrings already document G08 correctly; CLAUDE.md key-modules table indexes them
 blockers: []
 next_consumer: null
 metrics:
   tool_calls: 3
-  files_read: 5
+  files_read: 6
   files_updated: 1
   docs_updated: 1
-  iteration_id: D1
 ---
 
 ## Summary
@@ -38,6 +50,10 @@ The doc-sync phase completed one iteration (D1) to integrate G12's new documenta
 - `CLAUDE.md`: Added top-level reference to ADRs and a new `## Architecture Decision Records` section (7 lines) with a 2-row ADR table linking and summarizing ADR 001 and 002
 - `CLAUDE.md`: Updated directory layout section to include `docs/adr/` with filenames
 - `CLAUDE.md`: Added `(includes [§ Security posture](README.md#security-posture))` to the README.md link in the opening bullet list
+
+## Updated docs
+
+1. **CLAUDE.md**: Added top-level reference to ADRs and a new `## Architecture Decision Records` section with a 2-row ADR table linking and summarizing ADR 001 and 002.
 
 ## Files changed
 
