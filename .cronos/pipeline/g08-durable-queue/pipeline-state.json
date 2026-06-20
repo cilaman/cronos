@@ -3,7 +3,7 @@
   "goal_slug": "g08-durable-queue",
   "status": "running",
   "created_at": "2026-06-20T17:26:23.074629+00:00",
-  "updated_at": "2026-06-20T17:31:12.627071+00:00",
+  "updated_at": "2026-06-20T18:14:52.279842+00:00",
   "request_text": null,
   "phases": {
     "analysis": {
@@ -68,15 +68,127 @@
         "memory_hits": 0
       },
       "header_summary": {}
+    },
+    "implementation": {
+      "phase": "implementation",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-implementor",
+      "task_id": "2026-06-20-1437-impl-g08-durable-queue",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/g08-durable-queue/impl-report-g08-durable-queue.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "test": {
+      "phase": "test",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "tester",
+      "task_id": "2026-06-20-1437-test-g08-durable-queue",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/g08-durable-queue/test-report-g08-durable-queue.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "review": {
+      "phase": "review",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-reviewer",
+      "task_id": "2026-06-20-1437-review-g08-durable-queue",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/g08-durable-queue/review-report-g08-durable-queue--attempt1.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "doc": {
+      "phase": "doc",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-doc-sync",
+      "task_id": "2026-06-20-1437-review-g08-durable-queue",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/g08-durable-queue/doc-report-g08-durable-queue.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 426.83,
+        "token_spend": 5509400,
+        "tool_calls": 26,
+        "files_read": 3,
+        "memory_hits": 0
+      },
+      "header_summary": {}
     }
   },
   "telemetry": {
-    "total_duration_s": 0.0,
-    "total_token_spend": 0,
-    "total_tool_calls": 0,
-    "total_files_read": 0,
+    "total_duration_s": 426.83,
+    "total_token_spend": 5509400,
+    "total_tool_calls": 26,
+    "total_files_read": 3,
     "total_memory_hits": 0,
-    "phases_completed": 2,
+    "phases_completed": 6,
     "phases_escalated": 0,
     "phases_retried": 0,
     "phases_failed": 0
