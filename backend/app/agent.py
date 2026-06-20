@@ -11,6 +11,7 @@ from enum import Enum
 from pathlib import Path
 
 from . import git_ops
+from .logging_config import bind_run_context
 from .memory_parser import parse_cronos_status_block
 from .models import MemoryItem, Space, Task
 
@@ -370,6 +371,28 @@ async def run_agent(
     terminated and the returned `AgentResult.stopped` is True.
     Returns once the process exits.
     """
+    async with bind_run_context(run_id=task.id, task_id=task.id):
+        return await _run_agent_body(
+            task,
+            user_message=user_message,
+            on_event=on_event,
+            cancel_event=cancel_event,
+            space=space,
+            goal_context=goal_context,
+            memory_items=memory_items,
+        )
+
+
+async def _run_agent_body(
+    task: Task,
+    *,
+    user_message: str | None,
+    on_event: EventCallback,
+    cancel_event: asyncio.Event | None = None,
+    space: Space | None = None,
+    goal_context: str | None = None,
+    memory_items: list[MemoryItem] | None = None,
+) -> AgentResult:
     workspace = await workspace_for(task, space)
     prompt = build_prompt(task, user_message, goal_context, memory_items)
     permission_mode = PERMISSION_MODE.get(task.agent_mode, "acceptEdits")

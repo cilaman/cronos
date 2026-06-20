@@ -17,6 +17,8 @@ from .agent import AgentResult, CRONOS_SUBDIR, DATA_DIR, Status, run_agent
 from . import feature_sync
 from . import goal_sync
 from . import memory_retrieval
+from .logging_config import bind_run_context
+from .notifier import notify_state_change
 from .memory_parser import parse_cronos_remember_blocks, parse_memory_blocks
 from .memory_store import MemoryStore
 from .feature_state import FeatureState
@@ -156,6 +158,21 @@ class _WorkerProtocolAdapter:
             )
         except Exception:
             log.exception("_WorkerProtocolAdapter.finalize_child failed for %s", task_id)
+
+        # Fire-and-forget notification on WAITING (needs-human) transitions.
+        if new_state == TaskState.WAITING:
+            task_obj = self._worker.store.get(task_id)
+            title = task_obj.title if task_obj is not None else task_id
+            asyncio.create_task(
+                notify_state_change(
+                    task_id=task_id,
+                    task_title=title,
+                    status=new_state.value,
+                    exit_reason=trace.exit_reason,
+                    summary=waiting_question,
+                ),
+                name=f"notify-child-{task_id}",
+            )
 
         return new_state
 
@@ -492,13 +509,16 @@ class Worker:
         which is the only atomic update path available without extending storage.py
         out of scope.
         """
-        from .storage import FEATURE_WORKER_TRANSITIONS
-
         task = self.store.get(task_id)
         if task is None:
             log.warning("_run_feature_decompose: unknown task %s", task_id)
             return
 
+        async with bind_run_context(run_id=task_id, task_id=task_id):
+            await self.__run_feature_decompose_inner(task_id, user_message, task)
+
+    async def __run_feature_decompose_inner(self, task_id: str, user_message: str | None, task) -> None:
+        from .storage import FEATURE_WORKER_TRANSITIONS
         self._current_id = task_id
         cancel_event = asyncio.Event()
         self._current_cancel = cancel_event
@@ -667,6 +687,10 @@ class Worker:
             )
             return False
 
+        async with bind_run_context(run_id=task_id, task_id=task_id):
+            return await self.__execute_harness_run_body(task_id, harness_id, space_id, initial_run=initial_run, space=space)
+
+    async def __execute_harness_run_body(self, task_id: str, harness_id: str, space_id: str, *, initial_run: bool, space) -> bool:
         space_dir = str(self.space_store.spaces_dir / space_id)
         try:
             harness = await self.harness_store.get(space_dir, harness_id)
@@ -779,12 +803,13 @@ class Worker:
             # No waiting node — not a harness resume (or harness completed).
             return False
 
-        return await self._execute_harness_run(
-            task_id,
-            run_state.harness_id,
-            task.space_id,
-            initial_run=False,
-        )
+        async with bind_run_context(run_id=task_id, task_id=task_id):
+            return await self._execute_harness_run(
+                task_id,
+                run_state.harness_id,
+                task.space_id,
+                initial_run=False,
+            )
 
     async def _run_initial_harness_run(self, task_id: str) -> bool:
         """F1 fix: execute a freshly-triggered harness run for the first time.
@@ -842,6 +867,10 @@ class Worker:
             log.warning("Skipping unknown task %s", task_id)
             return
 
+        async with bind_run_context(run_id=task_id, task_id=task_id):
+            await self.__run_task_body(task_id, user_message, task)
+
+    async def __run_task_body(self, task_id: str, user_message: str | None, task) -> None:
         # Check if this is a WAITING harness run goal being resumed via a
         # pending_messages reply.  If so, delegate to executor.execute() and
         # skip the regular run_agent path entirely.
@@ -1061,6 +1090,20 @@ class Worker:
             )
         except Exception:
             log.exception("Failed to persist finalize for %s", task_id)
+
+        # Fire-and-forget push notification on terminal / needs-human transitions.
+        if new_state in (TaskState.DONE, TaskState.WAITING):
+            title = task_pre.title if task_pre is not None else task_id
+            asyncio.create_task(
+                notify_state_change(
+                    task_id=task_id,
+                    task_title=title,
+                    status=new_state.value,
+                    exit_reason=result.status.value if result and result.status else None,
+                    summary=waiting_question,
+                ),
+                name=f"notify-{task_id}",
+            )
 
         # Invoke the optional task-state-change callback (wired by main.py to
         # fan out harness triggers).  Called only on DONE transitions so that

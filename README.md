@@ -38,8 +38,17 @@ systemd autostart, and nightly `/data` backups.
 - **Health:** `GET /api/health` — returns 200 only when dirs exist, the
   task index loaded, and the worker loop is alive. The backend container
   has a Docker `healthcheck` that hits the same endpoint every 30 s.
+- **Metrics:** `GET /api/metrics` — no auth required (parity with health).
+  Returns `{queue_depth, active_tasks, auto_resume_total}` as integer counters.
 - **Logs:** `docker compose logs -f backend caddy`. The prod overlay caps
-  each service at `10m × 5` rotated `json-file` logs.
+  each service at `10m × 5` rotated `json-file` logs. Logs are JSON-structured
+  with fields `timestamp`, `level`, `logger`, `message`, plus `run_id` and
+  `task_id` when emitted within an agent/harness execution context.
+  Set `CRONOS_LOG_LEVEL` (default `INFO`) to `DEBUG` for verbose output.
+- **Notifications:** Set `CRONOS_NOTIFY_URL` to a webhook URL to receive a POST
+  on every terminal / needs-human state transition. Payload:
+  `{task_id, task_title, status, exit_reason, summary}`. The POST is
+  fire-and-forget with a 5 s timeout; errors are logged at WARNING level only.
 - **Backups:** `cronos-backup.timer` tars `/opt/cronos/data` to
   `/var/backups/cronos/` daily at ~03:17 UTC, keeping the last 14.
   Trigger manually with `sudo systemctl start cronos-backup.service`.

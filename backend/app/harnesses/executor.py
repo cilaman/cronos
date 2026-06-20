@@ -56,6 +56,8 @@ from typing import Any, Callable, Protocol, runtime_checkable
 
 import os
 
+from ..logging_config import bind_run_context
+
 from ..models import Space, TaskState
 from ..storage import TaskStore
 from ..trace_parser import RunTrace
@@ -299,6 +301,15 @@ class HarnessExecutor:
         RunState
             The final run state after all nodes have been processed.
         """
+        async with bind_run_context(run_id=run_goal_id):
+            return await self._execute_body(run_goal_id, harness, space)
+
+    async def _execute_body(
+        self,
+        run_goal_id: str,
+        harness: Harness,
+        space: Space,
+    ) -> RunState:
         # Compute run-state file path.  Space.id maps to the directory
         # {DATA_DIR}/spaces/{space.id}/.cronos/harness-runs/{run_goal_id}.json
         run_state_path: Path | None = (
