@@ -551,3 +551,33 @@ hostname.
 You can leave the `BASIC_AUTH_USER` / `BASIC_AUTH_HASH` values in `.env` —
 they're simply unused once `basic_auth` is removed from the Caddyfile.
 Or delete them; both work.
+
+---
+
+## 13. Enable GitHub branch protection on `main`
+
+Branch protection ensures that all CI checks (`backend` and `frontend` jobs in
+`.github/workflows/ci.yml`) must pass before a pull request can be merged into
+`main`. This prevents a red-main situation where failing tests reach the
+production branch undetected.
+
+### Steps
+
+1. Go to your repository on GitHub → **Settings** → **Branches**.
+2. Under **Branch protection rules**, click **Add rule** (or **Add classic rule**).
+3. Set **Branch name pattern** to `main`.
+4. Enable **Require status checks to pass before merging**.
+5. In the **Status checks that are required** search box, add:
+   - `backend`
+   - `frontend`
+   (These names match the `jobs:` keys in `.github/workflows/ci.yml`.)
+6. Optionally enable **Require branches to be up to date before merging** for
+   extra safety.
+7. Click **Create** (or **Save changes**).
+
+### Verify
+
+Open a pull request and confirm that the merge button stays disabled until both
+the `backend` and `frontend` checks show a green tick. If checks are not yet
+listed in step 5, push at least one commit through a PR first so GitHub
+registers the check names.

@@ -113,6 +113,9 @@ support SLA. These controls are in place for the operator's own protection:
 | App-layer auth is fail-closed (HTTP 503 when credentials are not set) | active | G04 |
 | Plugin install requires human approval via the UI; Bash-based install guarded | designed (planned) | G06 |
 | Git credentials use a least-privilege fine-grained PAT (Contents-only scope) | active | G11 |
+| GitHub branch protection on `main` requires `backend` + `frontend` CI checks to pass | manual step | G02 |
+
+To enable branch protection, follow the steps in [`deploy/VPS_SETUP.md §13`](deploy/VPS_SETUP.md).
 
 If you find a security issue, contact the operator directly. There is no formal
 disclosure process — this is a personal system.
