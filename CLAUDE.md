@@ -2,9 +2,10 @@
 
 Kanban-style task manager for orchestrating Claude Code agents. Single-user personal platform — agents run via the Claude Code CLI bundled in the backend container, authenticated against a Claude Pro/Max subscription (no API key needed).
 
-- **Quick-start & ops**: [README.md](README.md)
+- **Quick-start & ops**: [README.md](README.md) (includes [§ Security posture](README.md#security-posture))
 - **Testing guide**: [TESTING.md](TESTING.md)
 - **VPS deployment**: [deploy/VPS_SETUP.md](deploy/VPS_SETUP.md)
+- **Architecture decisions**: [docs/adr/](docs/adr/)
 
 ## Dev commands
 
@@ -151,7 +152,21 @@ deploy/
 
 data/             Per-deployment state (gitignored)
 .claude/          Claude Code harness: settings, agents, skills
+
+docs/
+  adr/            Architecture Decision Records (Nygard-style)
+    001-markdown-as-truth.md     Markdown files are source-of-truth; SQLite is a reconstructible index
+    002-sqlite-durability.md     SQLite (not Postgres/Redis) is the durable queue substrate for G08
 ```
+
+## Architecture Decision Records
+
+Cronos documents key architectural choices via ADRs in `docs/adr/`:
+
+| ADR | Decision |
+|-----|----------|
+| [001: Markdown as truth, SQLite as disposable index](docs/adr/001-markdown-as-truth.md) | `.md` files under `.cronos/` are the single source of truth for tasks, goals, and spaces. `cronos-index.db` is a reconstructible performance cache; deleting it and restarting always recovers correctly (self-healing invariant). Task leases (G08) live in SQLite because they are transient coordination data, not durable state. |
+| [002: SQLite durability (over Postgres, Redis, LangGraph)](docs/adr/002-sqlite-durability.md) | Single-VPS personal system uses SQLite for the durable task queue (lease + heartbeat tables) instead of a separate database service. Worker heartbeat renewal (15 s interval) bridges long agent runs; reaper reclaims stale leases on startup. Revisit if horizontal scaling is needed. |
 
 ## Registered agents
 
