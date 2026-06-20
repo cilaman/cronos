@@ -26,6 +26,9 @@ services:
       # dev to disable auth. In production, prefer setting these in .env.
       CRONOS_BASIC_AUTH_USER: ${CRONOS_BASIC_AUTH_USER:-}
       CRONOS_BASIC_AUTH_PASSWORD: ${CRONOS_BASIC_AUTH_PASSWORD:-}
+      # Override worker.py's hardcoded /root/.claude/projects default so agent
+      # run logs write to the cronos user's home instead of /root (unwritable).
+      CLAUDE_PROJECTS_DIR: /home/cronos/.claude/projects
     # Pass-through: if CLAUDE_CODE_OAUTH_TOKEN is set in the shell or in a
     # project-root .env file, it lands in the container. Listing the bare
     # name (no value) means we *don't* clobber whatever the prod overlay
@@ -36,11 +39,17 @@ services:
     expose:
       - "8000"
     restart: unless-stopped
+    # Security hardening: drop all Linux capabilities; no-new-privileges blocks
+    # setuid escalation after the initial gosu drop-in entrypoint.
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     volumes:
       - ./data:/data
-      # Claude stores per-session conversation logs under /root/.claude.
+      # Claude stores per-session conversation logs under /home/cronos/.claude.
       # A named volume keeps them across container restarts so `--resume` works.
-      - claude_config:/root/.claude
+      - claude_config:/home/cronos/.claude
 
   caddy:
     build:
@@ -55,6 +64,14 @@ services:
     ports:
       - "8080:80"
     restart: unless-stopped
+    # Security hardening: drop all capabilities but re-grant NET_BIND_SERVICE
+    # so the non-root caddy user can still bind port 80 (Caddyfile unchanged).
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
 
 volumes:
   claude_config:
