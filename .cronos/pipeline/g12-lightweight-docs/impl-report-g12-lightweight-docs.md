@@ -20,11 +20,15 @@ files_changed:
 - README.md
 - docs/adr/001-markdown-as-truth.md
 - docs/adr/002-sqlite-durability.md
+iteration_id: I1
 validation_command_passed: true
 metrics:
   tool_calls: 14
   files_read: 4
   memory_hits: 0
+  iterations_completed: 3
+  diff_lines_added: 138
+  diff_lines_removed: 0
 ---
 
 ## Summary
