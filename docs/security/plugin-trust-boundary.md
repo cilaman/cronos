@@ -25,7 +25,7 @@ The project settings file contains a `permissions.deny` list that blocks the six
 }
 ```
 
-This deny list is loaded by the Claude Code CLI from the project directory. Any agent task running within a Cronos workspace inherits these restrictions. The patterns use prefix matching: `Bash(claude plugin install:*)` denies any Bash command starting with `claude plugin install`.
+This deny list is loaded by the Claude Code CLI from the project directory. Any agent task running within a Cronos workspace inherits these restrictions. The patterns use prefix matching: `Bash(claude plugin install:*)` denies any Bash command starting with `claude plugin install`. Enforcement is performed by the Claude Code CLI permission system; when a tool call matches a deny pattern, the engine rejects the call before subprocess invocation.
 
 Read-only commands (`claude plugin list --available --json`, `claude plugin marketplace list --json`) are **not** denied — the backend uses them to surface plugin state.
 
@@ -38,10 +38,10 @@ Read-only commands (`claude plugin list --available --json`, `claude plugin mark
 `TRUSTED_MARKETPLACE_SOURCES` (env var, comma-separated URLs) gates the FastAPI plugin mutation path:
 
 - **`add_marketplace(source)`**: rejects sources not in the allowlist with `ValueError` → HTTP 422.
-- **`install(plugin_id)`**: looks up the plugin in the available list; if its source URL is known and not in the allowlist, raises `ValueError` → HTTP 422.
+- **`install(plugin_id)`**: looks up the plugin in the available list; if its source URL is known and not in the allowlist, raises `ValueError` → HTTP 422. Plugins absent from the available list (unknown source) are installed without re-validation, since the marketplace source was presumably validated when it was added via `add_marketplace()`.
 
-Default: `https://claude.ai/marketplace` (official Anthropic marketplace).  
-Set `TRUSTED_MARKETPLACE_SOURCES=` (empty) to disable restriction; set a comma-separated list to restrict to specific sources.
+Default: **unset = unrestricted** (any marketplace source allowed). All plugin sources are accepted unless explicitly restricted.  
+Set `TRUSTED_MARKETPLACE_SOURCES=<comma-separated URLs>` to opt into allowlist enforcement (e.g., `TRUSTED_MARKETPLACE_SOURCES=https://claude.ai/marketplace`).
 
 ### 4. Frontend provenance display (`frontend/src/components/PluginsPanel.tsx`)
 

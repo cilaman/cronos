@@ -111,7 +111,7 @@ support SLA. These controls are in place for the operator's own protection:
 |---------|--------|------|
 | Agents run as non-root (separate UID inside the backend container) | designed (planned) | G03 |
 | App-layer auth is fail-closed (HTTP 503 when credentials are not set) | active | G04 |
-| Plugin install requires human approval via the UI; Bash-based install guarded | designed (planned) | G06 |
+| Plugin install requires human approval via the UI; Bash-based install guarded | active | G06 |
 | Git credentials use a least-privilege fine-grained PAT (Contents-only scope) | active | G11 |
 | GitHub branch protection on `main` requires `backend` + `frontend` CI checks to pass | manual step | G02 |
 
