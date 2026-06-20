@@ -19,13 +19,16 @@ inputs_used:
   - deploy/VPS_SETUP.md
 outputs_produced:
   - .cronos/pipeline/g03-non-root-docker/doc-report-g03-non-root-docker.md
-  - CLAUDE.md (updated)
+  - CLAUDE.md
 blockers: []
 next_consumer: none
 intentionally_not_updated:
-  - README.md: Already high-level overview; non-root execution is transparent to end users in quick-start flow. VPS deployment section already references VPS_SETUP.md for hardening details.
-  - TESTING.md: Backend pytest suite does not need test changes for non-root infra changes (G03 is docker-only, no Python source modifications).
-  - deploy/VPS_SETUP.md: Non-root container model is handled transparently by docker-entrypoint.sh (idempotent chown at startup). Operator sees no VPS setup changes; the backend container drops privileges automatically.
+  - path: README.md
+    reason: Already high-level overview; non-root execution is transparent to end users in quick-start flow. VPS deployment section already references VPS_SETUP.md for hardening details.
+  - path: TESTING.md
+    reason: Backend pytest suite does not need test changes for non-root infra changes (G03 is docker-only, no Python source modifications).
+  - path: deploy/VPS_SETUP.md
+    reason: Non-root container model is handled transparently by docker-entrypoint.sh (idempotent chown at startup). Operator sees no VPS setup changes; the backend container drops privileges automatically.
 metrics:
   tool_calls: 8
   files_read: 11
@@ -36,6 +39,20 @@ metrics:
 ## Summary
 
 Updated CLAUDE.md to document G03 non-root execution and security hardening model. All Dockerfile, entrypoint, and compose changes are now reflected in the Architecture and Directory Layout sections. No source-file edits were made (doc-sync only); the new `deploy/EGRESS_ALLOWLIST.md` file created by the implementor is integrated into the docs index.
+
+## Updated docs
+
+| File | Changes |
+|------|---------|
+| `CLAUDE.md` | Updated Stack table to note non-root execution; added Security hardening subsection (gosu, cap_drop, no-new-privileges, egress allowlist, auth path migration); updated Directory Layout entries for backend/Dockerfile, docker-entrypoint.sh, frontend/Dockerfile; added EGRESS_ALLOWLIST.md to deploy/ index |
+
+## Intentionally not updated
+
+| File | Reason |
+|------|--------|
+| `README.md` | Already high-level overview; non-root execution is transparent to end users in quick-start flow. VPS deployment section already references VPS_SETUP.md for hardening details. |
+| `TESTING.md` | Backend pytest suite does not need test changes for non-root infra changes (G03 is docker-only, no Python source modifications). |
+| `deploy/VPS_SETUP.md` | Non-root container model is handled transparently by docker-entrypoint.sh (idempotent chown at startup). Operator sees no VPS setup changes; the backend container drops privileges automatically. |
 
 ## Files changed
 
