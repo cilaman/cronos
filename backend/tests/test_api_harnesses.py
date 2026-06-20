@@ -322,6 +322,7 @@ async def test_create_on_unknown_space_returns_404(h_client):
 
 async def test_unauthenticated_returns_401(space_store, harness_store, monkeypatch):
     """Missing credentials return 401 when auth env vars are set."""
+    monkeypatch.delenv("CRONOS_AUTH_DISABLED", raising=False)
     monkeypatch.setenv("CRONOS_BASIC_AUTH_USER", "admin")
     monkeypatch.setenv("CRONOS_BASIC_AUTH_PASSWORD", "secret")
     _app = _make_test_app(space_store, harness_store)

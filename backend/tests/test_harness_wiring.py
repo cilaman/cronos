@@ -47,9 +47,10 @@ def _inject_harness_store(tmp_path):
 
 @pytest.fixture(autouse=True)
 def _clear_auth_env(monkeypatch):
-    """Ensure no leftover auth env vars from other tests interfere."""
+    """Ensure no leftover auth env vars (including the fail-closed bypass) interfere."""
     monkeypatch.delenv("CRONOS_BASIC_AUTH_USER", raising=False)
     monkeypatch.delenv("CRONOS_BASIC_AUTH_PASSWORD", raising=False)
+    monkeypatch.delenv("CRONOS_AUTH_DISABLED", raising=False)
 
 
 # ---------------------------------------------------------------------------
@@ -134,9 +135,9 @@ async def test_harness_store_on_app_state(async_client):
     assert isinstance(app.state.harness_store, HarnessStore)
 
 
-async def test_harnesses_endpoint_reachable_without_auth_when_auth_disabled(async_client):
-    """When auth is disabled (no env vars), the endpoint returns 200 for an existing space."""
-    # _clear_auth_env autouse fixture already deleted env vars
+async def test_harnesses_endpoint_reachable_without_auth_when_auth_disabled(async_client, monkeypatch):
+    """When auth is explicitly disabled via CRONOS_AUTH_DISABLED=true, the endpoint returns 200."""
+    monkeypatch.setenv("CRONOS_AUTH_DISABLED", "true")
 
     resp = await async_client.get(HARNESS_URL)
 

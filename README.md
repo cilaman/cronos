@@ -48,6 +48,37 @@ systemd autostart, and nightly `/data` backups.
   `docker compose ... restart backend`. Revoke the old token in your
   Claude account settings.
 
+## Authentication
+
+Cronos uses **two complementary auth layers** (defense-in-depth):
+
+| Layer | Mechanism | Env vars |
+|-------|-----------|----------|
+| Edge (Caddy) | HTTP Basic Auth via bcrypt hash | `BASIC_AUTH_USER`, `BASIC_AUTH_HASH` |
+| App (FastAPI) | HTTP Basic Auth via plaintext compare | `CRONOS_BASIC_AUTH_USER`, `CRONOS_BASIC_AUTH_PASSWORD` |
+
+The app layer is **fail-closed**: if `CRONOS_BASIC_AUTH_USER` or
+`CRONOS_BASIC_AUTH_PASSWORD` is unset it returns **HTTP 503** (misconfiguration),
+not a silent 200. This prevents unauthenticated access on default deployments
+where only the Caddy layer was configured.
+
+To disable the app-level check (local dev only), set:
+
+```bash
+CRONOS_AUTH_DISABLED=true
+```
+
+Any other value, or omitting the variable entirely, leaves the fail-closed
+check active. `/api/health` is always public (no auth on either layer).
+
+The upgrade webhook (`deploy/upgrade-webhook.py`) also requires a secret:
+
+```bash
+WEBHOOK_SECRET=<strong-random-value>
+```
+
+All requests are rejected with **403** when `WEBHOOK_SECRET` is unset.
+
 ## Layout
 
 ```

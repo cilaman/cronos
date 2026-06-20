@@ -1,6 +1,15 @@
 # Local development: plain HTTP on :80, no Caddy-level auth.
-# Authentication is handled at the FastAPI layer via CRONOS_BASIC_AUTH_USER /
-# CRONOS_BASIC_AUTH_PASSWORD env vars (disabled when unset — default for dev).
+#
+# The FastAPI layer uses fail-closed auth: if CRONOS_BASIC_AUTH_USER +
+# CRONOS_BASIC_AUTH_PASSWORD are unset it returns HTTP 503 (misconfiguration),
+# NOT a silent allow. To disable auth for local dev, set:
+#
+#   CRONOS_AUTH_DISABLED=true
+#
+# This is the ONLY supported way to run without credentials. Do NOT rely on
+# Caddyfile.dev's absent basicauth block as the sole auth bypass — it only
+# removes the edge gate; the app-level check still fires.
+#
 # Production config is in `Caddyfile` and is mounted via the prod compose overlay.
 
 {

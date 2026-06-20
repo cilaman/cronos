@@ -34,6 +34,7 @@ def test_app(monkeypatch, tmp_path):
     The lifespan is bypassed by patching asynccontextmanager so we avoid
     spinning up worker pools, file watchers, etc.
     """
+    monkeypatch.delenv("CRONOS_AUTH_DISABLED", raising=False)
     monkeypatch.setenv("CRONOS_BASIC_AUTH_USER", TEST_USER)
     monkeypatch.setenv("CRONOS_BASIC_AUTH_PASSWORD", TEST_PASS)
     monkeypatch.setenv("CRONOS_DATA_DIR", str(tmp_path))

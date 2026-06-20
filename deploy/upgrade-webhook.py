@@ -19,6 +19,20 @@ UPGRADE_SCRIPT = os.environ.get("UPGRADE_SCRIPT", "/opt/cronos/upgrade.sh")
 UPGRADE_DIR = os.path.dirname(UPGRADE_SCRIPT)
 SECRET = os.environ.get("WEBHOOK_SECRET", "")
 
+if not SECRET:
+    print(
+        "WARNING: WEBHOOK_SECRET is not set — all upgrade requests will be rejected (403). "
+        "Set WEBHOOK_SECRET to a strong random value to enable the upgrade endpoint.",
+        flush=True,
+    )
+
+
+def authorized(header_value: str) -> bool:
+    """Return True iff WEBHOOK_SECRET is set and header_value matches it."""
+    if not SECRET:
+        return False
+    return hmac.compare_digest(header_value.encode(), SECRET.encode())
+
 
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
@@ -30,12 +44,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         client_ip = self.client_address[0]
         print(f"[{ts}] POST /upgrade from {client_ip}", flush=True)
 
-        if SECRET:
-            auth = self.headers.get("X-Upgrade-Secret", "")
-            if not hmac.compare_digest(auth.encode(), SECRET.encode()):
-                print(f"[{ts}] forbidden (bad secret) from {client_ip}", flush=True)
-                self._reply(403, b"forbidden\n")
-                return
+        auth = self.headers.get("X-Upgrade-Secret", "")
+        if not authorized(auth):
+            print(f"[{ts}] forbidden (bad or missing secret) from {client_ip}", flush=True)
+            self._reply(403, b"forbidden\n")
+            return
 
         threading.Thread(
             target=subprocess.run,

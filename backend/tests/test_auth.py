@@ -19,12 +19,15 @@ AUTH_PASS = "s3cret-pa$$w0rd"
 
 @pytest.fixture(autouse=True)
 def _clear_auth_env(monkeypatch):
-    """Ensure no leftover auth env vars from other tests interfere.
+    """Clear all auth env vars per-test so the real fail-closed logic is exercised.
 
-    Individual tests opt in to auth by calling monkeypatch.setenv themselves.
+    conftest's _auth_disabled_by_default sets CRONOS_AUTH_DISABLED=true at
+    function scope; this fixture's delenv runs in the SAME scope and wins,
+    leaving all three variables unset. Individual tests opt in as needed.
     """
     monkeypatch.delenv("CRONOS_BASIC_AUTH_USER", raising=False)
     monkeypatch.delenv("CRONOS_BASIC_AUTH_PASSWORD", raising=False)
+    monkeypatch.delenv("CRONOS_AUTH_DISABLED", raising=False)
 
 
 # ---------------------------------------------------------------------------
@@ -152,47 +155,45 @@ async def test_health_endpoint_public_when_auth_disabled(async_client):
 
 
 # ---------------------------------------------------------------------------
-# Auth DISABLED (env vars unset or empty)
+# Fail-closed: unconfigured credentials → 503
 # ---------------------------------------------------------------------------
 
 
-async def test_protected_endpoint_returns_200_when_auth_disabled(async_client):
-    # Arrange — _clear_auth_env autouse fixture deleted env vars.
+async def test_unset_credentials_returns_503(async_client):
+    # Arrange — _clear_auth_env deleted all auth vars (CRONOS_AUTH_DISABLED too).
 
     # Act
     resp = await async_client.get("/api/spaces")
 
-    # Assert
-    assert resp.status_code == 200
-    payload = resp.json()
-    assert "spaces" in payload
+    # Assert — misconfiguration, not a credentials challenge
+    assert resp.status_code == 503
 
 
-async def test_auth_disabled_when_only_user_env_set(async_client, monkeypatch):
-    # Arrange — partial config should also disable auth (per auth.py: needs BOTH).
+async def test_only_user_env_set_returns_503(async_client, monkeypatch):
+    # Arrange — partial config is still misconfigured.
     monkeypatch.setenv("CRONOS_BASIC_AUTH_USER", AUTH_USER)
     # password intentionally not set
 
     # Act
     resp = await async_client.get("/api/spaces")
 
-    # Assert — auth treated as disabled
-    assert resp.status_code == 200
+    # Assert
+    assert resp.status_code == 503
 
 
-async def test_auth_disabled_when_only_password_env_set(async_client, monkeypatch):
-    # Arrange
+async def test_only_password_env_set_returns_503(async_client, monkeypatch):
+    # Arrange — partial config is still misconfigured.
     monkeypatch.setenv("CRONOS_BASIC_AUTH_PASSWORD", AUTH_PASS)
 
     # Act
     resp = await async_client.get("/api/spaces")
 
     # Assert
-    assert resp.status_code == 200
+    assert resp.status_code == 503
 
 
-async def test_auth_disabled_when_user_env_empty_string(async_client, monkeypatch):
-    # Arrange — empty string is falsy per `if not user or not password` check
+async def test_empty_user_with_password_returns_503(async_client, monkeypatch):
+    # Arrange — empty string user with password is still partial/invalid config.
     monkeypatch.setenv("CRONOS_BASIC_AUTH_USER", "")
     monkeypatch.setenv("CRONOS_BASIC_AUTH_PASSWORD", AUTH_PASS)
 
@@ -200,7 +201,77 @@ async def test_auth_disabled_when_user_env_empty_string(async_client, monkeypatc
     resp = await async_client.get("/api/spaces")
 
     # Assert
+    assert resp.status_code == 503
+
+
+# ---------------------------------------------------------------------------
+# Explicit opt-out: CRONOS_AUTH_DISABLED=true
+# ---------------------------------------------------------------------------
+
+
+async def test_auth_disabled_flag_allows_unauthenticated_request(async_client, monkeypatch):
+    # Arrange — explicit opt-out, no credentials configured.
+    monkeypatch.setenv("CRONOS_AUTH_DISABLED", "true")
+
+    # Act
+    resp = await async_client.get("/api/spaces")
+
+    # Assert — opt-out grants access without credentials
     assert resp.status_code == 200
+    assert "spaces" in resp.json()
+
+
+async def test_auth_disabled_flag_wins_over_credentials(async_client, monkeypatch):
+    # Arrange — both disabled flag AND credentials set; disabled takes precedence.
+    monkeypatch.setenv("CRONOS_AUTH_DISABLED", "true")
+    monkeypatch.setenv("CRONOS_BASIC_AUTH_USER", AUTH_USER)
+    monkeypatch.setenv("CRONOS_BASIC_AUTH_PASSWORD", AUTH_PASS)
+
+    # Act
+    resp = await async_client.get("/api/spaces")
+
+    # Assert — no credentials required when disabled
+    assert resp.status_code == 200
+
+
+async def test_auth_disabled_false_does_not_disable(async_client, monkeypatch):
+    # Arrange — only "true" (exact string) disables auth.
+    monkeypatch.setenv("CRONOS_AUTH_DISABLED", "false")
+    monkeypatch.setenv("CRONOS_BASIC_AUTH_USER", AUTH_USER)
+    monkeypatch.setenv("CRONOS_BASIC_AUTH_PASSWORD", AUTH_PASS)
+
+    # Act — request without credentials
+    resp = await async_client.get("/api/spaces")
+
+    # Assert — auth still enforced (not disabled)
+    assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Route coverage: File Browser and Plugin API are protected by require_auth (R3/R4)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "router_path",
+    [
+        pytest.param("/api/spaces/test-space/files", id="file-browser-route"),
+        pytest.param("/api/plugins", id="plugins-route"),
+    ],
+)
+async def test_file_browser_and_plugin_routes_require_auth(async_client, monkeypatch, router_path):
+    # Arrange — credentials set so auth is enabled.
+    monkeypatch.setenv("CRONOS_BASIC_AUTH_USER", AUTH_USER)
+    monkeypatch.setenv("CRONOS_BASIC_AUTH_PASSWORD", AUTH_PASS)
+
+    # Act — request without credentials
+    unauth = await async_client.get(router_path)
+    # Act — request with correct credentials
+    authed = await async_client.get(router_path, auth=httpx.BasicAuth(AUTH_USER, AUTH_PASS))
+
+    # Assert
+    assert unauth.status_code == 401, f"{router_path} must require auth"
+    assert authed.status_code != 401, f"{router_path} must accept correct credentials"
 
 
 # ---------------------------------------------------------------------------
