@@ -15,10 +15,14 @@ inputs_used:
   - README.md
 outputs_produced:
   - .cronos/pipeline/g01-green-main/doc-report-g01-green-main.md
+  - CLAUDE.md
+  - TESTING.md
 blockers: []
 intentionally_not_updated:
-  - README.md
-  - deploy/VPS_SETUP.md
+  - file: README.md
+    reason: High-level overview is sufficient; detailed `.cronos/` structure documented in CLAUDE.md architecture section
+  - file: deploy/VPS_SETUP.md
+    reason: Deployment-focused docs; gitignore changes do not affect VPS runtime (instance uses ephemeral `.cronos/` dirs on disk)
 metrics:
   docs_updated: 2
   files_read: 6
@@ -56,6 +60,10 @@ Documentation updated in CLAUDE.md (directory layout + key modules section) and 
 - `.cronos/space.yml` and `.cronos/harnesses/` remain tracked per design decision; this is documented in the directory layout as "tracked"
 - The PAT guard test change (scan committed only, via `git ls-files`) is a security/test-correctness improvement, not a user-facing change, so TESTING.md is the appropriate place for detailed explanation
 - New CLAUDE.md section on `.cronos/` structure clarifies the distinction for future developers / deployers who need to understand what's ephemeral vs. legit config
+
+## Open questions
+
+- None.
 
 ## Next consumer brief
 
