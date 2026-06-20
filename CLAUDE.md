@@ -137,11 +137,15 @@ backend/
   app/            FastAPI source (main, storage, agent, worker, models, api/)
   tests/          Pytest suite (60% coverage floor)
   Dockerfile      Python 3.12 + Node 22, Claude Code CLI bundled
-  pyproject.toml  Dependencies and pytest/coverage config
+  pyproject.toml  Dependencies, pytest/coverage, ruff/mypy lint config
 
 frontend/
   src/            React + TypeScript source (pages/, components/, hooks/)
   Dockerfile      Node image; served via Caddy
+
+.github/
+  workflows/      GitHub Actions CI (backend + frontend jobs on push/PR)
+    ci.yml        Ruff, mypy, pytest (backend); tsc, vitest, build (frontend)
 
 deploy/
   VPS_SETUP.md   End-to-end VPS provisioning checklist
