@@ -499,8 +499,9 @@ data:
 - **Human wait**: the executor parks the run, the parent task becomes
   **WAITING**, and `waiting_node_id` is recorded. **Reply to the task** to
   resume; traversal continues from the wait node's outgoing edges.
-- **Timed wait**: the run sleeps `duration_seconds` and continues. Note: on a
-  process restart, a timed wait re-sleeps the full duration (MVP behaviour).
+- **Timed wait**: the run sleeps `duration_seconds` and continues. On a process
+  restart, the run resumes sleeping only the *remaining* interval and fires
+  immediately if the wake time has already passed.
 
 ### Aggregator — join branches
 
