@@ -2,10 +2,9 @@
 
 Kanban-style task manager for orchestrating Claude Code agents. Single-user personal platform — agents run via the Claude Code CLI bundled in the backend container, authenticated against a Claude Pro/Max subscription (no API key needed).
 
-- **Quick-start & ops**: [README.md](README.md) (includes [§ Security posture](README.md#security-posture))
+- **Quick-start & ops**: [README.md](README.md)
 - **Testing guide**: [TESTING.md](TESTING.md)
 - **VPS deployment**: [deploy/VPS_SETUP.md](deploy/VPS_SETUP.md)
-- **Architecture decisions**: [docs/adr/](docs/adr/)
 
 ## Dev commands
 
@@ -15,7 +14,7 @@ export CLAUDE_CODE_OAUTH_TOKEN=$(claude setup-token)   # optional; needed for ag
 docker compose up --build
 # open http://localhost:8080
 
-# Backend tests (60% coverage floor enforced)
+# Backend tests (80% coverage floor enforced)
 cd backend && pip install -e ".[dev]"
 cd backend && pytest tests/ --cov=app --cov-report=term-missing
 
@@ -59,29 +58,22 @@ HTTP Basic Auth via Caddy on every request. `/api/health` is public (no auth). C
 
 ### Agent execution
 
-`app/agent.py` spawns `claude code -s <space>` as a subprocess, captures stdout/stderr, tracks status. `app/worker.py` orchestrates task/goal/harness execution via extracted collaborators (as of G07 strangler-fig refactor): `RunExecutor` handles the main execution loop, `Finalizer` manages post-run state transitions and memory updates, `EventBus` handles pub/sub for SSE streams, and `RunSideEffects` records telemetry. `app/harnesses/executor.py` runs harness DAGs via the `WorkerAdapter` protocol bridge.
+`app/agent.py` spawns `claude code -s <space>` as a subprocess, captures stdout/stderr, tracks status. `app/worker.py` is the background executor driving goals and state transitions.
 
 ## Key modules
 
 | Path | Purpose |
 |------|---------|
-| `backend/app/main.py` | FastAPI app, router registration, background task startup (cron loop initialization + logging config), file watcher with event-trigger dispatch; task-state-change callback injection; metrics_router registration |
-| `backend/app/storage.py` | **CORE** — TaskStore, state machine, dependency DAG validation, cycle detection (41 KB); durable queue: `task_leases` (owner, lease_expiry, heartbeat_at) and `auto_resume_counts` SQLite tables with CRUD methods (acquire_lease, heartbeat_lease, release_lease, get_expired_leases; load_auto_resume_count, upsert_auto_resume_count, delete_auto_resume_count) |
-| `backend/app/logging_config.py` | JSON logging setup — `JsonFormatter` for structured logs (timestamp, level, logger, message, run_id, task_id fields), `bind_run_context()` context manager for safe contextvars binding, `configure_logging()` entry point (configurable `CRONOS_LOG_LEVEL`, default INFO) |
-| `backend/app/notifier.py` | Push notification on task state transitions — `notify_state_change()` coroutine posts to `CRONOS_NOTIFY_URL` webhook (payload: task_id, task_title, status, exit_reason, summary); 5s timeout, fire-and-forget, error logging only |
-| `backend/app/api/metrics.py` | Observability endpoint — `GET /api/metrics` (no auth, parity with /api/health) returns `{queue_depth, active_tasks, auto_resume_total}` integer counters for monitoring queue health and auto-resume rate |
+| `backend/app/main.py` | FastAPI app, router registration, background task startup (cron loop initialization), file watcher with event-trigger dispatch; task-state-change callback injection |
+| `backend/app/storage.py` | **CORE** — TaskStore, state machine, dependency DAG validation, cycle detection (41 KB) |
 | `backend/app/space_storage.py` | Space persistence, layouts, settings, `.cronos` subdirectory management |
-| `backend/app/agent.py` | Agent spawning, stdout/stderr capture, status tracking via `parse_status()` (checks structured `cronos_status` block first, falls back to deprecated free-text `STATUS:` line with warning log); `bind_run_context()` for run_id/task_id propagation in logs |
+| `backend/app/agent.py` | Agent spawning, stdout/stderr capture, status tracking |
 | `backend/app/file_service.py` | File classification and listing utilities (classify_file, list_files, list_git_changed_files, resolve_safe); FileEntry model; used by space file endpoints and task file operations |
-| `backend/app/event_bus.py` | Pub/sub event bus for SSE streaming (extracted G07) — holds per-task subscriber queues, space-subscriber broadcast, and run-event replay buffer (RUN_BUFFER_CAP=2000); Worker delegates via `self._bus = EventBus()`; provides synchronous `publish()` and async `subscribe()`/`unsubscribe()` methods |
-| `backend/app/run_side_effects.py` | Stateless post-run telemetry recorder (extracted G07) — records run stats/traces, memory blocks, and CRONOS_REMEMBER sentinel blocks to StatsStore/TraceStore/MemoryStore; called by Finalizer after each agent run completes |
-| `backend/app/finalizer.py` | Post-run state machine (extracted G07) — transitions tasks/children (DONE/WAITING/BLOCKED), persists auto_resume_count, nudges memory confidence (±0.05/±0.1), captures CRONOS_REMEMBER blocks; Finalizer takes a context dataclass (stores, event_bus, callbacks) and exposes `finalize()` and `finalize_child()` async methods |
-| `backend/app/run_executor.py` | Task, goal, feature, and harness execution engine (extracted G07, 947 LOC) — implements `run_task()`, `run_goal()`, `run_feature_decompose()`; runs agents with lease/heartbeat, orchestrates harness runs, delegates state transitions to Finalizer; takes a RunContext (stores, event_bus, finalizer) and holds thin shims in Worker for backward-compat |
-| `backend/app/worker.py` | Thin orchestration shell (636 LOC, reduced from 2057 via strangler-fig extraction G07); manages Worker lifecycle (`_run_forever`, `_run_one`), delegating to extracted collaborators: EventBus (pub/sub), RunSideEffects (telemetry/memory), Finalizer (post-run state machine), RunExecutor (task/goal/harness execution); durable queue: acquires task lease before run, runs async heartbeat loop (configurable LEASE_TTL, HEARTBEAT_INTERVAL), releases lease in finally block |
+| `backend/app/worker.py` | Background task processor (goals, agent execution, state transitions); harness run lifecycle execution, event publishing for SSE streams; post-task-completion trust-loop hook nudges retrieved memory confidence (±0.05/±0.1) based on task outcome; `_persist_cronos_remember_blocks()` captures structured CRONOS_REMEMBER sentinel blocks from agent final_text and persists them as unconfirmed MemoryItems (parallel to MEMORY: path) |
 | `backend/app/models.py` | Pydantic schemas: TaskState, Task, Space, View, agent modes/models; Plugin Management section (PluginComponent, PluginEntry, MarketplacePluginEntry, MarketplaceEntry, PluginsResponse) |
-| `backend/app/trace_parser.py` | Parse structured `cronos_status` fenced-JSON blocks (primary) and legacy `STATUS:` fields from agent stdout, extract RunTrace (result, exit_reason, parent_run_id, memory_hit_rate, `memory_used` bare IDs, etc.); `_memory_slug()` strips `.md` suffix from memory file paths; exit_reason includes `NO_CRONOS_STATUS` when neither channel emits a marker |
+| `backend/app/trace_parser.py` | Parse `STATUS:` fields from agent stdout, extract RunTrace (result, exit_reason, parent_run_id, memory_hit_rate, `memory_used` bare IDs, etc.); `_memory_slug()` strips `.md` suffix from memory file paths |
 | `backend/app/tools/scanner.py` | Scan .claude/ directory for markdown files and tools; extract descriptions from YAML frontmatter or first paragraph; parse settings.json for hooks and permissions |
-| `backend/app/tools/plugins.py` | Claude Code plugin CLI wrapper — `list_plugins()`, `list_marketplaces()`, `plugin_components(install_path)`, mutation functions (install, uninstall, enable, disable, add_marketplace, remove_marketplace); all mutations serialized via asyncio.Lock; PluginCliError for structured error handling; trusted marketplace allowlist via `TRUSTED_MARKETPLACE_SOURCES` env var (opt-in per-source restrictions; default unrestricted) gates `add_marketplace()` and `install()` for security boundary (G06) |
+| `backend/app/tools/plugins.py` | Claude Code plugin CLI wrapper — `list_plugins()`, `list_marketplaces()`, `plugin_components(install_path)`, mutation functions (install, uninstall, enable, disable, add_marketplace, remove_marketplace); all mutations serialized via asyncio.Lock; PluginCliError for structured error handling |
 | `backend/app/api/tasks.py` | Task CRUD, state transitions, drag-drop reordering, lane overrides (29 KB) |
 | `backend/app/api/spaces.py` | Space CRUD, repo linking, project settings; space file browsing endpoints (GET /{space_id}/files list and GET /{space_id}/files/{file_path} retrieve) |
 | `backend/app/api/plugins.py` | Plugin management API — 7 endpoints (GET, POST /install, POST /uninstall, POST /enable, POST /disable, POST/DELETE /marketplaces) delegating to `app.tools.plugins` coroutines; ValueError→422, PluginCliError→502 error handling; marketplace mutators return full PluginsResponse |
@@ -90,19 +82,17 @@ HTTP Basic Auth via Caddy on every request. `/api/health` is public (no auth). C
 | `backend/app/harnesses/model.py` | Pydantic models with reference integrity validation (HarnessNode, HarnessEdge, Harness); Wait and Aggregator node data conventions; trigger node kinds (`task-state-change`, `webhook`, `file-change`) and their `data` schemas |
 | `backend/app/harnesses/validator.py` | DAG validation (cycle detection, self-loop rejection, reference fidelity checks, human Wait required fields R6); event-trigger validation (kind field, required/optional fields per kind, defaults application) |
 | `backend/app/harnesses/store.py` | HarnessStore with atomic YAML I/O to `.cronos/harnesses/<name>.yml` per space |
-| `backend/app/harnesses/adapter.py` | WorkerAdapter bridging Worker to HarnessExecutor (extracted from `worker._WorkerProtocolAdapter` in G07) — implements WorkerProtocol duck-typing (run_agent, finalize_child, _publish methods); uses no module-level imports from worker to avoid circular import; WorkerAdapter is duck-typed at runtime to access worker's public attributes and _bus.publish callable |
-| `backend/app/harnesses/executor.py` | **Harness executor** — runtime-gated BFS DAG interpreter with control-flow dispatch (decision/wait/aggregator nodes), agent invocation via WorkerAdapter, fail-fast on node failure, variable scope propagation, run-state persistence, SSE event publishing (`node_transition`, `edge_chosen`, `run_status`), cancel-race guard; `bind_run_context()` for run_id propagation in logs |
-| `backend/app/harnesses/decision.py` | Decision node evaluator — four-layer signal precedence (cronos_status structured block > legacy STATUS marker > exit_reason > regex > variable condition) with whitelisted variable grammar (==, !=, in) |
-| `backend/app/harnesses/wait.py` | Wait node evaluators — `enter_wait()` parks human-mode harness runs with `waiting_node_id` routing key; `await_timed_wait()` sleeps timed-mode runs; on restart sleeps only the remaining duration (`wake_at` timestamp) |
+| `backend/app/harnesses/executor.py` | **Harness executor** — runtime-gated BFS DAG interpreter with control-flow dispatch (decision/wait/aggregator nodes), agent invocation, fail-fast on node failure, variable scope propagation, run-state persistence, SSE event publishing (`node_transition`, `edge_chosen`, `run_status`), cancel-race guard |
+| `backend/app/harnesses/decision.py` | Decision node evaluator — four-layer signal precedence (STATUS marker > exit_reason > regex > variable condition) with whitelisted variable grammar (==, !=, in) |
+| `backend/app/harnesses/wait.py` | Wait node evaluators — `enter_wait()` parks human-mode harness runs with `waiting_node_id` routing key; `await_timed_wait()` sleeps timed-mode runs (MVP: restart re-sleeps full duration) |
 | `backend/app/harnesses/aggregator.py` | Aggregator node evaluator — `mode='all'` (fires when all predecessors done; any failure fails aggregator) or `mode='any'` (fires when first predecessor done; fails only if all fail); verdict-only semantics |
 | `backend/app/harnesses/interpolate.py` | Variable/data interpolation via `string.Template.safe_substitute` with precedence (root_vars < upstream_outputs) |
 | `backend/app/harnesses/brief_composer.py` | Child-task brief composition for harness executor nodes (agent header, skill prefix, prompt inclusion) |
-| `backend/app/harnesses/run_state.py` | RunState dataclass with lifecycle status and timing fields (`started_at`, `ended_at`, `wake_at` ISO-8601 UTC per node); atomic persistence (tempfile + os.replace); reconciliation on resume; `wake_at` persisted for timed Wait nodes to enable remaining-duration sleep on restart |
+| `backend/app/harnesses/run_state.py` | RunState dataclass with lifecycle status and timing fields (`started_at`, `ended_at` ISO-8601 UTC per node); atomic persistence (tempfile + os.replace); reconciliation on resume |
 | `backend/app/harnesses/run_index.py` | Append-only per-harness run history index with concurrent-safe locking; `read_index()`, `append_run()`, `update_run_status()` |
 | `backend/app/harnesses/run_trigger.py` | Shared `enqueue_harness_run` helper — task creation, run index append, worker registration; used by POST /run endpoint and cron loop |
 | `backend/app/harnesses/cron.py` | Stateless cron-trigger background loop — `should_fire(expression, timezone, prev_tick, now)`, `has_active_run()`, `cron_loop()` with overlap guard and croniter integration |
-| `backend/app/reaper.py` | Durable queue reaper — background coroutine that periodically scans expired/stale-heartbeat task leases and re-enqueues them via markdown-state gate; detects silent wedging (heartbeat stalls) and crashed workers; configurable REAPER_INTERVAL and HEARTBEAT_TIMEOUT; scan-first loop ensures at least one recovery pass on startup |
-| `backend/app/memory_parser.py` | Parse `MEMORY:` inline markers/fenced blocks, structured `CRONOS_REMEMBER` fenced blocks, and structured `cronos_status` completion blocks from agent output; `parse_memory_blocks()` → list[MemoryBlock], `parse_cronos_remember_blocks()` → list[CronosRememberBlock], `parse_cronos_status_block()` → tuple[str \| None, str \| None]; YAML-safe parsing with silent-skip on malformed/missing-required-fields |
+| `backend/app/memory_parser.py` | Parse `MEMORY:` inline markers/fenced blocks and structured `CRONOS_REMEMBER` fenced blocks from agent output; `parse_memory_blocks()` → list[MemoryBlock], `parse_cronos_remember_blocks()` → list[CronosRememberBlock]; YAML-safe parsing with silent-skip on malformed/missing-required-fields |
 | `backend/app/memory_store.py` | Shared context storage (list, retrieve, prune); `nudge_confidence(scope, item_id, delta)` adjusts memory item confidence (clamped to [0.0, 1.0]) to implement outcome-linked trust updates |
 | `backend/app/harnesses/triggers.py` | Event routing core — `EventBusEvent` dataclass, `EventDebouncer` in-memory dedup, `fan_out_to_harnesses()` async dispatcher with pattern matching and harness selection |
 | `backend/app/git_ops.py` | `git clone/commit/push` wrappers for repo-linked spaces |
@@ -140,17 +130,13 @@ HTTP Basic Auth via Caddy on every request. `/api/health` is public (no auth). C
 ```
 backend/
   app/            FastAPI source (main, storage, agent, worker, models, api/)
-  tests/          Pytest suite (60% coverage floor)
+  tests/          Pytest suite (80% coverage floor)
   Dockerfile      Python 3.12 + Node 22, Claude Code CLI bundled
-  pyproject.toml  Dependencies, pytest/coverage, ruff/mypy lint config
+  pyproject.toml  Dependencies and pytest/coverage config
 
 frontend/
   src/            React + TypeScript source (pages/, components/, hooks/)
   Dockerfile      Node image; served via Caddy
-
-.github/
-  workflows/      GitHub Actions CI (backend + frontend jobs on push/PR)
-    ci.yml        Ruff, mypy, pytest (backend); tsc, vitest, build (frontend)
 
 deploy/
   VPS_SETUP.md   End-to-end VPS provisioning checklist
@@ -161,21 +147,7 @@ deploy/
 
 data/             Per-deployment state (gitignored)
 .claude/          Claude Code harness: settings, agents, skills
-
-docs/
-  adr/            Architecture Decision Records (Nygard-style)
-    001-markdown-as-truth.md     Markdown files are source-of-truth; SQLite is a reconstructible index
-    002-sqlite-durability.md     SQLite (not Postgres/Redis) is the durable queue substrate for G08
 ```
-
-## Architecture Decision Records
-
-Cronos documents key architectural choices via ADRs in `docs/adr/`:
-
-| ADR | Decision |
-|-----|----------|
-| [001: Markdown as truth, SQLite as disposable index](docs/adr/001-markdown-as-truth.md) | `.md` files under `.cronos/` are the single source of truth for tasks, goals, and spaces. `cronos-index.db` is a reconstructible performance cache; deleting it and restarting always recovers correctly (self-healing invariant). Task leases (G08) live in SQLite because they are transient coordination data, not durable state. |
-| [002: SQLite durability (over Postgres, Redis, LangGraph)](docs/adr/002-sqlite-durability.md) | Single-VPS personal system uses SQLite for the durable task queue (lease + heartbeat tables) instead of a separate database service. Worker heartbeat renewal (15 s interval) bridges long agent runs; reaper reclaims stale leases on startup. Revisit if horizontal scaling is needed. |
 
 ## Registered agents
 
