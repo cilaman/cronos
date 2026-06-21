@@ -17,26 +17,34 @@ outputs_produced:
   - .cronos/pipeline/g14-openapi-ts-types/doc-report-g14-openapi-ts-types.md
   - CLAUDE.md
 intentionally_not_updated:
-  - README.md (G14 is an internal type-drift fix; user-facing README does not need mention)
-  - frontend/package.json (generate:types script and openapi-typescript dep already documented inline; no separate doc needed)
-  - backend/app/export_openapi.py (new module; code is self-documenting with inline comments; no separate doc file)
-  - frontend/src/types.ts (refactored file includes inline comments and docstrings explaining the re-export surface and retention rationale)
-  - frontend/src/generated/api-types.ts (auto-generated committed snapshot; intentionally not documented — users never edit it)
-  - frontend/openapi.json (committed snapshot metadata in CLAUDE.md is sufficient; schema is self-describing)
-  - ".github/workflows/ci.yml (drift-check steps are self-explanatory YAML; documented inline in CLAUDE.md section)"
+  - path: README.md
+    reason: "G14 is an internal type-drift fix; user-facing README does not need mention"
+  - path: frontend/package.json
+    reason: "generate:types script and openapi-typescript dep already documented inline; no separate doc needed"
+  - path: backend/app/export_openapi.py
+    reason: "new module; code is self-documenting with inline comments; no separate doc file"
+  - path: frontend/src/types.ts
+    reason: "refactored file includes inline comments and docstrings explaining the re-export surface and retention rationale"
+  - path: frontend/src/generated/api-types.ts
+    reason: "auto-generated committed snapshot; intentionally not documented — users never edit it"
+  - path: frontend/openapi.json
+    reason: "committed snapshot metadata in CLAUDE.md is sufficient; schema is self-describing"
+  - path: .github/workflows/ci.yml
+    reason: "drift-check steps are self-explanatory YAML; documented inline in CLAUDE.md section"
 blockers: []
 metrics:
   tool_calls: 3
   files_read: 8
   memory_hits: 0
   docs_updated: 1
+next_consumer: none
 ---
 
 ## Summary
 
 G14 (OpenAPI→TS type generation) replaces hand-maintained `frontend/src/types.ts` with auto-generated schema types, eliminating type drift via a committed-snapshot pipeline. Documentation was updated to reflect the new type generation workflow, import conventions, and CI drift gate.
 
-## Files updated
+## Updated docs
 
 | File | Changes | Purpose |
 |------|---------|---------|
@@ -67,6 +75,14 @@ From the review report (verdict: pass, 2 non-blocking findings):
 ## Confidence notes
 
 - **0.92 confidence**: All documentation updates are minimal, focused, and verified against the review's confirmed scope. CLAUDE.md edits are additive (no deletions or rewrites) and clarify existing conventions.
+
+## Open questions
+
+None.
+
+## Blockers
+
+None. The doc phase is complete and all changes are committed to the feature branch.
 
 ## Next consumer brief
 
