@@ -20,7 +20,7 @@ blockers: []
 next_consumer: test
 metrics:
   tool_calls: 4
-  files_read: 2
+  files_read: 3
   memory_hits: 0
   diff_lines_added: 10
   diff_lines_removed: 0
@@ -77,3 +77,7 @@ The CI steps cannot be executed locally without a GitHub Actions runner environm
 ## Open questions
 
 - None.
+
+## Next consumer brief
+
+All 4 iterations complete. The implementation phase is done. Proceed to the test phase: run the backend test suite (`cd backend && pytest tests/test_export_openapi.py -v --override-ini="addopts="`) and frontend suite (`cd frontend && npm test`) to confirm the committed snapshots are stable. Then run the reviewer agent to gate doc-sync.
