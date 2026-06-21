@@ -1,7 +1,7 @@
 ---
 cc_version: '1.0'
 agent: pipeline-implementor
-slug: g13-coverage-floor
+slug: g13-coverage-floor--i1
 phase: impl
 status: done
 confidence: 0.99
