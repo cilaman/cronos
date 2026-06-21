@@ -15,10 +15,14 @@ outputs_produced:
   - CLAUDE.md
   - docs/HARNESSES.md
 intentionally_not_updated:
-  - README.md (high-level ops docs; no explicit mention of STATUS format needed)
-  - TESTING.md (unit test guide; internal format changes, no test-authoring impact)
-  - .claude/agents/* (agent contract definitions; updated by impl, not doc scope)
-  - .claude/skills/task-finalize/SKILL.md (already updated by impl phase with new block format)
+  - path: README.md
+    reason: High-level ops docs; no explicit mention of STATUS format needed at that scope
+  - path: TESTING.md
+    reason: Unit test guide; internal format changes are transparent to test-authoring
+  - path: .claude/agents/
+    reason: Agent contract definitions are updated by impl phase, not doc-sync scope
+  - path: .claude/skills/task-finalize/SKILL.md
+    reason: Already updated by impl phase with new block format; doc-sync does not edit skill source
 blockers: []
 next_consumer: null
 metrics:
@@ -40,57 +44,58 @@ completion sentinel block structure and the `NO_CRONOS_STATUS` exit reason.
 All documentation changes are now in place; the implementation is complete and
 documented.
 
-## Files updated
+## Updated docs
 
-| File | Change |
-|------|--------|
-| `CLAUDE.md` | Updated `backend/app/memory_parser.py` description to include `parse_cronos_status_block()` function |
-| `CLAUDE.md` | Updated `backend/app/trace_parser.py` description to mention structured `cronos_status` blocks (primary) and legacy `STATUS:` fields, plus `NO_CRONOS_STATUS` exit reason |
-| `CLAUDE.md` | Updated `backend/app/agent.py` description to document `parse_status()` behavior (structured block first, fallback with warning) |
-| `CLAUDE.md` | Updated `backend/app/harnesses/decision.py` description to clarify signal precedence includes cronos_status block |
-| `docs/HARNESSES.md` | Expanded Decision node signal precedence section (lines 411–425) to detail 5-layer hierarchy: cronos_status block > legacy STATUS marker > exit_reason > regex > variable condition |
-| `docs/HARNESSES.md` | Rewrote agent completion guidance (§7) to explain both structured and legacy channels and `NO_CRONOS_STATUS` exit reason |
-| `docs/HARNESSES.md` | Updated quick-reference Decision condition grammar to mention cronos_status block and legacy STATUS marker |
+| File | Section(s) |
+|------|-----------|
+| `CLAUDE.md` | Key modules table: updated descriptions for `backend/app/agent.py`, `backend/app/trace_parser.py`, `backend/app/memory_parser.py`, `backend/app/harnesses/decision.py` |
+| `docs/HARNESSES.md` | §7 Connecting nodes: added "Agent completion sentinel" subsection |
+| `docs/HARNESSES.md` | §8 Control-flow nodes: expanded Decision node signal precedence from 4 to 5 layers |
+| `docs/HARNESSES.md` | §8 Control-flow nodes: updated agent completion guidance and decision examples |
+| `docs/HARNESSES.md` | §13 Quick reference: updated Decision condition grammar to include cronos_status block |
+
+## Intentionally not updated
+
+- path: README.md
+  reason: High-level ops guide focuses on deployment/auth/logs; completion sentinel is agent-internal
+- path: TESTING.md
+  reason: Unit test guide; implementation format changes are transparent to test-authoring
+- path: .claude/agents/
+  reason: Agent definitions are updated by impl phase, not doc-sync scope
+- path: .claude/skills/task-finalize/SKILL.md
+  reason: Skill source already updated by impl phase; doc-sync does not edit source files
 
 ## Coverage
 
-### Updated sections
+### Key documentation updates
 
-- **CLAUDE.md Key modules table**: Four module descriptions clarified to document
-  the new structured completion channel and its interaction with downstream
-  systems (decision routing, exit reason reporting, signal precedence).
+**CLAUDE.md Key modules table** (4 entries updated):
+- `backend/app/agent.py`: Now documents `parse_status()` checks structured
+  `cronos_status` block first, falls back to deprecated `STATUS:` line with warning.
+- `backend/app/trace_parser.py`: Now states it parses structured blocks (primary)
+  and legacy fields, plus `NO_CRONOS_STATUS` exit reason.
+- `backend/app/memory_parser.py`: Now includes `parse_cronos_status_block()`
+  alongside the other parsing functions.
+- `backend/app/harnesses/decision.py`: Signal precedence now includes cronos_status
+  block as top priority.
 
-- **docs/HARNESSES.md § 8 (Control-flow nodes)**:
-  - Signal precedence expanded from 4 to 5 layers (cronos_status block inserted
-    as highest priority).
-  - Agent completion guidance added (new subsection "Agent completion sentinel")
-    explaining block format, valid status values, channel preference, and the
-    `NO_CRONOS_STATUS` exit reason for missing markers.
-  - Example `cronos_status` block included inline.
-
-- **docs/HARNESSES.md § 13 (Quick reference)**:
-  - Decision condition grammar updated to include cronos_status block and legacy
-    STATUS marker.
-
-### Intentionally not updated
-
-- `README.md`: High-level ops guide focuses on deployment, auth, and logs. The
-  completion sentinel is an agent-internal contract; not relevant to operators.
-- `TESTING.md`: Unit test authoring guide; the implementation's format changes
-  are transparent to test writing.
-- `.claude/agents/*`: Agent definitions (contract/model metadata) are not doc
-  scope; they were updated during implementation.
-- `.claude/skills/task-finalize/SKILL.md`: Already updated by the impl phase;
-  doc-sync reads but does not edit skill source files.
+**docs/HARNESSES.md updates**:
+- §7 (Connecting nodes): Added "Agent completion sentinel" subsection detailing
+  both channels (structured preferred, legacy deprecated), valid status values,
+  and the `NO_CRONOS_STATUS` exit reason.
+- §8 (Decision node): Expanded signal precedence from 4 to 5 layers; cronos_status
+  block inserted as layer 1; legacy STATUS marker moved to layer 2; added example
+  JSON block and guidance on handling missing markers via exit_reason.
+- §13 (Quick reference): Decision condition grammar now mentions cronos_status
+  blocks and legacy STATUS markers.
 
 ## Assumptions
 
 - Users authoring agents/harnesses will read CLAUDE.md for module overview and
-  docs/HARNESSES.md for harness-specific semantics; both have been kept current.
-- The implementation has already wired up the actual parsing and signal routing;
-  documentation reflects that completed behavior.
-- Signal precedence order (cronos_status > legacy STATUS > exit_reason > regex >
-  variable) is the one enforced in decision.py and is the canonical precedence.
+  docs/HARNESSES.md for harness-specific semantics; both are kept current.
+- Implementation has wired up parsing and routing; documentation reflects that.
+- Signal precedence (cronos_status > legacy STATUS > exit_reason > regex >
+  variable) is enforced in decision.py and documented here.
 
 ## Open questions
 
@@ -99,12 +104,10 @@ documented.
 ## Next consumer brief
 
 G05 is complete. The structured completion sentinel is implemented, tested,
-reviewed, and documented. Harness authors can now emit completion status via
-the `cronos_status` fenced-JSON block (preferred) or the legacy `STATUS:`
-marker (deprecated with warning). Decision nodes route on the status value
-with a clear 5-layer signal precedence. Any run missing both markers reports
-exit_reason = `NO_CRONOS_STATUS`, which can also be used as a decision
-condition for error handling.
+reviewed, and documented. Harness authors can emit completion status via
+the `cronos_status` fenced-JSON block (preferred) or legacy `STATUS:` marker
+(deprecated with warning). Decision nodes route on status value with 5-layer
+signal precedence. Runs missing both markers report `exit_reason=NO_CRONOS_STATUS`,
+usable as a decision condition for error handling.
 
-Documentation is sufficient for harness authoring and agent development. No
-further doc work is required for this goal.
+Documentation is sufficient for harness authoring and agent development.

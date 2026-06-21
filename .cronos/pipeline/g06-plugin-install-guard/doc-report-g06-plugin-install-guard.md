@@ -16,21 +16,32 @@ outputs_produced:
 - docs/security/plugin-trust-boundary.md
 - CLAUDE.md
 - README.md
+blockers: []
+next_consumer: user
 intentionally_not_updated:
-- backend/app/agent.py (no changes needed; I2 regression test added by impl)
-- backend/Dockerfile (no changes needed; cli already present and bundled)
-- .claude/settings.json (config file, not documentation; contains deny list as intended)
-- frontend/src/components/PluginsPanel.tsx (frontend code, not doc-sync scope)
-- backend/app/tools/plugins.py (source code, not doc-sync scope)
+- path: backend/app/agent.py
+  reason: No changes needed; I2 regression test added by impl phase only.
+- path: backend/Dockerfile
+  reason: No changes needed; Claude CLI already present and bundled.
+- path: .claude/settings.json
+  reason: Configuration file, not documentation; deny list as implemented is the source of truth.
+- path: frontend/src/components/PluginsPanel.tsx
+  reason: Frontend source code, not doc-sync scope.
+- path: backend/app/tools/plugins.py
+  reason: Source code, not doc-sync scope.
 metrics:
   docs_updated: 3
-  tool_calls: 8
   files_read: 5
+  tool_calls: 8
 ---
 
 ## Summary
 
 Three documentation artifacts updated to reflect G06 implementation:
+
+## Updated docs
+
+Three files were updated to document the plugin trust boundary and security controls:
 
 1. **`docs/security/plugin-trust-boundary.md`** (§3 corrected) — Fixed the blocking review finding F1: the default for `TRUSTED_MARKETPLACE_SOURCES` is now correctly documented as **unset/unrestricted** (opt-in allowlist enforcement), matching the shipped code behavior. Also clarified that `install()` does not re-validate unknown plugin ids (F2 context), and that deny-list enforcement is performed by the Claude Code CLI permission system.
 
@@ -48,12 +59,15 @@ No source files or test files were edited (doc-sync only). Configuration files (
 | `CLAUDE.md` | plugins.py entry augmented with env-var security boundary detail | Informational |
 | `README.md` | Security posture table: G06 status → "active" | Tracking |
 
-## Out-of-scope findings
+## Intentionally not updated
 
-- `backend/app/agent.py` — The I2 regression test was added by the impl task; no doc update needed.
-- `backend/Dockerfile` — Claude CLI already bundled per G06 design; no doc change required.
-- `.claude/settings.json` — Deny list configuration is present and correct; this is config, not documentation.
-- Frontend and backend source files — Left untouched per doc-sync contract.
+Five documentation-adjacent files were examined but intentionally not updated (see metrics above):
+
+- `backend/app/agent.py` — No changes needed; I2 regression test added by impl phase only.
+- `backend/Dockerfile` — No changes needed; Claude CLI already present and bundled.
+- `.claude/settings.json` — Configuration file, not documentation; deny list configuration is the source of truth.
+- `frontend/src/components/PluginsPanel.tsx` — Frontend source code, not doc-sync scope.
+- `backend/app/tools/plugins.py` — Source code, not doc-sync scope.
 
 ## Assumptions
 
@@ -62,8 +76,10 @@ No source files or test files were edited (doc-sync only). Configuration files (
 - The security trust-boundary record (in `docs/security/plugin-trust-boundary.md`) is consumed by G12 (lightweight documentation audit).
 - All three doc files are in-tree and included in version control.
 
+## Open questions
+
+- None. All blocking review findings (F1) have been addressed. Non-blocking findings (F2, F3) are contextually documented.
+
 ## Next consumer brief
 
-Pipeline doc phase complete. All blocking review findings (F1) addressed. Non-blocking findings (F2, F3) contextually documented. The codebase, test suite, and documentation are now consistent on the plugin trust boundary.
-
-Ready for `/pipeline-gate doc` phase marker and advancement to post-documentation workflow.
+Pipeline doc phase complete. The codebase, test suite, and documentation are now consistent on the plugin trust boundary. Ready for pipeline advancement to post-documentation workflow (user / orchestrator commit phase).

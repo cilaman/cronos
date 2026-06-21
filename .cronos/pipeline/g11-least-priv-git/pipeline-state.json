@@ -3,7 +3,7 @@
   "goal_slug": "g11-least-priv-git",
   "status": "running",
   "created_at": "2026-06-20T19:51:32.849151+00:00",
-  "updated_at": "2026-06-20T20:11:01.664868+00:00",
+  "updated_at": "2026-06-20T20:37:43.317934+00:00",
   "request_text": null,
   "phases": {
     "analysis": {
@@ -96,6 +96,90 @@
         "memory_hits": 0
       },
       "header_summary": {}
+    },
+    "test": {
+      "phase": "test",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "tester",
+      "task_id": "2026-06-20-1437-test-g11-least-priv-git",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/g11-least-priv-git/test-report-g11-least-priv-git.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "review": {
+      "phase": "review",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-reviewer",
+      "task_id": "2026-06-20-1437-review-g11-least-priv-git",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/g11-least-priv-git/review-report-g11-least-priv-git--attempt1.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "doc": {
+      "phase": "doc",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-doc-sync",
+      "task_id": "2026-06-20-1437-doc-g11-least-priv-git",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/g11-least-priv-git/doc-report-g11-least-priv-git.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
     }
   },
   "telemetry": {
@@ -104,7 +188,7 @@
     "total_tool_calls": 0,
     "total_files_read": 0,
     "total_memory_hits": 0,
-    "phases_completed": 3,
+    "phases_completed": 6,
     "phases_escalated": 0,
     "phases_retried": 0,
     "phases_failed": 0

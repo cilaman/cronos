@@ -15,49 +15,47 @@ outputs_produced:
   - TESTING.md
   - CLAUDE.md
 blockers: []
-next_consumer: null
+next_consumer: user
+intentionally_not_updated:
+  - path: README.md
+    reason: "Dev commands section only mentions coverage test requirement without the specific 60% floor; references pyproject.toml as authoritative, so no update needed."
+  - path: deploy/VPS_SETUP.md
+    reason: "Deployment procedures unchanged; implementation affected only `backend/pyproject.toml` configuration."
 metrics:
-  tool_calls: 4
-  files_read: 2
+  tool_calls: 8
+  files_read: 4
   memory_hits: 1
   docs_updated: 2
-intentionally_not_updated: []
+  docs_considered: 4
 ---
 
 ## Summary
 
-Updated documentation to reflect the G13 coverage floor change from 60% to 80% in `backend/pyproject.toml`. The implementation and review phases identified that `TESTING.md` and `CLAUDE.md` still documented the old 60% floor despite the config change. Both files have been updated to cite 80% and the new `--cov-fail-under=80` pytest flag.
+The implementation raised the pytest coverage floor from 60% to 80% in `backend/pyproject.toml` line 39. Two documentation files referenced this value and required updating: `TESTING.md` (line 17) and `CLAUDE.md` (lines 17 and 133). All references are now aligned with the new floor. README.md and deployment docs did not require updates since they do not hardcode the coverage floor value.
 
-## Files updated
+## Updated docs
 
-| File | Change |
-|------|--------|
-| `TESTING.md` | Line 17: "The suite requires 60% coverage..." → "The suite requires 80% coverage..." |
-| `CLAUDE.md` | Line 17 comment: "60% coverage floor enforced" → "80% coverage floor enforced" |
-| `CLAUDE.md` | Line 133: "Pytest suite (60% coverage floor)" → "Pytest suite (80% coverage floor)" |
+| File | Change summary |
+|------|---|
+| TESTING.md | Updated line 17: "60% coverage" → "80% coverage" and `--cov-fail-under=60` → `--cov-fail-under=80` |
+| CLAUDE.md | Updated line 17 comment from "60% coverage floor" to "80% coverage floor" |
+| CLAUDE.md | Updated line 133 from "Pytest suite (60% coverage floor)" to "Pytest suite (80% coverage floor)" |
 
-All three references have been aligned with the new floor enforced in `backend/pyproject.toml` line 39 (`--cov-fail-under=80`).
+## Intentionally not updated
 
-## Documentation audit
-
-Searched for additional coverage-floor references:
-- `README.md`: No coverage floor mentioned; no update needed.
-- `docs/`: No coverage-floor documentation in deployment/VPS docs.
-- `.claude/agents/`: Agent docs reference the testing guide externally; no hardcoded values.
-- No other `.md` files in repo root contain "60%" or "coverage floor".
-
-The implementation's single-line change to `pyproject.toml` is now fully reflected in user-facing docs.
+- **README.md** — Dev commands section only mentions coverage test requirement without the specific floor value; references `pyproject.toml` as authoritative source.
+- **deploy/VPS_SETUP.md** — Deployment procedures unchanged; implementation affected only `backend/pyproject.toml` configuration.
 
 ## Assumptions
 
-- `pyproject.toml` is the authoritative configuration source; documentation must track it.
-- The 80% floor applies to the full backend test suite; frontend coverage is not gated.
-- The CI job (G02 `ci.yml`) reads `addopts` from `pyproject.toml` at runtime and enforces the 80% floor end-to-end.
+- `backend/pyproject.toml` line 39 is the authoritative source of truth for the coverage floor value.
+- Documentation that hardcodes or references the 60% floor is outdated and must be updated to 80%.
+- The CI job (G02) reads `addopts` from `pyproject.toml` at runtime and enforces the new floor without requiring CI configuration changes.
 
-## Out-of-scope findings
+## Open questions
 
-None. All docs referencing the old 60% floor have been located and updated.
+None.
 
 ## Next consumer brief
 
-None. G13 documentation is complete and consistent with the implementation (80% floor in `pyproject.toml`). No further action needed.
+G13 documentation sync is complete. The coverage floor has been raised from 60% to 80% in `backend/pyproject.toml` and all user-facing documentation (TESTING.md, CLAUDE.md) now reflects this change. The new floor provides ~6.84% headroom above the current 86.84% coverage baseline and is enforced by the test suite and CI pipeline.

@@ -12,6 +12,8 @@ inputs_used:
 - docs/HARNESSES.md
 outputs_produced:
 - .cronos/pipeline/g09-timed-wait-fix/doc-report-g09-timed-wait-fix.md
+- CLAUDE.md
+- docs/HARNESSES.md
 intentionally_not_updated: []
 blockers: []
 next_consumer: none
@@ -37,6 +39,13 @@ edited.
 | `CLAUDE.md` (line 87) | Updated `backend/app/harnesses/wait.py` entry: removed MVP note; now states `await_timed_wait()` sleeps timed-mode runs and on restart sleeps only the remaining duration via `wake_at` timestamp |
 | `CLAUDE.md` (line 91) | Updated `backend/app/harnesses/run_state.py` entry: added `wake_at` field to lifecycle timing fields; documented that `wake_at` is persisted for timed Wait nodes to enable remaining-duration sleep on restart |
 | `docs/HARNESSES.md` (lines 502–503) | Updated timed-wait behavior section under "Wait — pause the run": removed MVP caveat about re-sleeping full duration; now documents that on restart the run sleeps only the remaining interval and fires immediately if the wake time has passed |
+
+## Updated docs
+
+| File | Changes |
+|------|---------|
+| CLAUDE.md | Updated module descriptions: `backend/app/harnesses/wait.py` (removed MVP caveat about re-sleeping full duration), `backend/app/harnesses/run_state.py` (added `wake_at` field documentation) |
+| docs/HARNESSES.md | Updated "Wait — pause the run" section (lines 502–503): removed MVP note; now documents remaining-duration sleep on restart with immediate fire if wake time passed |
 
 ## Intentionally not updated
 

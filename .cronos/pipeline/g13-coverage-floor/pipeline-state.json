@@ -3,7 +3,7 @@
   "goal_slug": "g13-coverage-floor",
   "status": "running",
   "created_at": "2026-06-21T01:45:55.952907+00:00",
-  "updated_at": "2026-06-21T01:54:32.595283+00:00",
+  "updated_at": "2026-06-21T02:05:50.815964+00:00",
   "request_text": null,
   "phases": {
     "analysis": {
@@ -92,15 +92,99 @@
         "memory_hits": 0
       },
       "header_summary": {}
+    },
+    "test": {
+      "phase": "test",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "tester",
+      "task_id": "2026-06-20-1437-test-g13-coverage-floor",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/g13-coverage-floor/test-report-g13-coverage-floor.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "review": {
+      "phase": "review",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-reviewer",
+      "task_id": "2026-06-20-1437-review-g13-coverage-floor",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/g13-coverage-floor/review-report-g13-coverage-floor--attempt1.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "doc": {
+      "phase": "doc",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-doc-sync",
+      "task_id": "2026-06-20-1437-review-g13-coverage-floor",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/g13-coverage-floor/doc-report-g13-coverage-floor.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 132.95,
+        "token_spend": 2044980,
+        "tool_calls": 16,
+        "files_read": 6,
+        "memory_hits": 0
+      },
+      "header_summary": {}
     }
   },
   "telemetry": {
-    "total_duration_s": 0.0,
-    "total_token_spend": 0,
-    "total_tool_calls": 0,
-    "total_files_read": 0,
+    "total_duration_s": 132.95,
+    "total_token_spend": 2044980,
+    "total_tool_calls": 16,
+    "total_files_read": 6,
     "total_memory_hits": 0,
-    "phases_completed": 3,
+    "phases_completed": 6,
     "phases_escalated": 0,
     "phases_retried": 0,
     "phases_failed": 0
