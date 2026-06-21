@@ -64,8 +64,9 @@ services:
     ports:
       - "8080:80"
     restart: unless-stopped
-    # Security hardening: drop all capabilities but re-grant NET_BIND_SERVICE
-    # so the non-root caddy user can still bind port 80 (Caddyfile unchanged).
+    # Security hardening: drop all capabilities but re-grant NET_BIND_SERVICE.
+    # The container runs as root, but under cap_drop:ALL even root needs this
+    # capability to bind the privileged ports 80/443 (Caddyfile unchanged).
     cap_drop:
       - ALL
     cap_add:
