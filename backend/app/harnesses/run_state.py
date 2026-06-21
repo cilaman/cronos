@@ -62,6 +62,7 @@ class NodeState:
     reason: str | None = None  # populated for 'skipped' and 'failed' nodes
     started_at: str | None = None  # ISO-8601 UTC; set when node transitions to 'in_progress'
     ended_at: str | None = None  # ISO-8601 UTC; set when node transitions to 'done'/'failed'/'skipped'
+    wake_at: str | None = None  # ISO-8601 UTC absolute wake time for timed Wait nodes; None for non-timed/legacy
 
 
 @dataclass
@@ -126,6 +127,7 @@ class RunState:
                 reason=ns.get("reason"),
                 started_at=ns.get("started_at"),
                 ended_at=ns.get("ended_at"),
+                wake_at=ns.get("wake_at"),
             )
             for node_id, ns in nodes_raw.items()
         }

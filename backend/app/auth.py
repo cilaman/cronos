@@ -10,10 +10,15 @@ security = HTTPBasic(auto_error=False)
 
 
 def require_auth(credentials: HTTPBasicCredentials | None = Depends(security)) -> None:
+    # Explicit opt-out: must be the exact string "true" — any other value falls through.
+    if os.environ.get("CRONOS_AUTH_DISABLED") == "true":
+        return
+
     user = os.environ.get("CRONOS_BASIC_AUTH_USER")
     password = os.environ.get("CRONOS_BASIC_AUTH_PASSWORD")
     if not user or not password:
-        return  # auth disabled — no env vars set
+        # Credentials unconfigured and auth not explicitly disabled → misconfiguration.
+        raise HTTPException(status_code=503, detail="Auth credentials not configured")
     if credentials is None:
         raise HTTPException(status_code=401, headers={"WWW-Authenticate": "Basic"})
     ok = hmac.compare_digest(credentials.username.encode(), user.encode()) and hmac.compare_digest(

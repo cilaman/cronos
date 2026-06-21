@@ -14,7 +14,7 @@ cd backend && pip install -e ".[dev]"
 cd backend && pytest tests/ --cov=app --cov-report=term-missing
 ```
 
-The suite requires 60% coverage (enforced via `--cov-fail-under=60` in `pyproject.toml`).
+The suite requires 80% coverage (enforced via `--cov-fail-under=80` in `pyproject.toml`).
 
 ### Coverage configuration
 

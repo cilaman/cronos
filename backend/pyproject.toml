@@ -36,7 +36,7 @@ packages = ["app"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-addopts = "--cov=app --cov-report=term-missing --cov-fail-under=60"
+addopts = "--cov=app --cov-report=term-missing --cov-fail-under=80"
 
 [tool.coverage.run]
 source = ["app"]
@@ -45,3 +45,93 @@ omit = ["app/__init__.py"]
 [tool.coverage.report]
 show_missing = true
 skip_covered = false
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F"]
+# debt: G02 ruff baseline — violations present in existing codebase; tracked here so G13 can prune
+ignore = [
+    "E501",  # line too long (120+ char lines exist in multiline strings and SQL)
+    "E402",  # module level import not at top of file (conditional imports in __init__ and main)
+    "F401",  # imported but unused (re-exports and TYPE_CHECKING blocks)
+    "F541",  # f-string without placeholders
+    "F821",  # undefined name (dynamic attribute access patterns)
+    "F841",  # local variable assigned but never used
+]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+warn_unused_ignores = false
+
+# debt: G02 mypy baseline — per-module ignore_errors until G13 hardens the type coverage
+[[tool.mypy.overrides]]
+module = "app.api.discovery"
+ignore_errors = true  # debt: G02 mypy baseline
+
+[[tool.mypy.overrides]]
+module = "app.api.features"
+ignore_errors = true  # debt: G02 mypy baseline
+
+[[tool.mypy.overrides]]
+module = "app.api.spaces"
+ignore_errors = true  # debt: G02 mypy baseline
+
+[[tool.mypy.overrides]]
+module = "app.api.tasks"
+ignore_errors = true  # debt: G02 mypy baseline
+
+[[tool.mypy.overrides]]
+module = "app.api.tools"
+ignore_errors = true  # debt: G02 mypy baseline
+
+[[tool.mypy.overrides]]
+module = "app.harnesses.cron"
+ignore_errors = true  # debt: G02 mypy baseline
+
+[[tool.mypy.overrides]]
+module = "app.harnesses.executor"
+ignore_errors = true  # debt: G02 mypy baseline
+
+[[tool.mypy.overrides]]
+module = "app.harnesses.run_trigger"
+ignore_errors = true  # debt: G02 mypy baseline
+
+[[tool.mypy.overrides]]
+module = "app.harnesses.triggers"
+ignore_errors = true  # debt: G02 mypy baseline
+
+[[tool.mypy.overrides]]
+module = "app.main"
+ignore_errors = true  # debt: G02 mypy baseline
+
+[[tool.mypy.overrides]]
+module = "app.memory_store"
+ignore_errors = true  # debt: G02 mypy baseline
+
+[[tool.mypy.overrides]]
+module = "app.pipeline.verify"
+ignore_errors = true  # debt: G02 mypy baseline
+
+[[tool.mypy.overrides]]
+module = "app.space_storage"
+ignore_errors = true  # debt: G02 mypy baseline
+
+[[tool.mypy.overrides]]
+module = "app.stats"
+ignore_errors = true  # debt: G02 mypy baseline
+
+[[tool.mypy.overrides]]
+module = "app.storage"
+ignore_errors = true  # debt: G02 mypy baseline
+
+[[tool.mypy.overrides]]
+module = "app.tools.plugins"
+ignore_errors = true  # debt: G02 mypy baseline
+
+[[tool.mypy.overrides]]
+module = "app.worker"
+ignore_errors = true  # debt: G02 mypy baseline

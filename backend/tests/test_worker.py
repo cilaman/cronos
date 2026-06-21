@@ -9,7 +9,7 @@ in the "fix false CRASHED classification" commit. They focus on:
    - exit_code=0 + status=None → WAITING with new resume guidance.
    - error_max_turns is its own branch after WAIT/BLOCKED.
 
-2. `exit_reason` computation (status-priority, NO_STATUS sentinel) flowing into
+2. `exit_reason` computation (status-priority, NO_CRONOS_STATUS sentinel) flowing into
    both stats and trace records.
 """
 
@@ -215,7 +215,7 @@ async def test_finalize_error_max_turns_uses_dedicated_branch(worker, task_store
 
 
 async def test_finalize_error_max_turns_distinct_from_no_status(worker, task_store):
-    """Verify the dedicated max-turns branch never falls through to NO_STATUS phrasing.
+    """Verify the dedicated max-turns branch never falls through to NO_CRONOS_STATUS phrasing.
 
     Even when auto-resume runs (counter not exhausted), the waiting_question
     that was written transiently to disk distinguishes max-turns from no-marker.
@@ -230,12 +230,12 @@ async def test_finalize_error_max_turns_distinct_from_no_status(worker, task_sto
 
     await worker._finalize(task_id, result)
 
-    # exit_reason in stats should still be NO_STATUS (no STATUS marker present),
+    # exit_reason in stats should still be NO_CRONOS_STATUS (no STATUS marker present),
     # which is correct — the max-turns branch only affects state/question, not
     # the exit_reason classification.
     stats = await worker.stats_store.load(SPACE_ID, task_id)
     assert stats is not None
-    assert stats.runs[0].exit_reason == "NO_STATUS"
+    assert stats.runs[0].exit_reason == "NO_CRONOS_STATUS"
 
 
 async def test_finalize_stopped_takes_priority_over_status(worker, task_store):
@@ -280,7 +280,7 @@ async def test_finalize_status_done_with_nonzero_exit_persists_no_session(
 async def test_finalize_exit_reason_no_status_when_clean_exit_no_marker(
     worker, task_store, tmp_spaces_dir
 ):
-    """exit_code=0 + status=None → exit_reason='NO_STATUS' in stats."""
+    """exit_code=0 + status=None → exit_reason='NO_CRONOS_STATUS' in stats."""
     task_id = await _active_task(task_store)
     result = _make_result(exit_code=0, status=None)
 
@@ -289,8 +289,8 @@ async def test_finalize_exit_reason_no_status_when_clean_exit_no_marker(
     stats = await worker.stats_store.load(SPACE_ID, task_id)
     assert stats is not None
     assert len(stats.runs) == 1
-    assert stats.runs[0].exit_reason == "NO_STATUS"
-    # And had_crash must be False — a NO_STATUS run isn't a process crash.
+    assert stats.runs[0].exit_reason == "NO_CRONOS_STATUS"
+    # And had_crash must be False — a NO_CRONOS_STATUS run isn't a process crash.
     assert stats.runs[0].had_crash is False
 
 
@@ -359,7 +359,7 @@ async def test_finalize_exit_reason_wait_persisted_in_stats(worker, task_store):
 
 
 async def test_finalize_trace_exit_reason_no_status(worker, task_store):
-    """The same NO_STATUS exit_reason value flows into the persisted trace."""
+    """The same NO_CRONOS_STATUS exit_reason value flows into the persisted trace."""
     task_id = await _active_task(task_store)
     result = _make_result(exit_code=0, status=None)
 
@@ -367,7 +367,7 @@ async def test_finalize_trace_exit_reason_no_status(worker, task_store):
 
     trace = await worker.trace_store.load_latest(SPACE_ID, task_id)
     assert trace is not None
-    assert trace.exit_reason == "NO_STATUS"
+    assert trace.exit_reason == "NO_CRONOS_STATUS"
 
 
 async def test_finalize_trace_exit_reason_done_wins_over_crashed(worker, task_store):

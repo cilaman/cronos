@@ -21,3 +21,6 @@ COPY --from=builder /app/dist /srv
 # Default to dev Caddyfile; production compose overlay can mount the prod one.
 COPY Caddyfile.dev /etc/caddy/Caddyfile
 EXPOSE 80 443
+# caddy:2-alpine ships with a built-in 'caddy' user (UID 1000).
+# NET_BIND_SERVICE in docker-compose.yml lets this user bind port 80.
+USER caddy

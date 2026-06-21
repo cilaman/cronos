@@ -13,6 +13,14 @@ from app.trace_store import TraceStore
 SPACE_ID = "test-space"
 
 
+@pytest.fixture(autouse=True)
+def _auth_disabled_by_default(monkeypatch):
+    """Set CRONOS_AUTH_DISABLED=true for every test so the fail-closed flip in
+    require_auth does not regress the thousands of existing endpoint assertions.
+    Tests in test_auth.py clear this via their own _clear_auth_env autouse fixture."""
+    monkeypatch.setenv("CRONOS_AUTH_DISABLED", "true")
+
+
 @pytest.fixture
 def tmp_spaces_dir(tmp_path):
     return tmp_path / "spaces"

@@ -177,6 +177,82 @@ Leave `CLAUDE_CODE_OAUTH_TOKEN` out of `.env` — it lives in
 files separate means a leaked `.env` (basic-auth creds + domain) doesn't
 leak the OAuth token.
 
+### 5.3 — Git push credentials (CRONOS_GIT_TOKEN) and least-privilege policy
+
+The read-only deploy key in §5.1 handles `git fetch` during upgrades. A *separate*
+credential is required for **push** operations (e.g. when an agent task commits
+and opens a PR via `autopilot_pr`).
+
+#### Push policy (ADR — single-operator decision)
+
+Cronos is a single-user, single-account platform. Push-to-fork (a technique that
+limits blast radius across *distinct* accounts) adds dual-remote plumbing without
+reducing risk for one operator. The chosen policy is:
+
+> **push-to-origin-branch + open a PR** via the `autopilot_pr` gate
+> (`git_ops.gh_pr_create`). The PR is opened for operator review and is **never
+> auto-merged**. The `Contents:write` PAT is the only credential the push path
+> needs.
+
+Push-to-fork is noted as a future option for multi-operator deployments.
+
+#### Least-privilege credential model
+
+Use a **fine-grained PAT** scoped to the specific repo — not a classic "repo" PAT
+that covers your entire GitHub account:
+
+| Operation       | Required scope (fine-grained PAT) |
+|-----------------|-----------------------------------|
+| `git clone / fetch` | Contents: Read                |
+| `git push`          | Contents: Write               |
+
+**Do NOT grant:** `admin:*`, `workflow`, `packages`, or any org-level scope.
+If the token is ever compromised, an attacker can only read/write the repos you
+explicitly listed — not your entire account.
+
+#### Creating the PAT
+
+1. Go to <https://github.com/settings/personal-access-tokens> → **Fine-grained tokens**
+2. **Repository access:** select the specific repo Cronos should push to.
+3. **Repository permissions → Contents:** *Read and write*
+4. Leave all other permissions at *No access* or *Read* only.
+5. Set an expiry (30 or 90 days recommended) and click **Generate token**.
+
+#### Configuring the VPS
+
+Add the token to `/opt/cronos/.env`:
+
+```bash
+# In /opt/cronos/.env — never commit to git
+CRONOS_GIT_TOKEN=github_pat_xxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+Restart the backend so the variable is picked up:
+
+```bash
+sudo systemctl restart cronos.service
+```
+
+#### Token hygiene and rotation
+
+- Treat `CRONOS_GIT_TOKEN` like a password: store it only in `.env` (never in
+  shell history, `.bashrc`, or any committed file).
+- The `.env` file is *not* tracked in git (it is in `.gitignore`) so it will
+  not be included in backups or upgrade pulls.
+- **Rotate** by generating a new fine-grained PAT (step above), updating `.env`,
+  and restarting the backend.
+- **Revoke** the old token in GitHub → Settings → Personal access tokens
+  *before* deploying the replacement if you suspect compromise.
+
+#### Preferred future path
+
+**GitHub App installation tokens** are short-lived (1 hour), scoped per
+installation, and leave a clear audit trail in the repository's security log.
+They are the recommended credential type for automated push operations in
+team environments. A future Cronos release will support App-based credentials
+as an alternative to PATs; for now a fine-grained PAT with the minimal scopes
+above is the practical choice for personal use.
+
 ---
 
 ## 6. First run
@@ -351,15 +427,16 @@ Once the webhook is running and `UPGRADE_WEBHOOK_URL` is set, you can open a
 Cronos task and say **"upgrade the app"** — the agent will call the webhook,
 which runs `upgrade.sh` on the host.
 
-**Optional shared secret** — prevent other containers from triggering upgrades:
+**Mandatory shared secret** — required to authorize webhook requests:
 
 ```bash
 # In /opt/cronos/.env
-UPGRADE_WEBHOOK_SECRET=choose-a-random-string
+WEBHOOK_SECRET=choose-a-random-strong-value
 ```
 
-The webhook checks the `X-Upgrade-Secret` header when the env var is set. The
-backend agent passes the same secret automatically.
+The webhook rejects all requests (403) when `WEBHOOK_SECRET` is unset. When set,
+the `X-Upgrade-Secret` header must match the env var value (constant-time compare).
+The backend agent passes the same secret automatically when calling the webhook.
 
 ---
 
@@ -474,3 +551,33 @@ hostname.
 You can leave the `BASIC_AUTH_USER` / `BASIC_AUTH_HASH` values in `.env` —
 they're simply unused once `basic_auth` is removed from the Caddyfile.
 Or delete them; both work.
+
+---
+
+## 13. Enable GitHub branch protection on `main`
+
+Branch protection ensures that all CI checks (`backend` and `frontend` jobs in
+`.github/workflows/ci.yml`) must pass before a pull request can be merged into
+`main`. This prevents a red-main situation where failing tests reach the
+production branch undetected.
+
+### Steps
+
+1. Go to your repository on GitHub → **Settings** → **Branches**.
+2. Under **Branch protection rules**, click **Add rule** (or **Add classic rule**).
+3. Set **Branch name pattern** to `main`.
+4. Enable **Require status checks to pass before merging**.
+5. In the **Status checks that are required** search box, add:
+   - `backend`
+   - `frontend`
+   (These names match the `jobs:` keys in `.github/workflows/ci.yml`.)
+6. Optionally enable **Require branches to be up to date before merging** for
+   extra safety.
+7. Click **Create** (or **Save changes**).
+
+### Verify
+
+Open a pull request and confirm that the merge button stays disabled until both
+the `backend` and `frontend` checks show a green tick. If checks are not yet
+listed in step 5, push at least one commit through a PR first so GitHub
+registers the check names.

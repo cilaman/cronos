@@ -10,14 +10,11 @@ Wait nodes pause harness execution in one of two ways:
     Wait node's id so the executor knows where to resume (single source of
     truth — do NOT duplicate this routing in the worker).
 
-  * **timed** mode — sleeps in-process for ``node.data['duration_seconds']``
-    seconds using ``asyncio.sleep``, then continues traversal immediately.
-
-    Limitation (arc6.3 MVP): if the process is killed or restarted mid-sleep,
-    the full duration is re-slept on resume.  There is no persisted
-    ``sleep_resume_at`` timestamp — that field is explicitly deferred to a
-    future arc.  This is intentional and documented here so the caller is
-    not surprised.
+  * **timed** mode — sleeps in-process until an absolute UTC ``wake_at``
+    timestamp, then continues traversal immediately.  The executor computes
+    ``wake_at = now + duration_seconds`` on first entry and persists it to
+    ``NodeState.wake_at`` so that a restart sleeps only the remaining
+    interval rather than the full duration again.
 
 Both functions are **pure** in the sense that they create no child tasks,
 spawn no subprocesses, and make no TaskStore calls.  The executor and worker
@@ -27,6 +24,7 @@ act on the returned ``WaitOutcome`` / awaited result to update external state.
 from __future__ import annotations
 
 import asyncio
+import datetime
 from dataclasses import dataclass
 from enum import Enum
 
@@ -114,32 +112,40 @@ def enter_wait(node: HarnessNode, run_state: RunState) -> WaitOutcome:
     )
 
 
-async def await_timed_wait(node: HarnessNode) -> None:
-    """Evaluate a timed-mode Wait node by sleeping for the configured duration.
+async def await_timed_wait(node: HarnessNode, wake_at: str | None = None) -> None:
+    """Evaluate a timed-mode Wait node by sleeping until ``wake_at``.
 
-    Reads ``node.data['duration_seconds']`` for the sleep duration.  If the
-    key is absent or ``None``, defaults to ``0`` (no sleep).
+    On fresh entry the executor computes ``wake_at = now + duration_seconds``
+    and persists it to ``NodeState.wake_at`` before calling this function.
+    On resume after a restart the executor passes the stored ``wake_at`` so
+    this function sleeps only the remaining interval.
 
     Parameters
     ----------
     node:
         The Wait node being evaluated.  Expected to have
-        ``node.data.get('mode') == 'timed'`` and a ``'duration_seconds'``
-        key.  The function does not enforce the mode constraint — the executor
-        is responsible for dispatching to the correct evaluator.
+        ``node.data.get('mode') == 'timed'``.  ``duration_seconds`` is only
+        used as a fallback when ``wake_at`` is ``None``.
+    wake_at:
+        ISO-8601 UTC absolute wake timestamp (``datetime.now(timezone.utc).isoformat()``
+        format).  When provided, the sleep duration is ``max(0, wake_at - now)``,
+        which correctly handles both mid-sleep restarts (remaining sleep) and
+        restarts after the wake time has already passed (0-second sleep / fire
+        immediately).  When ``None`` (defensive fallback), falls back to the
+        full ``duration_seconds`` from node data.
 
     Returns
     -------
     None
         Returns after sleeping.  The executor continues traversal from the
         Wait node's outgoing edges immediately after this coroutine completes.
-
-    Notes
-    -----
-    MVP limitation: if the process is restarted while sleeping, the full
-    duration is re-slept on resume.  A persisted ``sleep_resume_at`` timestamp
-    is explicitly out of scope for arc6.3.
     """
-    raw: float | int | None = node.data.get("duration_seconds")
-    duration: float = float(raw) if raw is not None else 0.0
-    await asyncio.sleep(duration)
+    if wake_at is not None:
+        now = datetime.datetime.now(datetime.timezone.utc)
+        target = datetime.datetime.fromisoformat(wake_at)
+        remaining = max(0.0, (target - now).total_seconds())
+        await asyncio.sleep(remaining)
+    else:
+        raw: float | int | None = node.data.get("duration_seconds")
+        duration: float = float(raw) if raw is not None else 0.0
+        await asyncio.sleep(duration)

@@ -378,6 +378,28 @@ When the node runs, the executor:
 or a skill like `frontend-design`. (See the registered agents/skills tables in
 `CLAUDE.md`.)
 
+#### Agent completion sentinel
+
+When an agent task finishes, the executor reads its completion status from one of
+two channels:
+
+1. **Structured channel (preferred)**: a fenced `cronos_status` JSON block at the
+   end of the agent's output:
+   ```
+   ```cronos_status
+   {"status": "DONE", "summary": "Completed without errors", "artifacts": []}
+   ```
+   ```
+   Valid `status` values: `DONE`, `WAIT`, `BLOCKED`. The `summary` field is
+   human-readable; `artifacts` is optional.
+
+2. **Legacy channel (deprecated)**: a `STATUS: DONE` line. Still supported but
+   logs a warning; structured blocks are preferred.
+
+If neither is present, the run's `exit_reason` is set to `NO_CRONOS_STATUS`. See
+the decision-routing section for how to drive harness control flow on these
+signals.
+
 The executor's **tools resolver** (`backend/app/worker.py:resolve_tool`) looks up
 the `agent_ref` name across multiple sources:
 
@@ -411,12 +433,17 @@ the upstream agent and follows the **first matching edge**. An edge with
 
 Signal precedence (`decision.py`, highest first):
 
-1. **`status`** — a `STATUS: <value>` marker found in the upstream node's output.
-   Matched case-sensitively against `edge.condition`.
-2. **`exit_reason`** — the run's exit reason string.
-3. **`regex`** — `re.search(edge.condition, upstream_final_text)`. Python inline
+1. **`status` from `cronos_status` block** — a fenced-JSON block
+   `` ```cronos_status\n{"status": "<value>", ...}\n``` ``
+   found in the upstream node's output. The `status` field is matched case-sensitively
+   against `edge.condition`.
+2. **`status` from legacy `STATUS:` marker** — a `STATUS: <value>` line (deprecated).
+   Matched case-sensitively. Logs a warning if found; `cronos_status` block is preferred.
+3. **`exit_reason`** — the run's exit reason string (e.g. `NO_CRONOS_STATUS` when
+   neither block nor marker is present).
+4. **`regex`** — `re.search(edge.condition, upstream_final_text)`. Python inline
    flags like `(?i)` are allowed. No `/pattern/flags` syntax, no `eval`.
-4. **`variable`** — a whitelisted expression on scope variables.
+5. **`variable`** — a whitelisted expression on scope variables.
 
 Variable-condition grammar (no `eval`): `<name> <op> <literal>` where `op` is
 `==`, `!=`, or `in` (comma-separated list for `in`):
@@ -434,9 +461,25 @@ edges:
 ```
 
 To drive a decision from an agent, have the upstream agent end its output with a
-marker, e.g. `STATUS: needs_ui`, and set the matching edge `condition:
-needs_ui`. If no condition matches and there is no default edge, the decision
+structured block:
+
+```
+```cronos_status
+{"status": "needs_ui", "summary": "UI needs to be updated", "artifacts": []}
+```
+```
+
+Then set the matching edge `condition: needs_ui`. The `summary` field is for
+human documentation and does not affect decision routing. Legacy free-text
+`STATUS: needs_ui` markers are still supported but deprecated (they log a
+warning).
+
+If no condition matches and there is no default edge, the decision
 **fails** (and fail-fast kicks in) — so always provide a `condition: null` edge.
+
+If an agent completes without emitting either a `cronos_status` block or a
+`STATUS:` marker, the run's `exit_reason` will be `NO_CRONOS_STATUS`; you
+can match on that in a decision edge condition.
 
 ### Wait — pause the run
 
@@ -456,8 +499,9 @@ data:
 - **Human wait**: the executor parks the run, the parent task becomes
   **WAITING**, and `waiting_node_id` is recorded. **Reply to the task** to
   resume; traversal continues from the wait node's outgoing edges.
-- **Timed wait**: the run sleeps `duration_seconds` and continues. Note: on a
-  process restart, a timed wait re-sleeps the full duration (MVP behaviour).
+- **Timed wait**: the run sleeps `duration_seconds` and continues. On a process
+  restart, the run resumes sleeping only the *remaining* interval and fires
+  immediately if the wake time has already passed.
 
 ### Aggregator — join branches
 
@@ -676,7 +720,8 @@ data: { mode: all }   # or: mode: any
 
 **Decision condition grammar:** `<var> == "x"`, `<var> != "x"`, `<var> in a,b,c`
 — or a regex string (matched against upstream final text) — or match a
-`STATUS: <value>` marker. `condition: null` = default edge.
+`cronos_status` block (`{"status": "<value>", ...}`) — or match a legacy
+`STATUS: <value>` marker (deprecated). `condition: null` = default edge.
 
 **Variable syntax:** `$name` / `${name}`. Root vars + upstream node outputs
 (keyed by node id); upstream wins on collision; unknown placeholders survive

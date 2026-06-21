@@ -15,6 +15,7 @@ Covers:
 - Aggregator 'all': waits for both predecessors
 - Aggregator 'any': fires on first done predecessor
 - 4-Agent linear chain regression: same execution order as old _topo_sort
+- Timed Wait (G09): fresh start persists wake_at; restart-before-wake sleeps remaining; restart-after-wake fires immediately
 """
 
 from __future__ import annotations
@@ -1471,3 +1472,174 @@ async def test_executor_run_status_done_updates_run_index():
     assert update_calls[0]["run_id"] == "run-idx"
     assert update_calls[0]["status"] == "done"
     assert update_calls[0]["finished_at"] is not None
+
+
+# ---------------------------------------------------------------------------
+# G09 Timed-wait resume fix — three-path integration tests (I4)
+# ---------------------------------------------------------------------------
+
+
+def _make_timed_wait_harness(duration_seconds: float) -> Harness:
+    """Build a minimal trigger → timed-wait harness for timed-wait tests."""
+    trigger = HarnessNode(
+        id="T1",
+        type=NodeType.trigger,
+        position=_make_position(),
+        ports={"out": {"direction": "output"}},
+        data={"kind": "webhook"},
+        label="T1",
+    )
+    wait = _make_wait_node("W1", mode="timed", duration_seconds=duration_seconds)
+    edge = _make_edge("e1", "T1", "W1", src_port="out", tgt_port="in")
+    return Harness(
+        id="harness-timed",
+        name="timed-wait-test",
+        nodes=[trigger, wait],
+        edges=[edge],
+        variables={},
+    )
+
+
+class TestTimedWaitResumeFix:
+    """G09: Timed-wait resume fix — three execution paths."""
+
+    @pytest.mark.asyncio
+    async def test_timed_wait_fresh_start_persists_wake_at(self, tmp_path: Path):
+        """
+        Path 1 (fresh start): executor computes and persists wake_at in NodeState
+        so a restart can calculate remaining sleep.
+        """
+        harness = _make_timed_wait_harness(duration_seconds=0.05)
+        store = _make_store_mock()
+        worker = StubWorker()
+        space = _make_space()
+
+        sleep_calls: list[float] = []
+
+        async def fake_sleep(seconds: float) -> None:
+            sleep_calls.append(seconds)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch("app.harnesses.executor._DATA_DIR", Path(tmpdir)):
+                with patch("app.harnesses.executor._run_index.update_run_status", new_callable=AsyncMock):
+                    with patch("app.harnesses.wait.asyncio.sleep", side_effect=fake_sleep):
+                        executor = HarnessExecutor(store, worker, _tools_resolver)
+                        state = await executor.execute("run-fresh", harness, space)
+
+            # Path: _DATA_DIR/spaces/{space.id}/.cronos/harness-runs/{run_id}.json
+            run_state_path = (
+                Path(tmpdir) / "spaces" / "test-space" / ".cronos" / "harness-runs" / "run-fresh.json"
+            )
+            assert run_state_path.exists(), "run_state.json not created"
+            with run_state_path.open() as fh:
+                raw = json.load(fh)
+            # W1 should be done after completion
+            assert state.nodes_executed["W1"].status == "done"
+
+        # asyncio.sleep was called once for the timed wait (not full duration re-sleep)
+        assert len(sleep_calls) == 1
+
+    @pytest.mark.asyncio
+    async def test_timed_wait_restart_before_wake_sleeps_remaining(self, tmp_path: Path):
+        """
+        Path 2 (restart before wake): when wake_at is in the future, executor sleeps
+        only the remaining time, NOT the full duration_seconds again.
+        """
+        import datetime as dt_module
+
+        harness = _make_timed_wait_harness(duration_seconds=3600.0)  # 1 hour
+        store = _make_store_mock()
+        worker = StubWorker()
+        space = _make_space()
+
+        # Simulate a run_state file that was persisted mid-sleep with wake_at 30s from now
+        future_wake_at = (
+            dt_module.datetime.now(dt_module.timezone.utc) + dt_module.timedelta(seconds=30)
+        ).isoformat()
+
+        sleep_calls: list[float] = []
+
+        async def fake_sleep(seconds: float) -> None:
+            sleep_calls.append(seconds)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Pre-populate run_state at the path the executor reads from (simulates restart).
+            # In a real restart T1 (trigger) is already done and W1 is in_progress mid-sleep.
+            # Path: _DATA_DIR/spaces/{space.id}/.cronos/harness-runs/{run_id}.json
+            run_dir = Path(tmpdir) / "spaces" / "test-space" / ".cronos" / "harness-runs"
+            run_dir.mkdir(parents=True)
+            pre_state = RunState(
+                run_id="run-resume",
+                harness_id="harness-timed",
+                goal_task_id="goal-1",
+                nodes_executed={
+                    "T1": NodeState(status="done"),
+                    "W1": NodeState(status="in_progress", wake_at=future_wake_at),
+                },
+            )
+            import json as _json
+            (run_dir / "run-resume.json").write_text(_json.dumps(pre_state.to_dict()), encoding="utf-8")
+
+            with patch("app.harnesses.executor._DATA_DIR", Path(tmpdir)):
+                with patch("app.harnesses.executor._run_index.update_run_status", new_callable=AsyncMock):
+                    with patch("app.harnesses.wait.asyncio.sleep", side_effect=fake_sleep):
+                        executor = HarnessExecutor(store, worker, _tools_resolver)
+                        await executor.execute("run-resume", harness, space)
+
+        # Must sleep the REMAINING time (~30s), NOT the full 3600s
+        assert len(sleep_calls) == 1
+        remaining = sleep_calls[0]
+        assert remaining <= 35.0, f"Expected at most 35s remaining sleep, got {remaining}"
+        assert remaining > 0.0, f"Expected positive remaining sleep, got {remaining}"
+
+    @pytest.mark.asyncio
+    async def test_timed_wait_restart_after_wake_fires_immediately(self, tmp_path: Path):
+        """
+        Path 3 (restart after wake time has passed): executor sleeps 0 seconds
+        and fires immediately rather than sleeping the full duration again.
+        """
+        import datetime as dt_module
+
+        harness = _make_timed_wait_harness(duration_seconds=3600.0)  # 1 hour
+        store = _make_store_mock()
+        worker = StubWorker()
+        space = _make_space()
+
+        # Simulate wake_at already in the past by 5 seconds
+        past_wake_at = (
+            dt_module.datetime.now(dt_module.timezone.utc) - dt_module.timedelta(seconds=5)
+        ).isoformat()
+
+        sleep_calls: list[float] = []
+
+        async def fake_sleep(seconds: float) -> None:
+            sleep_calls.append(seconds)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Pre-populate run_state at the correct path (simulates overdue restart).
+            # In a real restart T1 (trigger) is done and W1 is in_progress with past wake_at.
+            # Path: _DATA_DIR/spaces/{space.id}/.cronos/harness-runs/{run_id}.json
+            run_dir = Path(tmpdir) / "spaces" / "test-space" / ".cronos" / "harness-runs"
+            run_dir.mkdir(parents=True)
+            pre_state = RunState(
+                run_id="run-overdue",
+                harness_id="harness-timed",
+                goal_task_id="goal-1",
+                nodes_executed={
+                    "T1": NodeState(status="done"),
+                    "W1": NodeState(status="in_progress", wake_at=past_wake_at),
+                },
+            )
+            import json as _json
+            (run_dir / "run-overdue.json").write_text(_json.dumps(pre_state.to_dict()), encoding="utf-8")
+
+            with patch("app.harnesses.executor._DATA_DIR", Path(tmpdir)):
+                with patch("app.harnesses.executor._run_index.update_run_status", new_callable=AsyncMock):
+                    with patch("app.harnesses.wait.asyncio.sleep", side_effect=fake_sleep):
+                        executor = HarnessExecutor(store, worker, _tools_resolver)
+                        result = await executor.execute("run-overdue", harness, space)
+
+        # Must fire immediately with 0-second sleep (NOT 3600s)
+        assert len(sleep_calls) == 1
+        assert sleep_calls[0] == 0.0, f"Expected 0s sleep for overdue wake_at, got {sleep_calls[0]}"
+        assert result.nodes_executed["W1"].status == "done"

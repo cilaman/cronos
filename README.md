@@ -38,8 +38,17 @@ systemd autostart, and nightly `/data` backups.
 - **Health:** `GET /api/health` — returns 200 only when dirs exist, the
   task index loaded, and the worker loop is alive. The backend container
   has a Docker `healthcheck` that hits the same endpoint every 30 s.
+- **Metrics:** `GET /api/metrics` — no auth required (parity with health).
+  Returns `{queue_depth, active_tasks, auto_resume_total}` as integer counters.
 - **Logs:** `docker compose logs -f backend caddy`. The prod overlay caps
-  each service at `10m × 5` rotated `json-file` logs.
+  each service at `10m × 5` rotated `json-file` logs. Logs are JSON-structured
+  with fields `timestamp`, `level`, `logger`, `message`, plus `run_id` and
+  `task_id` when emitted within an agent/harness execution context.
+  Set `CRONOS_LOG_LEVEL` (default `INFO`) to `DEBUG` for verbose output.
+- **Notifications:** Set `CRONOS_NOTIFY_URL` to a webhook URL to receive a POST
+  on every terminal / needs-human state transition. Payload:
+  `{task_id, task_title, status, exit_reason, summary}`. The POST is
+  fire-and-forget with a 5 s timeout; errors are logged at WARNING level only.
 - **Backups:** `cronos-backup.timer` tars `/opt/cronos/data` to
   `/var/backups/cronos/` daily at ~03:17 UTC, keeping the last 14.
   Trigger manually with `sudo systemctl start cronos-backup.service`.
@@ -47,6 +56,72 @@ systemd autostart, and nightly `/data` backups.
   `~/.config/claude/env` on the VPS (`chmod 600`), then
   `docker compose ... restart backend`. Revoke the old token in your
   Claude account settings.
+
+## Authentication
+
+Cronos uses **two complementary auth layers** (defense-in-depth):
+
+| Layer | Mechanism | Env vars |
+|-------|-----------|----------|
+| Edge (Caddy) | HTTP Basic Auth via bcrypt hash | `BASIC_AUTH_USER`, `BASIC_AUTH_HASH` |
+| App (FastAPI) | HTTP Basic Auth via plaintext compare | `CRONOS_BASIC_AUTH_USER`, `CRONOS_BASIC_AUTH_PASSWORD` |
+
+The app layer is **fail-closed**: if `CRONOS_BASIC_AUTH_USER` or
+`CRONOS_BASIC_AUTH_PASSWORD` is unset it returns **HTTP 503** (misconfiguration),
+not a silent 200. This prevents unauthenticated access on default deployments
+where only the Caddy layer was configured.
+
+To disable the app-level check (local dev only), set:
+
+```bash
+CRONOS_AUTH_DISABLED=true
+```
+
+Any other value, or omitting the variable entirely, leaves the fail-closed
+check active. `/api/health` is always public (no auth on either layer).
+
+The upgrade webhook (`deploy/upgrade-webhook.py`) also requires a secret:
+
+```bash
+WEBHOOK_SECRET=<strong-random-value>
+```
+
+All requests are rejected with **403** when `WEBHOOK_SECRET` is unset.
+
+## Git credential model
+
+Repo-linked spaces need a `CRONOS_GIT_TOKEN` for HTTPS operations.
+The least-privilege credential model (see `deploy/VPS_SETUP.md §5.3` and `.env.example`):
+
+| Operation | Minimum scope (fine-grained PAT) |
+|-----------|----------------------------------|
+| clone / fetch | Contents: Read |
+| push / PR | Contents: Write |
+
+Never grant `admin`, `workflow`, or org-level scopes. A fine-grained PAT scoped
+to a specific repository limits the blast radius if the token is compromised.
+The `autopilot_pr` gate opens a PR for operator review — it never auto-merges.
+
+## Security posture
+
+Cronos is a **personal project** with no formal vulnerability disclosure process or
+support SLA. These controls are in place for the operator's own protection:
+
+| Control | Status | Goal |
+|---------|--------|------|
+| Agents run as non-root (separate UID inside the backend container) | designed (planned) | G03 |
+| App-layer auth is fail-closed (HTTP 503 when credentials are not set) | active | G04 |
+| Plugin install requires human approval via the UI; Bash-based install guarded | active | G06 |
+| Git credentials use a least-privilege fine-grained PAT (Contents-only scope) | active | G11 |
+| GitHub branch protection on `main` requires `backend` + `frontend` CI checks to pass | manual step | G02 |
+
+To enable branch protection, follow the steps in [`deploy/VPS_SETUP.md §13`](deploy/VPS_SETUP.md).
+
+If you find a security issue, contact the operator directly. There is no formal
+disclosure process — this is a personal system.
+
+See [`## Authentication`](#authentication) and [`## Git credential model`](#git-credential-model)
+for the active controls in detail.
 
 ## Layout
 

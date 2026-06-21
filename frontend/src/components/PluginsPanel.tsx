@@ -124,6 +124,25 @@ function InstalledPluginCard({ entry }: { entry: PluginEntry }) {
         </span>
       </div>
 
+      {(entry.installPath || entry.installedAt || !entry.marketplace) && (
+        <div className="mb-2 space-y-0.5">
+          {!entry.marketplace && (
+            <p className="font-mono text-[10px] italic text-ink-faint/60">source unknown</p>
+          )}
+          {entry.installPath && (
+            <p className="truncate font-mono text-[10px] text-ink-faint" title={entry.installPath}>
+              <span className="text-ink-muted">path:</span> {entry.installPath}
+            </p>
+          )}
+          {entry.installedAt && (
+            <p className="font-mono text-[10px] text-ink-faint">
+              <span className="text-ink-muted">installed:</span>{" "}
+              {new Date(entry.installedAt).toLocaleDateString()}
+            </p>
+          )}
+        </div>
+      )}
+
       {entry.components.length > 0 && (
         <div>
           <button

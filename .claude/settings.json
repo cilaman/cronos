@@ -3,6 +3,14 @@
     "allow": [
       "Write(/data/spaces/cronos-development/.claude/skills/**)",
       "Edit(/data/spaces/cronos-development/.claude/skills/**)"
+    ],
+    "deny": [
+      "Bash(claude plugin install:*)",
+      "Bash(claude plugin uninstall:*)",
+      "Bash(claude plugin enable:*)",
+      "Bash(claude plugin disable:*)",
+      "Bash(claude plugin marketplace add:*)",
+      "Bash(claude plugin marketplace remove:*)"
     ]
   }
 }

@@ -16,6 +16,7 @@ from .api.discovery import router as discovery_router
 from .api.harnesses import router as harnesses_router
 from .api.harness_runs import harness_runs_router
 from .api.memory import router as memory_router
+from .api.metrics import router as metrics_router
 from .api.plugins import router as plugins_router
 from .api.spaces import router as spaces_router
 from .api.stats import router as stats_router
@@ -29,6 +30,8 @@ from .auth import require_auth
 from .harnesses import HarnessStore
 from .harnesses.cron import cron_loop
 from .harnesses.triggers import EventBusEvent, fan_out_to_harnesses
+from .logging_config import configure_logging
+from .reaper import reaper_loop
 from .memory_store import MemoryStore
 from .space_storage import CRONOS_SUBDIR, RESERVED_SPACE_DIRS, SpaceStore
 from .stats_store import StatsStore
@@ -40,10 +43,7 @@ from .trace_store import TraceStore
 from . import feature_hooks
 from .worker_pool import WorkerPool
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-)
+configure_logging()
 log = logging.getLogger("cronos")
 
 DATA_DIR = Path(os.environ.get("CRONOS_DATA_DIR", "/data"))
@@ -377,6 +377,9 @@ async def lifespan(app: FastAPI):
 
     task_store = TaskStore(SPACES_DIR)
     await task_store.reload_all()
+    # Clear stale leases from the previous process so startup recovery can
+    # re-enqueue ACTIVE tasks without being blocked by expired lease rows.
+    task_store.clear_all_leases()
     app.state.store = task_store
     feature_hooks.configure_store(task_store)
 
@@ -499,6 +502,10 @@ async def lifespan(app: FastAPI):
         ),
         name="cron",
     )
+    reaper = asyncio.create_task(
+        reaper_loop(task_store, worker_pool, stop_event),
+        name="reaper",
+    )
 
     # Recover in-flight runs: any task left in ACTIVE on startup gets
     # re-enqueued on its space's worker. The agent resumes via its stored
@@ -559,7 +566,7 @@ async def lifespan(app: FastAPI):
     finally:
         stop_event.set()
         await worker_pool.stop_all()
-        for bg_task in (watcher, archiver, memory_pruner, discoverer, evolve_tools, cron):
+        for bg_task in (watcher, archiver, memory_pruner, discoverer, evolve_tools, cron, reaper):
             try:
                 await asyncio.wait_for(bg_task, timeout=5.0)
             except asyncio.TimeoutError:
@@ -569,6 +576,7 @@ async def lifespan(app: FastAPI):
 _auth = [Depends(require_auth)]
 
 app = FastAPI(title="Cronos", version="0.0.1", lifespan=lifespan)
+app.include_router(metrics_router)  # no auth — parity with /api/health
 app.include_router(tasks_router, dependencies=_auth)
 app.include_router(features_router, dependencies=_auth)
 app.include_router(spaces_router, dependencies=_auth)

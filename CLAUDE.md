@@ -14,7 +14,7 @@ export CLAUDE_CODE_OAUTH_TOKEN=$(claude setup-token)   # optional; needed for ag
 docker compose up --build
 # open http://localhost:8080
 
-# Backend tests (60% coverage floor enforced)
+# Backend tests (80% coverage floor enforced)
 cd backend && pip install -e ".[dev]"
 cd backend && pytest tests/ --cov=app --cov-report=term-missing
 
@@ -60,11 +60,22 @@ HTTP Basic Auth via Caddy on every request. `/api/health` is public (no auth). C
 
 `app/agent.py` spawns `claude code -s <space>` as a subprocess, captures stdout/stderr, tracks status. `app/worker.py` is the background executor driving goals and state transitions.
 
+### OpenAPI type generation (G14)
+
+Frontend types are **generated** from the backend OpenAPI schema via a committed-snapshot pipeline:
+1. **Backend** (`backend/app/export_openapi.py`): Exports the live FastAPI schema to `frontend/openapi.json` using `app.openapi()` (pure, no side effects).
+2. **Generation** (`npm run generate:types`): Regenerates `frontend/src/generated/api-types.ts` via `openapi-typescript` against the committed `openapi.json`.
+3. **Re-export** (`frontend/src/types.ts`): Single import surface that aliases generated schemas (`export type Task = components['schemas']['TaskRead']`) and retains hand-written UI/editor-only types.
+4. **CI drift gate** (`.github/workflows/ci.yml`): Two complementary checks fail CI if snapshots drift — backend diffs `openapi.json`, frontend diffs `src/generated/api-types.ts` — ensuring schema and types stay in sync with the code.
+
+**Key rule**: never import `./generated/api-types.ts` directly; always import from `./types.ts` (the re-export surface). This keeps migration churn localized to one file if the generation schema changes.
+
 ## Key modules
 
 | Path | Purpose |
 |------|---------|
 | `backend/app/main.py` | FastAPI app, router registration, background task startup (cron loop initialization), file watcher with event-trigger dispatch; task-state-change callback injection |
+| `backend/app/export_openapi.py` | CLI script: calls `app.main.app.openapi()` and exports the JSON schema to `frontend/openapi.json` (default) or custom `--out` path; feeds the committed-snapshot OpenAPI→TS type generation pipeline (G14) |
 | `backend/app/storage.py` | **CORE** — TaskStore, state machine, dependency DAG validation, cycle detection (41 KB) |
 | `backend/app/space_storage.py` | Space persistence, layouts, settings, `.cronos` subdirectory management |
 | `backend/app/agent.py` | Agent spawning, stdout/stderr capture, status tracking |
@@ -105,12 +116,10 @@ HTTP Basic Auth via Caddy on every request. `/api/health` is public (no auth). C
 | `frontend/src/pages/SpaceToolsPage.tsx` | AI Tools landing page at `/spaces/:spaceId/tools` — tabs for installed tools, available tools, and plugins (plugin management UI) |
 | `frontend/src/components/HarnessRunPanel.tsx` | Per-run detail panel with node status badges, live SSE indicator, cancel button, buffer-truncated badge |
 | `frontend/src/components/ToolDetailPanel.tsx` | Detail panel for tools displaying name, description, type badge (space/global/plugin), and components list |
-| `frontend/src/components/PluginsPanel.tsx` | Three-section plugin management UI (Installed / Available / Marketplaces): enable/disable toggle, confirm-gated uninstall, expandable component list with kind icons (agent/skill/command), install button, marketplace add/remove; rendered in the Plugins tab of SpaceToolsPage |
 | `frontend/src/hooks/useTasks.ts` | React Query hooks for task CRUD |
 | `frontend/src/hooks/useHarnessRuns.ts` | React Query hooks for harness run queries, mutations (trigger, cancel), and SSE stream subscription |
-| `frontend/src/hooks/usePlugins.ts` | React Query hooks for plugin management: `usePlugins()` query + 6 mutations (`useInstallPlugin`, `useUninstallPlugin`, `useEnablePlugin`, `useDisablePlugin`, `useAddMarketplace`, `useRemoveMarketplace`), all invalidating `['plugins']` on success |
 | `frontend/src/api.ts` | HTTP client with task/space file URL helpers (taskFileUrl, spaceFileUrl), task/space file API functions (taskFiles, spaceFiles), and plugin management functions (plugins, installPlugin, uninstallPlugin, enablePlugin, disablePlugin, addMarketplace, removeMarketplace); includes harness run types (RunSummary, NodeState, HarnessRunState) and plugin types (PluginsResponse) |
-| `frontend/src/pages/HarnessEditor.tsx` | Harness visual editor canvas page — React Flow v12 graph layout with 5 custom node types (Agent/Trigger/Decision/Wait/Aggregator), NodePalette drag source, VariableInspector side panel (receives `spaceId` for agent_ref datalist), Save button (GET-then-PUT); live-execution overlay with RunHistory (left panel), RunOverlay (canvas), and ChildTaskDrawer (right panel) |
+| `frontend/src/pages/HarnessEditor.tsx` | Harness visual editor canvas page — React Flow v12 graph layout with 5 custom node types (Agent/Trigger/Decision/Wait/Aggregator), NodePalette drag source, VariableInspector side panel, Save button (GET-then-PUT); live-execution overlay with RunHistory (left panel), RunOverlay (canvas), and ChildTaskDrawer (right panel) |
 | `frontend/src/hooks/useHarnesses.ts` | React Query hooks for harness CRUD and canvas save (`useHarnesses` list, `useHarness` single fetch, `useCreateHarness` and `useDeleteHarness` mutations, `useSaveHarness` GET-then-PUT mutation enforcing created_at preservation) |
 | `frontend/src/components/harness/runStatus.ts` | Single source of truth for node run-status styling: `NodeRunStatus` union type, `RunStatusOverlayData` interface (optional fields: runStatus, startedAt, endedAt, childTaskId), and `runStatusClassName()` mapper returning Tailwind class strings per status |
 | `frontend/src/components/harness/harnessMapping.ts` | Round-trip module converting between React Flow flat graph shape (nodes[], edges[]) and backend nested NodeRef payload; `toReactFlow()` and `fromReactFlow()` pure functions |
@@ -124,15 +133,17 @@ HTTP Basic Auth via Caddy on every request. `/api/health` is public (no auth). C
 | `frontend/src/components/harness/ChildTaskDrawer.tsx` | Right-side drawer component — accepts `child_task_id` prop, fetches task via `useTask()`, renders loading skeleton, then delegates to `ConversationStream` for task detail display |
 | `frontend/src/hooks/useRunStateOverlay.ts` | Central hook for run-state reduction: consumes SSE events (`useHarnessRunStream` live mode) or REST snapshots (`useHarnessRun` replay mode); coalesces events into `NodeRunStatus` and edge-coloring maps with `requestAnimationFrame` batching (R7) |
 | `frontend/src/components/harness/NodePalette.tsx` | Right-side draggable palette of 5 node types with React Flow dataTransfer semantics (effectAllowed=move) |
-| `frontend/src/components/harness/VariableInspector.tsx` | Right-side inspector panel — per-node-type config editing: AgentNode (agent_ref + prompt_template with datalist autocomplete from `api.spaceTools(spaceId)`, incl. plugin-namespaced names; graceful degradation when spaceId absent), WaitNode (mode + max_wait_seconds), AggregatorNode (mode all/any), TriggerNode (kind + per-kind fields), edge condition editing; harness-level variables add/remove UI |
-| `frontend/src/types.ts` | Harness visual editor type definitions (NodeType, Position, NodePort, HarnessNode, NodeRef, HarnessEdge, Harness interfaces mirroring backend Pydantic v2 models); plugin management types (PluginComponent, PluginEntry, MarketplacePluginEntry, MarketplaceEntry, PluginsResponse); AiToolEntry.scope widened to include `"plugin"` |
+| `frontend/src/components/harness/VariableInspector.tsx` | Right-side inspector panel — per-node-type config editing: AgentNode (agent_ref + prompt_template), WaitNode (mode + max_wait_seconds), AggregatorNode (mode all/any), TriggerNode (kind + per-kind fields), edge condition editing; harness-level variables add/remove UI |
+| `frontend/src/types.ts` | **Re-export surface** for backend schema types (generated via `openapi-typescript` from `frontend/openapi.json`). Aliases 22 backend Pydantic schemas (Task, Space, Feature, Harness, etc.) as `export type X = components['schemas']['X']` from `./generated/api-types.ts`; retains 10 hand-written UI/editor-only exports (NodeType, Position, NodePort, HarnessNode, NodeRef, HarnessEdge, Harness, PluginComponent, PluginEntry, AiToolEntry) for types with no matching OpenAPI schema or deliberate shape divergences. **Never import from `./generated/api-types.ts` directly** — always import from `./types.ts`. |
+| `frontend/src/generated/api-types.ts` | **Auto-generated** via `openapi-typescript ./openapi.json -o ./src/generated/api-types.ts` (npm run generate:types); emits TypeScript accessor types for all backend Pydantic schemas (`components['schemas'][...]`). Committed snapshot; never hand-edited. |
+| `frontend/openapi.json` | **Committed snapshot** of the live FastAPI OpenAPI schema, regenerated by `python -m app.export_openapi` (backend job); feeds the `npm run generate:types` pipeline. CI drift gate: backend job diffs this file after regeneration, frontend job diffs the generated `src/generated/api-types.ts`. |
 
 ## Directory layout
 
 ```
 backend/
   app/            FastAPI source (main, storage, agent, worker, models, api/)
-  tests/          Pytest suite (60% coverage floor)
+  tests/          Pytest suite (80% coverage floor)
   Dockerfile      Python 3.12 + Node 22, Claude Code CLI bundled
   pyproject.toml  Dependencies and pytest/coverage config
 

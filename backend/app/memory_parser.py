@@ -85,6 +85,9 @@ def parse_memory_blocks(text: str) -> list[MemoryBlock]:
 
 _CR_FENCE_OPEN = re.compile(r"^```cronos_remember\s*$", re.IGNORECASE)
 
+_CS_FENCE_OPEN = re.compile(r"^```cronos_status\s*$", re.IGNORECASE)
+_VALID_STATUSES = frozenset({"DONE", "WAIT", "BLOCKED"})
+
 
 @dataclass
 class CronosRememberBlock:
@@ -93,6 +96,51 @@ class CronosRememberBlock:
     description: str
     body: str = ""
     metadata: dict = field(default_factory=dict)
+
+
+def parse_cronos_status_block(text: str) -> tuple[str | None, str | None]:
+    """Parse the first ```cronos_status fenced JSON block from agent output.
+
+    Returns (status_str, summary) where status_str is one of 'DONE', 'WAIT',
+    'BLOCKED' and summary is the optional summary string (or None). Returns
+    (None, None) if no valid block is found.
+
+    Silently skips blocks that are unclosed, have malformed JSON, are missing
+    the required 'status' field, or have an unknown status value.
+    The payload is parsed via json.loads (not yaml.safe_load).
+    The optional 'artifacts' field is accepted but not returned.
+    """
+    if not text:
+        return None, None
+
+    lines = text.splitlines()
+    in_fence = False
+    fence_lines: list[str] = []
+
+    for line in lines:
+        if not in_fence:
+            if _CS_FENCE_OPEN.match(line):
+                in_fence = True
+                fence_lines = []
+        else:
+            if _FENCE_CLOSE.match(line):
+                try:
+                    data = json.loads("\n".join(fence_lines))
+                except (json.JSONDecodeError, ValueError):
+                    return None, None
+                if not isinstance(data, dict):
+                    return None, None
+                status = data.get("status")
+                if not isinstance(status, str) or status not in _VALID_STATUSES:
+                    return None, None
+                summary = data.get("summary")
+                if not isinstance(summary, str):
+                    summary = None
+                return status, summary
+            else:
+                fence_lines.append(line)
+
+    return None, None
 
 
 def parse_cronos_remember_blocks(text: str) -> list[CronosRememberBlock]:

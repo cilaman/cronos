@@ -25,3 +25,14 @@ build/
 # Local runtime data (sqlite, caddy data volumes if ever bind-mounted)
 data/*.db
 data/*.sqlite*
+
+# .cronos runtime dirs — ephemeral state that must not be committed
+.cronos/tasks/
+.cronos/workspaces/
+.cronos/traces/
+.cronos/stats/
+.cronos/memory/
+.cronos/.trash/
+.cronos/test-reports/
+.cronos/harness-runs/
+.cronos/test-coverage.md
