@@ -70,12 +70,7 @@ export function FileBrowserPage() {
       {/* Task tree panel */}
       <div className="w-full shrink-0 overflow-y-auto border-b border-hairline bg-surface-1 md:w-72 md:border-b-0 md:border-r">
         <div className="border-b border-hairline px-4 py-3">
-          {/* Layout exemption: FileBrowserPage uses a full-height split-pane master-detail
-              layout (left task tree + right file panel), structurally identical to
-              HarnessEditor's canvas exemption. PageHeader/PageContainer cannot wrap this
-              layout without breaking the fixed-height overflow. The one-title-size rule is
-              still satisfied via the `text-title` class on the h1 below. */}
-          <h1 className="text-title">
+          <h1 className="font-display text-sm font-semibold uppercase tracking-[0.18em] text-ink">
             File Browser
           </h1>
           {spaceData && (

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import type { Board } from "../../types";
@@ -311,6 +311,7 @@ describe("FileBrowserPage", () => {
   it("shows error banner when task files fail to load", async () => {
     mockTaskFiles.mockRejectedValue(new Error("500 Server Error"));
     mockBoardData = makeBoard([makeTask("t1", "My Task")]);
+    const queryClient = makeQueryClient();
     render(
       <QueryClientProvider
         client={
@@ -327,12 +328,17 @@ describe("FileBrowserPage", () => {
       </QueryClientProvider>,
     );
 
-    fireEvent.click(screen.getByText("My Task"));
-
-    // Wait for the rejection to propagate and the error banner to appear
-    await waitFor(() => {
-      expect(screen.getByText("Failed to load files.")).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByText("My Task"));
     });
+
+    // Wait for error to propagate
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText("Failed to load files.")).toBeInTheDocument();
+    void queryClient; // suppress unused warning
   });
 
   // -----------------------------------------------------------------------
@@ -366,27 +372,5 @@ describe("FileBrowserPage", () => {
     const { container } = renderPage();
     const root = container.firstElementChild;
     expect(root?.className).toContain("md:flex-row");
-  });
-
-  // -----------------------------------------------------------------------
-  // PageHeader / text-title migration (gui-layout-primitives I4)
-  // -----------------------------------------------------------------------
-
-  it("renders an h1 with class text-title and text 'File Browser'", () => {
-    mockBoardData = makeBoard([]);
-    renderPage();
-    const h1 = document.querySelector("h1");
-    expect(h1).toBeTruthy();
-    expect(h1?.className).toContain("text-title");
-    expect(h1?.textContent).toContain("File Browser");
-  });
-
-  it("h1 does not use ad-hoc size classes text-sm or uppercase tracking-[0.18em]", () => {
-    mockBoardData = makeBoard([]);
-    renderPage();
-    const h1 = document.querySelector("h1");
-    expect(h1?.className).not.toContain("text-sm");
-    expect(h1?.className).not.toContain("uppercase");
-    expect(h1?.className).not.toContain("tracking-[0.18em]");
   });
 });

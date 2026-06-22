@@ -2,9 +2,8 @@ import { useState, useEffect } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { FeaturesBoard } from "../components/FeaturesBoard";
 import { SpaceFilterDropdown } from "../components/SpaceFilterDropdown";
+import { StickyToolbar } from "../components/ui/StickyToolbar";
 import { useSpaces } from "../hooks/useSpaces";
-import { PageContainer } from "../components/ui/PageContainer";
-import { PageHeader } from "../components/ui/PageHeader";
 
 const LS_KEY = "cronos.features.lastSpaceId";
 
@@ -14,9 +13,11 @@ function ScopedFeaturesPage({ spaceId }: { spaceId: string }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <PageContainer className="py-4 lg:py-4">
-        <PageHeader title={space ? space.name : "Features"} />
-      </PageContainer>
+      <StickyToolbar>
+        <h1 className="font-display text-[13px] font-semibold uppercase tracking-[0.18em] text-ink">
+          {space ? space.name : "Features"}
+        </h1>
+      </StickyToolbar>
       <div className="min-h-0 flex-1 overflow-hidden">
         <FeaturesBoard spaceId={spaceId} />
       </div>
@@ -75,18 +76,15 @@ function GlobalFeaturesPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <PageContainer className="py-4 lg:py-4">
-        <PageHeader
-          title={activeSpace ? activeSpace.name : "Features"}
-          actions={[
-            <SpaceFilterDropdown
-              key="space-filter"
-              value={selectedSpaceId}
-              onChange={handleSelectSpace}
-            />,
-          ]}
+      <StickyToolbar>
+        <h1 className="font-display text-[13px] font-semibold uppercase tracking-[0.18em] text-ink">
+          {activeSpace ? activeSpace.name : "Features"}
+        </h1>
+        <SpaceFilterDropdown
+          value={selectedSpaceId}
+          onChange={handleSelectSpace}
         />
-      </PageContainer>
+      </StickyToolbar>
 
       {spacesLoading && (
         <div className="flex items-center gap-2 p-6 text-sm text-ink-muted">

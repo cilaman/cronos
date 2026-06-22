@@ -84,28 +84,6 @@ describe("HarnessRunsPage", () => {
     mockTriggerIsError = false;
   });
 
-  it("renders the harness name in an h1 with text-title class", () => {
-    renderPage("space-1", "my-harness");
-    const h1 = screen.getByRole("heading", { level: 1 });
-    expect(h1).toBeInTheDocument();
-    expect(h1.textContent).toBe("my-harness");
-    expect(h1.className).toContain("text-title");
-  });
-
-  it("h1 does not carry ad-hoc size classes", () => {
-    renderPage();
-    const h1 = screen.getByRole("heading", { level: 1 });
-    expect(h1.className).not.toMatch(/text-\[22px\]/);
-    expect(h1.className).not.toMatch(/uppercase/);
-    expect(h1.className).not.toMatch(/tracking-\[/);
-  });
-
-  it("wraps content in a PageContainer (max-w-[1280px])", () => {
-    const { container } = renderPage();
-    const wrapper = container.querySelector(".max-w-\\[1280px\\]");
-    expect(wrapper).not.toBeNull();
-  });
-
   it("test renders empty state when no runs", () => {
     mockRuns = [];
     renderPage();

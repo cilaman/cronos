@@ -4,7 +4,6 @@ import { useSpaces } from "../hooks/useSpaces";
 import type { SpaceSummary } from "../types";
 import { ThemePicker } from "./ThemePicker";
 import { BuildInfo } from "./BuildInfo";
-import { CronosMark } from "./CronosMark";
 
 const primaryNavLinkClasses = ({ isActive }: { isActive: boolean }) =>
   cn(
@@ -120,9 +119,12 @@ export function Sidebar({ onClose }: Props) {
     <aside className="flex h-full w-56 shrink-0 flex-col border-r border-hairline bg-surface-1 glass-pane">
       <div className="flex h-14 items-center justify-between gap-2 border-b border-hairline px-4">
         <div className="flex items-center gap-2">
-          <CronosMark className="h-6 w-6 shrink-0" />
-          <span className="font-mono text-sm font-semibold uppercase tracking-[0.22em] text-ink">
-            CRONOS
+          <span
+            aria-hidden
+            className="h-2 w-2 rounded-full bg-accent-bright shadow-accent-glow"
+          />
+          <span className="font-display text-sm font-semibold uppercase tracking-[0.22em] text-ink">
+            Cronos
           </span>
         </div>
         {onClose && (

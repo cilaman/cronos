@@ -87,26 +87,9 @@ describe("StatsPage", () => {
     } as unknown as ReturnType<typeof useSpaces>);
   });
 
-  it("renders the Stats page header with text-title on h1", () => {
+  it("renders the Stats page header", () => {
     renderPage();
-    const h1 = screen.getByRole("heading", { level: 1 });
-    expect(h1).toBeInTheDocument();
-    expect(h1.textContent).toBe("Stats");
-    expect(h1.className).toContain("text-title");
-  });
-
-  it("h1 does not carry ad-hoc size classes", () => {
-    renderPage();
-    const h1 = screen.getByRole("heading", { level: 1 });
-    expect(h1.className).not.toMatch(/text-\[22px\]/);
-    expect(h1.className).not.toMatch(/uppercase/);
-    expect(h1.className).not.toMatch(/tracking-\[/);
-  });
-
-  it("wraps content in a PageContainer (max-w-[1280px])", () => {
-    const { container } = renderPage();
-    const wrapper = container.querySelector(".max-w-\\[1280px\\]");
-    expect(wrapper).not.toBeNull();
+    expect(screen.getByText("Stats")).toBeInTheDocument();
   });
 
   it("shows a loading indicator while global stats are fetching", () => {

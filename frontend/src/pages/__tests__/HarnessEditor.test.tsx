@@ -323,38 +323,6 @@ describe('HarnessEditor', () => {
     expect(wrapper.className).toContain('harness-canvas');
   });
 
-  it('h1 carries class text-title and no text-sm/uppercase/tracking-wider', async () => {
-    vi.mocked(useHarness).mockReturnValue({
-      data: mockHarness,
-      isLoading: false,
-      isError: false,
-    } as any);
-    await act(async () => { renderEditor(); });
-
-    const h1 = screen.getByRole('heading', { level: 1 });
-    expect(h1.className).toContain('text-title');
-    expect(h1.className).not.toContain('text-sm');
-    expect(h1.className).not.toContain('text-lg');
-    expect(h1.className).not.toContain('text-[22px]');
-    expect(h1.className).not.toContain('uppercase');
-    expect(h1.className).not.toContain('tracking-wider');
-  });
-
-  it('PageContainer is NOT present in HarnessEditor (canvas page exemption)', async () => {
-    vi.mocked(useHarness).mockReturnValue({
-      data: mockHarness,
-      isLoading: false,
-      isError: false,
-    } as any);
-    await act(async () => { renderEditor(); });
-
-    // HarnessEditor is a full-screen canvas page; PageContainer must be omitted
-    await act(async () => { renderEditor(); });
-    // max-w-[1280px] and max-w-[768px] must not appear in the rendered tree
-    expect(document.querySelector('.max-w-\\[1280px\\]')).toBeNull();
-    expect(document.querySelector('.max-w-\\[768px\\]')).toBeNull();
-  });
-
   it('renders NodePalette and VariableInspector', async () => {
     vi.mocked(useHarness).mockReturnValue({
       data: mockHarness,

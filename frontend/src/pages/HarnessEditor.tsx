@@ -289,7 +289,7 @@ function HarnessEditorInner() {
     <div className="flex h-screen flex-col">
       {/* Header */}
       <header className="flex items-center gap-4 border-b border-hairline px-4 py-2">
-        <h1 className="text-title">
+        <h1 className="font-display text-sm font-semibold uppercase tracking-wider text-ink">
           {name}
         </h1>
         <div className="flex-1" />
