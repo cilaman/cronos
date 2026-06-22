@@ -4,9 +4,12 @@ agent: pipeline-doc-sync
 slug: gui-tokens-brand
 phase: doc
 status: done
-confidence: 0.9
+confidence: 0.92
 inputs_used:
+  - memory:project_gui_refactor_board_setup
+  - memory:project_branding
   - .cronos/pipeline/gui-tokens-brand/review-report-gui-tokens-brand--attempt2.md
+  - .cronos/pipeline/gui-tokens-brand/design-report-gui-tokens-brand.md
   - .cronos/pipeline/gui-tokens-brand/impl-report-gui-tokens-brand--i1.md
   - .cronos/pipeline/gui-tokens-brand/impl-report-gui-tokens-brand--i2.md
   - .cronos/pipeline/gui-tokens-brand/impl-report-gui-tokens-brand--i3.md
@@ -14,35 +17,26 @@ inputs_used:
   - .cronos/pipeline/gui-tokens-brand/impl-report-gui-tokens-brand--i5.md
   - CLAUDE.md
   - README.md
-  - TESTING.md
-  - docs/HARNESSES.md
-  - deploy/VPS_SETUP.md
 outputs_produced:
   - .cronos/pipeline/gui-tokens-brand/doc-report-gui-tokens-brand.md
 blockers: []
 next_consumer: user
 intentionally_not_updated:
   - path: CLAUDE.md
-    reason: "Token system (CSS variables + Tailwind extensions) is internal infrastructure already covered in Stack section. CronosMark and Sidebar changes are UI-level, not architectural modules warranting Key modules entry. TOKENS.md is documentation artifact, not code module."
+    reason: "Key modules table focuses on runtime code/modules, not style config or token docs. frontend/src/styles/TOKENS.md is self-documenting and discoverable. No architectural claims about styling were made that need correction."
   - path: README.md
-    reason: "No API, deployment, ops, or dev-command changes. Status/layout/auth/git-credential sections unaffected by frontend styling. Favicon/wordmark are user-visible but not significant enough for README mention (internal branding polish for gui-refactor arc)."
-  - path: TESTING.md
-    reason: "Test command (`npm test`) unchanged. Four new test files (index.css.test.ts, tailwind.config.test.ts, index-html.test.ts, Sidebar.wordmark.test.ts) are implementation artifacts, not test infrastructure changes."
-  - path: docs/HARNESSES.md
-    reason: "Harness documentation unchanged. Token/branding changes do not affect harness data model, control flow, or runtime behaviour."
-  - path: deploy/VPS_SETUP.md
-    reason: "Deployment and VPS provisioning steps unchanged. No new environment variables or infrastructure requirements introduced by CSS/branding work."
+    reason: "User-facing deployment and ops docs. Sidebar brand change and favicon are internal UI improvements; no false claims about UI architecture or capabilities made. Frontend stack unchanged."
 metrics:
-  tool_calls: 6
-  files_read: 11
-  memory_hits: 0
+  tool_calls: 14
+  files_read: 9
+  memory_hits: 2
   docs_updated: 0
-  docs_considered: 5
+  docs_considered: 2
 ---
 
 ## Summary
 
-The gui-tokens-brand implementation added a complete design token system (CSS variables + Tailwind theme extensions across light/dark/neon themes) and brand assets (favicon, PWA icons, CronosMark component, structured token documentation). All changes are frontend-only and internal-only per the review report. No documentation files required updates: the token system is infrastructure already reflected in the Stack section (Tailwind 3.4); the CronosMark component and Sidebar restyling are UI-level changes (not architectural modules); new test files are implementation artifacts; and deployment/testing infrastructure remains unchanged. The pipeline is ready for hand-off.
+The gui-tokens-brand implementation (5 frontend-only iterations) introduces a new CSS token layer (status/categorical/brand colours, typography scale, z-index, motion), exposes them via Tailwind utilities, adds PWA/favicon assets and manifest, and replaces the sidebar brand mark with a theme-aware CronosMark component. All changes are self-contained and self-documenting: (1) frontend/src/styles/TOKENS.md (shipped in I5) is the authoritative token reference for downstream phases; (2) component code and tests document the CronosMark + Sidebar swap; (3) HTML and manifest JSON document the favicon/PWA wiring. No existing documentation files make false claims about architecture, styling, or UI that require correction.
 
 ## Updated docs
 
@@ -50,18 +44,14 @@ The gui-tokens-brand implementation added a complete design token system (CSS va
 
 ## Intentionally not updated
 
-- **CLAUDE.md** — Token system is internal infrastructure already covered in Stack section. CronosMark and Sidebar changes are UI-level, not architectural modules warranting Key modules entry.
-- **README.md** — No API, deployment, ops, or dev-command changes. Status/layout/auth/git-credential sections unaffected by frontend styling.
-- **TESTING.md** — Test command (`npm test`) unchanged. Four new test files are implementation artifacts, not test infrastructure changes.
-- **docs/HARNESSES.md** — Harness documentation unchanged. Token/branding changes do not affect harness data model, control flow, or runtime behaviour.
-- **deploy/VPS_SETUP.md** — Deployment and VPS provisioning steps unchanged. No new environment variables or infrastructure requirements introduced.
+- **CLAUDE.md** — Key modules table focuses on runtime code/modules, not style configuration or documentation files. `frontend/src/styles/TOKENS.md` is self-documenting and discoverable via the directory structure. No architectural claims about styling or the token layer were made that are now inaccurate.
+- **README.md** — User-facing ops and deployment documentation. The sidebar brand change and favicon updates are internal UI improvements that do not affect the deployment model, architecture, or operational claims made in the README.
 
 ## Assumptions
 
-- Review report verdict `pass` (attempt 2) confirms implementation correctness across all 5 iterations (I1–I5).
-- Per review brief: token system and TOKENS.md are "internal-only"; only user-visible changes are favicon/PWA icons and sidebar wordmark redesign, neither of which warrant README mention.
-- Implementation on `feature/gui-refactor` branch; documentation assessment applies to eventual main merge state.
-- Changelog hook from review report: "The browser tab now shows the new Cronos favicon/PWA icons... The sidebar wordmark has been replaced... No other components changed visually."
+- The frontend/src/styles/TOKENS.md file (created by I5) is intended to serve as the definitive token reference for all subsequent gui-refactor subgoals (badge-system, button-focus, etc.); hence no need to cross-reference it from CLAUDE.md (it is discoverable and self-contained).
+- Changelog hook from review report's "## Next consumer brief" section: two user-visible surface changes — (1) browser tab now shows Cronos favicon/PWA manifest, (2) sidebar wordmark replaced with theme-aware CronosMark logo + JetBrains Mono text.
+- The implementation focused on presentation layer (CSS tokens, Tailwind config, React components, brand assets) with no changes to data models, backend APIs, or deployment infrastructure.
 
 ## Open questions
 
@@ -69,4 +59,10 @@ The gui-tokens-brand implementation added a complete design token system (CSS va
 
 ## Next consumer brief
 
-All five implemented iterations (CSS tokens, Tailwind config, favicon/branding assets, CronosMark component, token reference docs) passed review. No documentation updates were needed; all changes are frontend infrastructure or UI polish internal to the gui-refactor arc. The codebase is documented accurately as-is, and the pipeline is complete.
+The gui-tokens-brand phase completed successfully with no documentation updates required. The implementation is self-contained and self-documenting:
+
+1. **Token layer**: `frontend/src/styles/TOKENS.md` (281 lines) documents all CSS custom properties (status/categorical/brand tokens across light/dark/neon themes) and Tailwind utility exposures. This is the authoritative reference for downstream gui-refactor subgoals.
+
+2. **Brand updates**: The sidebar now displays a theme-aware SVG mark (three concentric rings with violet nodes) alongside "CRONOS" in JetBrains Mono, replacing the legacy green pulse-dot. The browser tab shows the new Cronos favicon (SVG + PNG sizes) and advertises `site.webmanifest` for PWA support.
+
+3. **Visual changes only**: No API contracts, data models, or deployment behavior changed. All tests pass (1405 frontend tests, green build). Ready for downstream gui-refactor subgoals (badge-system, button-focus, icons, modal-loading, polish, detail-ux) to consume the token layer.

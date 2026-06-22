@@ -183,7 +183,7 @@
       "status": "done",
       "cc_version": "1.0",
       "agent": "pipeline-doc-sync",
-      "task_id": "2026-06-22-1335-doc-gui-tokens-brand",
+      "task_id": "2026-06-22-1335-review-gui-tokens-brand",
       "run_index": 0,
       "gate": "auto",
       "started_at": "",
@@ -195,7 +195,7 @@
         "warnings": [],
         "normalize_fixes": [],
         "gate_decision": "proceed",
-        "gate_reason": "all checks passed"
+        "gate_reason": "doc phase terminal; TOKENS.md self-documents, no other docs needed"
       },
       "metrics": {
         "duration_s": 0.0,
@@ -218,5 +218,5 @@
     "phases_retried": 0,
     "phases_failed": 0
   },
-  "updated_at": "2026-06-22T16:51:47.103827+00:00"
+  "updated_at": "2026-06-22T16:32:30.014853+00:00"
 }
