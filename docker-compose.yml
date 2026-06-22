@@ -21,11 +21,15 @@ services:
       # over HTTPS. Single-user only — will be replaced by per-user storage
       # once Cronos supports multiple operators. Set in .env, never commit.
       CRONOS_GIT_TOKEN: ${CRONOS_GIT_TOKEN:-}
-      # Application-layer HTTP Basic Auth. When both are set, the API requires
-      # valid credentials on every request (except /api/health). Leave unset in
-      # dev to disable auth. In production, prefer setting these in .env.
+      # Application-layer HTTP Basic Auth (fail-closed). The API requires valid
+      # credentials on every request (except /api/health) when a username plus
+      # EITHER a bcrypt hash (preferred — reuse BASIC_AUTH_HASH, no plaintext)
+      # OR a plaintext password is set. To run without auth in dev, set
+      # CRONOS_AUTH_DISABLED=true. In production, set these in .env.
       CRONOS_BASIC_AUTH_USER: ${CRONOS_BASIC_AUTH_USER:-}
+      CRONOS_BASIC_AUTH_HASH: ${CRONOS_BASIC_AUTH_HASH:-}
       CRONOS_BASIC_AUTH_PASSWORD: ${CRONOS_BASIC_AUTH_PASSWORD:-}
+      CRONOS_AUTH_DISABLED: ${CRONOS_AUTH_DISABLED:-}
       # Override worker.py's hardcoded /root/.claude/projects default so agent
       # run logs write to the cronos user's home instead of /root (unwritable).
       CLAUDE_PROJECTS_DIR: /home/cronos/.claude/projects
@@ -39,10 +43,22 @@ services:
     expose:
       - "8000"
     restart: unless-stopped
-    # Security hardening: drop all Linux capabilities; no-new-privileges blocks
-    # setuid escalation after the initial gosu drop-in entrypoint.
+    # Security hardening: drop all capabilities, then re-grant only what the
+    # root entrypoint needs before it drops to the non-root cronos user:
+    #   CHOWN + DAC_OVERRIDE  -> chown -R the /data bind-mount
+    #   SETUID + SETGID       -> gosu drops root -> cronos
+    # Without these, cap_drop:ALL makes the entrypoint die on the first chown
+    # (set -e) and the backend never starts -> Caddy returns 502. The dropped
+    # caps are the gate here, NOT no-new-privileges, which only blocks gaining
+    # privileges via execve of setuid binaries and is kept on as defence in
+    # depth (uvicorn still ends up unprivileged; gosu passes no caps to it).
     cap_drop:
       - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETUID
+      - SETGID
     security_opt:
       - no-new-privileges:true
     volumes:
@@ -64,8 +80,9 @@ services:
     ports:
       - "8080:80"
     restart: unless-stopped
-    # Security hardening: drop all capabilities but re-grant NET_BIND_SERVICE
-    # so the non-root caddy user can still bind port 80 (Caddyfile unchanged).
+    # Security hardening: drop all capabilities but re-grant NET_BIND_SERVICE.
+    # The container runs as root, but under cap_drop:ALL even root needs this
+    # capability to bind the privileged ports 80/443 (Caddyfile unchanged).
     cap_drop:
       - ALL
     cap_add:

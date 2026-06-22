@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Cronos · UI/UX Wireframes</title>
+<link rel="icon" type="image/svg+xml" href="../brand/logo/cronos-favicon.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+/* ============================================================================
+   CRONOS — UNIFIED DESIGN TOKENS  (wireframe demonstration)
+   These mirror frontend/src/index.css and ADD the proposed status + categorical
+   tokens from docs/ui-ux-review/02-design-system.md. Toggle the theme (top-right)
+   to see badges/status adapt across light / dark / neon — the headline fix.
+   ========================================================================== */
+:root, [data-theme="light"] {
+  --canvas: 250 250 247;  --surface-1: 255 255 255;  --surface-2: 241 241 236;  --surface-3: 230 230 223;
+  --ink: 13 19 15;  --ink-muted: 70 80 74;  --ink-faint: 107 117 109;
+  --accent: 21 128 61;  --accent-bright: 15 106 49;
+  --hairline: 220 220 213;  --hairline-strong: 188 188 180;
+  /* brand identity — theme-independent (logos, idle-state mark). Reserved: not a chrome accent. */
+  --brand: 122 79 176;  --brand-deep: 106 63 160;  --brand-light: 184 149 224;
+  /* status tokens — hues from the brand state palette; light theme uses contrast-safe darker shades */
+  --running: 77 124 15;  --success: 8 145 178;  --info: 3 105 161;  --warning: 180 83 9;  --danger: 185 28 28;  --neutral: 107 117 109;
+  /* proposed categorical tokens */
+  --cat-goal: 124 58 237;  --cat-feature: 21 128 61;  --cat-fix: 190 18 60;  --cat-issue: 194 65 12;  --cat-plan: 67 56 202;  --cat-ask: 139 92 246;
+  --shadow-lift: 0 8px 24px -8px rgb(0 0 0 / .12), 0 2px 4px -2px rgb(0 0 0 / .06);
+  --grid: linear-gradient(rgb(0 0 0/.04) 1px, transparent 1px), linear-gradient(90deg, rgb(0 0 0/.04) 1px, transparent 1px);
+}
+[data-theme="dark"] {
+  --canvas: 7 16 12;  --surface-1: 17 24 27;  --surface-2: 26 35 38;  --surface-3: 36 48 48;
+  --ink: 232 240 227;  --ink-muted: 168 184 173;  --ink-faint: 126 142 131;
+  --accent: 74 222 128;  --accent-bright: 134 239 172;
+  --hairline: 31 42 38;  --hairline-strong: 50 64 56;
+  /* status tokens = brand state palette (lime=running · cyan=passed · amber=blocked · red=failed), tuned for dark surfaces */
+  --running: 184 255 92;  --success: 46 196 255;  --info: 56 189 248;  --warning: 255 166 46;  --danger: 255 110 92;  --neutral: 126 142 131;
+  --cat-goal: 167 139 250;  --cat-feature: 74 222 128;  --cat-fix: 251 113 133;  --cat-issue: 251 146 60;  --cat-plan: 129 140 248;  --cat-ask: 167 139 250;
+  --shadow-lift: 0 8px 24px -8px rgb(0 0 0 / .6), 0 2px 4px -2px rgb(0 0 0 / .4);
+  --grid: linear-gradient(rgb(255 255 255/.03) 1px, transparent 1px), linear-gradient(90deg, rgb(255 255 255/.03) 1px, transparent 1px);
+}
+[data-theme="neon"] {
+  --canvas: 3 7 30;  --surface-1: 8 14 52;  --surface-2: 12 22 68;  --surface-3: 18 30 88;
+  --ink: 214 236 255;  --ink-muted: 126 166 218;  --ink-faint: 66 102 168;
+  --accent: 0 210 255;  --accent-bright: 90 230 255;
+  --hairline: 22 28 78;  --hairline-strong: 38 46 118;
+  /* status = brand state palette; running stays lime (NOT the cyan accent) so green only ever means "running" */
+  --running: 184 255 92;  --success: 46 196 255;  --info: 90 230 255;  --warning: 255 166 46;  --danger: 255 110 92;  --neutral: 66 102 168;
+  --cat-goal: 167 139 250;  --cat-feature: 74 222 128;  --cat-fix: 251 113 133;  --cat-issue: 251 146 60;  --cat-plan: 129 140 248;  --cat-ask: 167 139 250;
+  --shadow-lift: 0 8px 32px -8px rgb(0 4 28 / .8), inset 0 1px 0 0 rgb(0 210 255 / .1);
+  --grid: linear-gradient(rgb(0 210 255/.07) 1px, transparent 1px), linear-gradient(90deg, rgb(0 210 255/.07) 1px, transparent 1px);
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: rgb(var(--canvas)); color: rgb(var(--ink));
+  font-family: "Geist", system-ui, sans-serif; font-size: 14px; line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+.mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
+
+/* ---- type scale (proposed) ---- */
+.t-title    { font-family:"JetBrains Mono",monospace; font-size:22px; line-height:28px; font-weight:600; letter-spacing:-.01em; }
+.t-eyebrow  { font-family:"JetBrains Mono",monospace; font-size:11px; line-height:14px; font-weight:600; letter-spacing:.18em; text-transform:uppercase; color:rgb(var(--ink-faint)); }
+.t-card     { font-size:14px; line-height:20px; font-weight:500; }
+.t-body     { font-size:14px; line-height:21px; color:rgb(var(--ink-muted)); }
+.t-meta     { font-family:"JetBrains Mono",monospace; font-size:12px; line-height:16px; color:rgb(var(--ink-faint)); font-variant-numeric:tabular-nums; }
+
+/* ---- the ONE badge recipe ---- */
+.badge {
+  display:inline-flex; align-items:center; gap:5px; border-radius:4px; padding:2px 6px;
+  font-family:"JetBrains Mono",monospace; font-size:10px; font-weight:500; line-height:1; letter-spacing:.04em; text-transform:uppercase;
+  box-shadow: inset 0 0 0 1px rgb(var(--tone) / .3);
+  background: rgb(var(--tone) / .12); color: rgb(var(--tone));
+}
+.badge .dot { width:5px; height:5px; border-radius:9999px; background:rgb(var(--tone)); }
+.t-running{--tone:var(--running)} .t-success{--tone:var(--success)} .t-info{--tone:var(--info)}
+.t-warning{--tone:var(--warning)} .t-danger{--tone:var(--danger)} .t-neutral{--tone:var(--neutral)}
+.t-goal{--tone:var(--cat-goal)} .t-feature{--tone:var(--cat-feature)} .t-fix{--tone:var(--cat-fix)}
+.t-issue{--tone:var(--cat-issue)} .t-plan{--tone:var(--cat-plan)} .t-ask{--tone:var(--cat-ask)}
+
+/* ---- buttons ---- */
+.btn { display:inline-flex; align-items:center; gap:6px; height:32px; padding:0 12px; border-radius:6px; border:1px solid transparent;
+  font-family:inherit; font-size:13px; font-weight:500; cursor:pointer; transition:.12s ease-out; }
+.btn:focus-visible { outline:none; box-shadow:0 0 0 2px rgb(var(--canvas)), 0 0 0 3px rgb(var(--accent)); }
+.btn-primary { background:rgb(var(--accent)); color:rgb(var(--canvas)); }
+.btn-primary:hover { background:rgb(var(--accent-bright)); }
+.btn-secondary { background:rgb(var(--surface-2)); color:rgb(var(--ink)); }
+.btn-secondary:hover { background:rgb(var(--surface-3)); }
+.btn-ghost { background:transparent; color:rgb(var(--ink-muted)); }
+.btn-ghost:hover { background:rgb(var(--surface-2)); color:rgb(var(--ink)); }
+.btn-danger { background:rgb(var(--danger)); color:#fff; }
+.icon-btn { width:32px; height:32px; display:inline-flex; align-items:center; justify-content:center; border-radius:6px;
+  background:rgb(var(--surface-2)); color:rgb(var(--ink-muted)); border:1px solid rgb(var(--hairline)); cursor:pointer; transition:.12s; }
+.icon-btn:hover { color:rgb(var(--ink)); border-color:rgb(var(--hairline-strong)); }
+
+/* ---- surfaces ---- */
+.panel { background:rgb(var(--surface-1)); border:1px solid rgb(var(--hairline)); border-radius:8px; }
+.hairline { height:1px; background:rgb(var(--hairline)); border:0; }
+
+/* ============================================================================
+   PAGE CHROME of this wireframe gallery (not part of the product)
+   ========================================================================== */
+.gallery { display:grid; grid-template-columns:220px 1fr; min-height:100vh; }
+.rail { position:sticky; top:0; align-self:start; height:100vh; overflow-y:auto;
+  border-right:1px solid rgb(var(--hairline)); padding:20px 14px; background:rgb(var(--surface-1)); }
+.rail .brand { display:flex; align-items:center; gap:9px; }
+.rail .brand-mark { width:26px; height:26px; flex:none; }
+.rail .brand-word { font-family:"JetBrains Mono",monospace; font-weight:600; letter-spacing:.14em; font-size:14px; }
+.rail .sub { font-size:11px; color:rgb(var(--ink-faint)); margin:6px 0 18px; }
+.rail a { display:block; padding:6px 8px; border-radius:6px; color:rgb(var(--ink-muted)); text-decoration:none;
+  font-size:12px; font-family:"JetBrains Mono",monospace; }
+.rail a:hover { background:rgb(var(--surface-2)); color:rgb(var(--ink)); }
+.themebar { display:flex; gap:4px; margin-top:18px; padding-top:14px; border-top:1px solid rgb(var(--hairline)); }
+.themebar button { flex:1; height:30px; border-radius:6px; border:1px solid rgb(var(--hairline)); cursor:pointer;
+  font-family:"JetBrains Mono",monospace; font-size:10px; text-transform:uppercase; letter-spacing:.08em;
+  background:rgb(var(--surface-2)); color:rgb(var(--ink-muted)); }
+.themebar button[aria-pressed="true"] { color:rgb(var(--canvas)); background:rgb(var(--accent)); border-color:rgb(var(--accent)); }
+
+.main { padding:36px 40px 120px; max-width:1320px; }
+.frame { margin:0 0 52px; }
+.frame > .cap { display:flex; align-items:baseline; gap:10px; margin-bottom:12px; }
+.frame > .cap h2 { margin:0; font-family:"JetBrains Mono",monospace; font-size:13px; letter-spacing:.08em; text-transform:uppercase; }
+.frame > .cap span { font-size:12px; color:rgb(var(--ink-faint)); }
+.note { font-size:12px; color:rgb(var(--ink-faint)); margin:10px 2px 0; }
+.note b { color:rgb(var(--ink-muted)); font-weight:500; }
+.demo { border:1px solid rgb(var(--hairline)); border-radius:10px; overflow:hidden; background:rgb(var(--canvas)); }
+.demo.padded { padding:22px; }
+
+/* ---- shell demo ---- */
+.shell { display:grid; grid-template-columns:200px 1fr; min-height:440px; }
+.sidebar { background:rgb(var(--surface-1)); border-right:1px solid rgb(var(--hairline)); padding:14px 8px; }
+.sidebar .logo { display:flex; align-items:center; gap:8px; font-family:"JetBrains Mono",monospace; font-weight:600; letter-spacing:.16em; font-size:12px; padding:4px 8px 12px; }
+.sidebar .logo img { width:22px; height:22px; flex:none; }
+.nav-item { display:flex; align-items:center; gap:9px; padding:7px 8px; border-radius:6px; color:rgb(var(--ink-muted));
+  font-family:"JetBrains Mono",monospace; font-size:11px; letter-spacing:.06em; text-transform:uppercase; cursor:pointer; position:relative; }
+.nav-item:hover { background:rgb(var(--surface-2)); color:rgb(var(--ink)); }
+.nav-item.active { background:rgb(var(--surface-2)); color:rgb(var(--ink)); box-shadow:inset 0 1px 0 0 rgb(var(--hairline-strong)); }
+.nav-item.active::before { content:""; position:absolute; left:-8px; top:6px; bottom:6px; width:2px; border-radius:2px; background:rgb(var(--accent)); }
+.nav-svg { width:15px; height:15px; stroke:currentColor; stroke-width:1.6; fill:none; flex:none; }
+.nav-section { font-size:9px; letter-spacing:.18em; color:rgb(var(--ink-faint)); padding:14px 8px 6px; font-family:"JetBrains Mono",monospace; }
+.space-row { display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:6px; cursor:pointer; font-size:12px; color:rgb(var(--ink-muted)); }
+.space-row .sdot { width:8px; height:8px; border-radius:2px; flex:none; }
+.space-row .count { margin-left:auto; font-family:"JetBrains Mono",monospace; font-size:10px; color:rgb(var(--ink-faint)); }
+.content { background-color:rgb(var(--canvas)); background-image:var(--grid); background-size:40px 40px; padding:0; }
+
+/* ---- page header ---- */
+.pagehead { padding:22px 26px; }
+.pagehead .crumb { margin-bottom:10px; }
+.pagehead .row { display:flex; align-items:flex-start; gap:16px; }
+.pagehead .row .actions { margin-left:auto; display:flex; gap:8px; }
+.pagehead .subtitle { margin-top:6px; }
+
+/* ---- board ---- */
+.board { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; padding:18px 26px 26px; }
+.lane { background:rgb(var(--surface-1) / .5); border:1px solid rgb(var(--hairline)); border-radius:8px; padding:10px; min-height:300px; }
+.lane > .lh { display:flex; align-items:center; gap:8px; padding:2px 4px 10px; }
+.lane > .lh .label { font-family:"JetBrains Mono",monospace; font-size:11px; letter-spacing:.1em; text-transform:uppercase; }
+.lane > .lh .n { font-family:"JetBrains Mono",monospace; font-size:10px; color:rgb(var(--ink-faint)); }
+.lane > .lh .add { margin-left:auto; width:24px; height:24px; border-radius:6px; display:grid; place-items:center; color:rgb(var(--ink-faint)); cursor:pointer; }
+.lane > .lh .add:hover { background:rgb(var(--surface-2)); color:rgb(var(--ink)); }
+.card { position:relative; background:rgb(var(--surface-1)); border:1px solid rgb(var(--hairline)); border-radius:6px;
+  padding:10px 12px 10px 13px; margin-bottom:10px; cursor:pointer; transition:.12s ease-out; overflow:hidden; }
+.card:hover { transform:translateY(-1px); box-shadow:var(--shadow-lift); border-color:rgb(var(--hairline-strong)); }
+.card::before { content:""; position:absolute; left:0; top:8px; bottom:8px; width:2px; border-radius:2px; background:rgb(var(--tone, var(--neutral))); }
+.card .badges { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:7px; }
+.card .title { font-size:13px; font-weight:500; line-height:1.35; margin-bottom:5px; }
+.card .brief { font-size:12px; color:rgb(var(--ink-muted)); line-height:1.4; margin-bottom:8px;
+  display:-webkit-box; -webkit-line-clamp:2; line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.card .foot { display:flex; align-items:center; gap:10px; }
+.card.tight { display:flex; align-items:center; gap:8px; padding:8px 12px; min-height:44px; }
+.card.tight .title { margin:0; flex:1; }
+.progress { height:4px; border-radius:9999px; background:rgb(var(--surface-3)); overflow:hidden; margin-bottom:8px; }
+.progress > i { display:block; height:100%; background:rgb(var(--running)); }
+.pulse { width:6px; height:6px; border-radius:9999px; background:rgb(var(--running)); box-shadow:0 0 0 0 rgb(var(--running)/.5);
+  animation:pd 1.8s ease-in-out infinite; }
+@keyframes pd { 0%,100%{box-shadow:0 0 0 0 rgb(var(--running)/.5)} 50%{box-shadow:0 0 0 4px rgb(var(--running)/0)} }
+@media (prefers-reduced-motion: reduce){ .pulse{animation:none} }
+
+/* ---- detail ---- */
+.detail { padding:0; }
+.detail .dh { display:flex; align-items:center; gap:10px; padding:16px 20px; border-bottom:1px solid rgb(var(--hairline)); }
+.detail .dh .acts { margin-left:auto; display:flex; gap:6px; }
+.detail .dtitle { padding:14px 20px 0; }
+.tabs { display:flex; gap:2px; padding:12px 20px 0; border-bottom:1px solid rgb(var(--hairline)); }
+.tab { padding:7px 12px; font-family:"JetBrains Mono",monospace; font-size:11px; text-transform:uppercase; letter-spacing:.08em;
+  color:rgb(var(--ink-faint)); border-bottom:2px solid transparent; cursor:pointer; }
+.tab.active { color:rgb(var(--ink)); border-bottom-color:rgb(var(--accent)); }
+.detail .body { display:grid; grid-template-columns:1fr 240px; gap:0; }
+.detail .conv { padding:16px 20px; border-right:1px solid rgb(var(--hairline)); }
+.conv .ch { display:flex; align-items:center; gap:8px; margin:14px 0 10px; }
+.conv .ch .lbl { font-family:"JetBrains Mono",monospace; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:rgb(var(--ink-faint)); }
+.conv .entry { border-left:2px solid rgb(var(--hairline-strong)); padding:2px 0 10px 12px; margin-bottom:6px; }
+.conv .entry .meta { display:flex; gap:8px; align-items:center; margin-bottom:5px; }
+.conv .entry p { margin:0; font-size:13px; color:rgb(var(--ink-muted)); }
+.files { padding:16px 16px; }
+.files .f { display:flex; gap:8px; align-items:center; padding:5px 4px; font-family:"JetBrains Mono",monospace; font-size:11px; color:rgb(var(--ink-muted)); }
+.askbar { margin:0 20px 14px; background:rgb(var(--warning)/.1); border:1px solid rgb(var(--warning)/.3); border-radius:8px; padding:8px 12px;
+  font-size:12px; color:rgb(var(--warning)); }
+.chat { display:flex; gap:10px; align-items:center; margin:0 20px 18px; background:rgb(var(--surface-2)); border:1px solid rgb(var(--hairline)); border-radius:8px; padding:8px 10px; }
+.chat input { flex:1; background:transparent; border:0; color:rgb(var(--ink)); font-family:inherit; font-size:14px; outline:none; }
+.chat .hint { font-family:"JetBrains Mono",monospace; font-size:10px; color:rgb(var(--ink-faint)); }
+/* detail variants + feature-specific zones */
+.dvar { display:flex; gap:2px; margin-left:auto; }
+.dvar button { height:26px; padding:0 12px; border:1px solid rgb(var(--hairline)); background:rgb(var(--surface-1)); color:rgb(var(--ink-muted));
+  font-family:"JetBrains Mono",monospace; font-size:10px; text-transform:uppercase; letter-spacing:.08em; cursor:pointer; }
+.dvar button:first-child{border-radius:6px 0 0 6px} .dvar button:last-child{border-radius:0 6px 6px 0; border-left:0}
+.dvar button[aria-pressed="true"]{ background:rgb(var(--surface-2)); color:rgb(var(--ink)); }
+.zone { padding:16px 20px; }
+.zone + .zone { border-top:1px solid rgb(var(--hairline)); }
+.zone .lbl { font-family:"JetBrains Mono",monospace; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:rgb(var(--ink-faint)); margin-bottom:10px; }
+.decompose { display:flex; align-items:center; gap:10px; }
+.decompose .go { width:32px; height:32px; border-radius:6px; display:grid; place-items:center; background:rgb(var(--accent)); color:rgb(var(--canvas)); cursor:pointer; }
+.reln { display:flex; align-items:center; gap:10px; padding:8px 11px; border:1px solid rgb(var(--hairline)); background:rgb(var(--surface-2)); border-radius:6px; margin-bottom:6px; font-size:13px; }
+.reln .nm { min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.reln .x { color:rgb(var(--ink-faint)); cursor:pointer; font-size:12px; }
+.reln .x:hover { color:rgb(var(--danger)); }
+.sharekey { display:flex; gap:18px; flex-wrap:wrap; margin-top:10px; font-size:12px; color:rgb(var(--ink-faint)); }
+.sharekey b { color:rgb(var(--ink-muted)); font-weight:500; }
+.tag-share { color:rgb(var(--accent-bright)); } .tag-diff { color:rgb(var(--warning)); }
+/* ---- two-pane workspace ---- */
+.ws { display:flex; flex-direction:column; height:540px; }
+.ws .topbar { display:flex; align-items:center; gap:10px; padding:13px 18px; border-bottom:1px solid rgb(var(--hairline)); flex:none; }
+.ws .topbar .acts { margin-left:auto; display:flex; gap:6px; align-items:center; }
+.ws .split { display:grid; grid-template-columns:1fr 1.12fr; min-height:0; flex:1; }
+.ws .ctx { min-height:0; overflow:auto; border-right:1px solid rgb(var(--hairline)); padding:0; }
+.ws .ctx .tabs { position:sticky; top:0; background:rgb(var(--surface-1)); z-index:1; }
+.ws .ctx .pad { padding:14px 18px; }
+.ws .cpane { display:grid; grid-template-rows:auto 1fr auto; min-height:0; }
+.scrollnote { font-family:"JetBrains Mono",monospace; font-size:9px; color:rgb(var(--ink-faint)); text-align:center; padding:4px; border-top:1px dashed rgb(var(--hairline)); }
+/* NOW running card (answers "what is the agent doing") */
+.now { margin:12px 14px 6px; border:1px solid rgb(var(--running)/.45); background:rgb(var(--running)/.07); border-radius:8px; padding:10px 12px; flex:none; }
+.now .l1 { display:flex; align-items:center; gap:8px; }
+.now .l1 .act { font-size:13px; font-weight:500; color:rgb(var(--ink)); }
+.now .l1 .act b { color:rgb(var(--running)); font-weight:600; }
+.now .l1 .timer { margin-left:auto; font-family:"JetBrains Mono",monospace; font-size:12px; color:rgb(var(--ink-muted)); font-variant-numeric:tabular-nums; }
+.now .l2 { display:flex; gap:10px; margin-top:6px; font-family:"JetBrains Mono",monospace; font-size:10px; color:rgb(var(--ink-faint)); }
+.now .steps { display:flex; gap:5px; margin-top:9px; flex-wrap:wrap; }
+.step { font-family:"JetBrains Mono",monospace; font-size:9px; letter-spacing:.04em; text-transform:uppercase; padding:2px 6px; border-radius:4px; display:inline-flex; gap:4px; align-items:center;
+  background:rgb(var(--surface-2)); color:rgb(var(--ink-faint)); box-shadow:inset 0 0 0 1px rgb(var(--hairline)); }
+.step.done { color:rgb(var(--success)); box-shadow:inset 0 0 0 1px rgb(var(--success)/.3); background:rgb(var(--success)/.1); }
+.step.run  { color:rgb(var(--running)); box-shadow:inset 0 0 0 1px rgb(var(--running)/.4); background:rgb(var(--running)/.12); }
+.stream { min-height:0; overflow:auto; padding:4px 16px 8px; }
+.ws .chat { margin:0; border-radius:0; border-left:0; border-right:0; border-bottom:0; border-top:1px solid rgb(var(--hairline)); }
+.tool-line { display:flex; align-items:center; gap:8px; padding:5px 0; font-family:"JetBrains Mono",monospace; font-size:11px; color:rgb(var(--ink-muted)); }
+.tool-line .ic { width:14px; text-align:center; }
+
+/* ---- dashboard ---- */
+.tiles { display:grid; grid-template-columns:repeat(6,1fr); gap:12px; }
+.tile { background:rgb(var(--surface-1)); border:1px solid rgb(var(--hairline)); border-radius:8px; padding:12px 14px; }
+.tile .k { font-family:"JetBrains Mono",monospace; font-size:9px; letter-spacing:.14em; text-transform:uppercase; color:rgb(var(--ink-faint)); }
+.tile .v { font-family:"JetBrains Mono",monospace; font-size:26px; font-weight:600; margin-top:6px; display:flex; align-items:center; gap:8px; }
+.tile .v small { font-size:11px; font-weight:500; }
+.dgrid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px; }
+.bars { display:flex; align-items:flex-end; gap:4px; height:60px; }
+.bars i { flex:1; background:rgb(var(--success)); border-radius:2px 2px 0 0; }
+.bars i.f { background:rgb(var(--danger)); }
+
+/* ---- modal ---- */
+.scrim { position:relative; background:rgb(0 0 0/.55); backdrop-filter:blur(2px); border-radius:10px; padding:40px; display:grid; place-items:center; }
+.modal { width:380px; background:rgb(var(--surface-1)); border:1px solid rgb(var(--hairline-strong)); border-radius:8px; box-shadow:var(--shadow-lift); }
+.modal .mh { display:flex; align-items:center; padding:14px 16px; border-bottom:1px solid rgb(var(--hairline)); }
+.modal .mh .t-card { flex:1; }
+.modal .mb { padding:16px; color:rgb(var(--ink-muted)); font-size:13px; }
+.modal .mf { display:flex; justify-content:flex-end; gap:8px; padding:12px 16px; border-top:1px solid rgb(var(--hairline)); }
+
+/* ---- skeleton & empty ---- */
+.sk { background:rgb(var(--surface-1)); border:1px solid rgb(var(--hairline)); border-radius:8px; padding:16px; }
+.sk i { display:block; height:10px; border-radius:4px; margin-bottom:10px;
+  background:linear-gradient(90deg, rgb(var(--surface-2)) 25%, rgb(var(--surface-3)) 50%, rgb(var(--surface-2)) 75%);
+  background-size:200% 100%; animation:sh 1.3s ease-in-out infinite; }
+@keyframes sh { from{background-position:200% 0} to{background-position:-200% 0} }
+@media (prefers-reduced-motion: reduce){ .sk i{animation:none} }
+.empty { border:1px dashed rgb(var(--hairline-strong)); border-radius:8px; padding:34px; text-align:center; }
+.empty .g { width:34px; height:34px; margin:0 auto 12px; stroke:rgb(var(--ink-faint)); stroke-width:1.5; fill:none; }
+
+/* ---- harness ---- */
+.flow { display:flex; align-items:center; gap:18px; flex-wrap:wrap; padding:26px; justify-content:center; }
+.node { background:rgb(var(--surface-1)); border:1px solid rgb(var(--hairline-strong)); border-radius:8px; padding:10px 14px; min-width:120px; text-align:center; position:relative; }
+.node .nt { font-family:"JetBrains Mono",monospace; font-size:9px; letter-spacing:.12em; text-transform:uppercase; color:rgb(var(--ink-faint)); }
+.node .nn { font-size:13px; font-weight:500; margin-top:3px; }
+.node.run { border-color:rgb(var(--running)); box-shadow:0 0 0 1px rgb(var(--running)/.4), 0 0 16px -4px rgb(var(--running)/.5); }
+.node.ok { border-color:rgb(var(--success)/.6); }
+.edge { color:rgb(var(--ink-faint)); }
+
+/* ---- goal tree ---- */
+.treewrap { display:grid; grid-template-columns:1.6fr 1fr; gap:0; }
+.tree { padding:14px 16px; border-right:1px solid rgb(var(--hairline)); }
+.tree .seg { display:flex; gap:2px; margin-bottom:12px; }
+.tree .seg button { height:26px; padding:0 12px; border:1px solid rgb(var(--hairline)); background:rgb(var(--surface-1)); color:rgb(var(--ink-muted));
+  font-family:"JetBrains Mono",monospace; font-size:10px; text-transform:uppercase; letter-spacing:.08em; cursor:pointer; }
+.tree .seg button:first-child{border-radius:6px 0 0 6px} .tree .seg button:last-child{border-radius:0 6px 6px 0; border-left:0}
+.tree .seg button[aria-pressed="true"]{ background:rgb(var(--surface-2)); color:rgb(var(--ink)); }
+.tnode { position:relative; }
+.trow { display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:6px; cursor:pointer; position:relative; }
+.trow:hover { background:rgb(var(--surface-2)); }
+.trow:focus-visible { outline:none; box-shadow:0 0 0 1px rgb(var(--accent)); }
+.trow .chev { width:14px; height:14px; flex:none; color:rgb(var(--ink-faint)); display:inline-flex; align-items:center; justify-content:center; font-size:9px; transition:.12s; }
+.trow.leaf .chev { visibility:hidden; }
+.trow .tt { font-size:13px; font-weight:500; }
+.trow.goal .tt { font-weight:600; }
+.trow .meta { margin-left:auto; display:flex; align-items:center; gap:10px; }
+.trow .mini { width:54px; height:4px; border-radius:9999px; background:rgb(var(--surface-3)); overflow:hidden; }
+.trow .mini > i { display:block; height:100%; background:rgb(var(--running)); }
+.tchildren { margin-left:19px; border-left:1px solid rgb(var(--hairline)); }
+.tchildren > .tnode > .trow::before { content:""; position:absolute; left:-11px; top:50%; width:11px; height:1px; background:rgb(var(--hairline)); }
+.tdrop { height:3px; margin:1px 8px 1px 28px; border-radius:9999px; background:rgb(var(--accent)); opacity:.9; }
+.tdrop.lbl { position:relative; }
+.tgraph { padding:18px; display:flex; flex-direction:column; gap:0; align-items:center; justify-content:center; }
+.gnode { background:rgb(var(--surface-1)); border:1px solid rgb(var(--hairline-strong)); border-radius:6px; padding:7px 11px; font-size:12px; text-align:center; min-width:140px; }
+.gnode.g { border-color:rgb(var(--cat-goal)/.6); } .gnode.run{ border-color:rgb(var(--running)); box-shadow:0 0 12px -4px rgb(var(--running)/.5); }
+.gline { width:1px; height:14px; background:rgb(var(--hairline-strong)); }
+.grow { display:flex; gap:14px; }
+.gconn { height:14px; border-left:1px solid rgb(var(--hairline-strong)); border-right:1px solid rgb(var(--hairline-strong)); border-top:1px solid rgb(var(--hairline-strong)); width:160px; margin:0 auto; }
+
+/* legend grid */
+.legend { display:grid; grid-template-columns:120px 1fr; gap:14px 20px; align-items:center; }
+.legend .row { display:flex; gap:8px; flex-wrap:wrap; }
+.swatches { display:flex; gap:10px; flex-wrap:wrap; }
+.sw { display:flex; flex-direction:column; align-items:center; gap:6px; font-family:"JetBrains Mono",monospace; font-size:9px; color:rgb(var(--ink-faint)); }
+.sw .chip { width:46px; height:30px; border-radius:6px; border:1px solid rgb(var(--hairline)); }
+
+/* ---- brand & identity showcase (section 00) ---- */
+.brandgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:14px; }
+.logocell { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px;
+  border:1px solid rgb(var(--hairline)); border-radius:8px; padding:18px 12px; background:rgb(var(--surface-1)); min-height:128px; }
+.logocell.ondark { background:#0E1822; border-color:#1d2b39; }   /* fixed dark tile — wordmark/glass tuned for dark */
+.logocell img { display:block; }
+.logocell .cap { font-family:"JetBrains Mono",monospace; font-size:9px; letter-spacing:.08em; text-transform:uppercase; color:rgb(var(--ink-faint)); }
+.logocell.ondark .cap { color:#6E8198; }
+.stategrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(132px,1fr)); gap:12px; }
+.statecell { display:flex; align-items:center; gap:11px; border:1px solid rgb(var(--hairline)); border-radius:8px; padding:11px 12px; background:rgb(var(--surface-1)); }
+.statecell img { width:40px; height:40px; flex:none; }
+.statecell .sname { font-family:"JetBrains Mono",monospace; font-size:11px; font-weight:600; letter-spacing:.04em; }
+.statecell .smap { font-family:"JetBrains Mono",monospace; font-size:9px; color:rgb(var(--ink-faint)); margin-top:3px; }
+.state-mark { width:18px; height:18px; flex:none; vertical-align:middle; }
+
+/* ============================ RESPONSIVE ============================ */
+.mobile-bar { display:none; }
+.ws-seg { display:none; }
+
+/* iPad landscape / small laptop */
+@media (max-width:1024px){
+  .main{ padding:30px 28px 100px; }
+  .board{ grid-template-columns:1fr 1fr; }
+  .tiles{ grid-template-columns:repeat(3,1fr); }
+  .dgrid{ grid-template-columns:1fr; }
+  .treewrap{ grid-template-columns:1fr; }
+  .tree{ border-right:0; border-bottom:1px solid rgb(var(--hairline)); }
+  .detail .body{ grid-template-columns:1fr; }
+  .detail .conv{ border-right:0; border-bottom:1px solid rgb(var(--hairline)); }
+  .ws .split{ grid-template-columns:1fr 1fr; }
+}
+
+/* iPad portrait / phones — gallery chrome goes mobile */
+@media (max-width:768px){
+  .gallery{ grid-template-columns:1fr; }
+  .rail{ display:none; }
+  .mobile-bar{
+    display:flex; align-items:center; gap:10px; position:sticky; top:0; z-index:50;
+    padding:10px 14px; background:rgb(var(--surface-1) / .92); backdrop-filter:blur(10px) saturate(160%);
+    border-bottom:1px solid rgb(var(--hairline));
+  }
+  .mobile-bar .mb-mark{ width:22px; height:22px; flex:none; }
+  .mobile-bar .mb-brand{ font-family:"JetBrains Mono",monospace; font-weight:600; letter-spacing:.14em; font-size:13px; }
+  .mobile-bar .mb-themes{ margin-left:auto; display:flex; gap:4px; }
+  .mobile-bar .mb-themes button{ height:30px; padding:0 10px; border-radius:6px; border:1px solid rgb(var(--hairline));
+    background:rgb(var(--surface-2)); color:rgb(var(--ink-muted)); font-family:"JetBrains Mono",monospace; font-size:10px;
+    text-transform:uppercase; letter-spacing:.06em; cursor:pointer; }
+  .mobile-bar .mb-themes button[aria-pressed="true"]{ background:rgb(var(--accent)); color:rgb(var(--canvas)); border-color:rgb(var(--accent)); }
+  .main{ padding:18px 16px 90px; max-width:none; }
+  .frame{ margin-bottom:40px; }
+  .cap{ flex-wrap:wrap; }
+  .pagehead .row{ flex-wrap:wrap; gap:10px; }
+  .pagehead .row .actions{ margin-left:0; }
+  .detail .dh{ flex-wrap:wrap; }
+  .detail .dh .acts, .detail .dh .dvar{ margin-left:0; }
+  .acts{ flex-wrap:wrap; }
+  /* board: swipeable lanes (native-feeling on touch) */
+  .board{ grid-template-columns:repeat(4, 78vw); overflow-x:auto; scroll-snap-type:x mandatory; padding-bottom:14px; -webkit-overflow-scrolling:touch; }
+  .lane{ scroll-snap-align:start; }
+  .tiles{ grid-template-columns:repeat(3,1fr); }
+  /* two-pane workspace → tabbed single pane */
+  .ws{ height:auto; }
+  .ws .topbar{ flex-wrap:wrap; }
+  .ws .topbar .acts{ margin-left:0; }
+  .ws-seg{ display:flex; gap:2px; padding:10px 14px 0; }
+  .ws-seg button{ flex:1; height:32px; border:1px solid rgb(var(--hairline)); background:rgb(var(--surface-1)); color:rgb(var(--ink-muted));
+    font-family:"JetBrains Mono",monospace; font-size:10px; text-transform:uppercase; letter-spacing:.08em; cursor:pointer; }
+  .ws-seg button:first-child{ border-radius:6px 0 0 6px; } .ws-seg button:last-child{ border-radius:0 6px 6px 0; border-left:0; }
+  .ws-seg button[aria-pressed="true"]{ background:rgb(var(--surface-2)); color:rgb(var(--ink)); }
+  .ws .split{ display:block; }
+  .ws .ctx, .ws .cpane{ display:none; }
+  .ws.tab-ctx .ctx{ display:block; }
+  .ws.tab-chat .cpane{ display:block; }
+  .ws .ctx{ overflow:visible; border-right:0; }
+  .ws .ctx .tabs{ position:static; }
+  .ws .stream{ overflow:visible; }
+  .ws .now{ position:sticky; top:52px; z-index:2; }   /* keep activity visible while scrolling */
+}
+
+/* iPhone */
+@media (max-width:480px){
+  .main{ padding:14px 12px 80px; }
+  .t-title{ font-size:19px; line-height:24px; }
+  .board{ grid-template-columns:repeat(4, 84vw); }
+  .tiles{ grid-template-columns:repeat(2,1fr); }
+  .legend{ grid-template-columns:1fr; gap:6px 0; }
+  .legend .t-eyebrow{ margin-top:10px; }
+  .shell{ grid-template-columns:1fr; }
+  .shell .content{ min-height:120px; }
+  .scrim{ padding:18px; }
+  .modal{ width:100%; }
+  .pagehead{ padding:16px; }
+  .grow{ flex-direction:column; gap:0; align-items:center; }
+  .gconn{ width:1px; height:14px; border:0; border-left:1px solid rgb(var(--hairline-strong)); }
+  .sharekey{ flex-direction:column; gap:6px; }
+  .dvar, .seg, .dv-panel .dvar{ flex-wrap:wrap; }
+}
+</style>
+</head>
+<body>
+<!-- mobile top bar — keeps brand + theme switch reachable when the rail is hidden -->
+<div class="mobile-bar">
+  <img class="mb-mark" src="../brand/logo/cronos-mark-flat.svg" alt="" aria-hidden="true" />
+  <span class="mb-brand">CRONOS</span>
+  <div class="mb-themes" role="group" aria-label="Theme">
+    <button data-set="light" aria-pressed="false">L</button>
+    <button data-set="dark" aria-pressed="true">D</button>
+    <button data-set="neon" aria-pressed="false">N</button>
+  </div>
+</div>
+<div class="gallery">
+  <!-- ░░ side rail (gallery nav, not the product) ░░ -->
+  <aside class="rail">
+    <div class="brand">
+      <img class="brand-mark" src="../brand/logo/cronos-mark-flat.svg" alt="" aria-hidden="true" />
+      <span class="brand-word">CRONOS</span>
+    </div>
+    <div class="sub">UI/UX wireframes · v1</div>
+    <nav>
+      <a href="#brand">00 · Brand &amp; identity</a>
+      <a href="#tokens">01 · Tokens &amp; badges</a>
+      <a href="#header">02 · Page header</a>
+      <a href="#shell">03 · App shell</a>
+      <a href="#board">04 · Board &amp; cards</a>
+      <a href="#tree">04b · Goal tree &amp; DAG</a>
+      <a href="#detail">05 · Detail &amp; chat</a>
+      <a href="#workspace">05b · Two-pane + activity</a>
+      <a href="#dashboard">06 · Dashboard</a>
+      <a href="#harness">07 · Harness editor</a>
+      <a href="#modal">08 · Modal</a>
+      <a href="#states">09 · Loading / empty</a>
+    </nav>
+    <div class="themebar" role="group" aria-label="Theme">
+      <button data-set="light"  aria-pressed="false">Light</button>
+      <button data-set="dark"   aria-pressed="true">Dark</button>
+      <button data-set="neon"   aria-pressed="false">Neon</button>
+    </div>
+    <p class="note" style="margin-top:14px">Switch theme to watch every badge &amp; status colour re-resolve from tokens — that's finding&nbsp;#1 fixed.</p>
+  </aside>
+
+  <main class="main">
+
+    <!-- 00 · BRAND & IDENTITY ============================================= -->
+    <section class="frame" id="brand">
+      <div class="cap"><h2>00 · Brand &amp; identity</h2><span>logos + runtime-state marks (from <code>docs/ui-ux-review/brand/</code>)</span></div>
+
+      <p class="note" style="margin:0 0 12px">The brand is <b style="color:rgb(var(--brand))">deep violet</b> (<code>#7A4FB0</code>) — the identity colour for the mark, wordmark, and the <em>idle</em> state. Lime-green is <b>reserved</b> for the <code>running</code> state and must never be a decorative accent (a stray lime reads as “a job is running”). The chrome accent stays per-theme (green / cyan) — see the residual-tension note below.</p>
+
+      <!-- logo set -->
+      <div class="demo padded">
+        <div class="t-eyebrow" style="margin-bottom:12px">Logo set</div>
+        <div class="brandgrid">
+          <div class="logocell ondark"><img src="../brand/logo/cronos-lockup-h.svg" alt="Cronos horizontal lockup" width="150" /><span class="cap">lockup-h · navbar</span></div>
+          <div class="logocell ondark"><img src="../brand/logo/cronos-mark.svg" alt="Cronos glass mark" width="64" height="64" /><span class="cap">mark · 64px+</span></div>
+          <div class="logocell"><img src="../brand/logo/cronos-mark-flat.svg" alt="Cronos flat mark" width="52" height="52" /><span class="cap">mark-flat · 24–64px</span></div>
+          <div class="logocell" style="color:rgb(var(--ink))"><img src="../brand/logo/cronos-mark-mono.svg" alt="Cronos mono mark" width="44" height="44" style="filter:none" /><span class="cap">mono · currentColor</span></div>
+          <div class="logocell"><img src="../brand/logo/cronos-app-icon.svg" alt="Cronos app icon" width="56" height="56" /><span class="cap">app-icon · tile</span></div>
+          <div class="logocell"><img src="../brand/logo/cronos-favicon.svg" alt="Cronos favicon" width="32" height="32" /><span class="cap">favicon · 16–32px</span></div>
+        </div>
+        <p class="note" style="margin-top:12px"><b>Sizing rule:</b> full glass <code>mark</code> at ≥64px (hero / app-icon source); <code>mark-flat</code> 24–64px (sidebar, tiles); <code>mono</code> inherits text colour (icon-in-button); <code>favicon</code> below 24px. The wordmark in the lockup is a placeholder typeface — pick &amp; lock one before production (see [06-brand.md]).</p>
+      </div>
+
+      <!-- runtime state marks -->
+      <div class="demo padded" style="margin-top:14px">
+        <div class="t-eyebrow" style="margin-bottom:12px">Runtime-state marks → task state machine</div>
+        <div class="stategrid">
+          <div class="statecell"><img src="../brand/states/cronos-state-idle.svg" alt="" /><div><div class="sname" style="color:rgb(var(--brand))">idle</div><div class="smap">backlog · violet</div></div></div>
+          <div class="statecell"><img src="../brand/states/cronos-state-active-animated.svg" alt="" /><div><div class="sname" style="color:rgb(var(--running))">active</div><div class="smap">active · run live · lime</div></div></div>
+          <div class="statecell"><img src="../brand/states/cronos-state-passed.svg" alt="" /><div><div class="sname" style="color:rgb(var(--success))">passed</div><div class="smap">done · gate ok · cyan</div></div></div>
+          <div class="statecell"><img src="../brand/states/cronos-state-blocked.svg" alt="" /><div><div class="sname" style="color:rgb(var(--warning))">blocked</div><div class="smap">waiting · gate fail · amber</div></div></div>
+          <div class="statecell"><img src="../brand/states/cronos-state-failed.svg" alt="" /><div><div class="sname" style="color:rgb(var(--danger))">failed</div><div class="smap">run error · red</div></div></div>
+        </div>
+        <p class="note" style="margin-top:12px">Same geometry as the flat mark, recoloured per state — one visual language across <code>backlog → active → waiting → done</code> and run outcomes. The <b>active</b> mark animates (SMIL: rotating orbit + pulsing core) and stands in for the bespoke pulse-dot / RunOverlay glow. Used in context in §07 (harness running node) and §05b (NOW card) below.</p>
+      </div>
+
+      <p class="note"><b>Residual tension (by design choice):</b> the chrome accent stays green (light/dark) / cyan (neon) while lime now signals <code>running</code> — so on the green themes the accent and the running-lime are adjacent greens. Acceptable here because they never label the same thing (accent = chrome/primary action; lime = live agent), but if it ever reads ambiguous, the fallback is to adopt brand violet as the chrome accent (the “brand-canonical” option) and free green entirely for <code>running</code>.</p>
+    </section>
+
+    <!-- 01 · TOKENS & BADGES ============================================== -->
+    <section class="frame" id="tokens">
+      <div class="cap"><h2>01 · Tokens &amp; badges</h2><span>the one recipe, all tones — theme-aware</span></div>
+      <div class="demo padded">
+        <div class="legend">
+          <div class="t-eyebrow">State</div>
+          <div class="row">
+            <span class="badge t-neutral"><span class="dot"></span>backlog</span>
+            <span class="badge t-running"><span class="dot"></span>running</span>
+            <span class="badge t-warning"><span class="dot"></span>waiting</span>
+            <span class="badge t-info"><span class="dot"></span>done</span>
+            <span class="badge t-neutral"><span class="dot"></span>archived</span>
+          </div>
+          <div class="t-eyebrow">Priority</div>
+          <div class="row">
+            <span class="badge t-danger">P1</span><span class="badge t-warning">P2</span>
+            <span class="badge t-neutral">P3</span><span class="badge t-info">P4</span><span class="badge t-neutral">P5</span>
+          </div>
+          <div class="t-eyebrow">Type</div>
+          <div class="row">
+            <span class="badge t-goal">goal</span><span class="badge t-feature">feature</span>
+            <span class="badge t-fix">fix</span><span class="badge t-issue">issue</span>
+          </div>
+          <div class="t-eyebrow">Mode</div>
+          <div class="row">
+            <span class="badge t-plan">plan</span><span class="badge t-ask">ask</span><span class="badge t-neutral">auto</span>
+          </div>
+          <div class="t-eyebrow">Run</div>
+          <div class="row">
+            <span class="badge t-success">✓ ok</span><span class="badge t-running"><span class="dot"></span>running</span>
+            <span class="badge t-danger">✗ failed</span><span class="badge t-warning">⏸ blocked</span>
+          </div>
+        </div>
+        <hr class="hairline" style="margin:20px 0">
+        <div class="swatches">
+          <div class="sw"><div class="chip" style="background:rgb(var(--canvas))"></div>canvas</div>
+          <div class="sw"><div class="chip" style="background:rgb(var(--surface-1))"></div>surface-1</div>
+          <div class="sw"><div class="chip" style="background:rgb(var(--surface-2))"></div>surface-2</div>
+          <div class="sw"><div class="chip" style="background:rgb(var(--surface-3))"></div>surface-3</div>
+          <div class="sw"><div class="chip" style="background:rgb(var(--accent))"></div>accent</div>
+          <div class="sw"><div class="chip" style="background:rgb(var(--brand))"></div>brand</div>
+          <div class="sw"><div class="chip" style="background:rgb(var(--running))"></div>running</div>
+          <div class="sw"><div class="chip" style="background:rgb(var(--success))"></div>passed</div>
+          <div class="sw"><div class="chip" style="background:rgb(var(--warning))"></div>warning</div>
+          <div class="sw"><div class="chip" style="background:rgb(var(--danger))"></div>danger</div>
+          <div class="sw"><div class="chip" style="background:rgb(var(--info))"></div>info</div>
+        </div>
+        <div style="margin-top:20px; display:flex; gap:8px; flex-wrap:wrap; align-items:center">
+          <button class="btn btn-primary">Primary</button>
+          <button class="btn btn-secondary">Secondary</button>
+          <button class="btn btn-ghost">Ghost</button>
+          <button class="btn btn-danger">Delete</button>
+          <span class="icon-btn" aria-hidden="true">✎</span>
+          <span class="t-meta">↑ all share one focus-ring + 44px hit area</span>
+        </div>
+      </div>
+      <p class="note"><b>Fix:</b> replaces 63 raw <code>red/emerald/amber/violet…</code> classes duplicated across 5+ files. One <code>&lt;Badge tone&gt;</code>, theme-aware everywhere.</p>
+    </section>
+
+    <!-- 02 · PAGE HEADER ================================================= -->
+    <section class="frame" id="header">
+      <div class="cap"><h2>02 · Page header</h2><span>one structure, every page</span></div>
+      <div class="demo">
+        <div class="pagehead">
+          <div class="crumb t-eyebrow">cronos / spaces / cronos-development</div>
+          <div class="row">
+            <div>
+              <div class="t-title">Harnesses</div>
+              <div class="subtitle t-body">Visual agent workflows for this space.</div>
+            </div>
+            <div class="actions">
+              <button class="btn btn-secondary">⤓ Runs</button>
+              <button class="btn btn-primary">+ New harness</button>
+            </div>
+          </div>
+        </div>
+        <hr class="hairline">
+        <div style="padding:20px 26px; color:rgb(var(--ink-faint)); font-size:12px">‹ page content · PageContainer max-width 1280 (content) or 768 (forms) ›</div>
+      </div>
+      <p class="note"><b>Fix:</b> kills the 13px→22px title drift and four container widths. Title size is fixed; breadcrumb + actions slots standardised.</p>
+    </section>
+
+    <!-- 03 · SHELL ======================================================= -->
+    <section class="frame" id="shell">
+      <div class="cap"><h2>03 · App shell</h2><span>sidebar + content, lucide icons, focus rings</span></div>
+      <div class="demo">
+        <div class="shell">
+          <aside class="sidebar">
+            <div class="logo"><img src="../brand/logo/cronos-mark-flat.svg" alt="" aria-hidden="true" />CRONOS</div>
+            <div class="nav-item active"><svg class="nav-svg" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Dashboard</div>
+            <div class="nav-item"><svg class="nav-svg" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg>Tasks</div>
+            <div class="nav-item"><svg class="nav-svg" viewBox="0 0 24 24"><path d="M4 4h16v6H4zM4 14h16v6H4z"/></svg>Features</div>
+            <div class="nav-item"><svg class="nav-svg" viewBox="0 0 24 24"><path d="M3 8l9-5 9 5-9 5-9-5zM3 16l9 5 9-5"/></svg>Harnesses</div>
+            <div class="nav-item"><svg class="nav-svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Stats</div>
+            <div class="nav-section">Spaces</div>
+            <div class="space-row" style="background:rgb(var(--surface-2)); color:rgb(var(--ink)); position:relative">
+              <span style="position:absolute;left:-8px;top:6px;bottom:6px;width:2px;border-radius:2px;background:rgb(var(--accent))"></span>
+              <span class="sdot" style="background:#4ade80"></span>cronos-dev<span class="count">12</span>
+            </div>
+            <div class="space-row"><span class="sdot" style="background:#818cf8"></span>other-space<span class="count">3</span></div>
+            <div class="space-row" style="color:rgb(var(--ink-faint))">+ New space</div>
+          </aside>
+          <div class="content">
+            <div class="pagehead">
+              <div class="crumb t-eyebrow">cronos / dashboard</div>
+              <div class="row"><div class="t-title">Dashboard</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="note"><b>Fix:</b> nav rows get icon+label (was label-only) and a visible focus ring; sidebar padding unified; mobile drawer gains space-context + Escape.</p>
+    </section>
+
+    <!-- 04 · BOARD ======================================================= -->
+    <section class="frame" id="board">
+      <div class="cap"><h2>04 · Kanban board &amp; cards</h2><span>unified card anatomy, two densities</span></div>
+      <div class="demo">
+        <div class="board">
+          <div class="lane">
+            <div class="lh"><span class="label">Backlog</span><span class="n">· 5</span><span class="add">+</span></div>
+            <div class="card t-feature" style="--tone:var(--cat-feature)">
+              <div class="badges"><span class="badge t-warning">P2</span><span class="badge t-feature">feature</span></div>
+              <div class="title">Plugin marketplace browser</div>
+              <div class="brief">Add a discovery surface so installed plugins can be browsed and enabled per space.</div>
+              <div class="foot"><span class="t-meta">2d</span><span class="t-meta">⎇ #214</span></div>
+            </div>
+            <div class="card tight t-neutral" style="--tone:var(--neutral)">
+              <span class="badge t-neutral" style="padding:2px 5px">P3</span><span class="title">Refactor trace parser</span><span class="t-meta">4d</span>
+            </div>
+          </div>
+          <div class="lane">
+            <div class="lh"><span class="label">Active</span><span class="n">· 2</span><span class="add">+</span></div>
+            <div class="card t-running" style="--tone:var(--running)">
+              <div class="badges"><span class="badge t-running"><span class="dot"></span>running</span><span class="badge t-warning">P2</span><span class="badge t-feature">feature</span></div>
+              <div class="title">Implement plugin frontend I2–I5</div>
+              <div class="progress"><i style="width:62%"></i></div>
+              <div class="foot"><span class="pulse"></span><span class="t-meta">live · 3/5</span></div>
+            </div>
+          </div>
+          <div class="lane">
+            <div class="lh"><span class="label">Waiting</span><span class="n">· 1</span><span class="add">+</span></div>
+            <div class="card t-warning" style="--tone:var(--warning)">
+              <div class="badges"><span class="badge t-warning"><span class="dot"></span>waiting</span><span class="badge t-goal">goal</span></div>
+              <div class="title">Harness Editor Path&nbsp;A</div>
+              <div class="brief" style="color:rgb(var(--warning))">⌜ asks: confirm scope of the schema-contract refactor?</div>
+              <div class="foot"><span class="t-meta">5h</span></div>
+            </div>
+          </div>
+          <div class="lane">
+            <div class="lh"><span class="label">Done</span><span class="n">· 12</span><span class="add">+</span></div>
+            <div class="card t-info" style="--tone:var(--info)">
+              <div class="badges"><span class="badge t-info"><span class="dot"></span>done</span><span class="badge t-fix">fix</span></div>
+              <div class="title">FastAPI 204 response_class</div>
+              <div class="foot"><span class="badge t-success">✓ passed</span><span class="t-meta">1d</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="note"><b>Fix:</b> one card component (radius <code>md</code> = buttons), accent strip keyed to status tone, badges via the recipe, 44px controls, focus ring on child rows, hover lift kept.</p>
+    </section>
+
+    <!-- 04b · GOAL TREE ================================================== -->
+    <section class="frame" id="tree">
+      <div class="cap"><h2>04b · Goal tree &amp; dependencies</h2><span>goals ▸ subgoals ▸ subtasks — with connector guides</span></div>
+      <div class="demo">
+        <div class="treewrap">
+          <!-- hierarchy tree -->
+          <div class="tree">
+            <div class="seg" role="group" aria-label="View"><button aria-pressed="true">Tree</button><button aria-pressed="false">Dependency DAG</button></div>
+
+            <div class="tnode">
+              <div class="trow goal" tabindex="0">
+                <span class="chev">▾</span>
+                <span class="badge t-goal">goal</span>
+                <span class="tt">Harness Editor — Path A (schema contract)</span>
+                <span class="meta"><span class="t-meta">2/5</span><span class="mini"><i style="width:40%"></i></span><span class="badge t-running"><span class="dot"></span>running</span></span>
+              </div>
+
+              <div class="tchildren">
+                <!-- subgoal 1 (expanded) -->
+                <div class="tnode">
+                  <div class="trow goal" tabindex="0">
+                    <span class="chev">▾</span>
+                    <span class="badge t-goal">goal</span>
+                    <span class="tt">Backend · schema contract</span>
+                    <span class="meta"><span class="t-meta">3/4</span><span class="mini"><i style="width:75%"></i></span><span class="badge t-running"><span class="dot"></span>running</span></span>
+                  </div>
+                  <div class="tchildren">
+                    <div class="tnode"><div class="trow leaf" tabindex="0"><span class="chev"></span><span class="badge t-info"><span class="dot"></span>done</span><span class="tt">Define NodeData discriminated union</span><span class="meta"><span class="badge t-success">✓</span></span></div></div>
+                    <div class="tdrop" aria-hidden="true"></div>
+                    <div class="tnode"><div class="trow leaf" tabindex="0"><span class="chev"></span><span class="badge t-running"><span class="dot"></span>running</span><span class="tt">Generate TS types from Pydantic</span><span class="meta"><span class="pulse"></span><span class="t-meta">live</span></span></div></div>
+                    <div class="tnode"><div class="trow leaf" tabindex="0"><span class="chev"></span><span class="badge t-info"><span class="dot"></span>done</span><span class="tt">Validator reference fidelity</span><span class="meta"><span class="badge t-success">✓</span></span></div></div>
+                    <div class="tnode"><div class="trow leaf" tabindex="0"><span class="chev"></span><span class="badge t-neutral"><span class="dot"></span>backlog</span><span class="tt">Migrate executor to typed nodes</span><span class="meta"><span class="badge t-warning">P2</span></span></div></div>
+                  </div>
+                </div>
+                <!-- subgoal 2 (collapsed) -->
+                <div class="tnode">
+                  <div class="trow goal" tabindex="0">
+                    <span class="chev">▸</span>
+                    <span class="badge t-goal">goal</span>
+                    <span class="tt">Frontend · editor consumes schema</span>
+                    <span class="meta"><span class="t-meta">0/3</span><span class="mini"><i style="width:0"></i></span><span class="badge t-neutral"><span class="dot"></span>backlog</span></span>
+                  </div>
+                </div>
+                <!-- leaf task at goal level -->
+                <div class="tnode">
+                  <div class="trow leaf" tabindex="0"><span class="chev"></span><span class="badge t-warning"><span class="dot"></span>waiting</span><span class="tt">Docs &amp; retro</span><span class="meta"><span class="t-meta">depends · 4</span></span></div>
+                </div>
+              </div>
+            </div>
+            <p class="note" style="margin:14px 2px 0">↑ continuous hairline guides + per-row connector ticks (NEW); ▾/▸ expand; whole row opens the task. Keyboard: ↑↓ move, ←→ collapse/expand. Drag a row onto another to re-parent; the accent line shows a sibling drop.</p>
+          </div>
+
+          <!-- dependency DAG sketch -->
+          <div class="tgraph">
+            <div class="t-eyebrow" style="align-self:flex-start; margin-bottom:14px">Dependency DAG (dagre) — same goal, depends_on edges</div>
+            <div class="gnode g">Path A (root goal)</div>
+            <div class="gline"></div>
+            <div class="gconn"></div>
+            <div class="grow">
+              <div style="display:flex;flex-direction:column;align-items:center">
+                <div class="gnode run">Backend contract</div>
+                <div class="gline"></div>
+                <div class="gnode">Executor migrate</div>
+              </div>
+              <div style="display:flex;flex-direction:column;align-items:center">
+                <div class="gnode">Frontend editor</div>
+                <div class="gline"></div>
+                <div class="gnode">Docs &amp; retro</div>
+              </div>
+            </div>
+            <p class="note" style="margin-top:16px">Toggle “Dependency DAG” to see the same goal as a layered graph (depends_on edges) instead of containment. Node tone = task status token; running node glows.</p>
+          </div>
+        </div>
+      </div>
+      <p class="note"><b>Fix:</b> the tree currently indents full cards with <em>no</em> connector lines — hard to scan at depth. Add hairline guides + connector ticks, a compact goal/subgoal/leaf row (progress + child-count for goals, status badge for leaves), and a Tree ⇄ Dependency-DAG view toggle so containment and ordering are one surface. Badges use the §2.1 recipe; drop/reparent affordance in <code>accent</code>.</p>
+    </section>
+
+    <!-- 05 · DETAIL ====================================================== -->
+    <section class="frame" id="detail">
+      <div class="cap"><h2>05 · Detail shell — task &amp; feature</h2><span>one shell, two payloads</span></div>
+
+      <p class="note" style="margin:0 0 12px"><b>Tasks and features share the same shell.</b> Header (status + type badge · key/id · title · edit/close), Brief (markdown), and the warning-toned waiting bar are <span class="tag-share">identical</span>. Only the lower zone differs: a <span class="tag-share">task</span> runs an agent → conversation + chat; a <span class="tag-diff">feature</span> decomposes → Decompose action + Realizing-goals list. Use the toggle.</p>
+
+      <!-- ── TASK variant ── -->
+      <div class="demo dv-panel" id="dv-task">
+        <div class="detail">
+          <div class="dh">
+            <span class="badge t-running"><span class="dot"></span>running</span>
+            <span class="badge t-warning">P2</span>
+            <span class="t-meta">#2026-06-19-impl-plugin-frontend</span>
+            <div class="dvar" role="group" aria-label="Detail kind"><button aria-pressed="true">Task</button><button aria-pressed="false">Feature</button></div>
+            <div class="acts">
+              <span class="icon-btn">⏸</span><span class="icon-btn">✎</span><span class="icon-btn">⤓</span><span class="icon-btn">🗑</span>
+              <button class="btn btn-primary" style="height:32px">✓ Done</button>
+            </div>
+          </div>
+          <div class="dtitle t-title" style="font-size:18px">Implement plugin frontend I2–I5</div>
+          <div class="tabs"><span class="tab active">Details</span><span class="tab">Stats</span><span class="tab">Trace</span></div>
+          <div class="body">
+            <div class="conv">
+              <div class="t-body" style="margin-top:4px">Frontend-only slice layering the plugin-management UI onto the delivered backend…</div>
+              <div class="ch"><span class="lbl">Conversation</span><span class="pulse"></span><span class="t-meta">streaming</span><span class="badge t-ask">agent</span></div>
+              <div class="entry">
+                <div class="meta"><span class="badge t-neutral">run #3</span><span class="t-meta">sonnet · auto</span></div>
+                <p>Added usePlugins hooks with the literal ['plugins'] query key and six mutations…</p>
+              </div>
+              <div class="entry">
+                <div class="meta"><span class="badge t-info">tool</span><span class="t-meta">Edit · api.ts</span></div>
+                <p>+77 −0 · src/hooks/usePlugins.ts</p>
+              </div>
+            </div>
+            <div class="files">
+              <div class="t-eyebrow" style="margin-bottom:8px">Files</div>
+              <div class="f">▸ src/hooks/usePlugins.ts</div>
+              <div class="f">▸ src/components/PluginsPanel.tsx</div>
+              <div class="f">▸ src/pages/SpaceToolsPage.tsx</div>
+              <div class="f">▸ tests/…</div>
+            </div>
+          </div>
+          <div class="askbar">⌜ Agent asks: confirm the scope of the schema-contract refactor before I touch model.py?</div>
+          <div class="chat"><input placeholder="Type a message…"><span class="hint">⌘⏎</span><button class="btn btn-primary">Send</button></div>
+        </div>
+      </div>
+
+      <!-- ── FEATURE variant (same shell) ── -->
+      <div class="demo dv-panel" id="dv-feature" style="margin-top:14px; display:none">
+        <div class="detail">
+          <div class="dh">
+            <span class="badge t-plan"><span class="dot"></span>planned</span>
+            <span class="badge t-feature">feature</span>
+            <span class="t-meta">FEAT-12 · #2026-06-10-feat-plugin-marketplace</span>
+            <div class="dvar" role="group" aria-label="Detail kind"><button aria-pressed="false">Task</button><button aria-pressed="true">Feature</button></div>
+            <div class="acts">
+              <span class="icon-btn">✎</span>
+              <span class="icon-btn" aria-label="Close">✕</span>
+            </div>
+          </div>
+          <div class="dtitle t-title" style="font-size:18px">Plugin marketplace browser</div>
+
+          <!-- shared Brief zone -->
+          <div class="zone">
+            <div class="lbl">Brief</div>
+            <div class="t-body">Add a discovery surface so installed plugins can be browsed and enabled per space. Acceptance: list available plugins, install/enable per space, surface component counts.</div>
+          </div>
+
+          <!-- waiting bar (shared) — shown for illustration -->
+          <div class="askbar" style="margin:0 20px">⌜ Waiting: should the marketplace be space-scoped or container-global?</div>
+
+          <!-- feature-only zone: Decompose -->
+          <div class="zone">
+            <div class="lbl">Decompose</div>
+            <div class="decompose">
+              <span class="go" aria-label="Start decomposition">▶</span>
+              <span class="t-body" style="color:rgb(var(--ink-muted))">Start decomposition — generates a realizing goal &amp; child tasks.</span>
+            </div>
+          </div>
+
+          <!-- feature-only zone: Realizing goals (the "relationships" slot) -->
+          <div class="zone">
+            <div class="lbl">Realizing goals · 2</div>
+            <div class="reln"><span class="badge t-goal">goal</span><span class="nm">Plugin marketplace — backend + UI</span><span class="badge t-running" style="margin-left:auto"><span class="dot"></span>running</span><span class="x" aria-label="Unlink">✕</span></div>
+            <div class="reln"><span class="badge t-goal">goal</span><span class="nm">Marketplace data sync</span><span class="badge t-neutral" style="margin-left:auto"><span class="dot"></span>backlog</span><span class="x" aria-label="Unlink">✕</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="note">
+        <div class="sharekey">
+          <span><b class="tag-share">Shared</b> header · brief · waiting bar · edit mode · skeleton · Esc/close</span>
+          <span><b class="tag-diff">Task-only</b> Stats/Trace/Files tabs · conversation · chat input</span>
+          <span><b class="tag-diff">Feature-only</b> Decompose action · Realizing-goals (the relationships slot)</span>
+        </div>
+      </div>
+      <p class="note"><b>Fix:</b> one <code>DetailShell</code> = <code>&lt;DetailHeader&gt;</code> + <code>&lt;BriefSection&gt;</code> + <code>&lt;WaitingBar&gt;</code> + a swappable footer (<code>TaskRuntime</code> = tabs/conversation/chat · <code>FeatureRuntime</code> = decompose/realizing-goals) + a generic <code>RelationshipList</code> (task deps/children · feature realizing-goals). Today <code>FeatureDetail.tsx</code> re-implements its own header, skeleton, and badge maps (<code>FEATURE_STATE_BADGE</code> violet/indigo/amber/sky + type rose/emerald) — all collapse into the shared shell + <code>&lt;Badge&gt;</code>. Tabs primitive, IconButton row, warning-toned waiting bar; mobile → single column.</p>
+    </section>
+
+    <!-- 05b · TWO-PANE WORKSPACE + ACTIVITY ============================== -->
+    <section class="frame" id="workspace">
+      <div class="cap"><h2>05b · Detail — two-pane workspace + live activity</h2><span>stop scrolling up &amp; down</span></div>
+      <p class="note" style="margin:0 0 12px">The current detail stacks brief + metadata + transcript in one scroll column. This splits it: <b>Context</b> (left) and <b>Conversation</b> (right) scroll <span class="tag-share">independently</span> under one top bar — and a pinned <b>NOW running</b> card always shows what the agent is doing, even while you scroll the transcript. Each pane below scrolls on its own; try it.</p>
+      <div class="demo">
+        <div class="ws tab-chat">
+          <!-- shared top bar -->
+          <div class="topbar">
+            <span class="badge t-running"><span class="dot"></span>running</span>
+            <span class="badge t-warning">P2</span>
+            <span class="t-card">Implement plugin frontend I2–I5</span>
+            <span class="t-meta">#…-impl-plugin-frontend</span>
+            <div class="acts">
+              <span class="icon-btn">⏸</span><span class="icon-btn">✎</span><span class="icon-btn">⤓</span><span class="icon-btn">🗑</span>
+              <button class="btn btn-primary">✓ Done</button>
+            </div>
+          </div>
+          <!-- mobile-only pane switch (hidden on desktop split) -->
+          <div class="ws-seg" role="group" aria-label="Pane"><button aria-pressed="false">Context</button><button aria-pressed="true">Conversation</button></div>
+          <div class="split">
+            <!-- LEFT: context pane (independent scroll) -->
+            <div class="ctx">
+              <div class="tabs"><span class="tab active">Details</span><span class="tab">Stats</span><span class="tab">Trace</span><span class="tab">Files</span></div>
+              <div class="pad">
+                <div class="t-eyebrow" style="margin-bottom:8px">Brief</div>
+                <div class="t-body">Frontend-only slice layering the plugin-management UI onto the delivered backend. Adds usePlugins hooks, PluginsPanel, the SpaceTools tab, and the VariableInspector agent_ref datalist.</div>
+                <div class="t-body" style="margin-top:10px">Acceptance: I2 hooks invalidate ['plugins']; I3 panel covers installed/available/marketplaces; I4 tab; I5 datalist + HarnessEditor wiring. Validation: vitest per iteration + full build.</div>
+                <div class="t-eyebrow" style="margin:18px 0 8px">Relationships</div>
+                <div class="reln"><span class="badge t-goal">goal</span><span class="nm">Plugin frontend (parent)</span><span class="badge t-running" style="margin-left:auto"><span class="dot"></span>running</span></div>
+                <div class="reln"><span class="badge t-info">linked</span><span class="nm">depends · I1 types + api</span><span class="badge t-success" style="margin-left:auto">✓ done</span></div>
+                <div class="t-eyebrow" style="margin:18px 0 8px">Files · 4</div>
+                <div class="tool-line"><span class="ic">▸</span> src/hooks/usePlugins.ts</div>
+                <div class="tool-line"><span class="ic">▸</span> src/components/PluginsPanel.tsx</div>
+                <div class="tool-line"><span class="ic">▸</span> src/pages/SpaceToolsPage.tsx</div>
+                <div class="tool-line"><span class="ic">▸</span> tests/…</div>
+                <div class="t-body" style="margin-top:12px; color:rgb(var(--ink-faint))">↑ scroll this pane — the conversation on the right stays put.</div>
+              </div>
+              <div class="scrollnote">CONTEXT · scrolls independently</div>
+            </div>
+            <!-- RIGHT: conversation pane = NOW card (pinned) + stream (scroll) + chat (pinned) -->
+            <div class="cpane">
+              <div class="now" aria-live="polite">
+                <div class="l1"><img class="state-mark" src="../brand/states/cronos-state-active-animated.svg" alt="running" /><span class="act">Now: <b>editing</b> src/api.ts</span><span class="timer">01:24</span></div>
+                <div class="l2"><span>sonnet · auto</span><span>via tester</span><span>12.3k tok</span><span>run #3</span></div>
+                <div class="steps">
+                  <span class="step done">✓ read 3</span>
+                  <span class="step done">✓ edit hooks</span>
+                  <span class="step run"><span class="pulse" style="width:5px;height:5px"></span> test</span>
+                  <span class="step">⌛ doc-sync</span>
+                </div>
+              </div>
+              <div class="stream">
+                <div class="entry" style="border-color:rgb(var(--hairline-strong))">
+                  <div class="meta"><span class="badge t-neutral">run #3</span><span class="t-meta">sonnet · auto</span></div>
+                  <p>Added usePlugins with the literal ['plugins'] key and six mutations; wiring PluginsPanel next.</p>
+                </div>
+                <div class="tool-line"><span class="ic" style="color:rgb(var(--success))">✓</span> Read · PluginsPanel spec, api.ts, useHarnesses.ts</div>
+                <div class="tool-line"><span class="ic" style="color:rgb(var(--success))">✓</span> Edit · src/hooks/usePlugins.ts  <span style="color:rgb(var(--success))">+77 −0</span></div>
+                <div class="tool-line"><span class="ic" style="color:rgb(var(--running))">··</span> Bash · vitest run usePlugins.test.tsx <span style="color:rgb(var(--ink-faint))">running…</span></div>
+                <div style="text-align:center; margin:8px 0"><span class="badge t-running"><span class="dot"></span>new activity</span></div>
+                <div class="t-body" style="color:rgb(var(--ink-faint))">↑ transcript scrolls here; the NOW card above and the input below stay pinned.</div>
+              </div>
+              <div class="chat"><input placeholder="Type a message…"><span class="hint">⌘⏎</span><button class="btn btn-primary">Send</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="note"><b>Layout:</b> shared top bar · left <em>Context</em> (Details/Stats/Trace/Files tabs + brief + relationships, scrolls) · right <em>Conversation</em> = pinned <code>NOW</code> card + scrolling stream + pinned chat. Mobile collapses to <code>Context | Chat</code> tabs.</p>
+      <p class="note"><b>NOW card</b> (the “what’s it doing” ask): current action + target · model/mode · active subagent · elapsed · tokens · a steps strip (<span style="color:rgb(var(--success))">✓ done</span> · <span style="color:rgb(var(--running))">·· running</span> · ⌛ queued). All derivable from the STATUS / tool-entry / subagent-trail data Cronos already parses. <code>aria-live="polite"</code> so screen readers hear step changes. <b>Alternative:</b> promote it to a third “Activity” column for very tool-heavy runs.</p>
+    </section>
+
+    <!-- 06 · DASHBOARD =================================================== -->
+    <section class="frame" id="dashboard">
+      <div class="cap"><h2>06 · Dashboard</h2><span>StatTile + ProgressBar primitives</span></div>
+      <div class="demo padded">
+        <div class="tiles">
+          <div class="tile"><div class="k">Active</div><div class="v">3 <span class="pulse"></span></div></div>
+          <div class="tile"><div class="k">Waiting</div><div class="v">1</div></div>
+          <div class="tile"><div class="k">Backlog</div><div class="v">17</div></div>
+          <div class="tile"><div class="k">Done 24h</div><div class="v">12</div></div>
+          <div class="tile"><div class="k">Run OK %</div><div class="v" style="color:rgb(var(--success))">92<small>%</small></div></div>
+          <div class="tile"><div class="k">Test pass %</div><div class="v">88<small>%</small></div></div>
+        </div>
+        <div class="dgrid">
+          <div class="tile"><div class="k">AI performance</div>
+            <div style="margin-top:12px"><div class="t-meta">tokens · 1.2M</div><div class="progress" style="margin-top:6px"><i style="width:70%;background:rgb(var(--accent))"></i></div></div>
+            <div style="display:flex;gap:18px;margin-top:12px" class="t-meta"><span>cost $4.10</span><span>runs 142</span><span>rescue 3</span></div>
+          </div>
+          <div class="tile"><div class="k">Test health</div>
+            <div class="bars" style="margin-top:14px">
+              <i style="height:60%"></i><i style="height:80%"></i><i class="f" style="height:30%"></i><i style="height:90%"></i><i style="height:70%"></i><i style="height:100%"></i>
+            </div>
+            <div class="t-meta" style="margin-top:8px">pass / fail · last 6 runs · hover for counts</div>
+          </div>
+        </div>
+      </div>
+      <p class="note"><b>Fix:</b> extract repeated metric markup into <code>StatTile</code> + <code>ProgressBar</code>; charts get legends, tooltips, and empty/loading states.</p>
+    </section>
+
+    <!-- 07 · HARNESS ===================================================== -->
+    <section class="frame" id="harness">
+      <div class="cap"><h2>07 · Harness editor</h2><span>strong already — node tones use status tokens</span></div>
+      <div class="demo">
+        <div class="pagehead" style="padding:16px 26px"><div class="row"><div class="t-title" style="font-size:18px">Harness · ci-guard</div><div class="actions"><button class="btn btn-primary">Save</button></div></div></div>
+        <hr class="hairline">
+        <div class="flow">
+          <div class="node ok"><div class="nt">Trigger</div><div class="nn">cron</div></div>
+          <span class="edge">→</span>
+          <div class="node run"><div class="nt"><img class="state-mark" src="../brand/states/cronos-state-active-animated.svg" alt="running" /> Agent · running</div><div class="nn">implementor</div></div>
+          <span class="edge">→</span>
+          <div class="node"><div class="nt">Decision</div><div class="nn">tests pass?</div></div>
+          <span class="edge">→</span>
+          <div class="node"><div class="nt">Agent</div><div class="nn">doc-sync</div></div>
+        </div>
+      </div>
+      <p class="note"><b>Fix:</b> bump the editor title to the standard scale, replace the hardcoded <code>#22c55e</code> run colour in RunOverlay with the <code>running</code> token (lime, shown glowing), and use the brand <code>active</code> mark on the running node — the same animated SVG can drive every live indicator (board card, NOW card, run node) from one asset.</p>
+    </section>
+
+    <!-- 08 · MODAL ======================================================= -->
+    <section class="frame" id="modal">
+      <div class="cap"><h2>08 · Modal contract</h2><span>one scrim, escape, focus-trap</span></div>
+      <div class="demo">
+        <div class="scrim">
+          <div class="modal">
+            <div class="mh"><span class="t-card">Delete task?</span><span class="icon-btn" aria-label="Close">✕</span></div>
+            <div class="mb">This permanently removes <b style="color:rgb(var(--ink))">“Refactor trace parser”</b> and its run history. This can't be undone.</div>
+            <div class="mf"><button class="btn btn-ghost">Cancel</button><button class="btn btn-danger">Delete task</button></div>
+          </div>
+        </div>
+      </div>
+      <p class="note"><b>Fix:</b> one scrim (<code>bg-black/60</code> + blur), one z-layer, Escape + focus-trap + focus-return, single <code>X</code> close, destructive in <code>danger</code> tone — migrates the 4 ad-hoc modals (scrims ranged /50→/80).</p>
+    </section>
+
+    <!-- 09 · STATES ====================================================== -->
+    <section class="frame" id="states">
+      <div class="cap"><h2>09 · Loading &amp; empty</h2><span>skeleton over spinner; inviting empties</span></div>
+      <div class="demo padded" style="display:grid; grid-template-columns:1fr 1fr; gap:18px">
+        <div class="sk">
+          <i style="width:40%"></i><i style="width:90%"></i><i style="width:75%"></i><i style="width:60%"></i><i style="width:85%;margin-bottom:0"></i>
+        </div>
+        <div class="empty">
+          <svg class="g" viewBox="0 0 24 24"><path d="M3 8l9-5 9 5-9 5-9-5zM3 16l9 5 9-5"/></svg>
+          <div class="t-card">No harnesses yet</div>
+          <div class="t-body" style="margin:6px 0 14px">Create one to automate agent workflows for this space.</div>
+          <button class="btn btn-primary">+ New harness</button>
+        </div>
+      </div>
+      <p class="note"><b>Fix:</b> skeletons reserve space (no layout shift) and replace the spinner-vs-“Loading…” mix; empty states invite the next action; errors (not shown) sit inline in <code>danger</code> tone with a Retry.</p>
+    </section>
+
+    <p class="note" style="margin-top:40px">Static wireframes — structure &amp; states, not pixel-final. See sibling markdown docs for the full system, findings, and roadmap.</p>
+  </main>
+</div>
+
+<script>
+  const root = document.documentElement;
+  // theme toggle — syncs both the rail and the mobile-bar button groups
+  const btns = [...document.querySelectorAll('[data-set]')];
+  btns.forEach(b => b.addEventListener('click', () => {
+    root.setAttribute('data-theme', b.dataset.set);
+    btns.forEach(x => x.setAttribute('aria-pressed', String(x.dataset.set === b.dataset.set)));
+  }));
+
+  // workspace (05b) mobile pane switch: Context | Conversation
+  const ws = document.querySelector('.ws');
+  const wsBtns = [...document.querySelectorAll('.ws-seg button')];
+  wsBtns.forEach(b => b.addEventListener('click', () => {
+    const ctx = b.textContent.trim() === 'Context';
+    ws.classList.toggle('tab-ctx', ctx);
+    ws.classList.toggle('tab-chat', !ctx);
+    wsBtns.forEach(x => x.setAttribute('aria-pressed', String((x.textContent.trim() === 'Context') === ctx)));
+  }));
+
+  // Detail shell: Task ⇄ Feature toggle (both .dvar groups stay in sync)
+  const dvBtns = [...document.querySelectorAll('.dvar button')];
+  const panels = { Task: document.getElementById('dv-task'), Feature: document.getElementById('dv-feature') };
+  dvBtns.forEach(b => b.addEventListener('click', () => {
+    const kind = b.textContent.trim();
+    panels.Task.style.display = kind === 'Task' ? '' : 'none';
+    panels.Feature.style.display = kind === 'Feature' ? '' : 'none';
+    dvBtns.forEach(x => x.setAttribute('aria-pressed', String(x.textContent.trim() === kind)));
+  }));
+</script>
+</body>
+</html>

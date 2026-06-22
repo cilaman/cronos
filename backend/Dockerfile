@@ -25,6 +25,12 @@ RUN npm install -g @anthropic-ai/claude-code \
 # /data at runtime before dropping to cronos via gosu.
 RUN useradd -m -u 1001 -s /bin/sh cronos
 
+# Claude CLI resolves its config/session dirs from HOME (Node os.homedir()).
+# gosu does not rewrite HOME when dropping root->cronos, so set it explicitly;
+# otherwise it stays /root and the unprivileged user can't create its
+# ~/.claude/session-env dir (Bash tool) -> "Bash tool is broken".
+ENV HOME=/home/cronos
+
 WORKDIR /app
 
 # Python deps (copy pyproject first for layer cache)

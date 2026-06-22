@@ -160,6 +160,16 @@ docker run --rm caddy caddy hash-password --plaintext 'your-password-here'
 #   put in .env:  $$2a$$14$$TxGxYeXXN0i...
 # Otherwise docker compose treats `$2a`, `$14`, etc. as variable references
 # and silently expands them to empty strings.
+#
+# Auth is enforced TWICE — at the Caddy edge AND in the backend (fail-closed):
+# you MUST configure the app-layer vars too, or the API returns 503 even after
+# Caddy accepts the login. Reuse the SAME bcrypt hash for the app layer so no
+# plaintext password is ever stored. The username must match the edge:
+#   BASIC_AUTH_USER=admin              # edge (Caddy)
+#   BASIC_AUTH_HASH=$$2a$$14$$...      # bcrypt hash ($$-escaped)
+#   CRONOS_BASIC_AUTH_USER=admin       # app layer, same username
+#   CRONOS_BASIC_AUTH_HASH=$$2a$$14$$...   # app layer, the SAME hash value
+# (CRONOS_BASIC_AUTH_PASSWORD — plaintext — is a fallback only; leave it unset.)
 nano .env
 ```
 

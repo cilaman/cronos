@@ -1,0 +1,40 @@
+/* ============================================================
+   Cronos Design Tokens
+   v1.0.0
+   ============================================================ */
+
+:root {
+  /* ---- Brand ---- */
+  --cronos-brand:       #7A4FB0; /* primary mid-tone · WCAG 5.9:1 on white, 3.9:1 on black */
+  --cronos-brand-deep:  #6A3FA0; /* headers / wordmarks on light surfaces */
+  --cronos-brand-light: #B895E0; /* accents / hover states on dark surfaces */
+  --cronos-brand-ink:   #2A0848; /* deepest shadow · surface accent */
+
+  /* ---- State ---- */
+  --cronos-state-idle:    #7A4FB0; /* default · brand identity */
+  --cronos-state-active:  #B8FF5C; /* agent in flight · run in progress */
+  --cronos-state-passed:  #2EC4FF; /* gate passed · goal complete */
+  --cronos-state-blocked: #FFA62E; /* gate failed · awaiting decision */
+  --cronos-state-failed:  #FF6E5C; /* run error · executor crash */
+
+  /* ---- Surfaces (recommended) ---- */
+  --cronos-surface-dark:  #0E1822;
+  --cronos-surface-light: #EEF2F6;
+  --cronos-surface-ink:   #03060A;
+
+  /* ---- Type (recommended) ---- */
+  --cronos-text-primary:   #EAF1F8;
+  --cronos-text-secondary: #A8B8C8;
+  --cronos-text-muted:     #6E8198;
+}
+
+/* Optional auto-theming if a light/dark preference is set */
+@media (prefers-color-scheme: light) {
+  :root {
+    --cronos-surface-dark:  #EEF2F6;
+    --cronos-surface-light: #0E1822;
+    --cronos-text-primary:   #1A1424;
+    --cronos-text-secondary: #4A4458;
+    --cronos-text-muted:     #6A6480;
+  }
+}
