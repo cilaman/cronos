@@ -8,6 +8,7 @@ use monkeypatch.setenv / delenv to flip auth on and off per test, then exercise
 the real FastAPI app through the shared `async_client` fixture.
 """
 
+import bcrypt
 import httpx
 import pytest
 
@@ -15,6 +16,9 @@ from .conftest import SPACE_ID
 
 AUTH_USER = "alice"
 AUTH_PASS = "s3cret-pa$$w0rd"
+# bcrypt hash of AUTH_PASS (low cost so the test suite stays fast). This mirrors
+# reusing Caddy's BASIC_AUTH_HASH for the app-layer check.
+AUTH_HASH = bcrypt.hashpw(AUTH_PASS.encode(), bcrypt.gensalt(rounds=4)).decode()
 
 
 @pytest.fixture(autouse=True)
@@ -27,6 +31,7 @@ def _clear_auth_env(monkeypatch):
     """
     monkeypatch.delenv("CRONOS_BASIC_AUTH_USER", raising=False)
     monkeypatch.delenv("CRONOS_BASIC_AUTH_PASSWORD", raising=False)
+    monkeypatch.delenv("CRONOS_BASIC_AUTH_HASH", raising=False)
     monkeypatch.delenv("CRONOS_AUTH_DISABLED", raising=False)
 
 
@@ -121,6 +126,88 @@ async def test_all_routers_require_auth_when_enabled(async_client, monkeypatch, 
     assert unauth.status_code == 401, f"{router_path} should require auth"
     # Authed should not be 401 (may be 200, 404, etc. depending on endpoint state)
     assert authed.status_code != 401, f"{router_path} should accept correct credentials"
+
+
+# ---------------------------------------------------------------------------
+# Auth ENABLED via bcrypt hash (CRONOS_BASIC_AUTH_HASH — no plaintext in env)
+# ---------------------------------------------------------------------------
+
+
+async def test_hash_credentials_correct_returns_200(async_client, monkeypatch):
+    # Arrange — only the username + bcrypt hash are configured (no plaintext).
+    monkeypatch.setenv("CRONOS_BASIC_AUTH_USER", AUTH_USER)
+    monkeypatch.setenv("CRONOS_BASIC_AUTH_HASH", AUTH_HASH)
+
+    # Act
+    resp = await async_client.get("/api/spaces", auth=httpx.BasicAuth(AUTH_USER, AUTH_PASS))
+
+    # Assert
+    assert resp.status_code == 200
+    assert any(s.get("id") == SPACE_ID for s in resp.json()["spaces"])
+
+
+async def test_hash_credentials_wrong_password_returns_401(async_client, monkeypatch):
+    # Arrange
+    monkeypatch.setenv("CRONOS_BASIC_AUTH_USER", AUTH_USER)
+    monkeypatch.setenv("CRONOS_BASIC_AUTH_HASH", AUTH_HASH)
+
+    # Act
+    resp = await async_client.get("/api/spaces", auth=httpx.BasicAuth(AUTH_USER, "definitely-wrong"))
+
+    # Assert
+    assert resp.status_code == 401
+
+
+async def test_hash_credentials_wrong_username_returns_401(async_client, monkeypatch):
+    # Arrange
+    monkeypatch.setenv("CRONOS_BASIC_AUTH_USER", AUTH_USER)
+    monkeypatch.setenv("CRONOS_BASIC_AUTH_HASH", AUTH_HASH)
+
+    # Act
+    resp = await async_client.get("/api/spaces", auth=httpx.BasicAuth("not-alice", AUTH_PASS))
+
+    # Assert
+    assert resp.status_code == 401
+
+
+async def test_only_hash_without_user_returns_503(async_client, monkeypatch):
+    # Arrange — hash set but no username is still misconfiguration.
+    monkeypatch.setenv("CRONOS_BASIC_AUTH_HASH", AUTH_HASH)
+
+    # Act
+    resp = await async_client.get("/api/spaces")
+
+    # Assert
+    assert resp.status_code == 503
+
+
+async def test_hash_takes_precedence_over_plaintext(async_client, monkeypatch):
+    # Arrange — both set; the hash is authoritative, plaintext is ignored.
+    monkeypatch.setenv("CRONOS_BASIC_AUTH_USER", AUTH_USER)
+    monkeypatch.setenv("CRONOS_BASIC_AUTH_HASH", AUTH_HASH)
+    monkeypatch.setenv("CRONOS_BASIC_AUTH_PASSWORD", "a-different-plaintext")
+
+    # Act — the password matching the HASH succeeds...
+    ok = await async_client.get("/api/spaces", auth=httpx.BasicAuth(AUTH_USER, AUTH_PASS))
+    # ...and the password matching only the ignored plaintext fails.
+    bad = await async_client.get("/api/spaces", auth=httpx.BasicAuth(AUTH_USER, "a-different-plaintext"))
+
+    # Assert
+    assert ok.status_code == 200
+    assert bad.status_code == 401
+
+
+async def test_malformed_hash_returns_401_not_500(async_client, monkeypatch):
+    # Arrange — a garbage (non-bcrypt) hash must fail closed as a non-match,
+    # not raise and surface as a 500.
+    monkeypatch.setenv("CRONOS_BASIC_AUTH_USER", AUTH_USER)
+    monkeypatch.setenv("CRONOS_BASIC_AUTH_HASH", "not-a-real-bcrypt-hash")
+
+    # Act
+    resp = await async_client.get("/api/spaces", auth=httpx.BasicAuth(AUTH_USER, AUTH_PASS))
+
+    # Assert
+    assert resp.status_code == 401
 
 
 # ---------------------------------------------------------------------------
