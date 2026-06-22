@@ -70,7 +70,7 @@ export function FileBrowserPage() {
       {/* Task tree panel */}
       <div className="w-full shrink-0 overflow-y-auto border-b border-hairline bg-surface-1 md:w-72 md:border-b-0 md:border-r">
         <div className="border-b border-hairline px-4 py-3">
-          <h1 className="font-display text-sm font-semibold uppercase tracking-[0.18em] text-ink">
+          <h1 className="text-title">
             File Browser
           </h1>
           {spaceData && (

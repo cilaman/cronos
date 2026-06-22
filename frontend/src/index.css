@@ -33,26 +33,9 @@
     --color-hairline: 220 220 213;
     --color-hairline-strong: 188 188 180;
 
-    /* Semantic chrome / Status colour tokens (R1) — contrast-safe on white/bone backgrounds */
-    --color-running: 30 160 30;
-    --color-success: 20 140 100;
-    --color-info: 0 120 200;
-    --color-warning: 180 120 0;
-    --color-danger: 190 50 50;
-    --color-neutral: 100 110 120;
-
-    /* Categorical tokens (R2) — muted, readable on light surfaces */
-    --cat-goal: 122 79 176;
-    --cat-feature: 0 120 200;
-    --cat-fix: 190 50 50;
-    --cat-issue: 180 120 0;
-    --cat-plan: 20 140 100;
-    --cat-ask: 100 110 120;
-
-    /* Brand identity tokens (R3) — theme-invariant violet, :root only */
-    --brand: 122 79 176;
-    --brand-deep: 90 50 140;
-    --brand-light: 180 140 220;
+    /* Semantic chrome */
+    --color-warning: 180 83 9;
+    --color-danger: 185 28 28;
 
     /* Shadows + atmosphere — softer on light, no grain. */
     --shadow-inset-hairline: rgb(0 0 0 / 0.04);
@@ -83,21 +66,8 @@
     --color-hairline: 31 42 38;
     --color-hairline-strong: 50 64 56;
 
-    /* Status colour tokens (R1) — brand-palette, readable on dark canvas */
-    --color-running: 130 220 100;
-    --color-success: 80 200 180;
-    --color-info: 90 180 240;
-    --color-warning: 255 166 46;
-    --color-danger: 255 110 92;
-    --color-neutral: 140 150 165;
-
-    /* Categorical tokens (R2) — adapted for dark backgrounds */
-    --cat-goal: 180 140 220;
-    --cat-feature: 90 180 240;
-    --cat-fix: 255 110 92;
-    --cat-issue: 255 166 46;
-    --cat-plan: 80 200 180;
-    --cat-ask: 140 150 165;
+    --color-warning: 212 166 71;
+    --color-danger: 168 74 74;
 
     --shadow-inset-hairline: rgb(255 255 255 / 0.04);
     --shadow-lift-outer: rgb(0 0 0 / 0.6);
@@ -135,21 +105,9 @@
     --color-hairline: 22 28 78;
     --color-hairline-strong: 38 46 118;
 
-    /* Semantic chrome / Status colour tokens (R1) — bright, distinct on midnight navy canvas */
-    --color-running: 150 255 100;
-    --color-success: 80 255 200;
-    --color-info: 120 210 255;
-    --color-warning: 255 200 50;
-    --color-danger: 255 100 80;
-    --color-neutral: 160 170 185;
-
-    /* Categorical tokens (R2) — bright, vivid for neon theme */
-    --cat-goal: 200 160 255;
-    --cat-feature: 120 210 255;
-    --cat-fix: 255 120 100;
-    --cat-issue: 255 210 60;
-    --cat-plan: 80 255 200;
-    --cat-ask: 160 170 185;
+    /* Semantic chrome stays warm for contrast */
+    --color-warning: 251 191 36;
+    --color-danger: 248 113 113;
 
     /* Glass-like atmosphere — electric blue top highlight, deep navy shadows */
     --shadow-inset-hairline: rgb(0 210 255 / 0.16);
@@ -174,6 +132,31 @@
 }
 
 @layer utilities {
+  /**
+   * text-title — canonical page title style. Authoritative spec: §2.2
+   * design-system.md. Must be the only h1 style; no supplemental
+   * tracking-[…] or uppercase allowed on elements carrying this class.
+   *
+   * font-mono: JetBrains Mono
+   * font-size: 22px / line-height: 28px
+   * font-weight: 600
+   * color: var(--color-ink)  [via Tailwind semantic token `text-ink`]
+   * letter-spacing: -0.01em
+   * NO uppercase, NO positive tracking
+   *
+   * PageHeader sticky z-index is z-30. Consumers using StickyToolbar
+   * (z-20) must NOT enable sticky=true on PageHeader for the same page
+   * to avoid z-index collisions.
+   */
+  .text-title {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 22px;
+    line-height: 28px;
+    font-weight: 600;
+    color: rgb(var(--color-ink));
+    letter-spacing: -0.01em;
+  }
+
   /* Glass-morphism panel — semi-transparent surface with backdrop blur.
    * In neon mode, adds an electric-blue top edge and deep navy shadow.
    * Apply to cards/modals that float over the textured canvas. */

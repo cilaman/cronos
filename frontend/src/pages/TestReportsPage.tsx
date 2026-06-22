@@ -3,6 +3,8 @@ import { Link, useParams } from "react-router-dom";
 import { useTestReport, useTestReports } from "../hooks/useTestReports";
 import { useSpaces } from "../hooks/useSpaces";
 import { TestStatusBadge } from "../components/TestStatusBadge";
+import { PageContainer } from "../components/ui/PageContainer";
+import { PageHeader } from "../components/ui/PageHeader";
 import type { TestReportSummary, TestSuite, TestCase } from "../types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -249,45 +251,43 @@ export function TestReportsPage() {
   const activeSpace = spaces.find((s) => s.id === selectedSpaceId);
 
   return (
-    <div className="mx-auto max-w-[1280px] space-y-8 p-6 lg:p-8">
+    <PageContainer>
+      <div className="space-y-8">
       {/* Page header */}
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink-faint">
-            Cronos · Tests
-          </p>
-          <h1 className="font-display text-[22px] font-semibold uppercase tracking-[0.14em] text-ink">
-            Test Reports
-          </h1>
-        </div>
-
-        {spaces.length > 0 && (
-          <div className="flex items-center gap-2">
-            <label
-              htmlFor="space-filter"
-              className="font-display text-[10px] uppercase tracking-[0.18em] text-ink-faint"
-            >
-              Space
-            </label>
-            <select
-              id="space-filter"
-              value={selectedSpaceId}
-              onChange={(e) => {
-                setSelectedSpaceId(e.target.value);
-                setSelectedReportId(null);
-              }}
-              className="h-9 rounded border border-hairline bg-surface-1 px-3 font-mono text-[12px] text-ink shadow-inset-hairline transition focus:border-accent focus:outline-none"
-            >
-              <option value="">Select a space…</option>
-              {spaces.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-      </header>
+      <PageHeader
+        breadcrumbs={[{ label: "Cronos" }, { label: "Tests" }]}
+        title="Test Reports"
+        actions={
+          spaces.length > 0
+            ? [
+                <div key="space-filter" className="flex items-center gap-2">
+                  <label
+                    htmlFor="space-filter"
+                    className="font-display text-[10px] uppercase tracking-[0.18em] text-ink-faint"
+                  >
+                    Space
+                  </label>
+                  <select
+                    id="space-filter"
+                    value={selectedSpaceId}
+                    onChange={(e) => {
+                      setSelectedSpaceId(e.target.value);
+                      setSelectedReportId(null);
+                    }}
+                    className="h-9 rounded border border-hairline bg-surface-1 px-3 font-mono text-[12px] text-ink shadow-inset-hairline transition focus:border-accent focus:outline-none"
+                  >
+                    <option value="">Select a space…</option>
+                    {spaces.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>,
+              ]
+            : undefined
+        }
+      />
 
       {/* No space selected */}
       {!selectedSpaceId && (
@@ -421,6 +421,7 @@ export function TestReportsPage() {
           )}
         </>
       )}
-    </div>
+      </div>
+    </PageContainer>
   );
 }

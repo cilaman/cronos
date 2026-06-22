@@ -3,6 +3,8 @@ import { useSpaces } from "../hooks/useSpaces";
 import { useConfirmMemory, useMemoryItems, useRejectMemory } from "../hooks/useMemory";
 import type { MemoryItem, MemoryKind } from "../types";
 import { cn } from "../utils/cn";
+import { PageContainer } from "../components/ui/PageContainer";
+import { PageHeader } from "../components/ui/PageHeader";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -181,23 +183,22 @@ export function MemoryPage() {
   const unconfirmedCount = (items ?? []).filter((i) => !i.confirmed).length;
 
   return (
-    <div className="mx-auto max-w-[1024px] space-y-6 p-6 lg:p-8">
-      {/* Header */}
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink-faint">
-            Cronos · Memory Browser
-          </p>
-          <h1 className="font-display text-[22px] font-semibold uppercase tracking-[0.14em] text-ink">
-            Memory Browser
-          </h1>
-        </div>
-        {unconfirmedCount > 0 && (
-          <span className="rounded border border-warning/40 bg-warning/10 px-2.5 py-1 font-mono text-[11px] text-warning">
-            {unconfirmedCount} unconfirmed
-          </span>
-        )}
-      </header>
+    <PageContainer width="reading" className="space-y-6">
+      <PageHeader
+        title="Memory Browser"
+        actions={
+          unconfirmedCount > 0
+            ? [
+                <span
+                  key="unconfirmed"
+                  className="rounded border border-warning/40 bg-warning/10 px-2.5 py-1 font-mono text-[11px] text-warning"
+                >
+                  {unconfirmedCount} unconfirmed
+                </span>,
+              ]
+            : undefined
+        }
+      />
 
       {/* Filters row */}
       <div className="flex flex-wrap items-center gap-3">
@@ -290,6 +291,6 @@ export function MemoryPage() {
           ))}
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 }

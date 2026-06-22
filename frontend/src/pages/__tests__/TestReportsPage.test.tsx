@@ -110,9 +110,26 @@ describe("TestReportsPage", () => {
     } as ReturnType<typeof useTestReport>);
   });
 
-  it("renders the Test Reports page header", () => {
+  it("renders the Test Reports page title in an h1 with text-title class", () => {
     renderPage();
-    expect(screen.getByText("Test Reports")).toBeInTheDocument();
+    const h1 = screen.getByRole("heading", { level: 1 });
+    expect(h1).toBeInTheDocument();
+    expect(h1.textContent).toBe("Test Reports");
+    expect(h1.className).toContain("text-title");
+  });
+
+  it("h1 does not carry ad-hoc size classes", () => {
+    renderPage();
+    const h1 = screen.getByRole("heading", { level: 1 });
+    expect(h1.className).not.toMatch(/text-\[22px\]/);
+    expect(h1.className).not.toMatch(/uppercase/);
+    expect(h1.className).not.toMatch(/tracking-\[/);
+  });
+
+  it("wraps content in a PageContainer (max-w-[1280px])", () => {
+    const { container } = renderPage();
+    const wrapper = container.querySelector(".max-w-\\[1280px\\]");
+    expect(wrapper).not.toBeNull();
   });
 
   it("shows 'select a space' prompt when no space is selected", () => {

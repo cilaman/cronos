@@ -7,6 +7,8 @@ import {
   type TimeFrame,
   type TimeFramePreset,
 } from "../components/TimeFrameSelector";
+import { PageContainer } from "../components/ui/PageContainer";
+import { PageHeader } from "../components/ui/PageHeader";
 import type { GlobalStats, TaskStats } from "../types";
 
 // ── Formatters ────────────────────────────────────────────────────────────────
@@ -324,48 +326,41 @@ export function StatsPage() {
   const activeSpace = spaces.find((s) => s.id === selectedSpaceId);
 
   return (
-    <div className="mx-auto max-w-[1280px] space-y-8 p-6 lg:p-8">
+    <PageContainer>
+      <div className="space-y-8">
       {/* Page header */}
-      <header className="space-y-4">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink-faint">
-              Cronos · Analytics
-            </p>
-            <h1 className="font-display text-[22px] font-semibold uppercase tracking-[0.14em] text-ink">
-              Stats
-            </h1>
+      <PageHeader
+        breadcrumbs={[{ label: "Cronos" }, { label: "Analytics" }]}
+        title="Stats"
+        subtitle={
+          <div className="mt-2 space-y-2">
+            {spaces.length > 0 && (
+              <div className="flex items-center gap-2">
+                <label
+                  htmlFor="space-filter"
+                  className="font-display text-[10px] uppercase tracking-[0.18em] text-ink-faint"
+                >
+                  Space
+                </label>
+                <select
+                  id="space-filter"
+                  value={selectedSpaceId}
+                  onChange={(e) => setSelectedSpaceId(e.target.value)}
+                  className="h-9 rounded border border-hairline bg-surface-1 px-3 font-mono text-[12px] text-ink shadow-inset-hairline transition focus:border-accent focus:outline-none"
+                >
+                  <option value="">All spaces</option>
+                  {spaces.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <TimeFrameSelector value={timeFrame} onChange={handleTimeFrameChange} />
           </div>
-
-          {/* Space filter */}
-          {spaces.length > 0 && (
-            <div className="flex items-center gap-2">
-              <label
-                htmlFor="space-filter"
-                className="font-display text-[10px] uppercase tracking-[0.18em] text-ink-faint"
-              >
-                Space
-              </label>
-              <select
-                id="space-filter"
-                value={selectedSpaceId}
-                onChange={(e) => setSelectedSpaceId(e.target.value)}
-                className="h-9 rounded border border-hairline bg-surface-1 px-3 font-mono text-[12px] text-ink shadow-inset-hairline transition focus:border-accent focus:outline-none"
-              >
-                <option value="">All spaces</option>
-                {spaces.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-        </div>
-
-        {/* Time frame selector */}
-        <TimeFrameSelector value={timeFrame} onChange={handleTimeFrameChange} />
-      </header>
+        }
+      />
 
       {/* Global stats */}
       {globalLoading ? (
@@ -401,6 +396,7 @@ export function StatsPage() {
           </div>
         )}
       </section>
-    </div>
+      </div>
+    </PageContainer>
   );
 }

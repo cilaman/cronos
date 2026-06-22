@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useHarnesses, useCreateHarness, useDeleteHarness } from "../hooks/useHarnesses";
 import { cn } from "../utils/cn";
+import { PageContainer } from "../components/ui/PageContainer";
+import { PageHeader } from "../components/ui/PageHeader";
 import type { Harness } from "../types";
 
 function formatDate(iso?: string): string {
@@ -194,24 +196,22 @@ export function HarnessListPage() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-8">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="font-display text-lg font-semibold uppercase tracking-[0.18em] text-ink">
-            Harnesses
-          </h1>
-          <p className="mt-0.5 text-xs text-ink-muted">
-            Automation workflows that chain agent tasks
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setShowCreate(true)}
-          className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white transition hover:bg-accent-bright"
-        >
-          + New harness
-        </button>
-      </div>
+    <PageContainer width="content">
+      <PageHeader
+        title="Harnesses"
+        subtitle="Automation workflows that chain agent tasks"
+        actions={[
+          <button
+            key="new"
+            type="button"
+            onClick={() => setShowCreate(true)}
+            className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white transition hover:bg-accent-bright"
+          >
+            + New harness
+          </button>,
+        ]}
+        className="mb-6"
+      />
 
       {isLoading && (
         <div className="flex items-center gap-2 py-12 text-sm text-ink-muted">
@@ -287,6 +287,6 @@ export function HarnessListPage() {
           </div>
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 }

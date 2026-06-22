@@ -6,6 +6,8 @@ import { useGlobalStats } from "../hooks/useStats";
 import { useTestReports, useLatestTestReport } from "../hooks/useTestReports";
 import { TaskForm } from "../components/TaskForm";
 import { EmptyState } from "../components/ui/EmptyState";
+import { PageContainer } from "../components/ui/PageContainer";
+import { PageHeader } from "../components/ui/PageHeader";
 import { SpaceTag } from "../components/ui/SpaceTag";
 import { TestStatusBadge } from "../components/TestStatusBadge";
 import { TimeFrameSelector } from "../components/TimeFrameSelector";
@@ -602,54 +604,52 @@ export function DashboardPage() {
   }
 
   return (
-    <div className="mx-auto max-w-[1280px] space-y-8 p-6 lg:p-8">
+    <PageContainer>
+      <div className="space-y-8">
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink-faint">
-            Cronos · Overview
-          </p>
-          <h1 className="font-display text-[22px] font-semibold uppercase tracking-[0.14em] text-ink">
-            Dashboard
-          </h1>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+      <PageHeader
+        breadcrumbs={[{ label: "Cronos" }, { label: "Overview" }]}
+        title="Dashboard"
+        actions={[
           <button
+            key="new-task"
             type="button"
             onClick={() => setCreating(true)}
             className="flex h-9 items-center gap-1.5 rounded border border-accent bg-accent px-3 text-[12px] font-medium text-canvas transition hover:bg-accent-bright"
           >
             <span aria-hidden className="text-base leading-none">＋</span>
             New task
-          </button>
+          </button>,
           <Link
+            key="new-space"
             to="/spaces/new"
             className="flex h-9 items-center rounded border border-hairline-strong bg-surface-1 px-3 text-[12px] text-ink transition hover:border-accent hover:bg-surface-2"
           >
             New space
-          </Link>
+          </Link>,
           <button
+            key="import-space"
             type="button"
             onClick={() => fileRef.current?.click()}
             disabled={importMutation.isPending}
             className="flex h-9 items-center rounded px-3 text-[12px] text-ink-muted transition hover:bg-surface-2 hover:text-ink disabled:opacity-60"
           >
             {importMutation.isPending ? "Importing…" : "Import space"}
-          </button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".zip"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) handleImport(file);
-              e.target.value = "";
-            }}
-          />
-        </div>
-      </header>
+          </button>,
+        ]}
+      />
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".zip"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleImport(file);
+          e.target.value = "";
+        }}
+      />
 
       {/* ── Zone A: Mission Control ─────────────────────────────────────────── */}
 
@@ -950,6 +950,7 @@ export function DashboardPage() {
           }}
         />
       )}
-    </div>
+      </div>
+    </PageContainer>
   );
 }
