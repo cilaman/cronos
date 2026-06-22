@@ -26,4 +26,10 @@ fi
 # writes on repeated restarts. Suppresses errors if /data is already correct.
 chown -R --from=0 cronos:cronos /data 2>/dev/null || chown -R cronos:cronos /data
 
+# The claude_config named volume mounts at /home/cronos/.claude as root:root.
+# cronos (UID 1001) must own it to write session-env / shell snapshots / run
+# logs. Idempotent: only touch root-owned entries on repeat restarts.
+chown --from=0 cronos:cronos /home/cronos 2>/dev/null || true
+chown -R --from=0 cronos:cronos /home/cronos/.claude 2>/dev/null || chown -R cronos:cronos /home/cronos/.claude
+
 exec gosu cronos "$@"
