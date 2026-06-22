@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 200" width="720" height="200" font-family="'Inter','Helvetica Neue',Arial,sans-serif">
+  <defs>
+    <linearGradient id="lh-glass-1" x1="25%" y1="0%" x2="75%" y2="100%">
+      <stop offset="0%" stop-color="#DCEBFB" stop-opacity="0.85"/>
+      <stop offset="30%" stop-color="#8AA6C2" stop-opacity="0.30"/>
+      <stop offset="60%" stop-color="#36506A" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#0B1722" stop-opacity="0.55"/>
+    </linearGradient>
+    <linearGradient id="lh-glass-2" x1="25%" y1="0%" x2="75%" y2="100%">
+      <stop offset="0%" stop-color="#CFE2F7" stop-opacity="0.7"/>
+      <stop offset="50%" stop-color="#4C6883" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#0B1722" stop-opacity="0.45"/>
+    </linearGradient>
+    <linearGradient id="lh-rim" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="lh-violet" x1="20%" y1="0%" x2="80%" y2="100%">
+      <stop offset="0%" stop-color="#D0B8E8" stop-opacity="0.9"/>
+      <stop offset="45%" stop-color="#6A3FA0" stop-opacity="0.65"/>
+      <stop offset="100%" stop-color="#2E0855" stop-opacity="0.9"/>
+    </linearGradient>
+    <radialGradient id="lh-core" cx="38%" cy="30%" r="72%">
+      <stop offset="0%" stop-color="#F0E0FF"/>
+      <stop offset="20%" stop-color="#B895E0"/>
+      <stop offset="60%" stop-color="#6939A8"/>
+      <stop offset="100%" stop-color="#2A0848" stop-opacity="0.9"/>
+    </radialGradient>
+  </defs>
+  <g transform="translate(100 100) scale(0.62)">
+    <circle r="100" fill="none" stroke="url(#lh-glass-1)" stroke-width="22"/>
+    <circle r="111.5" fill="none" stroke="url(#lh-rim)" stroke-width="1.5"/>
+    <path d="M -72 -70 A 100 100 0 0 1 24 -97" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" opacity="0.95"/>
+    <circle r="68" fill="none" stroke="url(#lh-glass-2)" stroke-width="14"/>
+    <circle r="42" fill="none" stroke="url(#lh-violet)" stroke-width="9"/>
+    <path d="M -30 -29 A 42 42 0 0 1 10 -41" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" opacity="0.9"/>
+    <circle cx="0" cy="-100" r="10" fill="url(#lh-core)"/>
+    <circle cx="87" cy="50" r="10" fill="url(#lh-core)"/>
+    <circle cx="-87" cy="50" r="10" fill="url(#lh-core)"/>
+    <circle r="18" fill="url(#lh-core)"/>
+    <ellipse cx="-5.5" cy="-7" rx="6.5" ry="4" fill="#fff" opacity="0.9"/>
+  </g>
+  <text x="210" y="118" fill="#EAF1F8" font-size="68" font-weight="600" letter-spacing="6">CRONOS</text>
+</svg>

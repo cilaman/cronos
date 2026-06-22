@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cronos · Brand Preview</title>
+  <link rel="icon" type="image/svg+xml" href="logo/cronos-favicon.svg">
+  <link rel="stylesheet" href="tokens/tokens.css">
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+      background: var(--cronos-surface-dark);
+      color: var(--cronos-text-primary);
+      line-height: 1.55;
+      transition: background .25s, color .25s;
+    }
+    body[data-theme="light"] {
+      --cronos-surface-dark: #EEF2F6;
+      --cronos-text-primary: #1A1424;
+      --cronos-text-secondary: #4A4458;
+      --cronos-text-muted: #6A6480;
+      background: #EEF2F6;
+      color: #1A1424;
+    }
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 48px 32px 96px; }
+    header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 56px; }
+    header h1 { font-size: 28px; font-weight: 600; letter-spacing: 0.02em; margin: 0; }
+    header .sub { color: var(--cronos-text-muted); font-size: 13px; letter-spacing: 0.3em; text-transform: uppercase; margin-top: 6px; }
+    .toggle {
+      background: none;
+      border: 1px solid currentColor;
+      color: inherit;
+      padding: 8px 14px;
+      border-radius: 8px;
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+      opacity: 0.7;
+    }
+    .toggle:hover { opacity: 1; }
+    section { margin-bottom: 72px; }
+    h2 { font-size: 13px; font-weight: 500; letter-spacing: 0.3em; text-transform: uppercase; color: var(--cronos-text-muted); margin: 0 0 24px; }
+    .hero { display: flex; align-items: center; gap: 56px; padding: 56px 0; border-top: 1px solid #243240; border-bottom: 1px solid #243240; }
+    body[data-theme="light"] .hero { border-color: #D4DCE4; }
+    .hero img { width: 200px; height: 200px; }
+    .hero h3 { font-size: 56px; font-weight: 600; letter-spacing: 0.06em; margin: 0; }
+    .hero p { color: var(--cronos-text-secondary); margin: 8px 0 0; max-width: 420px; }
+    .grid { display: grid; gap: 16px; }
+    .grid-sizes { grid-template-columns: repeat(6, 1fr); align-items: end; }
+    .tile {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid #243240;
+      border-radius: 12px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      min-height: 180px;
+    }
+    body[data-theme="light"] .tile { background: rgba(0,0,0,0.03); border-color: #D4DCE4; }
+    .tile.light { background: #fff; border-color: #D4DCE4; }
+    .tile.brand { background: var(--cronos-brand); border-color: transparent; }
+    .tile.brand-deep { background: var(--cronos-brand-ink); border-color: transparent; }
+    .tile small { color: var(--cronos-text-muted); font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; }
+    .tile code { color: var(--cronos-brand-light); font-size: 11px; font-family: ui-monospace, monospace; }
+    body[data-theme="light"] .tile code { color: var(--cronos-brand-deep); }
+    .tile.light small, .tile.light code { color: #4A4458; }
+    .tile.brand small, .tile.brand code, .tile.brand-deep small, .tile.brand-deep code { color: rgba(255,255,255,0.8); }
+
+    .lockup-row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    .lockup-tile { padding: 48px 32px; }
+    .lockup-tile img { max-width: 100%; height: auto; }
+    .lockup-tile.h img { max-height: 90px; }
+    .lockup-tile.v img { max-height: 240px; }
+
+    .contexts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+    .contexts .tile { aspect-ratio: 1; padding: 24px; }
+    .contexts .tile img { width: 100%; height: auto; max-width: 140px; }
+
+    .states { display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; }
+    .states .tile { padding: 20px 12px; }
+    .states .tile img { width: 72px; height: 72px; }
+    .states .state-label { font-size: 12px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--cronos-text-secondary); margin-top: 4px; }
+    .states .state-hex { font-family: ui-monospace, monospace; font-size: 10px; color: var(--cronos-text-muted); }
+
+    .tokens { display: grid; grid-template-columns: 1fr; gap: 0; border: 1px solid #243240; border-radius: 12px; overflow: hidden; }
+    body[data-theme="light"] .tokens { border-color: #D4DCE4; }
+    .token-row { display: grid; grid-template-columns: 80px 220px 140px 1fr; align-items: center; padding: 16px 20px; border-bottom: 1px solid #243240; gap: 16px; font-size: 13px; }
+    body[data-theme="light"] .token-row { border-color: #D4DCE4; }
+    .token-row:last-child { border-bottom: none; }
+    .swatch { width: 40px; height: 40px; border-radius: 8px; }
+    .token-row code { font-family: ui-monospace, monospace; color: var(--cronos-text-secondary); }
+    .token-row .hex { font-family: ui-monospace, monospace; }
+    .token-row .desc { color: var(--cronos-text-muted); font-size: 12px; }
+
+    pre {
+      background: rgba(0,0,0,0.25);
+      border: 1px solid #243240;
+      border-radius: 8px;
+      padding: 16px 20px;
+      font-size: 12px;
+      overflow-x: auto;
+      color: var(--cronos-text-secondary);
+    }
+    body[data-theme="light"] pre { background: rgba(0,0,0,0.04); border-color: #D4DCE4; }
+
+    footer { color: var(--cronos-text-muted); font-size: 12px; margin-top: 80px; padding-top: 24px; border-top: 1px solid #243240; }
+    body[data-theme="light"] footer { border-color: #D4DCE4; }
+
+    /* hero size mark sizing */
+    .size-mark-240 { width: 240px; height: 240px; }
+    .size-mark-128 { width: 128px; height: 128px; }
+    .size-mark-64 { width: 64px; height: 64px; }
+    .size-mark-32 { width: 32px; height: 32px; }
+    .size-mark-24 { width: 24px; height: 24px; }
+    .size-mark-16 { width: 16px; height: 16px; }
+  </style>
+</head>
+<body data-theme="dark">
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>Cronos · Brand Preview</h1>
+        <div class="sub">V2 Deep Violet · Logo Set</div>
+      </div>
+      <button class="toggle" onclick="document.body.dataset.theme = document.body.dataset.theme === 'dark' ? 'light' : 'dark'">Toggle theme</button>
+    </header>
+
+    <section class="hero">
+      <img src="logo/cronos-mark.svg" alt="Cronos">
+      <div>
+        <h3>CRONOS</h3>
+        <p>Harnessed agentic task management. The logo is a translucent harness ring holding the agent core in directed orbit.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Size Ladder</h2>
+      <div class="grid grid-sizes">
+        <div class="tile"><img src="logo/cronos-mark.svg" class="size-mark-240" alt=""><small>240px</small><code>mark.svg</code></div>
+        <div class="tile"><img src="logo/cronos-mark.svg" class="size-mark-128" alt=""><small>128px</small><code>mark.svg</code></div>
+        <div class="tile"><img src="logo/cronos-mark-flat.svg" class="size-mark-64" alt=""><small>64px</small><code>mark-flat.svg</code></div>
+        <div class="tile"><img src="logo/cronos-mark-flat.svg" class="size-mark-32" alt=""><small>32px</small><code>mark-flat.svg</code></div>
+        <div class="tile"><img src="logo/cronos-favicon.svg" class="size-mark-24" alt=""><small>24px</small><code>favicon.svg</code></div>
+        <div class="tile"><img src="logo/cronos-favicon.svg" class="size-mark-16" alt=""><small>16px</small><code>favicon.svg</code></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Lockups</h2>
+      <div class="lockup-row">
+        <div class="tile lockup-tile h">
+          <img src="logo/cronos-lockup-h.svg" alt="Horizontal lockup">
+          <small style="margin-top:24px">horizontal · navbars · headers</small>
+        </div>
+        <div class="tile lockup-tile v">
+          <img src="logo/cronos-lockup-v.svg" alt="Vertical lockup">
+          <small style="margin-top:24px">vertical · splash · square aspect</small>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Contexts</h2>
+      <div class="contexts">
+        <div class="tile">
+          <img src="logo/cronos-app-icon.svg" alt="App icon tile" style="border-radius:22%">
+          <small>app icon tile</small>
+        </div>
+        <div class="tile light">
+          <img src="logo/cronos-mark.svg" alt="">
+          <small>on light surface</small>
+        </div>
+        <div class="tile brand">
+          <img src="logo/cronos-mark-mono.svg" alt="" style="color:#fff">
+          <small>mono on brand</small>
+        </div>
+        <div class="tile brand-deep">
+          <img src="logo/cronos-mark-mono.svg" alt="" style="color:var(--cronos-brand-light)">
+          <small>mono on ink</small>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Runtime State Icons</h2>
+      <div class="states">
+        <div class="tile">
+          <img src="states/cronos-state-idle.svg" alt="">
+          <div class="state-label">idle</div>
+          <div class="state-hex">#7A4FB0</div>
+        </div>
+        <div class="tile">
+          <img src="states/cronos-state-active.svg" alt="">
+          <div class="state-label">active</div>
+          <div class="state-hex">#B8FF5C</div>
+        </div>
+        <div class="tile">
+          <img src="states/cronos-state-active-animated.svg" alt="">
+          <div class="state-label">active (anim)</div>
+          <div class="state-hex">orbit + pulse</div>
+        </div>
+        <div class="tile">
+          <img src="states/cronos-state-passed.svg" alt="">
+          <div class="state-label">passed</div>
+          <div class="state-hex">#2EC4FF</div>
+        </div>
+        <div class="tile">
+          <img src="states/cronos-state-blocked.svg" alt="">
+          <div class="state-label">blocked</div>
+          <div class="state-hex">#FFA62E</div>
+        </div>
+        <div class="tile">
+          <img src="states/cronos-state-failed.svg" alt="">
+          <div class="state-label">failed</div>
+          <div class="state-hex">#FF6E5C</div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Design Tokens</h2>
+      <div class="tokens">
+        <div class="token-row">
+          <div class="swatch" style="background:#7A4FB0"></div>
+          <code>--cronos-brand</code>
+          <div class="hex">#7A4FB0</div>
+          <div class="desc">Primary brand mid-tone · WCAG 5.9:1 on white</div>
+        </div>
+        <div class="token-row">
+          <div class="swatch" style="background:#6A3FA0"></div>
+          <code>--cronos-brand-deep</code>
+          <div class="hex">#6A3FA0</div>
+          <div class="desc">Headers · wordmarks on light surfaces</div>
+        </div>
+        <div class="token-row">
+          <div class="swatch" style="background:#B895E0"></div>
+          <code>--cronos-brand-light</code>
+          <div class="hex">#B895E0</div>
+          <div class="desc">Accents · hover states on dark surfaces</div>
+        </div>
+        <div class="token-row">
+          <div class="swatch" style="background:#2A0848"></div>
+          <code>--cronos-brand-ink</code>
+          <div class="hex">#2A0848</div>
+          <div class="desc">Deepest shadow · surface accent</div>
+        </div>
+        <div class="token-row">
+          <div class="swatch" style="background:#B8FF5C"></div>
+          <code>--cronos-state-active</code>
+          <div class="hex">#B8FF5C</div>
+          <div class="desc">Agent in flight · run in progress</div>
+        </div>
+        <div class="token-row">
+          <div class="swatch" style="background:#2EC4FF"></div>
+          <code>--cronos-state-passed</code>
+          <div class="hex">#2EC4FF</div>
+          <div class="desc">Gate passed · goal complete</div>
+        </div>
+        <div class="token-row">
+          <div class="swatch" style="background:#FFA62E"></div>
+          <code>--cronos-state-blocked</code>
+          <div class="hex">#FFA62E</div>
+          <div class="desc">Gate failed · awaiting decision</div>
+        </div>
+        <div class="token-row">
+          <div class="swatch" style="background:#FF6E5C"></div>
+          <code>--cronos-state-failed</code>
+          <div class="hex">#FF6E5C</div>
+          <div class="desc">Run error · executor crash</div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Quick Embed</h2>
+      <pre>&lt;link rel="stylesheet" href="brand/tokens/tokens.css"&gt;
+&lt;link rel="icon" type="image/svg+xml" href="brand/logo/cronos-favicon.svg"&gt;
+
+&lt;img src="brand/logo/cronos-lockup-h.svg" alt="Cronos" height="48"&gt;
+&lt;img src="brand/states/cronos-state-active-animated.svg" alt="running" width="16"&gt;
+&lt;span style="color: var(--cronos-brand-light)"&gt;ready&lt;/span&gt;</pre>
+    </section>
+
+    <footer>
+      Cronos brand v1.0.0 · Generated June 2026 · Open this file locally to preview all assets.
+    </footer>
+  </div>
+</body>
+</html>
