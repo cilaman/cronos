@@ -2,21 +2,11 @@ import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useFeature, usePatchFeature, useProcessFeature, useSetRealize } from "../hooks/useFeatures";
+import { Badge } from "./ui/Badge";
 import { IconButton } from "./ui/IconButton";
 import { Modal } from "./ui/Modal";
-import type { FeatureState } from "../types";
-
-const FEATURE_STATE_BADGE: Record<FeatureState, string> = {
-  backlog: "bg-surface-2 text-ink-muted ring-1 ring-hairline",
-  processing:
-    "bg-violet-100 text-violet-800 ring-1 ring-violet-300 dark:bg-violet-400/10 dark:text-violet-300 dark:ring-violet-400/40",
-  planned:
-    "bg-indigo-100 text-indigo-800 ring-1 ring-indigo-300 dark:bg-indigo-400/10 dark:text-indigo-300 dark:ring-indigo-400/40",
-  waiting:
-    "bg-amber-100 text-amber-800 ring-1 ring-amber-300 dark:bg-amber-400/10 dark:text-amber-300 dark:ring-amber-400/40",
-  done:
-    "bg-sky-100 text-sky-800 ring-1 ring-sky-300 dark:bg-sky-400/10 dark:text-sky-300 dark:ring-sky-400/40",
-};
+import { getToneFeatureState, getToneType } from "../utils/badgeTone";
+import type { FeatureState, TaskType } from "../types";
 
 function FeatureDetailSkeleton() {
   return (
@@ -133,23 +123,13 @@ export function FeatureDetail({ featureId, onClose }: Props) {
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   {feature.feature_state && (
-                    <span
-                      className={`rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] ${
-                        FEATURE_STATE_BADGE[feature.feature_state]
-                      }`}
-                    >
+                    <Badge tone={getToneFeatureState(feature.feature_state as FeatureState)}>
                       {feature.feature_state}
-                    </span>
+                    </Badge>
                   )}
-                  <span
-                    className={`rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] ${
-                      feature.type === "fix"
-                        ? "bg-rose-100 text-rose-800 ring-1 ring-rose-300 dark:bg-rose-400/10 dark:text-rose-300 dark:ring-rose-400/40"
-                        : "bg-emerald-100 text-emerald-800 ring-1 ring-emerald-300 dark:bg-emerald-400/10 dark:text-emerald-300 dark:ring-emerald-400/40"
-                    }`}
-                  >
+                  <Badge tone={getToneType(feature.type as TaskType)}>
                     {feature.type}
-                  </span>
+                  </Badge>
                   {feature.feature_key && (
                     <span className="font-mono text-xs text-ink-faint">{feature.feature_key}</span>
                   )}
@@ -196,7 +176,7 @@ export function FeatureDetail({ featureId, onClose }: Props) {
                           onClick={() => setEditType("feature")}
                           className={`rounded px-3 py-1 text-xs font-semibold transition ${
                             editType === "feature"
-                              ? "bg-emerald-500 text-white"
+                              ? "bg-feature text-white"
                               : "text-ink-muted hover:text-ink"
                           }`}
                         >
@@ -207,7 +187,7 @@ export function FeatureDetail({ featureId, onClose }: Props) {
                           onClick={() => setEditType("fix")}
                           className={`rounded px-3 py-1 text-xs font-semibold transition ${
                             editType === "fix"
-                              ? "bg-rose-500 text-white"
+                              ? "bg-fix text-white"
                               : "text-ink-muted hover:text-ink"
                           }`}
                         >
@@ -280,12 +260,12 @@ export function FeatureDetail({ featureId, onClose }: Props) {
                 <section>
                   <div
                     data-testid="waiting-question-box"
-                    className="rounded-lg border border-amber-300 bg-amber-50 p-4 dark:border-amber-400/40 dark:bg-amber-400/10"
+                    className="rounded-lg border border-warning/30 bg-warning/10 p-4"
                   >
-                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-700 dark:text-amber-300">
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-warning">
                       Waiting
                     </p>
-                    <p className="mt-1 text-sm text-amber-800 dark:text-amber-200">
+                    <p className="mt-1 text-sm text-warning">
                       {feature.waiting_question}
                     </p>
                   </div>

@@ -59,6 +59,20 @@ export default {
         },
         warning: "rgb(var(--color-warning) / <alpha-value>)",
         danger: "rgb(var(--color-danger) / <alpha-value>)",
+        // Status colour tokens (R1) — backed by I1 CSS variables
+        running: "rgb(var(--color-running) / <alpha-value>)",
+        success: "rgb(var(--color-success) / <alpha-value>)",
+        info: "rgb(var(--color-info) / <alpha-value>)",
+        neutral: "rgb(var(--color-neutral) / <alpha-value>)",
+        // Categorical tokens (R2)
+        goal: "rgb(var(--cat-goal) / <alpha-value>)",
+        feature: "rgb(var(--cat-feature) / <alpha-value>)",
+        fix: "rgb(var(--cat-fix) / <alpha-value>)",
+        issue: "rgb(var(--cat-issue) / <alpha-value>)",
+        plan: "rgb(var(--cat-plan) / <alpha-value>)",
+        ask: "rgb(var(--cat-ask) / <alpha-value>)",
+        // Brand identity tokens (R3)
+        brand: "rgb(var(--brand) / <alpha-value>)",
       },
       boxShadow: {
         "inset-hairline": "inset 0 1px 0 0 var(--shadow-inset-hairline)",

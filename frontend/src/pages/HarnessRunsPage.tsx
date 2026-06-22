@@ -2,6 +2,10 @@ import { useParams, useSearchParams } from "react-router-dom";
 import { useHarnessRuns, useTriggerHarnessRun } from "../hooks/useHarnessRuns";
 import type { RunSummary } from "../api";
 import { HarnessRunPanel } from "../components/HarnessRunPanel";
+import { PageContainer } from "../components/ui/PageContainer";
+import { PageHeader } from "../components/ui/PageHeader";
+import { Badge } from "../components/ui/Badge";
+import { getToneRunStatus } from "../utils/badgeTone";
 import { cn } from "../utils/cn";
 
 // ---------------------------------------------------------------------------
@@ -10,23 +14,10 @@ import { cn } from "../utils/cn";
 
 type RunStatus = RunSummary["status"];
 
-const RUN_BADGE_STYLE: Record<RunStatus, string> = {
-  running: "border-amber-400/40 bg-amber-400/10 text-amber-600 dark:text-amber-400",
-  done: "border-accent/30 bg-accent/10 text-accent-bright",
-  failed: "border-danger/30 bg-danger/10 text-danger",
-  cancelled: "border-hairline bg-surface-2 text-ink-muted",
-};
-
 function RunStatusBadge({ status }: { status: RunStatus }) {
   return (
-    <span
-      className={cn(
-        "shrink-0 rounded border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.12em]",
-        RUN_BADGE_STYLE[status],
-      )}
-      data-testid={`run-badge-${status}`}
-    >
-      {status}
+    <span data-testid={`run-badge-${status}`}>
+      <Badge tone={getToneRunStatus(status)}>{status}</Badge>
     </span>
   );
 }
@@ -134,28 +125,25 @@ export function HarnessRunsPage() {
   );
 
   return (
-    <div className="mx-auto max-w-[1280px] space-y-6 p-6 lg:p-8">
+    <PageContainer>
+      <div className="space-y-6">
       {/* Page header */}
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink-faint">
-            Cronos · Harnesses
-          </p>
-          <h1 className="font-display text-[22px] font-semibold uppercase tracking-[0.14em] text-ink">
-            {safeName}
-          </h1>
-        </div>
-
-        <button
-          type="button"
-          onClick={handleTrigger}
-          disabled={triggerMutation.isPending}
-          className="rounded border border-accent/30 bg-accent/10 px-4 py-2 font-display text-[12px] font-medium text-accent-bright transition hover:bg-accent/20 disabled:opacity-60"
-          data-testid="run-now-button"
-        >
-          {triggerMutation.isPending ? "Starting…" : "Run now"}
-        </button>
-      </header>
+      <PageHeader
+        breadcrumbs={[{ label: "Cronos" }, { label: "Harnesses" }]}
+        title={safeName}
+        actions={[
+          <button
+            key="run-now"
+            type="button"
+            onClick={handleTrigger}
+            disabled={triggerMutation.isPending}
+            className="rounded border border-accent/30 bg-accent/10 px-4 py-2 font-display text-[12px] font-medium text-accent-bright transition hover:bg-accent/20 disabled:opacity-60"
+            data-testid="run-now-button"
+          >
+            {triggerMutation.isPending ? "Starting…" : "Run now"}
+          </button>,
+        ]}
+      />
 
       {/* Error banner for trigger */}
       {triggerMutation.isError && (
@@ -246,6 +234,7 @@ export function HarnessRunsPage() {
           )}
         </div>
       </div>
-    </div>
+      </div>
+    </PageContainer>
   );
 }
