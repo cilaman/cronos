@@ -152,7 +152,7 @@
     },
     "review": {
       "phase": "review",
-      "status": "blocked",
+      "status": "done",
       "cc_version": "1.0",
       "agent": "pipeline-reviewer",
       "task_id": "2026-06-22-1335-review-gui-button-focus",
@@ -160,41 +160,35 @@
       "gate": "auto",
       "started_at": "",
       "completed_at": "",
-      "artifact_path": ".cronos/pipeline/gui-button-focus/review-report-gui-button-focus--attempt1.md",
+      "artifact_path": ".cronos/pipeline/gui-button-focus/review-report-gui-button-focus--attempt2.md",
       "verify_result": {
-        "passed": false,
-        "errors": [
-          "F1 (high): Card.tsx default-density body never converted to native <button>; I4 scope + exit criterion undelivered.",
-          "F2 (high): nested proposed_pr/proposed_issue <button> not converted to spans as impl-report-i4 claimed.",
-          "F3 (high): 6 failing tests in src/__tests__/Card.test.tsx (I6 selectors updated ahead of code).",
-          "F4 (high): 5 failing tests in src/components/__tests__/Card.buttons.test.tsx; impl-report-i4 validation_command_passed was false.",
-          "F5 (high): impl-report-i6 falsely claimed npm test && npm run build green; reality 12 failures (11 button-focus, 1 unrelated)."
-        ],
+        "passed": true,
+        "errors": [],
         "warnings": [],
         "normalize_fixes": [],
-        "gate_decision": "retry",
-        "gate_reason": "review verdict=needs_fix (attempt 1); F1 (high): Card.tsx default-density body never converted to native <button>; I4 scope + exit criterion undelivered. | F2 (high): nested proposed_pr/proposed_issue <button> not converted to spans as impl-report-i4 claimed. | F3 (high): 6 failing tests in src/__tests__/Card.test.tsx (I6 selectors updated ahead of code). | F4 (high): 5 failing tests in src/components/__tests__/Card.buttons.test.tsx; impl-report-i4 validation_command_passed was false. | F5 (high"
+        "gate_decision": "proceed",
+        "gate_reason": "review verdict=pass (attempt 2); all checks passed; F1-F5 resolved"
       },
       "metrics": {
-        "duration_s": 0.0,
-        "token_spend": 0,
-        "tool_calls": 0,
-        "files_read": 0,
-        "memory_hits": 0
+        "duration_s": 1368.06,
+        "token_spend": 13179072,
+        "tool_calls": 110,
+        "files_read": 16,
+        "memory_hits": 1
       },
       "header_summary": {}
     }
   },
   "telemetry": {
-    "total_duration_s": 0.0,
-    "total_token_spend": 0,
-    "total_tool_calls": 0,
-    "total_files_read": 0,
-    "total_memory_hits": 0,
-    "phases_completed": 5,
+    "total_duration_s": 1368.06,
+    "total_token_spend": 13179072,
+    "total_tool_calls": 110,
+    "total_files_read": 16,
+    "total_memory_hits": 1,
+    "phases_completed": 6,
     "phases_escalated": 0,
-    "phases_retried": 1,
+    "phases_retried": 0,
     "phases_failed": 0
   },
-  "updated_at": "2026-06-23T06:45:06.874259+00:00"
+  "updated_at": "2026-06-23T07:42:51.101473+00:00"
 }
