@@ -116,7 +116,7 @@ export function RunOverlay({ runId, mode, onNodeOpen: _onNodeOpen }: RunOverlayP
         return {
           ...edge,
           animated: status === 'done',
-          style: { ...edge.style, stroke: status === 'done' ? 'rgb(var(--color-running))' : undefined },
+          style: { ...edge.style, stroke: status === 'done' ? '#22c55e' : undefined },
         };
       }),
     );

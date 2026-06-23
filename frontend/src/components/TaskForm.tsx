@@ -2,19 +2,17 @@ import { useEffect, useRef, useState } from "react";
 import { useSpaces } from "../hooks/useSpaces";
 import { AGENT_MODES, AGENT_MODELS, type AgentMode, type AgentModel } from "../types";
 import { Button } from "./ui/Button";
-import { Badge } from "./ui/Badge";
 import { FormField } from "./ui/FormField";
 import { FormInput, FormSelect, FormTextarea } from "./ui/FormInput";
 import { Modal } from "./ui/Modal";
-import { getTonePriority } from "../utils/badgeTone";
 
 const PRIORITY_OPTIONS = [
-  { value: 1 as const, label: "P1" },
-  { value: 2 as const, label: "P2" },
-  { value: 3 as const, label: "P3" },
-  { value: 4 as const, label: "P4" },
-  { value: 5 as const, label: "P5" },
-];
+  { value: 1, label: "P1", cls: "border-red-200 bg-red-50 text-red-600 dark:border-red-400/30 dark:bg-red-400/10 dark:text-red-400" },
+  { value: 2, label: "P2", cls: "border-orange-200 bg-orange-50 text-orange-600 dark:border-orange-400/30 dark:bg-orange-400/10 dark:text-orange-400" },
+  { value: 3, label: "P3", cls: "border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-400" },
+  { value: 4, label: "P4", cls: "border-teal-200 bg-teal-50 text-teal-600 dark:border-teal-400/30 dark:bg-teal-400/10 dark:text-teal-400" },
+  { value: 5, label: "P5", cls: "border-hairline bg-surface-2 text-ink-faint" },
+] as const;
 
 interface Props {
   heading: string;
@@ -183,13 +181,14 @@ export function TaskForm({
                   type="button"
                   onClick={() => setPriority(opt.value)}
                   className={[
-                    "transition",
+                    "rounded border px-2.5 py-1 font-mono text-[11px] font-semibold uppercase tracking-wide transition",
+                    opt.cls,
                     priority === opt.value
-                      ? "ring-2 ring-offset-1 ring-offset-canvas ring-current rounded-sm"
+                      ? "ring-2 ring-offset-1 ring-offset-canvas ring-current"
                       : "opacity-50 hover:opacity-80",
                   ].join(" ")}
                 >
-                  <Badge tone={getTonePriority(opt.value)}>{opt.label}</Badge>
+                  {opt.label}
                 </button>
               ))}
             </div>

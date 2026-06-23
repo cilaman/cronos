@@ -38,10 +38,8 @@ import { GoalDependencyGraph } from "./GoalDependencyGraph";
 import { TaskActionBar } from "./TaskActionBar";
 import { TaskForm } from "./TaskForm";
 import { TracePanel } from "./TracePanel";
-import { Badge } from "./ui/Badge";
 import { Modal } from "./ui/Modal";
 import { SpaceTag } from "./ui/SpaceTag";
-import { getTonePriority, getToneType } from "../utils/badgeTone";
 
 // ── Stat formatting helpers ───────────────────────────────────────────────────
 
@@ -279,11 +277,20 @@ function StatsPanel({ taskId }: { taskId: string }) {
 
 // ── Priority badge ────────────────────────────────────────────────────────────
 
+const PRIORITY_BADGE_STYLES: Record<number, string> = {
+  1: "border-red-200 bg-red-50 text-red-600 dark:border-red-400/30 dark:bg-red-400/10 dark:text-red-400",
+  2: "border-orange-200 bg-orange-50 text-orange-600 dark:border-orange-400/30 dark:bg-orange-400/10 dark:text-orange-400",
+  3: "border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-400",
+  4: "border-teal-200 bg-teal-50 text-teal-600 dark:border-teal-400/30 dark:bg-teal-400/10 dark:text-teal-400",
+  5: "border-hairline bg-surface-2 text-ink-faint",
+};
+
 function PriorityBadge({ priority }: { priority: number }) {
+  const cls = PRIORITY_BADGE_STYLES[priority] ?? PRIORITY_BADGE_STYLES[3];
   return (
-    <Badge tone={getTonePriority(priority as 1 | 2 | 3 | 4 | 5)}>
+    <span className={`rounded border px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wide ${cls}`}>
       P{priority}
-    </Badge>
+    </span>
   );
 }
 
@@ -339,11 +346,20 @@ export function getDescendantIds(tasks: TaskSummary[], rootId: string): Set<stri
   return result;
 }
 
+const TYPE_BADGE_STYLES: Partial<Record<TaskType, string>> = {
+  goal: "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-400/30 dark:bg-violet-400/10 dark:text-violet-400",
+  issue: "border-orange-200 bg-orange-50 text-orange-600 dark:border-orange-400/30 dark:bg-orange-400/10 dark:text-orange-400",
+};
+
 export function TypeBadge({ type }: { type: TaskType }) {
+  const cls =
+    TYPE_BADGE_STYLES[type] ?? "border-hairline bg-surface-2 text-ink-muted";
   return (
-    <Badge tone={getToneType(type)}>
+    <span
+      className={`rounded border px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wide ${cls}`}
+    >
       {type}
-    </Badge>
+    </span>
   );
 }
 

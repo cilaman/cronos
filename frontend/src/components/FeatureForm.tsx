@@ -1,19 +1,17 @@
 import { useEffect, useState } from "react";
 import { Button } from "./ui/Button";
-import { Badge } from "./ui/Badge";
 import { FormField } from "./ui/FormField";
 import { FormInput, FormTextarea } from "./ui/FormInput";
 import { Modal } from "./ui/Modal";
 import { useCreateFeature } from "../hooks/useFeatures";
-import { getTonePriority } from "../utils/badgeTone";
 
 const PRIORITY_OPTIONS = [
-  { value: 1 as const, label: "P1" },
-  { value: 2 as const, label: "P2" },
-  { value: 3 as const, label: "P3" },
-  { value: 4 as const, label: "P4" },
-  { value: 5 as const, label: "P5" },
-];
+  { value: 1, label: "P1", cls: "border-red-200 bg-red-50 text-red-600 dark:border-red-400/30 dark:bg-red-400/10 dark:text-red-400" },
+  { value: 2, label: "P2", cls: "border-orange-200 bg-orange-50 text-orange-600 dark:border-orange-400/30 dark:bg-orange-400/10 dark:text-orange-400" },
+  { value: 3, label: "P3", cls: "border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-400" },
+  { value: 4, label: "P4", cls: "border-teal-200 bg-teal-50 text-teal-600 dark:border-teal-400/30 dark:bg-teal-400/10 dark:text-teal-400" },
+  { value: 5, label: "P5", cls: "border-hairline bg-surface-2 text-ink-faint" },
+] as const;
 
 interface Props {
   spaceId: string;
@@ -82,25 +80,25 @@ export function FeatureForm({ spaceId, onClose }: Props) {
                 type="button"
                 onClick={() => setType("feature")}
                 className={[
-                  "transition",
+                  "rounded border px-3 py-1 text-xs font-semibold transition",
                   type === "feature"
-                    ? "ring-2 ring-offset-1 ring-offset-canvas ring-current rounded-sm"
-                    : "opacity-60 hover:opacity-80",
+                    ? "border-emerald-300 bg-emerald-100 text-emerald-700 dark:border-emerald-400/50 dark:bg-emerald-400/20 dark:text-emerald-300 ring-2 ring-offset-1 ring-offset-canvas ring-emerald-400/50"
+                    : "border-hairline bg-surface-2 text-ink-muted opacity-60 hover:opacity-80",
                 ].join(" ")}
               >
-                <Badge tone="feature">Feature</Badge>
+                Feature
               </button>
               <button
                 type="button"
                 onClick={() => setType("fix")}
                 className={[
-                  "transition",
+                  "rounded border px-3 py-1 text-xs font-semibold transition",
                   type === "fix"
-                    ? "ring-2 ring-offset-1 ring-offset-canvas ring-current rounded-sm"
-                    : "opacity-60 hover:opacity-80",
+                    ? "border-rose-300 bg-rose-100 text-rose-700 dark:border-rose-400/50 dark:bg-rose-400/20 dark:text-rose-300 ring-2 ring-offset-1 ring-offset-canvas ring-rose-400/50"
+                    : "border-hairline bg-surface-2 text-ink-muted opacity-60 hover:opacity-80",
                 ].join(" ")}
               >
-                <Badge tone="fix">Fix</Badge>
+                Fix
               </button>
             </div>
           </FormField>
@@ -124,13 +122,14 @@ export function FeatureForm({ spaceId, onClose }: Props) {
                   type="button"
                   onClick={() => setPriority(opt.value)}
                   className={[
-                    "transition",
+                    "rounded border px-2.5 py-1 font-mono text-[11px] font-semibold uppercase tracking-wide transition",
+                    opt.cls,
                     priority === opt.value
-                      ? "ring-2 ring-offset-1 ring-offset-canvas ring-current rounded-sm"
+                      ? "ring-2 ring-offset-1 ring-offset-canvas ring-current"
                       : "opacity-50 hover:opacity-80",
                   ].join(" ")}
                 >
-                  <Badge tone={getTonePriority(opt.value)}>{opt.label}</Badge>
+                  {opt.label}
                 </button>
               ))}
             </div>

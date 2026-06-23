@@ -2,8 +2,6 @@ import { useParams, useSearchParams } from "react-router-dom";
 import { useHarnessRuns, useTriggerHarnessRun } from "../hooks/useHarnessRuns";
 import type { RunSummary } from "../api";
 import { HarnessRunPanel } from "../components/HarnessRunPanel";
-import { Badge } from "../components/ui/Badge";
-import { getToneRunStatus } from "../utils/badgeTone";
 import { cn } from "../utils/cn";
 
 // ---------------------------------------------------------------------------
@@ -12,10 +10,23 @@ import { cn } from "../utils/cn";
 
 type RunStatus = RunSummary["status"];
 
+const RUN_BADGE_STYLE: Record<RunStatus, string> = {
+  running: "border-amber-400/40 bg-amber-400/10 text-amber-600 dark:text-amber-400",
+  done: "border-accent/30 bg-accent/10 text-accent-bright",
+  failed: "border-danger/30 bg-danger/10 text-danger",
+  cancelled: "border-hairline bg-surface-2 text-ink-muted",
+};
+
 function RunStatusBadge({ status }: { status: RunStatus }) {
   return (
-    <span data-testid={`run-badge-${status}`}>
-      <Badge tone={getToneRunStatus(status)}>{status}</Badge>
+    <span
+      className={cn(
+        "shrink-0 rounded border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.12em]",
+        RUN_BADGE_STYLE[status],
+      )}
+      data-testid={`run-badge-${status}`}
+    >
+      {status}
     </span>
   );
 }

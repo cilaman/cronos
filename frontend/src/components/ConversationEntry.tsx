@@ -2,20 +2,6 @@ import { ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { AgentInfo, formatClock, formatFullTimestamp } from "../parse-history";
-import { Badge } from "./ui/Badge";
-import { getToneMode } from "../utils/badgeTone";
-import type { AgentMode } from "../types";
-
-// Semantic text-color classes for agent sub-types (used by ConversationStream + ToolBlock)
-export const AGENT_TYPE_COLOR: Record<string, string> = {
-  explore: "text-info",
-  plan: "text-plan",
-  "test-architect": "text-success",
-  tester: "text-success",
-  "security-officer": "text-danger",
-  "general-purpose": "text-warning",
-  claude: "text-brand",
-};
 
 export const conversationProseClasses =
   "prose prose-sm dark:prose-invert max-w-none " +
@@ -45,6 +31,22 @@ function shortenModel(model: string): string {
   if (lower.includes("sonnet")) return "sonnet";
   return model;
 }
+
+const MODEL_COLOR: Record<string, string> = {
+  opus: "text-purple-400",
+  sonnet: "text-accent-bright",
+  haiku: "text-emerald-400",
+};
+
+export const AGENT_TYPE_COLOR: Record<string, string> = {
+  explore: "text-sky-400",
+  plan: "text-purple-400",
+  "test-architect": "text-emerald-400",
+  tester: "text-emerald-300",
+  "security-officer": "text-rose-400",
+  "general-purpose": "text-amber-400",
+  claude: "text-accent-bright",
+};
 
 function RoleTag({
   role,
@@ -78,22 +80,31 @@ function RoleTag({
 
 function AgentBadge({ info }: { info: AgentInfo }) {
   const short = shortenModel(info.model);
+  const modelColor = MODEL_COLOR[short] ?? "text-ink-faint";
   return (
     <div className="mt-0.5 flex flex-col gap-0.5">
       <span className="inline-flex items-center gap-1 font-mono text-[9px] tabular-nums text-ink-faint">
         <span className="rounded bg-accent/15 px-1 py-px font-semibold text-accent-bright">
           #{info.runIndex + 1}
         </span>
-        <Badge tone="neutral">{short}</Badge>
+        <span className={modelColor}>{short}</span>
       </span>
-      <Badge tone={getToneMode(info.mode as AgentMode)}>{info.mode}</Badge>
+      <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-ink-faint/70">
+        {info.mode}
+      </span>
       {info.agents && info.agents.length > 0 && (
         <div className="flex flex-col gap-px">
-          {info.agents.map((agent) => (
-            <span key={agent} className="font-mono text-[8px] tracking-[0.10em] text-ink-faint">
-              ↳ <Badge tone="neutral">{agent}</Badge>
-            </span>
-          ))}
+          {info.agents.map((agent) => {
+            const color = AGENT_TYPE_COLOR[agent] ?? "text-ink-faint";
+            return (
+              <span
+                key={agent}
+                className={`font-mono text-[8px] tracking-[0.10em] ${color}`}
+              >
+                ↳ {agent}
+              </span>
+            );
+          })}
         </div>
       )}
     </div>
