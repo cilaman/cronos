@@ -8,7 +8,6 @@ import { TaskForm } from "../components/TaskForm";
 import { EmptyState } from "../components/ui/EmptyState";
 import { SpaceTag } from "../components/ui/SpaceTag";
 import { Skeleton } from "../components/ui/Skeleton";
-import { StatTile } from "../components/ui/StatTile";
 import { TestStatusBadge } from "../components/TestStatusBadge";
 import { TimeFrameSelector } from "../components/TimeFrameSelector";
 import type { TimeFrame } from "../components/TimeFrameSelector";
@@ -52,75 +51,92 @@ function fmtDate(iso: string | null): string {
 }
 
 // ── Task count tiles ──────────────────────────────────────────────────────────
-// DashboardStatTile wraps the shared StatTile primitive and adds dashboard-
-// specific features: optional Link wrapper (to) and a pulse indicator dot.
 
-type DashboardTone = "neutral" | "info" | "warning";
-
-function DashboardStatTile({
+function StatTile({
   label,
   value,
-  tone = "neutral",
+  tone = "ink",
   pulse = false,
   to,
 }: {
   label: string;
   value: number | string;
-  tone?: DashboardTone;
+  tone?: "ink" | "accent" | "warning";
   pulse?: boolean;
   to?: string;
 }) {
-  const tile = (
-    <div className="relative">
-      <StatTile
-        label={label}
-        value={value}
-        tone={tone}
-        className={
-          to
-            ? "h-24 cursor-pointer bg-surface-1 shadow-inset-hairline transition hover:-translate-y-px hover:border-hairline-strong hover:shadow-lift"
-            : "h-24 bg-surface-1 shadow-inset-hairline"
-        }
-      />
-      {pulse && (
-        <span
-          aria-hidden
-          className="anim-pulse-dot absolute right-2 top-2 h-2 w-2 rounded-full bg-accent-bright"
-        />
-      )}
-    </div>
+  const valueClass =
+    tone === "accent"
+      ? "text-accent-bright"
+      : tone === "warning"
+        ? "text-warning"
+        : "text-ink";
+  const baseClass =
+    "flex h-24 flex-col justify-between rounded-md border border-hairline bg-surface-1 p-4 shadow-inset-hairline";
+  const interactiveClass = to
+    ? " cursor-pointer transition hover:-translate-y-px hover:border-hairline-strong hover:shadow-lift"
+    : "";
+  const inner = (
+    <>
+      <div className="flex items-center justify-between font-display text-[10px] uppercase tracking-[0.2em] text-ink-faint">
+        <span>{label}</span>
+        {pulse && (
+          <span
+            aria-hidden
+            className="anim-pulse-dot h-2 w-2 rounded-full bg-accent-bright"
+          />
+        )}
+      </div>
+      <p className={`font-display text-[28px] font-semibold tabular-nums ${valueClass}`}>
+        {value}
+      </p>
+    </>
   );
-
   return to ? (
-    <Link to={to} className="block">
-      {tile}
+    <Link to={to} className={baseClass + interactiveClass}>
+      {inner}
     </Link>
   ) : (
-    tile
+    <div className={baseClass}>{inner}</div>
   );
 }
 
 // ── AI stats metric tiles ─────────────────────────────────────────────────────
-// MetricTile uses the shared StatTile primitive; sub text maps to the delta slot.
 
 function MetricTile({
   label,
   value,
-  tone = "neutral",
+  tone = "ink",
   sub,
 }: {
   label: string;
   value: string | number;
-  tone?: "neutral" | "info" | "warning" | "danger";
+  tone?: "ink" | "accent" | "warning" | "danger";
   sub?: string;
 }) {
+  const valueClass =
+    tone === "accent"
+      ? "text-accent-bright"
+      : tone === "warning"
+        ? "text-warning"
+        : tone === "danger"
+          ? "text-danger"
+          : "text-ink";
+
   return (
-    <StatTile
-      label={label}
-      value={value}
-      tone={tone}
-      delta={sub}
-    />
+    <div className="flex flex-col gap-1 rounded-md border border-hairline bg-surface-2 p-3 shadow-inset-hairline">
+      <p className="font-display text-[10px] uppercase tracking-[0.2em] text-ink-faint">
+        {label}
+      </p>
+      <div>
+        <p className={`font-display text-[22px] font-semibold tabular-nums leading-none ${valueClass}`}>
+          {value}
+        </p>
+        {sub && (
+          <p className="mt-1 font-mono text-[10px] tracking-wide text-ink-faint">{sub}</p>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -654,23 +670,23 @@ export function DashboardPage() {
 
       {/* Stat tiles */}
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-6">
-        <DashboardStatTile label="To Do" value={totals.backlog ?? 0} to="/board" />
-        <DashboardStatTile
+        <StatTile label="To Do" value={totals.backlog ?? 0} to="/board" />
+        <StatTile
           label="Active agents"
           value={totals.active ?? 0}
-          tone="info"
+          tone="accent"
           pulse={(totals.active ?? 0) > 0}
           to="/board"
         />
-        <DashboardStatTile
+        <StatTile
           label="Waiting"
           value={totals.waiting ?? 0}
-          tone={totals.waiting ? "warning" : "neutral"}
+          tone={totals.waiting ? "warning" : "ink"}
           to="/board"
         />
-        <DashboardStatTile label="Done" value={totals.done ?? 0} to="/board" />
-        <DashboardStatTile label="Total tasks" value={totalTasks} to="/board" />
-        <DashboardStatTile label="Features" value={spacesData?.feature_totals?.backlog ?? 0} to="/features" />
+        <StatTile label="Done" value={totals.done ?? 0} to="/board" />
+        <StatTile label="Total tasks" value={totalTasks} to="/board" />
+        <StatTile label="Features" value={spacesData?.feature_totals?.backlog ?? 0} to="/features" />
       </section>
 
       {/* Analytics — above the fold, always visible */}
@@ -710,7 +726,7 @@ export function DashboardPage() {
                     value={formatTokens(
                       globalStats.total_input_tokens + globalStats.total_output_tokens,
                     )}
-                    tone="info"
+                    tone="accent"
                   />
                   <MetricTile
                     label="Est. cost"

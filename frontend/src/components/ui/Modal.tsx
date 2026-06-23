@@ -123,33 +123,29 @@ export function Modal({
           ) : (
             <span />
           )}
-          {/* Outer span provides a 44 × 44 px hit area (WCAG 2.5.5) while
-              the visual button stays at 16 × 16 px (the SVG glyph size). */}
           {!hideDefaultClose && (
-            <span className="ml-auto inline-grid min-h-[44px] min-w-[44px] place-content-center">
-              <button
-                type="button"
-                aria-label="Close"
-                onClick={onClose}
-                className="flex items-center justify-center rounded text-ink-muted hover:bg-surface-2 hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            <button
+              type="button"
+              aria-label="Close"
+              onClick={onClose}
+              className="ml-auto flex items-center justify-center rounded p-1 text-ink-muted hover:bg-surface-2 hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
-            </span>
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
           )}
         </div>
 

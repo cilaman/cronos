@@ -48,7 +48,7 @@ export function SpaceFilterDropdown({
         disabled={disabled}
         title={disabled ? disabledTooltip : undefined}
         onClick={() => !disabled && setOpen((v) => !v)}
-        className="flex h-8 items-center gap-2 rounded border border-hairline-strong bg-surface-1 px-2.5 text-[12px] text-ink transition hover:border-accent hover:bg-surface-2 focus:outline-none focus-visible:ring-1 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-hairline-strong disabled:hover:bg-surface-1"
+        className="flex h-8 items-center gap-2 rounded border border-hairline-strong bg-surface-1 px-2.5 text-[12px] text-ink transition hover:border-accent hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-hairline-strong disabled:hover:bg-surface-1"
       >
         {active ? (
           <>
@@ -73,7 +73,7 @@ export function SpaceFilterDropdown({
               onChange(null);
               setOpen(false);
             }}
-            className={`flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] transition hover:bg-surface-2 focus:outline-none focus-visible:ring-1 focus-visible:ring-accent ${
+            className={`flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] transition hover:bg-surface-2 ${
               value === null ? "text-ink" : "text-ink-muted"
             }`}
           >
@@ -89,7 +89,7 @@ export function SpaceFilterDropdown({
                   onChange(s.id);
                   setOpen(false);
                 }}
-                className={`flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] transition hover:bg-surface-2 focus:outline-none focus-visible:ring-1 focus-visible:ring-accent ${
+                className={`flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] transition hover:bg-surface-2 ${
                   value === s.id ? "text-ink" : "text-ink-muted"
                 }`}
               >

@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useSpaces, useSpaceTools, useUnadoptTool } from "../hooks/useSpaces";
 import { cn } from "../utils/cn";
-import { Tabs } from "../components/ui/Tabs";
 import { formatRelative } from "../utils/format";
 import type { AdoptedTool, AiToolEntry, HookEntry, PermissionEntry } from "../types";
 import { ToolDetailPanel } from "../components/ToolDetailPanel";
@@ -484,11 +483,23 @@ export function SpaceToolsPage() {
       </header>
 
       {/* Tab switcher */}
-      <Tabs
-        items={TABS.map((t) => ({ value: t.id, label: t.label }))}
-        value={activeTab}
-        onChange={(v) => setActiveTab(v as Tab)}
-      />
+      <div className="flex gap-1 rounded-md border border-hairline bg-surface-1 p-1 w-fit shadow-inset-hairline">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+            className={cn(
+              "rounded px-4 py-1.5 font-display text-[12px] font-medium uppercase tracking-[0.1em] transition",
+              activeTab === tab.id
+                ? "bg-accent text-white shadow-sm"
+                : "text-ink-muted hover:text-ink",
+            )}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
       {/* Tool detail panel */}
       {selectedTool && activeSpaceId && (

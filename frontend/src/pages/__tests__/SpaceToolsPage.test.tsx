@@ -265,12 +265,12 @@ describe("SpaceToolsPage — Plugins tab", () => {
 
   it("renders a Plugins tab button in the tab switcher", () => {
     renderPage();
-    expect(screen.getByRole("tab", { name: /plugins/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /plugins/i })).toBeInTheDocument();
   });
 
   it("mounts PluginsPanel when the Plugins tab is selected", () => {
     renderPage();
-    fireEvent.click(screen.getByRole("tab", { name: /plugins/i }));
+    fireEvent.click(screen.getByRole("button", { name: /plugins/i }));
     expect(screen.getByTestId("plugins-panel")).toBeInTheDocument();
   });
 
@@ -282,7 +282,7 @@ describe("SpaceToolsPage — Plugins tab", () => {
 
   it("hides the space selector when the Plugins tab is active", () => {
     renderPage();
-    fireEvent.click(screen.getByRole("tab", { name: /plugins/i }));
+    fireEvent.click(screen.getByRole("button", { name: /plugins/i }));
     // The select element for choosing a space should not be present
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
   });
@@ -292,7 +292,7 @@ describe("SpaceToolsPage — Plugins tab", () => {
     // Installed tab (default): selector present
     expect(screen.getByRole("combobox")).toBeInTheDocument();
     // Switch to Plugins tab: selector gone
-    fireEvent.click(screen.getByRole("tab", { name: /plugins/i }));
+    fireEvent.click(screen.getByRole("button", { name: /plugins/i }));
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
   });
 });

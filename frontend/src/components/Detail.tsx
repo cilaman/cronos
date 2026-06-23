@@ -41,7 +41,6 @@ import { TracePanel } from "./TracePanel";
 import { Badge } from "./ui/Badge";
 import { Modal } from "./ui/Modal";
 import { SpaceTag } from "./ui/SpaceTag";
-import { Tabs } from "./ui/Tabs";
 import { getTonePriority, getToneType } from "../utils/badgeTone";
 
 // ── Stat formatting helpers ───────────────────────────────────────────────────
@@ -895,7 +894,7 @@ export function Detail({ taskId, onClose }: Props) {
           {error && (
             <div className="flex flex-col items-center gap-3 p-10 text-center">
               <p className="rounded border border-danger/40 bg-danger/15 px-4 py-3 text-sm text-danger">
-                {extractDetail(error.message)}
+                {error.message}
               </p>
               <button
                 type="button"
@@ -1019,26 +1018,31 @@ export function Detail({ taskId, onClose }: Props) {
               />
 
               {/* Tab bar */}
-              <div className="flex items-end border-b border-hairline bg-surface-1 px-4">
-                <Tabs
-                  items={[
-                    { value: "details", label: "details" },
-                    { value: "stats", label: "stats" },
-                    { value: "trace", label: "trace" },
-                  ]}
-                  value={activeTab === "files" ? "details" : activeTab}
-                  onChange={(v) => setActiveTab(v as "details" | "stats" | "trace")}
-                  className="border-b-0"
-                />
+              <div className="flex border-b border-hairline bg-surface-1 px-4">
+                {(["details", "stats", "trace"] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => setActiveTab(tab)}
+                    className={[
+                      "relative mr-4 pb-2.5 pt-2 font-display text-[10px] uppercase tracking-[0.18em] transition",
+                      activeTab === tab
+                        ? "text-ink after:absolute after:inset-x-0 after:bottom-0 after:h-[2px] after:rounded-t after:bg-accent"
+                        : "text-ink-faint hover:text-ink-muted",
+                    ].join(" ")}
+                  >
+                    {tab}
+                  </button>
+                ))}
                 {/* Files tab — only visible on mobile since desktop shows files as a sidebar */}
                 <button
                   type="button"
                   onClick={() => setActiveTab("files")}
                   className={[
-                    "lg:hidden relative ml-4 pb-2 text-xs font-medium transition",
+                    "lg:hidden relative mr-4 pb-2.5 pt-2 font-display text-[10px] uppercase tracking-[0.18em] transition",
                     activeTab === "files"
-                      ? "text-ink after:absolute after:inset-x-0 after:-bottom-px after:h-px after:bg-accent"
-                      : "text-ink-muted hover:text-ink",
+                      ? "text-ink after:absolute after:inset-x-0 after:bottom-0 after:h-[2px] after:rounded-t after:bg-accent"
+                      : "text-ink-faint hover:text-ink-muted",
                   ].join(" ")}
                 >
                   files

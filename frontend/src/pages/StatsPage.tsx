@@ -7,7 +7,6 @@ import {
   type TimeFrame,
   type TimeFramePreset,
 } from "../components/TimeFrameSelector";
-import { StatTile } from "../components/ui/StatTile";
 import type { GlobalStats, TaskStats } from "../types";
 
 // ── Formatters ────────────────────────────────────────────────────────────────
@@ -56,6 +55,43 @@ function parseTimeFrame(params: URLSearchParams): TimeFrame {
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
+
+function StatTile({
+  label,
+  value,
+  tone = "ink",
+  sub,
+}: {
+  label: string;
+  value: string | number;
+  tone?: "ink" | "accent" | "warning" | "danger";
+  sub?: string;
+}) {
+  const valueClass =
+    tone === "accent"
+      ? "text-accent-bright"
+      : tone === "warning"
+        ? "text-warning"
+        : tone === "danger"
+          ? "text-danger"
+          : "text-ink";
+
+  return (
+    <div className="flex h-28 flex-col justify-between rounded-md border border-hairline bg-surface-1 p-4 shadow-inset-hairline">
+      <p className="font-display text-[10px] uppercase tracking-[0.2em] text-ink-faint">
+        {label}
+      </p>
+      <div>
+        <p className={`font-display text-[28px] font-semibold tabular-nums leading-none ${valueClass}`}>
+          {value}
+        </p>
+        {sub && (
+          <p className="mt-1 font-mono text-[10px] tracking-wide text-ink-faint">{sub}</p>
+        )}
+      </div>
+    </div>
+  );
+}
 
 const EXIT_REASON_STYLE: Record<string, { label: string; cls: string }> = {
   DONE:    { label: "Done",    cls: "text-accent-bright border-accent/30 bg-accent/10" },
@@ -131,13 +167,13 @@ function GlobalView({ stats }: { stats: GlobalStats }) {
           <StatTile
             label="Total tokens"
             value={formatTokens(totalTokens)}
-            tone="info"
-            delta={`${formatTokens(stats.total_input_tokens)} in · ${formatTokens(stats.total_output_tokens)} out`}
+            tone="accent"
+            sub={`${formatTokens(stats.total_input_tokens)} in · ${formatTokens(stats.total_output_tokens)} out`}
           />
           <StatTile
             label="Est. cost"
             value={formatCost(stats.total_cost_usd)}
-            delta="approximate"
+            sub="approximate"
           />
           <StatTile
             label="Total time"
@@ -150,7 +186,7 @@ function GlobalView({ stats }: { stats: GlobalStats }) {
           <StatTile
             label="Avg tokens / run"
             value={formatTokens(stats.avg_tokens_per_run)}
-            tone="neutral"
+            tone="ink"
           />
         </div>
       </section>
@@ -334,7 +370,7 @@ export function StatsPage() {
       {/* Global stats */}
       {globalLoading ? (
         <div className="py-12 text-center font-mono text-[11px] text-ink-faint">
-          Loading your statistics…
+          Loading statistics…
         </div>
       ) : globalStats ? (
         <GlobalView stats={globalStats} />
@@ -361,7 +397,7 @@ export function StatsPage() {
           <SpaceTaskTable tasks={spaceStats} spaceId={selectedSpaceId} />
         ) : (
           <div className="rounded-md border border-hairline bg-surface-1 p-8 text-center shadow-inset-hairline">
-            <p className="font-mono text-[11px] text-ink-faint">Loading task statistics…</p>
+            <p className="font-mono text-[11px] text-ink-faint">Loading…</p>
           </div>
         )}
       </section>

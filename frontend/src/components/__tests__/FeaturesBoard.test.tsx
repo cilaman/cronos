@@ -400,7 +400,7 @@ describe("FeaturesBoard — card click opens FeatureDetail", () => {
     expect(screen.queryByTestId("feature-detail-mock")).not.toBeInTheDocument();
 
     const user = userEvent.setup();
-    const card = screen.getByText("Clickable Feature").closest('button');
+    const card = screen.getByText("Clickable Feature").closest('[role="button"]');
     expect(card).toBeTruthy();
     await user.click(card!);
 

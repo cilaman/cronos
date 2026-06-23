@@ -148,7 +148,7 @@ describe("Board — feature card onClick deep-links to /features?feature=<id>", 
     renderBoard();
 
     const user = userEvent.setup();
-    const card = screen.getByText("Feature: dark mode").closest('button');
+    const card = screen.getByText("Feature: dark mode").closest('[role="button"]');
     expect(card).toBeTruthy();
     await user.click(card!);
 
@@ -171,12 +171,12 @@ describe("Board — feature card onClick deep-links to /features?feature=<id>", 
     renderBoard();
 
     const user = userEvent.setup();
-    const alphaCard = screen.getByText("Alpha feature").closest('button');
+    const alphaCard = screen.getByText("Alpha feature").closest('[role="button"]');
     await user.click(alphaCard!);
     expect(mockNavigate).toHaveBeenCalledWith("/features?feature=feat-abc");
 
     mockNavigate.mockClear();
-    const betaCard = screen.getByText("Beta feature").closest('button');
+    const betaCard = screen.getByText("Beta feature").closest('[role="button"]');
     await user.click(betaCard!);
     expect(mockNavigate).toHaveBeenCalledWith("/features?feature=feat-xyz");
   });
@@ -194,7 +194,7 @@ describe("Board — feature card onClick deep-links to /features?feature=<id>", 
     renderBoard();
 
     const user = userEvent.setup();
-    const card = screen.getByText("Feature: dark mode").closest('button');
+    const card = screen.getByText("Feature: dark mode").closest('[role="button"]');
     await user.click(card!);
 
     expect(mockNavigate).not.toHaveBeenCalledWith("/features");
@@ -219,7 +219,7 @@ describe("Board — feature card deep-link works for both click and keyboard-ope
     renderBoard();
 
     const user = userEvent.setup();
-    const card = screen.getByText("Feature: dark mode").closest('button');
+    const card = screen.getByText("Feature: dark mode").closest('[role="button"]');
     await user.click(card!);
 
     expect(mockNavigate).toHaveBeenCalledWith("/features?feature=feat-1");
