@@ -239,8 +239,7 @@ describe("Board — feature card click navigates to /features", () => {
     renderBoard();
 
     const user = userEvent.setup();
-    // The Card renders a div[role="button"] for the main clickable body
-    const card = screen.getByText("Feature: dark mode").closest('[role="button"]');
+    const card = screen.getByText("Feature: dark mode").closest('button');
     expect(card).toBeTruthy();
     await user.click(card!);
 
@@ -346,7 +345,7 @@ describe("Board — regression: existing Tasks board DnD unaffected", () => {
     renderBoard();
 
     const user = userEvent.setup();
-    const taskCard = screen.getByText("Regular task").closest('[role="button"]');
+    const taskCard = screen.getByText("Regular task").closest('button');
     expect(taskCard).toBeTruthy();
     await user.click(taskCard!);
 

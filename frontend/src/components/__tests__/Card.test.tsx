@@ -112,7 +112,7 @@ describe("Card — plain task (no type, no parent, no deps)", () => {
 
     const { container } = renderCard({ task, onClick: () => {} });
 
-    const button = container.querySelector("[data-task-type] div[role='button']");
+    const button = container.querySelector("[data-task-type] > div > button:last-child");
     expect(button).not.toBeNull();
     // The goal-specific class is only added for type=goal.
     expect(button!.className).not.toContain("border-t-ink");
@@ -150,7 +150,7 @@ describe("Card — type=goal", () => {
 
     const { container } = renderCard({ task, onClick: () => {} });
 
-    const button = container.querySelector("[data-task-type] div[role='button']");
+    const button = container.querySelector("[data-task-type] > div > button:last-child");
     expect(button).not.toBeNull();
     expect(button!.className).toContain("border-t-ink");
     expect((button as HTMLElement).style.borderTopWidth).toBe("2px");
@@ -185,7 +185,7 @@ describe("Card — type=issue", () => {
 
     const { container } = renderCard({ task, onClick: () => {} });
 
-    const button = container.querySelector("[data-task-type] div[role='button']");
+    const button = container.querySelector("[data-task-type] > div > button:last-child");
     expect(button).not.toBeNull();
     expect(button!.className).not.toContain("border-t-ink");
     expect((button as HTMLElement).style.borderTopWidth).toBe("");
@@ -650,7 +650,7 @@ describe("Card — combined goal that blocks others and is blocked", () => {
     expect(getCardRoot(container).getAttribute("data-task-type")).toBe("goal");
 
     // Goal-specific border styling
-    const button = container.querySelector("[data-task-type] div[role='button']");
+    const button = container.querySelector("[data-task-type] > div > button:last-child");
     expect(button!.className).toContain("border-t-ink");
     expect((button as HTMLElement).style.borderTopWidth).toBe("2px");
 

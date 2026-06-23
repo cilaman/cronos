@@ -352,20 +352,13 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
           </span>
         </button>
       )}
-      <div
-        role="button"
-        tabIndex={0}
+      <button
+        type="button"
         onClick={onClick}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onClick();
-          }
-        }}
         style={bodyStyle}
         className={cn(
           "relative cursor-pointer border bg-surface-2 py-3 pl-2.5 pr-3 text-left shadow-inset-hairline transition hover:-translate-y-px hover:border-hairline-strong hover:bg-surface-3 hover:shadow-lift focus:outline-none focus-visible:ring-1 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface-1",
-          hasChildren ? "min-w-0 flex-1 border-l-0 border-hairline" : "block w-full border-hairline",
+          hasChildren ? "min-w-0 flex-1 border-l-0 border-hairline" : "w-full border-hairline",
           hasChildren
             ? expanded ? "rounded-tr-md" : "rounded-r-md"
             : "rounded-md",
@@ -434,17 +427,24 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
             </a>
           )}
           {!task.pr_url && task.proposed_pr_path && (
-            <button
-              type="button"
+            <span
+              role="button"
+              tabIndex={0}
               title="PROPOSED PR (no GitHub remote)"
               onClick={(e) => {
                 e.stopPropagation();
                 void navigator.clipboard.writeText(task.proposed_pr_path!);
               }}
-              className="inline-flex items-center text-ink-faint transition hover:text-ink-muted"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.stopPropagation();
+                  void navigator.clipboard.writeText(task.proposed_pr_path!);
+                }
+              }}
+              className="inline-flex cursor-pointer items-center text-ink-faint transition hover:text-ink-muted"
             >
               <IconFileText />
-            </button>
+            </span>
           )}
           {task.issue_url ? (
             <a
@@ -581,10 +581,10 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
         <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.15em] text-ink-faint">
           {formatRelative(task.updated_at)}
         </p>
-      </div>
+      </button>
       </div>
 
-      {/* Expanded children list — rendered outside the card body div so the inline children look like a panel attached underneath */}
+      {/* Expanded children list — rendered outside the card body button so the inline children look like a panel attached underneath */}
       {expanded && hasChildren && (childrenProgress?.items?.length ?? 0) > 0 && (
         <div
           style={{ borderLeftColor: borderColor, borderLeftWidth: 3 }}

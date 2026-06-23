@@ -38,39 +38,39 @@ describe("IconButton — focus ring", () => {
   });
 });
 
-// ── Sizes ──────────────────────────────────────────────────────────────────────
+// ── Sizes — visual button dimensions ──────────────────────────────────────────
 
-describe("IconButton — sizes", () => {
-  it("sm size produces h-11 and w-11 (44 px)", () => {
+describe("IconButton — inner visual button dimensions", () => {
+  it("sm size produces h-7 and w-7 on the inner button (28 px visual)", () => {
     render(
       <IconButton size="sm" aria-label="small button">
         ★
       </IconButton>,
     );
     const btn = screen.getByRole("button", { name: "small button" });
-    expect(btn.className).toContain("h-11");
-    expect(btn.className).toContain("w-11");
+    expect(btn.className).toContain("h-7");
+    expect(btn.className).toContain("w-7");
   });
 
-  it("md size produces h-11 and w-11 (44 px)", () => {
+  it("md size produces h-8 and w-8 on the inner button (32 px visual)", () => {
     render(
       <IconButton size="md" aria-label="medium button">
         ★
       </IconButton>,
     );
     const btn = screen.getByRole("button", { name: "medium button" });
-    expect(btn.className).toContain("h-11");
-    expect(btn.className).toContain("w-11");
+    expect(btn.className).toContain("h-8");
+    expect(btn.className).toContain("w-8");
   });
 
-  it("default size (no explicit size prop) produces h-11 and w-11", () => {
+  it("default size (no explicit size prop) uses md — h-8 and w-8", () => {
     render(<IconButton aria-label="default size button">★</IconButton>);
     const btn = screen.getByRole("button", { name: "default size button" });
-    expect(btn.className).toContain("h-11");
-    expect(btn.className).toContain("w-11");
+    expect(btn.className).toContain("h-8");
+    expect(btn.className).toContain("w-8");
   });
 
-  it("compact size produces h-8 and w-8 (32 px)", () => {
+  it("compact size produces h-8 and w-8 on the button (32 px visual)", () => {
     render(
       <IconButton size="compact" aria-label="compact button">
         ★
@@ -79,6 +79,28 @@ describe("IconButton — sizes", () => {
     const btn = screen.getByRole("button", { name: "compact button" });
     expect(btn.className).toContain("h-8");
     expect(btn.className).toContain("w-8");
+  });
+
+  it("sm size does NOT produce h-11 or w-11 on the inner button", () => {
+    render(
+      <IconButton size="sm" aria-label="sm no-44-inner button">
+        ★
+      </IconButton>,
+    );
+    const btn = screen.getByRole("button", { name: "sm no-44-inner button" });
+    expect(btn.className).not.toContain("h-11");
+    expect(btn.className).not.toContain("w-11");
+  });
+
+  it("md size does NOT produce h-11 or w-11 on the inner button", () => {
+    render(
+      <IconButton size="md" aria-label="md no-44-inner button">
+        ★
+      </IconButton>,
+    );
+    const btn = screen.getByRole("button", { name: "md no-44-inner button" });
+    expect(btn.className).not.toContain("h-11");
+    expect(btn.className).not.toContain("w-11");
   });
 
   it("compact size does NOT produce h-11 or w-11", () => {
@@ -90,6 +112,71 @@ describe("IconButton — sizes", () => {
     const btn = screen.getByRole("button", { name: "compact no-44 button" });
     expect(btn.className).not.toContain("h-11");
     expect(btn.className).not.toContain("w-11");
+  });
+});
+
+// ── Sizes — outer hit-area wrapper ────────────────────────────────────────────
+
+describe("IconButton — outer 44px hit-area wrapper", () => {
+  it("sm size is wrapped in a span with min-h-[44px] and min-w-[44px]", () => {
+    render(
+      <IconButton size="sm" aria-label="sm wrapped">
+        ★
+      </IconButton>,
+    );
+    const btn = screen.getByRole("button", { name: "sm wrapped" });
+    const wrapper = btn.parentElement;
+    expect(wrapper?.tagName.toLowerCase()).toBe("span");
+    expect(wrapper?.className).toContain("min-h-[44px]");
+    expect(wrapper?.className).toContain("min-w-[44px]");
+  });
+
+  it("md size is wrapped in a span with min-h-[44px] and min-w-[44px]", () => {
+    render(
+      <IconButton size="md" aria-label="md wrapped">
+        ★
+      </IconButton>,
+    );
+    const btn = screen.getByRole("button", { name: "md wrapped" });
+    const wrapper = btn.parentElement;
+    expect(wrapper?.tagName.toLowerCase()).toBe("span");
+    expect(wrapper?.className).toContain("min-h-[44px]");
+    expect(wrapper?.className).toContain("min-w-[44px]");
+  });
+
+  it("default size (no explicit size prop) is wrapped with 44px hit area", () => {
+    render(<IconButton aria-label="default wrapped">★</IconButton>);
+    const btn = screen.getByRole("button", { name: "default wrapped" });
+    const wrapper = btn.parentElement;
+    expect(wrapper?.tagName.toLowerCase()).toBe("span");
+    expect(wrapper?.className).toContain("min-h-[44px]");
+    expect(wrapper?.className).toContain("min-w-[44px]");
+  });
+
+  it("compact size is NOT wrapped — button's parent is not a min-h-[44px] span", () => {
+    render(
+      <IconButton size="compact" aria-label="compact no-wrap">
+        ★
+      </IconButton>,
+    );
+    const btn = screen.getByRole("button", { name: "compact no-wrap" });
+    // compact renders the button directly — parent is the testing container div, NOT a wrapper span
+    expect(btn.parentElement?.tagName.toLowerCase()).not.toBe("span");
+    // And the parent should not have the 44px classes
+    expect(btn.parentElement?.className ?? "").not.toContain("min-h-[44px]");
+    expect(btn.parentElement?.className ?? "").not.toContain("min-w-[44px]");
+  });
+
+  it("sm wrapper uses inline-grid and place-content-center for centering", () => {
+    render(
+      <IconButton size="sm" aria-label="sm grid">
+        ★
+      </IconButton>,
+    );
+    const btn = screen.getByRole("button", { name: "sm grid" });
+    const wrapper = btn.parentElement;
+    expect(wrapper?.className).toContain("inline-grid");
+    expect(wrapper?.className).toContain("place-content-center");
   });
 });
 

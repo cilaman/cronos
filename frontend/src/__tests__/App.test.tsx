@@ -74,4 +74,13 @@ describe("App", () => {
     // The mobile top bar shows "Cronos" as text — no emoji injection
     expect(screen.getByText("Cronos")).toBeInTheDocument();
   });
+
+  it("ToastProvider is mounted — aria-live toast stack container is present in the DOM", () => {
+    // ToastProvider renders a fixed aria-live container with data-testid="toast-stack".
+    // Its presence proves <ToastProvider> is wrapping the route tree in App.
+    renderApp();
+    const toastStack = screen.getByTestId("toast-stack");
+    expect(toastStack).toBeInTheDocument();
+    expect(toastStack.getAttribute("aria-live")).toBe("polite");
+  });
 });

@@ -337,9 +337,9 @@ describe("Detail — task loaded", () => {
 
   it("renders tab buttons for Details, Stats, and Trace", () => {
     renderDetail();
-    expect(screen.getByRole("button", { name: /details/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /stats/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /trace/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /details/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /stats/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /trace/i })).toBeInTheDocument();
   });
 
   it("renders Priority, Mode, and Model dropdowns in the header", () => {
@@ -430,8 +430,45 @@ describe("Detail — tab switching", () => {
 
   it("switches to Stats tab and shows StatsPanel", async () => {
     renderDetail();
-    await userEvent.click(screen.getByRole("button", { name: /stats/i }));
+    await userEvent.click(screen.getByRole("tab", { name: /stats/i }));
     expect(screen.getByText(/Loading stats/)).toBeInTheDocument();
+  });
+});
+
+describe("Detail — Tabs primitive integration", () => {
+  it("renders a tablist container for the tab bar", () => {
+    renderDetail();
+    expect(screen.getByRole("tablist")).toBeInTheDocument();
+  });
+
+  it("Details tab is aria-selected=true by default", () => {
+    renderDetail();
+    const detailsTab = screen.getByRole("tab", { name: /details/i });
+    expect(detailsTab).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("Stats tab is aria-selected=false by default", () => {
+    renderDetail();
+    const statsTab = screen.getByRole("tab", { name: /stats/i });
+    expect(statsTab).toHaveAttribute("aria-selected", "false");
+  });
+
+  it("clicking Stats tab makes it aria-selected=true", async () => {
+    renderDetail();
+    const statsTab = screen.getByRole("tab", { name: /stats/i });
+    await userEvent.click(statsTab);
+    expect(statsTab).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("clicking Trace tab makes it aria-selected=true and Details false", async () => {
+    renderDetail();
+    const traceTab = screen.getByRole("tab", { name: /trace/i });
+    await userEvent.click(traceTab);
+    expect(traceTab).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: /details/i })).toHaveAttribute(
+      "aria-selected",
+      "false",
+    );
   });
 });
 

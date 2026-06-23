@@ -269,6 +269,46 @@ describe("Lane — backlog '+ New task' button", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Touch-target compliance — WCAG 2.5.5 (min 44 × 44 px hit area)
+// ---------------------------------------------------------------------------
+
+describe("Lane — touch target 44px wrapper (WCAG 2.5.5)", () => {
+  it("'+ New task' button is wrapped in a span with min-h-[44px] and min-w-[44px]", () => {
+    renderLane({ state: "backlog", label: "To Do" });
+    const btn = screen.getByRole("button", { name: /New task/i });
+    const wrapper = btn.parentElement;
+    expect(wrapper?.tagName.toLowerCase()).toBe("span");
+    expect(wrapper?.className).toContain("min-h-[44px]");
+    expect(wrapper?.className).toContain("min-w-[44px]");
+  });
+
+  it("'+ New task' wrapper uses inline-grid place-content-center", () => {
+    renderLane({ state: "backlog", label: "To Do" });
+    const btn = screen.getByRole("button", { name: /New task/i });
+    const wrapper = btn.parentElement;
+    expect(wrapper?.className).toContain("inline-grid");
+    expect(wrapper?.className).toContain("place-content-center");
+  });
+
+  it("hide-lane button is wrapped in a span with min-h-[44px] and min-w-[44px]", () => {
+    renderLane({ state: "active", label: "Active", onHideLane: vi.fn() });
+    const btn = screen.getByRole("button", { name: /Hide Active lane/i });
+    const wrapper = btn.parentElement;
+    expect(wrapper?.tagName.toLowerCase()).toBe("span");
+    expect(wrapper?.className).toContain("min-h-[44px]");
+    expect(wrapper?.className).toContain("min-w-[44px]");
+  });
+
+  it("hide-lane button wrapper uses inline-grid place-content-center", () => {
+    renderLane({ state: "active", label: "Active", onHideLane: vi.fn() });
+    const btn = screen.getByRole("button", { name: /Hide Active lane/i });
+    const wrapper = btn.parentElement;
+    expect(wrapper?.className).toContain("inline-grid");
+    expect(wrapper?.className).toContain("place-content-center");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Lane header content — label + count + running pulse
 // ---------------------------------------------------------------------------
 

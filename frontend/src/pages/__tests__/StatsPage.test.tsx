@@ -99,7 +99,7 @@ describe("StatsPage", () => {
     } as ReturnType<typeof useGlobalStats>);
 
     renderPage();
-    expect(screen.getByText(/Loading statistics/i)).toBeInTheDocument();
+    expect(screen.getByText(/Loading your statistics/i)).toBeInTheDocument();
   });
 
   it("renders overview tiles when global stats are loaded", () => {
