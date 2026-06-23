@@ -109,10 +109,6 @@ Frontend types are **generated** from the backend OpenAPI schema via a committed
 | `backend/app/git_ops.py` | `git clone/commit/push` wrappers for repo-linked spaces |
 | `backend/app/goal_sync.py` | Goal state propagation |
 | `frontend/src/App.tsx` | Root layout — sidebar nav + outlet (responsive mobile drawer) |
-| `frontend/src/components/ui/PageHeader.tsx` | Unified page title / breadcrumb / actions bar — renders `<h1 className="text-title">` per design-system §2.2, with optional breadcrumbs, subtitle, and action buttons (3 inline / 4+ via details/summary); optional sticky mode with z-30 |
-| `frontend/src/components/ui/PageContainer.tsx` | Standard page body wrapper — responsive padding (p-6 mobile / p-8 lg) with width variants: `'content'` (max-w-[1280px]) for dashboards, `'reading'` (max-w-[768px]) for settings/docs pages |
-| `frontend/src/components/ui/Badge.tsx` | Reusable badge component rendering styled pill with tone-based color classes (12 tones: status/categorical/brand); frozen TONE_CLASSES record for Tailwind JIT static scanning; used across 10 frontend files (Card, Detail, TaskForm, FeatureForm, FeatureDetail, ConversationEntry, HarnessRunsPage, RunOverlay) to consolidate duplicated badge styling. Ships with 20 vitest tests. |
-| `frontend/src/utils/badgeTone.ts` | Badge tone helper module — exports `Tone` union type and 6 typed getter functions (`getToneRunStatus`, `getToneTaskState`, `getToneFeatureState`, `getTonePriority`, `getToneType`, `getToneMode`) mapping domain enums to badge tone strings; guards against unrecognized inputs with fallback to `'neutral'` tone. Supplies the semantic tone strings used by Badge component. Ships with 43 vitest tests. |
 | `frontend/src/pages/BoardPage.tsx` | Kanban board — dnd-kit drag-drop, lanes by TaskState |
 | `frontend/src/pages/TreePage.tsx` | Dependency DAG visualization (dagre) |
 | `frontend/src/pages/HarnessRunsPage.tsx` | Harness run history list with embedded per-run detail panel; trigger button and status badges |

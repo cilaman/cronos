@@ -3,6 +3,7 @@ import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { cn } from "../utils/cn";
 import { EmptyState } from "./ui/EmptyState";
 import { StickyToolbar } from "./ui/StickyToolbar";
+import { IconButton } from "./ui/IconButton";
 import { Card } from "./Card";
 import type { TaskSummary } from "../types";
 
@@ -68,28 +69,26 @@ export function Lane({ state, label, tasks, onOpen, onAdd, compact = false, show
         </div>
         <div className="ml-auto flex items-center gap-1">
           {shouldShowAdd && (
-            <button
-              type="button"
-              onClick={onAdd}
+            <IconButton
               aria-label="New task"
-              className="rounded p-1 text-ink-muted transition hover:bg-surface-2 hover:text-accent-bright focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+              size="compact"
+              onClick={onAdd}
             >
               <span aria-hidden className="text-lg leading-none">＋</span>
-            </button>
+            </IconButton>
           )}
           {onHideLane && (
-            <button
-              type="button"
-              onClick={() => onHideLane(state)}
+            <IconButton
               aria-label={`Hide ${label} lane`}
               title={`Hide ${label}`}
-              className="rounded p-1 text-ink-faint transition hover:bg-surface-2 hover:text-ink focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+              size="compact"
+              onClick={() => onHideLane(state)}
             >
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" aria-hidden="true">
                 <line x1="3" y1="3" x2="9" y2="9" />
                 <line x1="9" y1="3" x2="3" y2="9" />
               </svg>
-            </button>
+            </IconButton>
           )}
         </div>
       </StickyToolbar>

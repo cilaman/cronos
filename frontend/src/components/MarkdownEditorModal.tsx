@@ -3,6 +3,9 @@ import "@uiw/react-md-editor/markdown-editor.css";
 import { useEffect, useState } from "react";
 import { useTheme } from "../hooks/useTheme";
 import type { TaskFile } from "../types";
+import { cn } from "../utils/cn";
+import { Button } from "./ui/Button";
+import { IconButton } from "./ui/IconButton";
 
 type PreviewMode = "edit" | "preview" | "live";
 
@@ -93,22 +96,22 @@ export function MarkdownEditorModal({ file, fileUrl, onSave, savePending, onClos
           </span>
           <div className="flex shrink-0 items-center gap-2">
             {/* Mode toggle */}
-            <div className="flex rounded border border-hairline text-[10px] uppercase tracking-wide overflow-hidden">
+            <div className="flex rounded border border-hairline overflow-hidden">
               {(["edit", "preview", "live"] as PreviewMode[]).map((mode) => (
-                <button
+                <Button
                   key={mode}
                   type="button"
+                  archetype="segmented"
+                  variant={previewMode === mode ? "secondary" : "ghost"}
+                  size="sm"
                   onClick={() => setPreviewMode(mode)}
-                  className={`px-2 py-1 transition ${
-                    mode === "live" ? "hidden sm:block" : ""
-                  } ${
-                    previewMode === mode
-                      ? "bg-surface-2 text-ink"
-                      : "text-ink-muted hover:text-ink"
-                  }`}
+                  className={cn(
+                    "text-[10px] uppercase tracking-wide px-2 py-1",
+                    mode === "live" ? "hidden sm:flex" : "",
+                  )}
                 >
                   {mode === "live" ? "Split" : mode.charAt(0).toUpperCase() + mode.slice(1)}
-                </button>
+                </Button>
               ))}
             </div>
 
@@ -119,23 +122,26 @@ export function MarkdownEditorModal({ file, fileUrl, onSave, savePending, onClos
               <span className="max-w-xs truncate text-[10px] text-danger">{saveError}</span>
             )}
             {onSave && (
-              <button
+              <Button
                 type="button"
+                variant="secondary"
+                size="sm"
                 onClick={() => void handleSave()}
                 disabled={savePending || !dirty || content === null}
-                className="rounded border border-hairline px-3 py-1 text-xs text-ink-muted transition hover:border-hairline-strong hover:text-ink disabled:opacity-40"
+                loading={savePending}
               >
                 {savePending ? "Saving…" : "Save"}
-              </button>
+              </Button>
             )}
-            <button
+            <IconButton
               type="button"
+              variant="default"
               onClick={onClose}
-              aria-label="Close"
-              className="rounded p-1 text-ink-muted transition hover:bg-surface-2 hover:text-ink"
+              aria-label="Close editor"
+              size="compact"
             >
               ✕
-            </button>
+            </IconButton>
           </div>
         </div>
 
