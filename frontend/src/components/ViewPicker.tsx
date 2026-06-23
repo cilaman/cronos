@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Button } from "./ui/Button";
+import { ChevronDown } from "lucide-react";
+import { Icon } from "./ui/Icon";
 import { useViews } from "../hooks/useViews";
 import type { View } from "../types";
 
@@ -84,12 +85,10 @@ export function ViewPicker({ spaceId, viewId, onChange, onManageViews }: Props) 
 
   return (
     <div ref={ref} className="relative">
-      <Button
-        archetype="dropdown-trigger"
-        variant="secondary"
-        size="sm"
+      <button
+        type="button"
         onClick={() => setOpen((x) => !x)}
-        className="h-8 gap-2 px-2.5 text-[12px]"
+        className="flex h-8 items-center gap-2 rounded border border-hairline-strong bg-surface-1 px-2.5 text-[12px] text-ink transition hover:border-accent hover:bg-surface-2"
       >
         {resolvedView ? (
           <>
@@ -99,10 +98,8 @@ export function ViewPicker({ spaceId, viewId, onChange, onManageViews }: Props) 
         ) : (
           <span className="text-ink-muted">Views</span>
         )}
-        <span aria-hidden className="text-[10px] text-ink-faint">
-          ▾
-        </span>
-      </Button>
+        <Icon icon={ChevronDown} size="sm" className="text-ink-faint" />
+      </button>
 
       {open && (
         <div className="absolute left-0 z-30 mt-1 w-52 overflow-hidden rounded-md border border-hairline bg-surface-1 shadow-lift">
@@ -110,33 +107,32 @@ export function ViewPicker({ spaceId, viewId, onChange, onManageViews }: Props) 
             {(views ?? []).map((v) => {
               const isActive = resolvedView?.id === v.id;
               return (
-                <Button
+                <button
                   key={v.id}
-                  archetype="list-row"
-                  variant="ghost"
-                  size="sm"
+                  type="button"
                   onClick={() => handleSelect(v)}
-                  className={`gap-2 text-[12px] ${isActive ? "text-ink" : "text-ink-muted"}`}
+                  className={[
+                    "flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] transition hover:bg-surface-2",
+                    isActive ? "text-ink" : "text-ink-muted",
+                  ].join(" ")}
                 >
                   <span className="w-3 shrink-0">
                     {isActive && <CheckIcon />}
                   </span>
                   <span className="min-w-0 flex-1 truncate">{v.name}</span>
                   {v.default && <StarIcon />}
-                </Button>
+                </button>
               );
             })}
           </div>
           <div className="border-t border-hairline">
-            <Button
-              archetype="list-row"
-              variant="ghost"
-              size="sm"
+            <button
+              type="button"
               onClick={() => {
                 setOpen(false);
                 onManageViews();
               }}
-              className="gap-2 text-[12px] text-ink-muted hover:text-ink"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] text-ink-muted transition hover:bg-surface-2 hover:text-ink"
             >
               <svg
                 width="12"
@@ -154,7 +150,7 @@ export function ViewPicker({ spaceId, viewId, onChange, onManageViews }: Props) 
                 <line x1="4" y1="6" x2="8" y2="6" />
               </svg>
               Manage views…
-            </Button>
+            </button>
           </div>
         </div>
       )}

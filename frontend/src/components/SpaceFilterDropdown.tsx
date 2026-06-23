@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Button } from "./ui/Button";
+import { ChevronDown } from "lucide-react";
+import { Icon } from "./ui/Icon";
 import { useSpaces } from "../hooks/useSpaces";
 
 interface Props {
@@ -42,14 +43,12 @@ export function SpaceFilterDropdown({
 
   return (
     <div ref={ref} className="relative">
-      <Button
-        archetype="dropdown-trigger"
-        variant="secondary"
-        size="sm"
+      <button
+        type="button"
         disabled={disabled}
         title={disabled ? disabledTooltip : undefined}
         onClick={() => !disabled && setOpen((v) => !v)}
-        className="h-8 gap-2 px-2.5 text-[12px]"
+        className="flex h-8 items-center gap-2 rounded border border-hairline-strong bg-surface-1 px-2.5 text-[12px] text-ink transition hover:border-accent hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-hairline-strong disabled:hover:bg-surface-1"
       >
         {active ? (
           <>
@@ -64,37 +63,35 @@ export function SpaceFilterDropdown({
         ) : (
           <span className="text-ink-muted">All spaces</span>
         )}
-        <span aria-hidden className="text-[10px] text-ink-faint">
-          ▾
-        </span>
-      </Button>
+        <Icon icon={ChevronDown} size="sm" className="text-ink-faint" />
+      </button>
       {open && (
         <div className="absolute right-0 z-30 mt-1 w-56 overflow-hidden rounded-md border border-hairline bg-surface-1 shadow-lift">
-          <Button
-            archetype="list-row"
-            variant="ghost"
-            size="sm"
+          <button
+            type="button"
             onClick={() => {
               onChange(null);
               setOpen(false);
             }}
-            className={`gap-2 text-[12px] ${value === null ? "text-ink" : "text-ink-muted"}`}
+            className={`flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] transition hover:bg-surface-2 ${
+              value === null ? "text-ink" : "text-ink-muted"
+            }`}
           >
             <span aria-hidden className="h-2 w-2 rounded-sm bg-hairline-strong" />
             All spaces
-          </Button>
+          </button>
           <div className="max-h-72 overflow-x-hidden overflow-y-auto border-t border-hairline">
             {spaces.map((s) => (
-              <Button
+              <button
                 key={s.id}
-                archetype="list-row"
-                variant="ghost"
-                size="sm"
+                type="button"
                 onClick={() => {
                   onChange(s.id);
                   setOpen(false);
                 }}
-                className={`gap-2 text-[12px] ${value === s.id ? "text-ink" : "text-ink-muted"}`}
+                className={`flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] transition hover:bg-surface-2 ${
+                  value === s.id ? "text-ink" : "text-ink-muted"
+                }`}
               >
                 <span
                   aria-hidden
@@ -103,7 +100,7 @@ export function SpaceFilterDropdown({
                 />
                 {s.icon && <span aria-hidden>{s.icon}</span>}
                 <span className="truncate">{s.name}</span>
-              </Button>
+              </button>
             ))}
           </div>
         </div>

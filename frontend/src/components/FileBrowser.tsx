@@ -1,24 +1,39 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import type { LucideIcon } from "lucide-react";
+import {
+  Archive,
+  Binary,
+  BookOpen,
+  Bot,
+  Command,
+  FileCode,
+  FileText,
+  Folder,
+  Image,
+  Terminal,
+  Zap,
+} from "lucide-react";
 import type { FileCategory, TaskFile } from "../types";
 import { MarkdownEditorModal } from "./MarkdownEditorModal";
+import { Icon } from "./ui/Icon";
 
 // ---------------------------------------------------------------------------
 // Category metadata
 // ---------------------------------------------------------------------------
 
-const CATEGORY_ICON: Record<FileCategory | "directory", string> = {
-  directory: "▸",
-  agent:     "🤖",
-  skill:     "⚡",
-  command:   "⌘",
-  context:   "📖",
-  image:     "🖼",
-  text:      "📄",
-  code:      "💻",
-  document:  "📑",
-  archive:   "🗜",
-  binary:    "⬛",
+const CATEGORY_ICON: Record<FileCategory | "directory", LucideIcon> = {
+  directory: Folder,
+  agent:     Bot,
+  skill:     Zap,
+  command:   Command,
+  context:   BookOpen,
+  image:     Image,
+  text:      FileText,
+  code:      Terminal,
+  document:  FileCode,
+  archive:   Archive,
+  binary:    Binary,
 };
 
 const CATEGORY_LABEL: Record<FileCategory | "directory", string> = {
@@ -224,7 +239,7 @@ export function FileBrowser({
           ) : (
             <ul className="divide-y divide-hairline">
               {files.map((file) => {
-                const icon = CATEGORY_ICON[file.category as FileCategory | "directory"] ?? "📄";
+                const iconComponent = CATEGORY_ICON[file.category as FileCategory | "directory"] ?? FileText;
                 const label = CATEGORY_LABEL[file.category as FileCategory | "directory"] ?? file.category;
                 const canView = !file.is_dir && VIEWABLE_CATEGORIES.has(file.category as FileCategory);
                 const depth = file.path.split("/").length - 1;
@@ -239,8 +254,8 @@ export function FileBrowser({
                     }`}
                     style={{ paddingLeft: `${0.75 + depth * 1}rem` }}
                   >
-                    <span className="shrink-0 text-base leading-none" title={label}>
-                      {icon}
+                    <span className="shrink-0 leading-none text-ink-muted" title={label}>
+                      <Icon icon={iconComponent} size="sm" />
                     </span>
                     <span
                       className={`min-w-0 flex-1 truncate font-mono text-xs ${

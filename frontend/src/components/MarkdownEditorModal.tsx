@@ -1,11 +1,10 @@
 import MDEditor from "@uiw/react-md-editor";
 import "@uiw/react-md-editor/markdown-editor.css";
 import { useEffect, useState } from "react";
+import { X } from "lucide-react";
 import { useTheme } from "../hooks/useTheme";
 import type { TaskFile } from "../types";
-import { cn } from "../utils/cn";
-import { Button } from "./ui/Button";
-import { IconButton } from "./ui/IconButton";
+import { Icon } from "./ui/Icon";
 
 type PreviewMode = "edit" | "preview" | "live";
 
@@ -96,22 +95,22 @@ export function MarkdownEditorModal({ file, fileUrl, onSave, savePending, onClos
           </span>
           <div className="flex shrink-0 items-center gap-2">
             {/* Mode toggle */}
-            <div className="flex rounded border border-hairline overflow-hidden">
+            <div className="flex rounded border border-hairline text-[10px] uppercase tracking-wide overflow-hidden">
               {(["edit", "preview", "live"] as PreviewMode[]).map((mode) => (
-                <Button
+                <button
                   key={mode}
                   type="button"
-                  archetype="segmented"
-                  variant={previewMode === mode ? "secondary" : "ghost"}
-                  size="sm"
                   onClick={() => setPreviewMode(mode)}
-                  className={cn(
-                    "text-[10px] uppercase tracking-wide px-2 py-1",
-                    mode === "live" ? "hidden sm:flex" : "",
-                  )}
+                  className={`px-2 py-1 transition ${
+                    mode === "live" ? "hidden sm:block" : ""
+                  } ${
+                    previewMode === mode
+                      ? "bg-surface-2 text-ink"
+                      : "text-ink-muted hover:text-ink"
+                  }`}
                 >
                   {mode === "live" ? "Split" : mode.charAt(0).toUpperCase() + mode.slice(1)}
-                </Button>
+                </button>
               ))}
             </div>
 
@@ -122,26 +121,23 @@ export function MarkdownEditorModal({ file, fileUrl, onSave, savePending, onClos
               <span className="max-w-xs truncate text-[10px] text-danger">{saveError}</span>
             )}
             {onSave && (
-              <Button
+              <button
                 type="button"
-                variant="secondary"
-                size="sm"
                 onClick={() => void handleSave()}
                 disabled={savePending || !dirty || content === null}
-                loading={savePending}
+                className="rounded border border-hairline px-3 py-1 text-xs text-ink-muted transition hover:border-hairline-strong hover:text-ink disabled:opacity-40"
               >
                 {savePending ? "Saving…" : "Save"}
-              </Button>
+              </button>
             )}
-            <IconButton
+            <button
               type="button"
-              variant="default"
               onClick={onClose}
               aria-label="Close editor"
-              size="compact"
+              className="rounded p-1 text-ink-muted transition hover:bg-surface-2 hover:text-ink focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
             >
-              ✕
-            </IconButton>
+              <Icon icon={X} size="sm" />
+            </button>
           </div>
         </div>
 
