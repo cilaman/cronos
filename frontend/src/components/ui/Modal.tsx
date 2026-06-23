@@ -7,6 +7,10 @@ interface Props {
   children: React.ReactNode;
   dismissable?: boolean;
   title?: string;
+  /** When true, Modal does not render its own X close button.
+   * Use this when the consumer provides its own close control
+   * (e.g. MarkdownEditorModal's own aria-label="Close editor" button). */
+  hideDefaultClose?: boolean;
 }
 
 const FOCUSABLE =
@@ -18,6 +22,7 @@ export function Modal({
   children,
   dismissable = true,
   title,
+  hideDefaultClose = false,
 }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -118,28 +123,30 @@ export function Modal({
           ) : (
             <span />
           )}
-          <button
-            type="button"
-            aria-label="Close"
-            onClick={onClose}
-            className="ml-auto flex items-center justify-center rounded p-1 text-ink-muted hover:bg-surface-2 hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
+          {!hideDefaultClose && (
+            <button
+              type="button"
+              aria-label="Close"
+              onClick={onClose}
+              className="ml-auto flex items-center justify-center rounded p-1 text-ink-muted hover:bg-surface-2 hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          )}
         </div>
 
         {/* Panel body */}

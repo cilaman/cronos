@@ -1,8 +1,10 @@
 import MDEditor from "@uiw/react-md-editor";
 import "@uiw/react-md-editor/markdown-editor.css";
 import { useEffect, useState } from "react";
+import { X } from "lucide-react";
 import { useTheme } from "../hooks/useTheme";
 import type { TaskFile } from "../types";
+import { Icon } from "./ui/Icon";
 import { Modal } from "./ui/Modal";
 
 type PreviewMode = "edit" | "preview" | "live";
@@ -117,11 +119,19 @@ export function MarkdownEditorModal({ file, fileUrl, onSave, savePending, onClos
                 type="button"
                 onClick={() => void handleSave()}
                 disabled={savePending || !dirty || content === null}
-                className="rounded border border-hairline px-3 py-1 text-xs text-ink-muted transition hover:border-hairline-strong hover:text-ink disabled:opacity-40"
+                className="rounded border border-hairline px-3 py-1 text-xs text-ink-muted transition hover:border-hairline-strong hover:text-ink disabled:opacity-40 focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
               >
                 {savePending ? "Saving…" : "Save"}
               </button>
             )}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close editor"
+              className="rounded p-1 text-ink-muted transition hover:bg-surface-2 hover:text-ink focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+            >
+              <Icon icon={X} size="sm" />
+            </button>
           </div>
         </div>
 

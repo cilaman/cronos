@@ -150,3 +150,17 @@ describe("Modal — motion token class", () => {
     expect(panel.className).toContain("duration-slow");
   });
 });
+
+// ── 10. hideDefaultClose prop ─────────────────────────────────────────────────
+
+describe("Modal — hideDefaultClose prop", () => {
+  it("hides the X close button when hideDefaultClose=true", () => {
+    renderModal({ hideDefaultClose: true });
+    expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
+  });
+
+  it("still renders the X close button when hideDefaultClose is not set (default)", () => {
+    renderModal();
+    expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
+  });
+});
