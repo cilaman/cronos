@@ -3,6 +3,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useHarnesses, useCreateHarness, useDeleteHarness } from "../hooks/useHarnesses";
 import { cn } from "../utils/cn";
 import type { Harness } from "../types";
+import { Modal } from "../components/ui/Modal";
+import { Skeleton } from "../components/ui/Skeleton";
 
 function formatDate(iso?: string): string {
   if (!iso) return "—";
@@ -101,61 +103,58 @@ function CreateHarnessModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-xl border border-hairline bg-surface-1 p-6 shadow-xl">
-        <h2 className="mb-4 font-display text-base font-semibold text-ink">New Harness</h2>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-ink-muted" htmlFor="harness-name">
-              Name
-            </label>
-            <input
-              id="harness-name"
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="my-harness"
-              autoFocus
-              className="rounded-md border border-hairline bg-surface-2 px-3 py-2 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-accent focus:ring-1 focus:ring-accent"
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-ink-muted" htmlFor="harness-description">
-              Description <span className="text-ink-faint">(optional)</span>
-            </label>
-            <input
-              id="harness-description"
-              type="text"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="What does this harness do?"
-              className="rounded-md border border-hairline bg-surface-2 px-3 py-2 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-accent focus:ring-1 focus:ring-accent"
-            />
-          </div>
-          <div className="flex justify-end gap-2 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded px-3 py-1.5 text-sm text-ink-muted transition hover:bg-surface-2 hover:text-ink"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={!name.trim() || isLoading}
-              className={cn(
-                "rounded bg-accent px-4 py-1.5 text-sm font-medium text-white transition",
-                !name.trim() || isLoading
-                  ? "cursor-not-allowed opacity-50"
-                  : "hover:bg-accent-bright",
-              )}
-            >
-              {isLoading ? "Creating…" : "Create"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <Modal onClose={onClose} title="New Harness">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4 px-4 pb-4">
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-medium text-ink-muted" htmlFor="harness-name">
+            Name
+          </label>
+          <input
+            id="harness-name"
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="my-harness"
+            autoFocus
+            className="rounded-md border border-hairline bg-surface-2 px-3 py-2 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-accent focus:ring-1 focus:ring-accent"
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-medium text-ink-muted" htmlFor="harness-description">
+            Description <span className="text-ink-faint">(optional)</span>
+          </label>
+          <input
+            id="harness-description"
+            type="text"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="What does this harness do?"
+            className="rounded-md border border-hairline bg-surface-2 px-3 py-2 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-accent focus:ring-1 focus:ring-accent"
+          />
+        </div>
+        <div className="flex justify-end gap-2 pt-1">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded px-3 py-1.5 text-sm text-ink-muted transition hover:bg-surface-2 hover:text-ink"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={!name.trim() || isLoading}
+            className={cn(
+              "rounded bg-accent px-4 py-1.5 text-sm font-medium text-white transition",
+              !name.trim() || isLoading
+                ? "cursor-not-allowed opacity-50"
+                : "hover:bg-accent-bright",
+            )}
+          >
+            {isLoading ? "Creating…" : "Create"}
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
@@ -214,9 +213,10 @@ export function HarnessListPage() {
       </div>
 
       {isLoading && (
-        <div className="flex items-center gap-2 py-12 text-sm text-ink-muted">
-          <span className="h-4 w-4 animate-spin rounded-full border-2 border-hairline border-t-accent" />
-          Loading…
+        <div className="flex flex-col gap-3">
+          <Skeleton variant="card" />
+          <Skeleton variant="card" />
+          <Skeleton variant="card" />
         </div>
       )}
 
@@ -261,9 +261,8 @@ export function HarnessListPage() {
       )}
 
       {deletePending && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-xl border border-hairline bg-surface-1 p-6 shadow-xl">
-            <h2 className="mb-2 font-display text-base font-semibold text-ink">Delete harness?</h2>
+        <Modal onClose={() => setDeletePending(null)} title="Delete harness?">
+          <div className="px-4 pb-4">
             <p className="mb-5 text-sm text-ink-muted">
               <span className="font-medium text-ink">{deletePending}</span> will be permanently deleted.
             </p>
@@ -285,7 +284,7 @@ export function HarnessListPage() {
               </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );
