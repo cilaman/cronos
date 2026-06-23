@@ -116,6 +116,14 @@ vi.mock("remark-gfm", () => ({
   default: () => ({}),
 }));
 
+vi.mock("../../hooks/useLiveStream", () => ({
+  useLiveStream: vi.fn().mockReturnValue({ entries: [], status: "ended" }),
+}));
+
+vi.mock("../../assets/cronos-state-active-animated.svg", () => ({
+  default: "/mock-active.svg",
+}));
+
 // ── Imports after mocks ───────────────────────────────────────────────────────
 
 import React from "react";
@@ -136,6 +144,7 @@ import {
 } from "../../hooks/useTasks";
 import { useTaskStats } from "../../hooks/useStats";
 import { useTaskTestReportLatest } from "../../hooks/useTestReports";
+import { useLiveStream } from "../../hooks/useLiveStream";
 import { Detail } from "../Detail";
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -271,6 +280,8 @@ beforeEach(() => {
     data: undefined,
     isLoading: false,
   } as unknown as ReturnType<typeof useTaskTestReportLatest>);
+
+  vi.mocked(useLiveStream).mockReturnValue({ entries: [], status: "ended" });
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -432,6 +443,113 @@ describe("Detail — tab switching", () => {
     renderDetail();
     await userEvent.click(screen.getByRole("button", { name: /stats/i }));
     expect(screen.getByText(/Loading stats/)).toBeInTheDocument();
+  });
+});
+
+describe("Detail — two-pane layout (I4)", () => {
+  it("renders context-pane with overflow-y-auto class", () => {
+    renderDetail();
+    expect(screen.getByTestId("context-pane")).toHaveClass("overflow-y-auto");
+  });
+
+  it("renders conversation-pane with overflow-y-auto class", () => {
+    renderDetail();
+    expect(screen.getByTestId("conversation-pane")).toHaveClass("overflow-y-auto");
+  });
+
+  it("renders mobile Context and Conversation sub-tab buttons inside details tab", () => {
+    renderDetail();
+    expect(screen.getByRole("button", { name: /^context$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^conversation$/i })).toBeInTheDocument();
+  });
+
+  it("conversation pane wrapper has hidden class by default (mobile context tab active)", () => {
+    renderDetail();
+    const convWrapper = screen.getByTestId("conversation-pane").parentElement;
+    expect(convWrapper).toHaveClass("hidden");
+  });
+
+  it("clicking Conversation sub-tab removes hidden class from conversation pane wrapper", async () => {
+    renderDetail();
+    await userEvent.click(screen.getByRole("button", { name: /^conversation$/i }));
+    const convWrapper = screen.getByTestId("conversation-pane").parentElement;
+    expect(convWrapper).not.toHaveClass("hidden");
+  });
+});
+
+describe("Detail — NOW running card (I5)", () => {
+  it("does NOT render the NOW running card when task is not active", () => {
+    renderDetail(); // mockTask has state: "backlog"
+    expect(screen.queryByTestId("now-running-card")).not.toBeInTheDocument();
+  });
+
+  it("renders the NOW running card when task.state === 'active'", () => {
+    vi.mocked(useTask).mockReturnValue({
+      data: { ...mockTask, state: "active" },
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useTask>);
+
+    renderDetail();
+    expect(screen.getByTestId("now-running-card")).toBeInTheDocument();
+    expect(screen.getByText("NOW running")).toBeInTheDocument();
+  });
+
+  it("shows the latest tool name from live stream", async () => {
+    vi.mocked(useTask).mockReturnValue({
+      data: { ...mockTask, state: "active" },
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useTask>);
+
+    vi.mocked(useLiveStream).mockReturnValue({
+      entries: [
+        { id: "1", kind: "tool_call", toolUseId: "t1", name: "Read", input: {} },
+        { id: "2", kind: "tool_call", toolUseId: "t2", name: "Write", input: {} },
+      ],
+      status: "live",
+    });
+
+    renderDetail();
+    expect(screen.getByTestId("now-tool-name")).toHaveTextContent("Write");
+  });
+
+  it("shows the correct step count from live stream", () => {
+    vi.mocked(useTask).mockReturnValue({
+      data: { ...mockTask, state: "active" },
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useTask>);
+
+    vi.mocked(useLiveStream).mockReturnValue({
+      entries: [
+        { id: "1", kind: "tool_call", toolUseId: "t1", name: "Read", input: {} },
+        { id: "2", kind: "assistant", text: "hello" },
+        { id: "3", kind: "tool_call", toolUseId: "t2", name: "Write", input: {} },
+      ],
+      status: "live",
+    });
+
+    renderDetail();
+    expect(screen.getByTestId("now-step-count")).toHaveTextContent("3 steps");
+  });
+
+  it("does not render tool-name span when no tool_call entries exist", () => {
+    vi.mocked(useTask).mockReturnValue({
+      data: { ...mockTask, state: "active" },
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useTask>);
+
+    vi.mocked(useLiveStream).mockReturnValue({ entries: [], status: "live" });
+
+    renderDetail();
+    expect(screen.queryByTestId("now-tool-name")).not.toBeInTheDocument();
+    expect(screen.getByTestId("now-step-count")).toHaveTextContent("0 steps");
   });
 });
 
