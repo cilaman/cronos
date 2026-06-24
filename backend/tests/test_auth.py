@@ -414,3 +414,75 @@ async def test_credentials_byte_length_mismatch_rejected(async_client, monkeypat
 
     # Assert
     assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Internal service token (CRONOS_INTERNAL_TOKEN)
+# ---------------------------------------------------------------------------
+
+INTERNAL_TOKEN = "test-internal-secret-token-xyz"
+
+
+async def test_internal_token_correct_returns_200(async_client, monkeypatch):
+    # Arrange — auth configured; internal token set
+    monkeypatch.setenv("CRONOS_BASIC_AUTH_USER", AUTH_USER)
+    monkeypatch.setenv("CRONOS_BASIC_AUTH_PASSWORD", AUTH_PASS)
+    monkeypatch.setenv("CRONOS_INTERNAL_TOKEN", INTERNAL_TOKEN)
+
+    # Act — bearer token bypasses bcrypt
+    resp = await async_client.get(
+        "/api/spaces",
+        headers={"Authorization": f"Bearer {INTERNAL_TOKEN}"},
+    )
+
+    # Assert
+    assert resp.status_code == 200
+    assert "spaces" in resp.json()
+
+
+async def test_internal_token_wrong_returns_401(async_client, monkeypatch):
+    # Arrange — internal token set but request sends wrong value
+    monkeypatch.setenv("CRONOS_BASIC_AUTH_USER", AUTH_USER)
+    monkeypatch.setenv("CRONOS_BASIC_AUTH_PASSWORD", AUTH_PASS)
+    monkeypatch.setenv("CRONOS_INTERNAL_TOKEN", INTERNAL_TOKEN)
+
+    # Act — wrong bearer token must not fall through to bcrypt
+    resp = await async_client.get(
+        "/api/spaces",
+        headers={"Authorization": "Bearer totally-wrong-token"},
+    )
+
+    # Assert
+    assert resp.status_code == 401
+
+
+async def test_internal_token_unset_disables_bypass(async_client, monkeypatch):
+    # Arrange — CRONOS_INTERNAL_TOKEN not set; bearer header is ignored
+    monkeypatch.setenv("CRONOS_BASIC_AUTH_USER", AUTH_USER)
+    monkeypatch.setenv("CRONOS_BASIC_AUTH_PASSWORD", AUTH_PASS)
+    monkeypatch.delenv("CRONOS_INTERNAL_TOKEN", raising=False)
+
+    # Act — Bearer header with any value is treated as missing credentials
+    resp = await async_client.get(
+        "/api/spaces",
+        headers={"Authorization": f"Bearer {INTERNAL_TOKEN}"},
+    )
+
+    # Assert — bypass disabled; falls through to Basic check → 401 (no Basic creds)
+    assert resp.status_code == 401
+
+
+async def test_internal_token_empty_disables_bypass(async_client, monkeypatch):
+    # Arrange — empty string CRONOS_INTERNAL_TOKEN is the same as unset
+    monkeypatch.setenv("CRONOS_BASIC_AUTH_USER", AUTH_USER)
+    monkeypatch.setenv("CRONOS_BASIC_AUTH_PASSWORD", AUTH_PASS)
+    monkeypatch.setenv("CRONOS_INTERNAL_TOKEN", "")
+
+    # Act
+    resp = await async_client.get(
+        "/api/spaces",
+        headers={"Authorization": f"Bearer {INTERNAL_TOKEN}"},
+    )
+
+    # Assert — empty token disables bypass; falls through to Basic → 401
+    assert resp.status_code == 401

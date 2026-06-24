@@ -30,6 +30,10 @@ services:
       CRONOS_BASIC_AUTH_HASH: ${CRONOS_BASIC_AUTH_HASH:-}
       CRONOS_BASIC_AUTH_PASSWORD: ${CRONOS_BASIC_AUTH_PASSWORD:-}
       CRONOS_AUTH_DISABLED: ${CRONOS_AUTH_DISABLED:-}
+      # Shared secret for agents calling the API from inside the container.
+      # Agents send Authorization: Bearer <token> to bypass bcrypt. If unset,
+      # the bypass is disabled (fail-closed). Generate: openssl rand -hex 32
+      CRONOS_INTERNAL_TOKEN: ${CRONOS_INTERNAL_TOKEN:-}
       # Override worker.py's hardcoded /root/.claude/projects default so agent
       # run logs write to the cronos user's home instead of /root (unwritable).
       CLAUDE_PROJECTS_DIR: /home/cronos/.claude/projects

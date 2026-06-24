@@ -6,7 +6,7 @@ license: Internal — Cronos project.
 
 # Create Goal
 
-Creates a goal and its child tasks in the Cronos task board by POSTing to the backend API. Works from any workspace container — no auth needed on the internal port.
+Creates a goal and its child tasks in the Cronos task board by POSTing to the backend API. Works from any workspace container — authenticate using the `CRONOS_INTERNAL_TOKEN` environment variable as a Bearer token.
 
 ## API
 
@@ -76,14 +76,19 @@ Goal
 Use Python (not curl) — shell quoting breaks on multi-line briefs.
 
 ```python
+import os
 import urllib.request, json
 
 def api_post(payload: dict) -> dict:
     data = json.dumps(payload).encode()
+    token = os.environ.get("CRONOS_INTERNAL_TOKEN", "")
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
     req = urllib.request.Request(
         "http://backend:8000/api/tasks",
         data=data,
-        headers={"Content-Type": "application/json"},
+        headers=headers,
         method="POST",
     )
     with urllib.request.urlopen(req) as resp:
@@ -120,6 +125,7 @@ for t in [
 ## Procedure — feature goal (CC-v1 pipeline structure)
 
 ```python
+import os
 import urllib.request, json
 
 SPACE = "cronos-development"
@@ -128,9 +134,13 @@ PIPELINE_DIR = f".cronos/pipeline/{GOAL_SLUG}"
 
 def api_post(payload):
     data = json.dumps(payload).encode()
+    token = os.environ.get("CRONOS_INTERNAL_TOKEN", "")
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
     req = urllib.request.Request(
         "http://backend:8000/api/tasks", data=data,
-        headers={"Content-Type": "application/json"}, method="POST")
+        headers=headers, method="POST")
     with urllib.request.urlopen(req) as r:
         return json.loads(r.read())
 
@@ -208,7 +218,7 @@ Then run: /pipeline-gate""",
 ## Verify
 
 ```bash
-curl -s "http://backend:8000/api/tasks?space_id=cronos-development" \
+curl -s -H "Authorization: Bearer $CRONOS_INTERNAL_TOKEN" "http://backend:8000/api/tasks?space_id=cronos-development" \
   | python3 -c "
 import sys, json
 tasks = json.load(sys.stdin)
