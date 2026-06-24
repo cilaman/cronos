@@ -135,6 +135,17 @@ class RunSideEffects:
             except Exception:
                 log.exception("Failed to save trace for %s", task_id)
 
+        # Delivery/v1 telemetry: emit via lib.telemetry so the portable pipeline
+        # lib accumulates non-zero tokens/duration for this run. The sink is
+        # transient here (no StateStore) — Phase 6 wires in persistence to
+        # state.json. Gated to runs that produced a trace; always wrapped in
+        # try/except so this path can never break the existing recording.
+        if computed_trace is not None:
+            try:
+                _emit_delivery_telemetry(task_id, computed_trace)
+            except Exception:
+                log.exception("Failed to emit delivery telemetry for %s", task_id)
+
     async def save_memory_blocks(
         self,
         task_id: str,
@@ -201,3 +212,26 @@ class RunSideEffects:
                 )
             except Exception:
                 log.exception("Failed to save CRONOS_REMEMBER block for %s", log_id)
+
+
+def _emit_delivery_telemetry(task_id: str, trace: Any) -> None:
+    """Emit per-task telemetry into a transient TelemetrySink from lib.telemetry.
+
+    Derives token_spend (sum of all token categories across turns) and
+    duration_seconds from the RunTrace. USD is 0.0 — rate table deferred to
+    Phase 6. The sink is not persisted here; Phase 6 wires in a StateStore to
+    write to the delivery/v1 state.json. Importing lib.telemetry here proves
+    the backend has the editable delivery-workflow package on sys.path (R14 AC).
+    """
+    from lib.telemetry import TelemetrySink
+
+    token_spend = sum(
+        t.input_tokens + t.output_tokens + t.cache_read_tokens + t.cache_creation_tokens
+        for t in trace.turns
+    )
+    sink = TelemetrySink()
+    sink.emit(task_id, {
+        "tokens": float(token_spend),
+        "usd": 0.0,
+        "seconds": trace.duration_seconds,
+    })
