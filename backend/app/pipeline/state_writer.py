@@ -102,25 +102,6 @@ class PhaseMetrics:
             memory_hits=len(trace.memory_used),
         )
 
-    @classmethod
-    def from_telemetry_sink(cls, sink: Any, task_id: str) -> "PhaseMetrics":
-        """Extract phase metrics from a lib.telemetry.TelemetrySink node entry.
-
-        Complements from_trace() for delivery/v1 pipeline runs where telemetry
-        flows through the portable lib rather than the CC-v1 trace parser. The
-        from_trace() fallback is always preferred when a RunTrace is available.
-        """
-        data = sink.node_data(task_id) if hasattr(sink, "node_data") else None
-        if data is None:
-            return cls()
-        return cls(
-            duration_s=round(data.get("seconds", 0.0), 2),
-            token_spend=int(data.get("tokens", 0)),
-            tool_calls=0,
-            files_read=0,
-            memory_hits=0,
-        )
-
     def to_dict(self) -> dict[str, Any]:
         return {
             "duration_s": self.duration_s,
