@@ -1,0 +1,42 @@
+[project]
+name = "delivery-workflow"
+version = "0.1.0"
+description = "Portable delivery/v1 workflow executor library"
+requires-python = ">=3.12"
+dependencies = [
+    "pyyaml>=6.0",
+    "jsonschema>=4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "import-linter>=2.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["lib", "runner", "adapters"]
+artifacts = [
+    "interface.py",
+    "results.py",
+    "state_types.py",
+    "null_runtime.py",
+    "spec_loader.py",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.importlinter]
+root_packages = ["lib", "runner", "adapters"]
+
+[[tool.importlinter.contracts]]
+name = "No app.* imports from portable core"
+type = "forbidden"
+source_modules = ["lib", "runner"]
+forbidden_modules = ["app"]
