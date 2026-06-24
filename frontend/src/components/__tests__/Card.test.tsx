@@ -686,7 +686,7 @@ describe("Card — type=feature", () => {
     const badge = screen.getByText("feature");
     expect(badge).toBeInTheDocument();
     expect(badge.className).toContain("uppercase");
-    expect(badge.className).toContain("emerald");
+    expect(badge.className).toContain("feature");
   });
 
   it("sets data-task-type='feature' on the root", () => {
@@ -711,7 +711,7 @@ describe("Card — type=fix", () => {
     const badge = screen.getByText("fix");
     expect(badge).toBeInTheDocument();
     expect(badge.className).toContain("uppercase");
-    expect(badge.className).toContain("rose");
+    expect(badge.className).toContain("fix");
   });
 
   it("sets data-task-type='fix' on the root", () => {

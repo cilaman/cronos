@@ -1,8 +1,9 @@
-import { useEffect } from "react";
 import { useToolContent } from "../hooks/useSpaces";
 import { cn } from "../utils/cn";
 import { formatRelative } from "../utils/format";
 import type { AiToolEntry } from "../types";
+import { Modal } from "./ui/Modal";
+import { Skeleton } from "./ui/Skeleton";
 
 export interface ToolDetailPanelProps {
   tool: AiToolEntry & { category: "agent" | "command" | "skill" | "context" };
@@ -58,46 +59,15 @@ function ScopeBadge({ scope }: { scope: "space" | "global" | "plugin" }) {
   );
 }
 
-function Spinner() {
-  return (
-    <svg
-      className="h-4 w-4 animate-spin text-ink-faint"
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-      aria-hidden
-    >
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path
-        className="opacity-75"
-        fill="currentColor"
-        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-      />
-    </svg>
-  );
-}
-
 export function ToolDetailPanel({ tool, spaceId, onClose }: ToolDetailPanelProps) {
   const { data, isLoading, isError } = useToolContent(spaceId, tool.path, tool.scope);
   const style = CATEGORY_STYLE[tool.category] ?? CATEGORY_STYLE.context;
 
-  useEffect(() => {
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    document.addEventListener("keydown", handleKey);
-    return () => document.removeEventListener("keydown", handleKey);
-  }, [onClose]);
+  // Note: window.addEventListener('keydown', ...) Escape handler is removed.
+  // Modal.tsx handles Escape via its own keydown listener.
 
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 z-40 bg-canvas/60 backdrop-blur-sm"
-        onClick={onClose}
-        aria-hidden="true"
-      />
-
+    <Modal onClose={onClose} aria-label={`Tool details: ${tool.name}`}>
       {/* Slide-over panel */}
       <div
         role="dialog"
@@ -186,10 +156,7 @@ export function ToolDetailPanel({ tool, spaceId, onClose }: ToolDetailPanelProps
               Content
             </p>
             {isLoading && (
-              <div className="flex items-center gap-2 py-4 text-[12px] text-ink-faint">
-                <Spinner />
-                <span>Loading file…</span>
-              </div>
+              <Skeleton variant="card" />
             )}
             {isError && (
               <div className="rounded border border-danger/20 bg-danger/5 px-3 py-2.5 text-[12px] text-danger">
@@ -204,6 +171,6 @@ export function ToolDetailPanel({ tool, spaceId, onClose }: ToolDetailPanelProps
           </div>
         </div>
       </div>
-    </>
+    </Modal>
   );
 }

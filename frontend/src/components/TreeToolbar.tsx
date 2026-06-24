@@ -5,6 +5,8 @@ import { SpaceFilterDropdown } from "./SpaceFilterDropdown";
 import { SpaceTag } from "./ui/SpaceTag";
 import { StickyToolbar } from "./ui/StickyToolbar";
 
+export type TreeViewMode = "tree" | "dag";
+
 interface Props {
   spaceId: string | null;
   onSpaceChange: (next: string | null) => void;
@@ -14,6 +16,8 @@ interface Props {
   onExpandAll: () => void;
   onCollapseAll: () => void;
   boardLink: string;
+  viewMode?: TreeViewMode;
+  onViewModeToggle?: () => void;
 }
 
 export function TreeToolbar({
@@ -25,6 +29,8 @@ export function TreeToolbar({
   onExpandAll,
   onCollapseAll,
   boardLink,
+  viewMode = "tree",
+  onViewModeToggle,
 }: Props) {
   const { data } = useSpaces();
   const active = spaceId ? data?.spaces.find((s) => s.id === spaceId) ?? null : null;
@@ -53,6 +59,42 @@ export function TreeToolbar({
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
+        {onViewModeToggle && (
+          <div className="flex items-center rounded border border-hairline bg-surface-2">
+            <button
+              type="button"
+              onClick={viewMode === "dag" ? onViewModeToggle : undefined}
+              aria-pressed={viewMode === "tree"}
+              aria-label="Tree view"
+              title="Tree view"
+              className={[
+                "flex h-8 items-center px-2.5 font-display text-[10px] uppercase tracking-[0.14em] transition focus:outline-none focus-visible:ring-1 focus-visible:ring-accent rounded-l",
+                viewMode === "tree"
+                  ? "bg-accent/10 text-accent-bright"
+                  : "text-ink-muted hover:bg-surface-3 hover:text-ink",
+              ].join(" ")}
+            >
+              Tree
+            </button>
+            <span className="h-4 w-px bg-hairline" aria-hidden="true" />
+            <button
+              type="button"
+              onClick={viewMode === "tree" ? onViewModeToggle : undefined}
+              aria-pressed={viewMode === "dag"}
+              aria-label="DAG view"
+              title="DAG view"
+              className={[
+                "flex h-8 items-center px-2.5 font-display text-[10px] uppercase tracking-[0.14em] transition focus:outline-none focus-visible:ring-1 focus-visible:ring-accent rounded-r",
+                viewMode === "dag"
+                  ? "bg-accent/10 text-accent-bright"
+                  : "text-ink-muted hover:bg-surface-3 hover:text-ink",
+              ].join(" ")}
+            >
+              DAG
+            </button>
+          </div>
+        )}
+
         <SpaceFilterDropdown
           value={spaceId}
           onChange={onSpaceChange}

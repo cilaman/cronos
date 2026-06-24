@@ -1,24 +1,41 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import type { LucideIcon } from "lucide-react";
+import {
+  Archive,
+  Binary,
+  BookOpen,
+  Bot,
+  Command,
+  FileCode,
+  FileText,
+  Folder,
+  Image,
+  Terminal,
+  Zap,
+} from "lucide-react";
 import type { FileCategory, TaskFile } from "../types";
 import { MarkdownEditorModal } from "./MarkdownEditorModal";
+import { Icon } from "./ui/Icon";
+import { Modal } from "./ui/Modal";
+import { Skeleton } from "./ui/Skeleton";
 
 // ---------------------------------------------------------------------------
 // Category metadata
 // ---------------------------------------------------------------------------
 
-const CATEGORY_ICON: Record<FileCategory | "directory", string> = {
-  directory: "▸",
-  agent:     "🤖",
-  skill:     "⚡",
-  command:   "⌘",
-  context:   "📖",
-  image:     "🖼",
-  text:      "📄",
-  code:      "💻",
-  document:  "📑",
-  archive:   "🗜",
-  binary:    "⬛",
+const CATEGORY_ICON: Record<FileCategory | "directory", LucideIcon> = {
+  directory: Folder,
+  agent:     Bot,
+  skill:     Zap,
+  command:   Command,
+  context:   BookOpen,
+  image:     Image,
+  text:      FileText,
+  code:      Terminal,
+  document:  FileCode,
+  archive:   Archive,
+  binary:    Binary,
 };
 
 const CATEGORY_LABEL: Record<FileCategory | "directory", string> = {
@@ -72,69 +89,40 @@ function FileViewerModal({ file, fileUrl, downloadUrl, onClose }: ViewerProps) {
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
   }, [fileUrl, file.category]);
 
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <div
-        className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-lg border border-hairline bg-surface-1 shadow-lift"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex shrink-0 items-center justify-between gap-4 border-b border-hairline px-4 py-3">
-          <span className="min-w-0 truncate font-mono text-sm text-ink">
-            {file.path}
-          </span>
-          <div className="flex shrink-0 items-center gap-2">
-            <a
-              href={downloadUrl}
-              download
-              className="rounded border border-hairline px-3 py-1 text-xs text-ink-muted transition hover:border-hairline-strong hover:text-ink"
-            >
-              Download
-            </a>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Close"
-              className="rounded p-1 text-ink-muted transition hover:bg-surface-2 hover:text-ink"
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-
-        {/* Body */}
-        <div className="min-h-0 flex-1 overflow-auto">
-          {file.category === "image" ? (
-            <div className="flex items-center justify-center p-4">
-              <img
-                src={fileUrl}
-                alt={file.name}
-                className="max-h-[70vh] max-w-full object-contain"
-              />
-            </div>
-          ) : error ? (
-            <p className="p-4 text-sm text-danger">{error}</p>
-          ) : content === null ? (
-            <p className="p-4 text-sm text-ink-muted">Loading…</p>
-          ) : (
-            <pre className="whitespace-pre-wrap break-all p-4 font-mono text-xs leading-relaxed text-ink">
-              {content}
-            </pre>
-          )}
-        </div>
+    <Modal onClose={onClose} title={file.path}>
+      {/* Download link row */}
+      <div className="flex shrink-0 items-center justify-end gap-2 border-b border-hairline px-4 pb-3">
+        <a
+          href={downloadUrl}
+          download
+          className="rounded border border-hairline px-3 py-1 text-xs text-ink-muted transition hover:border-hairline-strong hover:text-ink"
+        >
+          Download
+        </a>
       </div>
-    </div>
+
+      {/* Body */}
+      <div className="max-h-[60vh] min-h-[8rem] overflow-auto p-4">
+        {file.category === "image" ? (
+          <div className="flex items-center justify-center">
+            <img
+              src={fileUrl}
+              alt={file.name}
+              className="max-h-[55vh] max-w-full object-contain"
+            />
+          </div>
+        ) : error ? (
+          <p className="text-sm text-danger">{error}</p>
+        ) : content === null ? (
+          <Skeleton variant="block" />
+        ) : (
+          <pre className="whitespace-pre-wrap break-all font-mono text-xs leading-relaxed text-ink">
+            {content}
+          </pre>
+        )}
+      </div>
+    </Modal>
   );
 }
 
@@ -224,7 +212,7 @@ export function FileBrowser({
           ) : (
             <ul className="divide-y divide-hairline">
               {files.map((file) => {
-                const icon = CATEGORY_ICON[file.category as FileCategory | "directory"] ?? "📄";
+                const iconComponent = CATEGORY_ICON[file.category as FileCategory | "directory"] ?? FileText;
                 const label = CATEGORY_LABEL[file.category as FileCategory | "directory"] ?? file.category;
                 const canView = !file.is_dir && VIEWABLE_CATEGORIES.has(file.category as FileCategory);
                 const depth = file.path.split("/").length - 1;
@@ -239,8 +227,8 @@ export function FileBrowser({
                     }`}
                     style={{ paddingLeft: `${0.75 + depth * 1}rem` }}
                   >
-                    <span className="shrink-0 text-base leading-none" title={label}>
-                      {icon}
+                    <span className="shrink-0 leading-none text-ink-muted" title={label}>
+                      <Icon icon={iconComponent} size="sm" />
                     </span>
                     <span
                       className={`min-w-0 flex-1 truncate font-mono text-xs ${

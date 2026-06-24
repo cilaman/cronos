@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { ChevronDown } from "lucide-react";
+import { Icon } from "./ui/Icon";
 import { useViews } from "../hooks/useViews";
 import type { View } from "../types";
 
@@ -96,9 +98,7 @@ export function ViewPicker({ spaceId, viewId, onChange, onManageViews }: Props) 
         ) : (
           <span className="text-ink-muted">Views</span>
         )}
-        <span aria-hidden className="text-[10px] text-ink-faint">
-          ▾
-        </span>
+        <Icon icon={ChevronDown} size="sm" className="text-ink-faint" />
       </button>
 
       {open && (

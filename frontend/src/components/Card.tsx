@@ -4,6 +4,8 @@ import { CSS } from "@dnd-kit/utilities";
 import { cn } from "../utils/cn";
 import { formatRelative } from "../utils/format";
 import { SpaceTag } from "./ui/SpaceTag";
+import { Badge } from "./ui/Badge";
+import { getTonePriority, getToneTaskState, getToneType, getToneMode } from "../utils/badgeTone";
 import type { AgentMode, ChildProgressItem, TaskSummary, TaskState, TaskType } from "../types";
 
 function IconGitPR({ className }: { className?: string }) {
@@ -70,54 +72,12 @@ function IconGitIssue({ className }: { className?: string }) {
   );
 }
 
-const PRIORITY_STYLES: Record<number, { badge: string; dot: string }> = {
-  1: {
-    badge: "border-red-200 bg-red-50 text-red-600 dark:border-red-400/30 dark:bg-red-400/10 dark:text-red-400",
-    dot: "bg-red-500",
-  },
-  2: {
-    badge: "border-orange-200 bg-orange-50 text-orange-600 dark:border-orange-400/30 dark:bg-orange-400/10 dark:text-orange-400",
-    dot: "bg-orange-500",
-  },
-  3: {
-    badge: "border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-400",
-    dot: "bg-amber-500",
-  },
-  4: {
-    badge: "border-teal-200 bg-teal-50 text-teal-600 dark:border-teal-400/30 dark:bg-teal-400/10 dark:text-teal-400",
-    dot: "bg-teal-500",
-  },
-  5: {
-    badge: "border-hairline bg-surface-2 text-ink-faint",
-    dot: "bg-ink-faint",
-  },
-};
-
-const MODE_STYLES: Record<AgentMode, string> = {
-  plan: "border-indigo-200 bg-indigo-50 text-indigo-600 dark:border-indigo-400/30 dark:bg-indigo-400/10 dark:text-indigo-400",
-  auto: "border-hairline bg-surface-2 text-ink-faint",
-  ask: "border-violet-200 bg-violet-50 text-violet-600 dark:border-violet-400/30 dark:bg-violet-400/10 dark:text-violet-400",
-};
-
-const MODE_LABELS: Record<AgentMode, string> = {
-  plan: "Plan",
-  auto: "Auto",
-  ask: "Ask",
-};
-
-const TYPE_BADGE_STYLES: Partial<Record<TaskType, string>> = {
-  goal: "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-400/30 dark:bg-violet-400/10 dark:text-violet-400",
-  issue: "border-orange-200 bg-orange-50 text-orange-600 dark:border-orange-400/30 dark:bg-orange-400/10 dark:text-orange-400",
-  feature: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-400",
-  fix: "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/30 dark:bg-rose-400/10 dark:text-rose-400",
-};
-
-const STATE_BADGE_STYLES: Record<TaskState, string> = {
-  backlog: "border-hairline bg-surface-2 text-ink-faint",
-  active: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-400",
-  waiting: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-400",
-  done: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-400/30 dark:bg-sky-400/10 dark:text-sky-400",
-  archived: "border-hairline bg-surface-2 text-ink-faint/60",
+const PRIORITY_DOT_CLASSES: Record<number, string> = {
+  1: "bg-danger",
+  2: "bg-warning",
+  3: "bg-info",
+  4: "bg-success",
+  5: "bg-neutral",
 };
 
 const STATE_LABELS: Record<TaskState, string> = {
@@ -126,6 +86,12 @@ const STATE_LABELS: Record<TaskState, string> = {
   waiting: "Waiting",
   done: "Done",
   archived: "Archived",
+};
+
+const MODE_LABELS: Record<AgentMode, string> = {
+  plan: "Plan",
+  auto: "Auto",
+  ask: "Ask",
 };
 
 function formatCompactAge(iso: string | null | undefined): string {
@@ -153,7 +119,6 @@ function ChildRow({
   expandedChildIds: Set<string>;
   toggleChildExpand: (id: string) => void;
 }) {
-  const childPStyle = PRIORITY_STYLES[child.priority] ?? PRIORITY_STYLES[3];
   const isGoalChild = child.type === "goal";
   const hasSubChildren = isGoalChild && (child.children_progress?.total ?? 0) > 0;
   const childExpanded = expandedChildIds.has(child.id);
@@ -181,31 +146,21 @@ function ChildRow({
           onClick={(e) => { e.stopPropagation(); onOpenTask?.(child.id); }}
           className="flex min-w-0 flex-1 items-center gap-2 rounded px-1 py-1.5 text-left transition hover:bg-surface-3 focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
         >
-          <span
-            className={cn(
-              "inline-flex shrink-0 items-center rounded border px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide",
-              STATE_BADGE_STYLES[child.state],
-            )}
-          >
+          <Badge tone={getToneTaskState(child.state)}>
             {STATE_LABELS[child.state]}
-          </span>
+          </Badge>
           {isGoalChild && (
-            <span className="inline-flex shrink-0 items-center rounded border border-accent/40 bg-accent/10 px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide text-accent/80">
+            <Badge tone="goal">
               goal
-            </span>
+            </Badge>
           )}
           <span className="flex-1 truncate text-sm font-medium text-ink">{child.title}</span>
           <span className="shrink-0 font-mono text-[9px] text-ink-faint">
             {formatCompactAge(child.updated_at)}
           </span>
-          <span
-            className={cn(
-              "inline-flex shrink-0 items-center rounded border px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide",
-              childPStyle.badge,
-            )}
-          >
+          <Badge tone={getTonePriority(child.priority as 1 | 2 | 3 | 4 | 5)}>
             P{child.priority}
-          </span>
+          </Badge>
         </button>
       </div>
       {hasSubChildren && childExpanded && (child.children_progress?.items?.length ?? 0) > 0 && (
@@ -264,12 +219,12 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
 
   const borderColor = task.space_color ?? "rgb(var(--color-hairline-strong))";
   const priority = task.priority ?? 3;
-  const pStyle = PRIORITY_STYLES[priority] ?? PRIORITY_STYLES[3];
+  const priorityDotClass = PRIORITY_DOT_CLASSES[priority] ?? PRIORITY_DOT_CLASSES[3];
   const mode = task.agent_mode ?? "auto";
   const showModeBadge = !compact || mode !== "auto";
-  const taskType = task.type ?? "task";
+  const taskType = (task.type ?? "task") as TaskType;
   const isGoal = taskType === "goal";
-  const typeBadgeStyle = TYPE_BADGE_STYLES[taskType];
+  const showTypeBadge = taskType !== "task";
   const blockedBy = task.unmet_dependencies ?? [];
   const childrenProgress = task.children_progress;
   const hasChildren = isGoal && (childrenProgress?.total ?? 0) > 0;
@@ -313,16 +268,11 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
           )}
           <h3 className="truncate text-sm font-semibold leading-snug text-ink">{task.title}</h3>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-            <span
-              className={cn(
-                "inline-flex items-center rounded border px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide",
-                STATE_BADGE_STYLES[task.state],
-              )}
-            >
+            <Badge tone={getToneTaskState(task.state)}>
               {STATE_LABELS[task.state]}
-            </span>
+            </Badge>
             <span
-              className={cn("h-1.5 w-1.5 shrink-0 rounded-full", pStyle.dot)}
+              className={cn("h-1.5 w-1.5 shrink-0 rounded-full", priorityDotClass)}
               aria-label={`priority ${priority}`}
             />
             <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-ink-faint">
@@ -333,33 +283,27 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
                 {childrenProgress.done}/{childrenProgress.total}
               </span>
             )}
-            {typeBadgeStyle && (
-              <span
-                className={cn(
-                  "inline-flex items-center rounded border px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide",
-                  typeBadgeStyle,
-                )}
-              >
+            {showTypeBadge && (
+              <Badge tone={getToneType(taskType)}>
                 {taskType}
-              </span>
+              </Badge>
             )}
             {(taskType === "feature" || taskType === "fix") && (task.realizing_count ?? 0) > 0 && (
-              <span className="inline-flex items-center rounded border border-sky-200 bg-sky-50 px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide text-sky-700 dark:border-sky-400/30 dark:bg-sky-400/10 dark:text-sky-400">
+              <Badge tone="info">
                 {task.realizing_count} linked
-              </span>
+              </Badge>
             )}
             {blockedBy.length > 0 && (
-              <span
-                title={blockedBy.map((d) => d.title).join(", ")}
-                className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide text-amber-700 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-400"
-              >
-                Blocked by {blockedBy.length}
-              </span>
+              <Badge tone="warning">
+                <span title={blockedBy.map((d) => d.title).join(", ")}>
+                  Blocked by {blockedBy.length}
+                </span>
+              </Badge>
             )}
             {blocksCount > 0 && (
-              <span className="inline-flex items-center rounded border border-hairline bg-surface-2 px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide text-ink-muted">
+              <Badge tone="neutral">
                 Blocks {blocksCount}
-              </span>
+              </Badge>
             )}
           </div>
         </button>
@@ -448,31 +392,16 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
         </span>
 
         <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
-          <span
-            className={cn(
-              "inline-flex items-center rounded border px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide",
-              pStyle.badge,
-            )}
-          >
+          <Badge tone={getTonePriority(priority as 1 | 2 | 3 | 4 | 5)}>
             P{priority}
-          </span>
-          <span
-            className={cn(
-              "inline-flex items-center rounded border px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide",
-              STATE_BADGE_STYLES[task.state],
-            )}
-          >
+          </Badge>
+          <Badge tone={getToneTaskState(task.state)}>
             {STATE_LABELS[task.state]}
-          </span>
-          {typeBadgeStyle && (
-            <span
-              className={cn(
-                "inline-flex items-center rounded border px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide",
-                typeBadgeStyle,
-              )}
-            >
+          </Badge>
+          {showTypeBadge && (
+            <Badge tone={getToneType(taskType)}>
               {taskType}
-            </span>
+            </Badge>
           )}
           {task.space_name && (
             <SpaceTag
@@ -483,19 +412,14 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
             />
           )}
           {showModeBadge && (
-            <span
-              className={cn(
-                "inline-flex items-center rounded border px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide",
-                MODE_STYLES[mode],
-              )}
-            >
+            <Badge tone={getToneMode(mode)}>
               {MODE_LABELS[mode]}
-            </span>
+            </Badge>
           )}
           {task.space_autopilot === "enabled" && (
-            <span className="inline-flex items-center rounded border border-hairline bg-surface-2 px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide text-ink-faint">
+            <Badge tone="neutral">
               AUTO
-            </span>
+            </Badge>
           )}
           {task.pr_url && (
             <a
@@ -529,7 +453,7 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
               rel="noopener noreferrer"
               title="Open GitHub issue"
               onClick={(e) => e.stopPropagation()}
-              className="inline-flex items-center gap-0.5 text-emerald-600 transition hover:text-emerald-500 dark:text-emerald-400 dark:hover:text-emerald-300"
+              className="inline-flex items-center gap-0.5 text-success transition hover:text-success/80"
             >
               <IconGitIssue />
               {task.issue_number != null && (
@@ -551,14 +475,14 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
             </button>
           ) : null}
           {task.feature_key && (
-            <span className="inline-flex items-center rounded border border-emerald-200 bg-emerald-50 px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-400">
+            <Badge tone="feature">
               {task.feature_key}
-            </span>
+            </Badge>
           )}
           {(taskType === "feature" || taskType === "fix") && (task.realizing_count ?? 0) > 0 && (
-            <span className="inline-flex items-center rounded border border-sky-200 bg-sky-50 px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide text-sky-700 dark:border-sky-400/30 dark:bg-sky-400/10 dark:text-sky-400">
+            <Badge tone="info">
               {task.realizing_count} linked
-            </span>
+            </Badge>
           )}
         </div>
 
@@ -596,7 +520,7 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
                 onOpenTask?.(task.realizes!);
               }
             }}
-            className="mb-1 block cursor-pointer truncate font-mono text-[10px] uppercase tracking-[0.1em] text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300"
+            className="mb-1 block cursor-pointer truncate font-mono text-[10px] uppercase tracking-[0.1em] text-success hover:text-success/80"
           >
             {/* Fallback when realizes is set but realizes_feature_key is null: render "→ realizes (unknown)" */}
             → {task.realizes_feature_key ?? "realizes (unknown)"}
@@ -616,7 +540,7 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
                 style={{ width: `${(childrenProgress.done / childrenProgress.total) * 100}%` }}
               />
               <div
-                className="absolute inset-y-0 bg-amber-500"
+                className="absolute inset-y-0 bg-warning"
                 style={{
                   left: `${(childrenProgress.done / childrenProgress.total) * 100}%`,
                   width: `${(childrenProgress.waiting / childrenProgress.total) * 100}%`,
@@ -631,7 +555,7 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
           </p>
         )}
         {task.waiting_question && !compact && (
-          <p className="mt-2 hidden rounded border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-800 sm:block dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-300">
+          <p className="mt-2 hidden rounded border border-warning/30 bg-warning/10 px-2 py-1 text-xs text-warning sm:block">
             <span className="font-semibold uppercase tracking-wide text-[10px]">Q&nbsp;</span>
             {task.waiting_question}
           </p>
@@ -640,17 +564,16 @@ export function Card({ task, onClick, compact = false, density = "default", isDr
         {(blockedBy.length > 0 || blocksCount > 0) && (
           <div className="mt-1.5 flex flex-wrap gap-1">
             {blockedBy.length > 0 && (
-              <span
-                title={blockedBy.map((d) => d.title).join(", ")}
-                className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide text-amber-700 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-400"
-              >
-                Blocked by {blockedBy.length}
-              </span>
+              <Badge tone="warning">
+                <span title={blockedBy.map((d) => d.title).join(", ")}>
+                  Blocked by {blockedBy.length}
+                </span>
+              </Badge>
             )}
             {blocksCount > 0 && (
-              <span className="inline-flex items-center rounded border border-hairline bg-surface-2 px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide text-ink-muted">
+              <Badge tone="neutral">
                 Blocks {blocksCount}
-              </span>
+              </Badge>
             )}
           </div>
         )}

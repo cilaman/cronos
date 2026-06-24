@@ -1,4 +1,5 @@
 import { cn } from "../utils/cn";
+import { Button } from "./ui/Button";
 
 export type TimeFramePreset = "6h" | "24h" | "7d" | "30d" | "90d" | "all" | "custom";
 
@@ -54,11 +55,14 @@ export function TimeFrameSelector({ value, onChange, compact = false }: Props) {
 
   return (
     <div className="flex flex-wrap items-center gap-3">
-      <div className="flex items-center gap-px rounded-md border border-hairline bg-surface-1 p-1 shadow-inset-hairline">
+      <div className="flex items-center rounded-md border border-hairline bg-surface-1 p-1 shadow-inset-hairline">
         {PRESETS.map(({ value: preset, label }) => (
-          <button
+          <Button
             key={preset}
             type="button"
+            archetype="segmented"
+            variant={value.preset === preset ? "primary" : "ghost"}
+            size="sm"
             onClick={() => {
               if (preset === "custom") {
                 onChange({ preset: "custom", from: customFrom, to: customTo });
@@ -67,17 +71,14 @@ export function TimeFrameSelector({ value, onChange, compact = false }: Props) {
               }
             }}
             className={cn(
-              "rounded transition",
+              "font-display uppercase tracking-[0.1em]",
               compact
-                ? "px-2 py-0.5 font-display text-[9px] uppercase tracking-[0.1em]"
-                : "px-2.5 py-1 font-display text-[11px] uppercase tracking-[0.1em]",
-              value.preset === preset
-                ? "bg-accent text-white shadow-sm"
-                : "text-ink-muted hover:bg-surface-2 hover:text-ink",
+                ? "px-2 py-0.5 text-[9px]"
+                : "px-2.5 py-1 text-[11px]",
             )}
           >
             {label}
-          </button>
+          </Button>
         ))}
       </div>
 
