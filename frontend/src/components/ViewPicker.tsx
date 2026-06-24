@@ -88,7 +88,7 @@ export function ViewPicker({ spaceId, viewId, onChange, onManageViews }: Props) 
       <button
         type="button"
         onClick={() => setOpen((x) => !x)}
-        className="flex h-8 items-center gap-2 rounded border border-hairline-strong bg-surface-1 px-2.5 text-[12px] text-ink transition hover:border-accent hover:bg-surface-2"
+        className="flex h-8 items-center gap-2 rounded border border-hairline-strong bg-surface-1 px-2.5 text-[12px] text-ink transition hover:border-accent hover:bg-surface-2 focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
       >
         {resolvedView ? (
           <>
@@ -112,7 +112,7 @@ export function ViewPicker({ spaceId, viewId, onChange, onManageViews }: Props) 
                   type="button"
                   onClick={() => handleSelect(v)}
                   className={[
-                    "flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] transition hover:bg-surface-2",
+                    "flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] transition hover:bg-surface-2 focus:outline-none focus-visible:ring-1 focus-visible:ring-accent",
                     isActive ? "text-ink" : "text-ink-muted",
                   ].join(" ")}
                 >
@@ -132,7 +132,7 @@ export function ViewPicker({ spaceId, viewId, onChange, onManageViews }: Props) 
                 setOpen(false);
                 onManageViews();
               }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] text-ink-muted transition hover:bg-surface-2 hover:text-ink"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] text-ink-muted transition hover:bg-surface-2 hover:text-ink focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
             >
               <svg
                 width="12"

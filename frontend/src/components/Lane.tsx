@@ -69,29 +69,35 @@ export function Lane({ state, label, tasks, onOpen, onAdd, compact = false, show
           )}
         </div>
         <div className="ml-auto flex items-center gap-1">
+          {/* Wrapper spans provide 44 × 44 px hit areas (WCAG 2.5.5) while
+              keeping the visual button small for the dense lane toolbar. */}
           {shouldShowAdd && (
-            <button
-              type="button"
-              onClick={onAdd}
-              aria-label="New task"
-              className="rounded p-1 text-ink-muted transition hover:bg-surface-2 hover:text-accent-bright focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
-            >
-              <Icon icon={Plus} size="sm" />
-            </button>
+            <span className="inline-grid min-h-[44px] min-w-[44px] place-content-center">
+              <button
+                type="button"
+                onClick={onAdd}
+                aria-label="New task"
+                className="rounded p-1 text-ink-muted transition hover:bg-surface-2 hover:text-accent-bright focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+              >
+                <Icon icon={Plus} size="sm" />
+              </button>
+            </span>
           )}
           {onHideLane && (
-            <button
-              type="button"
-              onClick={() => onHideLane(state)}
-              aria-label={`Hide ${label} lane`}
-              title={`Hide ${label}`}
-              className="rounded p-1 text-ink-faint transition hover:bg-surface-2 hover:text-ink focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
-            >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" aria-hidden="true">
-                <line x1="3" y1="3" x2="9" y2="9" />
-                <line x1="9" y1="3" x2="3" y2="9" />
-              </svg>
-            </button>
+            <span className="inline-grid min-h-[44px] min-w-[44px] place-content-center">
+              <button
+                type="button"
+                onClick={() => onHideLane(state)}
+                aria-label={`Hide ${label} lane`}
+                title={`Hide ${label}`}
+                className="rounded p-1 text-ink-faint transition hover:bg-surface-2 hover:text-ink focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" aria-hidden="true">
+                  <line x1="3" y1="3" x2="9" y2="9" />
+                  <line x1="9" y1="3" x2="3" y2="9" />
+                </svg>
+              </button>
+            </span>
           )}
         </div>
       </StickyToolbar>

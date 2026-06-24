@@ -95,7 +95,7 @@ export function MarkdownEditorModal({ file, fileUrl, onSave, savePending, onClos
                   key={mode}
                   type="button"
                   onClick={() => setPreviewMode(mode)}
-                  className={`px-2 py-1 transition ${
+                  className={`px-2 py-1 transition focus:outline-none focus-visible:ring-1 focus-visible:ring-accent ${
                     mode === "live" ? "hidden sm:block" : ""
                   } ${
                     previewMode === mode
