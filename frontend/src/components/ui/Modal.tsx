@@ -11,6 +11,10 @@ interface Props {
    * Use this when the consumer provides its own close control
    * (e.g. MarkdownEditorModal's own aria-label="Close editor" button). */
   hideDefaultClose?: boolean;
+  /** Override the panel's max-width. Defaults to `max-w-lg` for small
+   * dialogs; wide consumers (e.g. the task/feature detail shell) pass a
+   * larger width so the panel can cover most of the screen. */
+  panelClassName?: string;
 }
 
 const FOCUSABLE =
@@ -23,6 +27,7 @@ export function Modal({
   dismissable = true,
   title,
   hideDefaultClose = false,
+  panelClassName,
 }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -112,7 +117,10 @@ export function Modal({
     >
       <div
         ref={panelRef}
-        className="relative z-[40] w-full max-w-lg rounded-lg bg-surface-1 shadow-lift transition-all duration-slow scale-100 opacity-100"
+        className={cn(
+          "relative z-[40] w-full rounded-lg bg-surface-1 shadow-lift transition-all duration-slow scale-100 opacity-100",
+          panelClassName ?? "max-w-lg",
+        )}
         onClick={handlePanelClick}
         data-testid="modal-panel"
       >
