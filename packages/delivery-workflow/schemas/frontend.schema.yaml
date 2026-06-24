@@ -1,0 +1,65 @@
+$schema: "http://json-schema.org/draft-07/schema#"
+title: delivery/v1 Frontend-Class Delivery Status Block
+description: >
+  Schema for the delivery_status fenced-block emitted by frontend-designer agents.
+  Novel class with no CC-v1 counterpart. Reached only when analysis.fields.has_ui == true.
+type: object
+required:
+  - status
+  - artifact_paths
+  - produces
+  - fields
+  - telemetry
+additionalProperties: false
+properties:
+  status:
+    type: string
+    enum: [done, blocked, needs_fix, failed]
+  artifact_paths:
+    type: array
+    items:
+      type: string
+  produces:
+    type: string
+    const: frontend
+  fields:
+    type: object
+    additionalProperties: true
+    properties:
+      component_names:
+        type: array
+        items:
+          type: string
+        description: React/UI component names designed in this pass.
+      pages:
+        type: array
+        items:
+          type: string
+        description: Page-level routes or views covered.
+      design_tokens_updated:
+        type: boolean
+        description: Whether the design token set was modified.
+      responsive:
+        type: boolean
+        description: Whether the spec covers mobile/responsive layouts.
+      accessibility_notes:
+        type: string
+        description: A11y considerations captured in the design.
+  open_questions:
+    type: array
+    items:
+      type: string
+  telemetry:
+    type: object
+    required: [tokens, usd, seconds]
+    additionalProperties: false
+    properties:
+      tokens:
+        type: integer
+        minimum: 0
+      usd:
+        type: number
+        minimum: 0
+      seconds:
+        type: number
+        minimum: 0

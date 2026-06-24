@@ -1,0 +1,69 @@
+$schema: "http://json-schema.org/draft-07/schema#"
+title: delivery/v1 Review-Class Delivery Status Block
+description: >
+  Schema for the delivery_status fenced-block emitted by reviewer agents.
+  'verdict' and 'finding_class' are the primary routing surface for the review loop:
+  verdict=needs_fix + finding_class=architectural routes back to the architect;
+  verdict=needs_fix + finding_class=local routes back to the implementor;
+  verdict=pass routes forward to doc.
+type: object
+required:
+  - status
+  - artifact_paths
+  - produces
+  - fields
+  - telemetry
+additionalProperties: false
+properties:
+  status:
+    type: string
+    enum: [done, blocked, needs_fix, failed]
+  artifact_paths:
+    type: array
+    items:
+      type: string
+  produces:
+    type: string
+    const: review
+  fields:
+    type: object
+    required:
+      - verdict
+    additionalProperties: true
+    properties:
+      verdict:
+        type: string
+        enum: [pass, needs_fix, failed]
+        description: Gate decision. Primary routing field for the review loop.
+      finding_class:
+        type: string
+        enum: [architectural, local]
+        description: >
+          Triage label when verdict=needs_fix. 'architectural' re-routes to the architect;
+          'local' re-routes to the implementor.
+      findings_count:
+        type: integer
+        minimum: 0
+        description: Number of distinct findings in this review pass.
+      attempt:
+        type: integer
+        minimum: 1
+        description: Review loop attempt number (1-based).
+  open_questions:
+    type: array
+    items:
+      type: string
+  telemetry:
+    type: object
+    required: [tokens, usd, seconds]
+    additionalProperties: false
+    properties:
+      tokens:
+        type: integer
+        minimum: 0
+      usd:
+        type: number
+        minimum: 0
+      seconds:
+        type: number
+        minimum: 0

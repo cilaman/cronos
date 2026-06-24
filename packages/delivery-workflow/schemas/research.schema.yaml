@@ -1,0 +1,62 @@
+$schema: "http://json-schema.org/draft-07/schema#"
+title: delivery/v1 Research-Class Delivery Status Block
+description: >
+  Schema for the delivery_status fenced-block emitted by scout/research agents.
+  Validates the structured return (fields routing surface) for the 'research' class.
+type: object
+required:
+  - status
+  - artifact_paths
+  - produces
+  - fields
+  - telemetry
+additionalProperties: false
+properties:
+  status:
+    type: string
+    enum: [done, blocked, needs_fix, failed]
+  artifact_paths:
+    type: array
+    items:
+      type: string
+  produces:
+    type: string
+    const: research
+  fields:
+    type: object
+    additionalProperties: true
+    properties:
+      memory_hits:
+        type: integer
+        minimum: 0
+        description: Number of memory store entries retrieved during recon.
+      critical_blockers:
+        type: array
+        items:
+          type: string
+        description: IDs or labels of critical gaps that block downstream phases.
+      implementation_status:
+        type: string
+        description: Human-readable summary of current implementation coverage.
+      estimated_weeks_to_milestone:
+        type: number
+        minimum: 0
+        description: Optional velocity estimate.
+  open_questions:
+    type: array
+    items:
+      type: string
+  telemetry:
+    type: object
+    required: [tokens, usd, seconds]
+    additionalProperties: false
+    properties:
+      tokens:
+        type: integer
+        minimum: 0
+      usd:
+        type: number
+        minimum: 0
+      seconds:
+        type: number
+        minimum: 0

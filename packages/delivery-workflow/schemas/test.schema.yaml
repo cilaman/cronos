@@ -1,0 +1,65 @@
+$schema: "http://json-schema.org/draft-07/schema#"
+title: delivery/v1 Test-Class Delivery Status Block
+description: >
+  Schema for the delivery_status fenced-block emitted by tester agents.
+  The g-tests gate re-executes the suite; this block carries the outcome signal.
+type: object
+required:
+  - status
+  - artifact_paths
+  - produces
+  - fields
+  - telemetry
+additionalProperties: false
+properties:
+  status:
+    type: string
+    enum: [done, blocked, needs_fix, failed]
+  artifact_paths:
+    type: array
+    items:
+      type: string
+  produces:
+    type: string
+    const: test
+  fields:
+    type: object
+    additionalProperties: true
+    properties:
+      passed:
+        type: boolean
+        description: Whether the full test suite exited 0.
+      coverage_pct:
+        type: number
+        minimum: 0
+        maximum: 100
+        description: Line/branch coverage percentage.
+      tests_run:
+        type: integer
+        minimum: 0
+        description: Total number of test cases executed.
+      tests_failed:
+        type: integer
+        minimum: 0
+        description: Number of failing test cases.
+      coverage_floor_met:
+        type: boolean
+        description: Whether coverage met the configured floor threshold.
+  open_questions:
+    type: array
+    items:
+      type: string
+  telemetry:
+    type: object
+    required: [tokens, usd, seconds]
+    additionalProperties: false
+    properties:
+      tokens:
+        type: integer
+        minimum: 0
+      usd:
+        type: number
+        minimum: 0
+      seconds:
+        type: number
+        minimum: 0

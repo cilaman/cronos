@@ -1,0 +1,62 @@
+$schema: "http://json-schema.org/draft-07/schema#"
+title: delivery/v1 Doc-Class Delivery Status Block
+description: >
+  Schema for the delivery_status fenced-block emitted by doc-sync agents.
+  Terminal phase — doc agents never modify source files, only documentation.
+type: object
+required:
+  - status
+  - artifact_paths
+  - produces
+  - fields
+  - telemetry
+additionalProperties: false
+properties:
+  status:
+    type: string
+    enum: [done, blocked, needs_fix, failed]
+  artifact_paths:
+    type: array
+    items:
+      type: string
+  produces:
+    type: string
+    const: doc
+  fields:
+    type: object
+    additionalProperties: true
+    properties:
+      docs_updated:
+        type: array
+        items:
+          type: string
+        description: Workspace-relative paths of documentation files updated.
+      intentionally_not_updated:
+        type: array
+        items:
+          type: string
+        description: >
+          Files the doc agent considered but deliberately skipped, with reasons.
+          Required by CC-v1 doc contract (must be present, can be empty list).
+      modules_documented:
+        type: integer
+        minimum: 0
+        description: Number of source modules that received documentation updates.
+  open_questions:
+    type: array
+    items:
+      type: string
+  telemetry:
+    type: object
+    required: [tokens, usd, seconds]
+    additionalProperties: false
+    properties:
+      tokens:
+        type: integer
+        minimum: 0
+      usd:
+        type: number
+        minimum: 0
+      seconds:
+        type: number
+        minimum: 0
