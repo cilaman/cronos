@@ -1,7 +1,7 @@
 import { createContext, useContext } from "react";
 import { useDroppable, useDndContext } from "@dnd-kit/core";
 import { cn } from "../utils/cn";
-import { STATE_BADGE } from "../state-badges";
+import { Card } from "./Card";
 import type { TaskSummary } from "../types";
 
 export interface TreeNode {
@@ -160,7 +160,7 @@ export function TreeNode({ node, depth, expanded, onToggle, onOpenTask }: Props)
           />
         )}
 
-        {/* Compact row — drop zone for reparenting */}
+        {/* Card body — drop zone for reparenting */}
         <div
           className={cn(
             "min-w-0 flex-1 rounded-md transition-all duration-100",
@@ -168,40 +168,17 @@ export function TreeNode({ node, depth, expanded, onToggle, onOpenTask }: Props)
           )}
           title={isActive ? "Cannot move a running task" : undefined}
         >
-          <button
-            type="button"
+          <Card
+            task={task}
             onClick={() => onOpenTask?.(task.id)}
-            className="relative flex min-h-[36px] w-full items-center gap-2 rounded-md border border-hairline bg-surface-2 px-2.5 py-1.5 text-left shadow-inset-hairline transition hover:border-hairline-strong hover:bg-surface-3 focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
-          >
-            {isActive && (
-              <span
-                className="absolute right-2 top-1/2 -translate-y-1/2 h-1.5 w-1.5 rounded-full bg-accent-bright anim-pulse-dot"
-                aria-label="Running"
-              />
-            )}
-            <span
-              className={cn(
-                "shrink-0 rounded px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-wide",
-                STATE_BADGE[task.state],
-              )}
-            >
-              {task.state}
-            </span>
-            <h3 className="min-w-0 truncate text-sm font-semibold leading-snug text-ink">
-              {task.title}
-            </h3>
-          </button>
+            density="tight"
+            dragDisabled={isActive}
+          />
         </div>
       </div>
 
       {isExpanded && hasChildren && (
-        <div
-          role="group"
-          className="relative border-l border-hairline"
-          style={{
-            marginLeft: `calc(${depth} * var(--tree-indent, 1.25rem) + 1.5rem)`,
-          }}
-        >
+        <div role="group">
           {node.children.map((child) => (
             <TreeNode
               key={child.task.id}

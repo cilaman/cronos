@@ -7,7 +7,6 @@ import { useTestReports, useLatestTestReport } from "../hooks/useTestReports";
 import { TaskForm } from "../components/TaskForm";
 import { EmptyState } from "../components/ui/EmptyState";
 import { SpaceTag } from "../components/ui/SpaceTag";
-import { Skeleton } from "../components/ui/Skeleton";
 import { TestStatusBadge } from "../components/TestStatusBadge";
 import { TimeFrameSelector } from "../components/TimeFrameSelector";
 import type { TimeFrame } from "../components/TimeFrameSelector";
@@ -599,21 +598,7 @@ export function DashboardPage() {
   }
 
   if (spacesLoading) {
-    return (
-      <div className="mx-auto max-w-[1280px] space-y-8 p-6 lg:p-8">
-        {/* Stat tiles skeleton */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-6">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} variant="block" className="h-24" />
-          ))}
-        </div>
-        {/* Analytics cards skeleton */}
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <Skeleton variant="card" className="h-48" />
-          <Skeleton variant="card" className="h-48" />
-        </div>
-      </div>
-    );
+    return <p className="p-8 text-ink-muted">Loading dashboard…</p>;
   }
 
   return (
@@ -710,11 +695,8 @@ export function DashboardPage() {
           </div>
           <div className="p-4">
             {!globalStats ? (
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                <Skeleton variant="block" className="h-16" />
-                <Skeleton variant="block" className="h-16" />
-                <Skeleton variant="block" className="h-16" />
-                <Skeleton variant="block" className="h-16" />
+              <div className="flex items-center justify-center py-8 font-mono text-[11px] text-ink-faint">
+                Loading statistics…
               </div>
             ) : (
               <div className="space-y-4">
@@ -830,7 +812,9 @@ export function DashboardPage() {
                 </p>
               </div>
             ) : testReportsLoading ? (
-              <Skeleton variant="card" className="h-32" />
+              <div className="flex items-center justify-center py-8 font-mono text-[11px] text-ink-faint">
+                Loading…
+              </div>
             ) : !latestTestReport ? (
               <div className="flex items-center justify-center py-8">
                 <p className="font-mono text-[11px] text-ink-faint">

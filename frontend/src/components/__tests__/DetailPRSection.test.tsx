@@ -56,14 +56,6 @@ vi.mock("../../hooks/useTestReports", () => ({
   useTaskTestReportLatest: () => ({ data: null }),
 }));
 
-vi.mock("../../hooks/useLiveStream", () => ({
-  useLiveStream: vi.fn().mockReturnValue({ entries: [], status: "ended" }),
-}));
-
-vi.mock("../../assets/cronos-state-active-animated.svg", () => ({
-  default: "/mock-active.svg",
-}));
-
 // Heavy children — render as stubs so we don't have to satisfy their props.
 vi.mock("../ChatInput", () => ({ ChatInput: () => <div data-testid="chat-input-stub" /> }));
 vi.mock("../ConversationStream", () => ({

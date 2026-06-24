@@ -279,7 +279,7 @@ describe('RunOverlay — setEdges driven by edgeStatuses', () => {
     const nextEdges = updater(prevEdges);
 
     expect(nextEdges[0].animated).toBe(true);
-    expect(nextEdges[0].style?.stroke).toBe('rgb(var(--color-running))');
+    expect(nextEdges[0].style?.stroke).toBe('#22c55e');
     // edge-b-c is untouched
     expect(nextEdges[1]).toStrictEqual(prevEdges[1]);
   });

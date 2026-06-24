@@ -177,6 +177,34 @@
         "memory_hits": 0
       },
       "header_summary": {}
+    },
+    "doc": {
+      "phase": "doc",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-doc-sync",
+      "task_id": "2026-06-22-1335-doc-gui-detail-ux",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/gui-detail-ux/doc-report-gui-detail-ux.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
     }
   },
   "telemetry": {
@@ -185,10 +213,10 @@
     "total_tool_calls": 101,
     "total_files_read": 25,
     "total_memory_hits": 0,
-    "phases_completed": 6,
+    "phases_completed": 7,
     "phases_escalated": 0,
     "phases_retried": 0,
     "phases_failed": 0
   },
-  "updated_at": "2026-06-24T04:39:49.128475+00:00"
+  "updated_at": "2026-06-24T05:51:51.262045+00:00"
 }

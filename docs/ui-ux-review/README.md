@@ -67,3 +67,20 @@ sharpens that identity: **deep violet `#7A4FB0`** is the logo/wordmark/idle colo
 **lime-green is reserved for `running`** — so green only ever means "an agent is working,"
 which is exactly the status-as-light language above. The chrome accent stays per-theme;
 the brand contributes the logos, the runtime-state marks, and the status colour palette.
+
+## Implementation status
+
+This design document is now being implemented incrementally as autonomous CC-v1 pipeline goals. Progress:
+
+- **gui-detail-ux** (goal 2026-06-22-1335) — DELIVERED. Implements the detail view UX improvements:
+  - `DetailShell` component (I1): Shared shell for task and feature details with discriminated union variant (`task | feature`); owns Modal, skeleton, error+retry, header/footer slots.
+  - `Detail.tsx` adoption (I2): Adopts DetailShell, replaces inline Modal/skeleton; test coverage maintained.
+  - Two-pane workspace (I4): Task Detail split into independently scrolling panes (Context left, sticky | Conversation right); mobile breakpoint md (768px) tabs to Context | Conversation switch.
+  - NOW running card (I5): Sticky live indicator in conversation pane for ACTIVE tasks; animated SVG asset.
+  - `FeatureDetail.tsx` adoption (I3): Adopts DetailShell, replaces local skeleton/header markup.
+  - Tree improvements (I6–I7): TreeNode compact rows + connector lines; TreeToolbar Tree/DAG toggle button (F6 disclosure: placed in TreeToolbar by design, not TreePage).
+  - Semantic token migration (I9): Raw Tailwind palette classes (24 instances in Detail/FeatureDetail) replaced with semantic tokens (`danger`, `warning`, `accent`, `surface-*`, `bg-warning/10`, CSS-var syntax for goal badge colors).
+  - Exit gate: clean build (tsc + vite), all tests green (5 pre-existing failures only, zero new regressions), scope delivered.
+  - Non-blocking deviations disclosed: F6 (toggle placement), F7 (test-only mock fix), F8 (DetailShell unification scope deferred).
+
+Other gui-refactor goals (gui-tokens-brand, gui-layout-primitives, gui-badge-system, gui-button-focus, gui-icons, gui-modal-loading, gui-polish) completed or in flight; see goal tree for full status.

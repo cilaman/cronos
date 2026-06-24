@@ -219,19 +219,16 @@ describe("component list expand with icons", () => {
     expect(screen.getByText("my-cmd")).toBeInTheDocument();
   });
 
-  it("shows correct kind label for agent, skill, and command components", async () => {
+  it("shows correct icons for agent (🤖), skill (⚡), command (⌘)", async () => {
     renderPanel();
     await userEvent.click(
       screen.getByRole("button", { name: /expand components for my plugin/i }),
     );
     const items = screen.getAllByRole("listitem");
     const get = (name: string) => items.find((li) => li.textContent?.includes(name));
-    // Assert that each component list item includes its kind label text.
-    // This is icon-implementation-agnostic and works regardless of whether
-    // emoji strings or Lucide SVG icons are used for the kind indicator.
-    expect(get("my-agent")?.textContent).toContain("agent");
-    expect(get("my-skill")?.textContent).toContain("skill");
-    expect(get("my-cmd")?.textContent).toContain("command");
+    expect(get("my-agent")?.textContent).toContain("🤖");
+    expect(get("my-skill")?.textContent).toContain("⚡");
+    expect(get("my-cmd")?.textContent).toContain("⌘");
   });
 
   it("collapses list again on second click", async () => {

@@ -137,9 +137,9 @@ describe("Card — compact prop", () => {
     const task = makeTask({ title: "Clickable card title" });
     const { container } = renderCard({ task, onClick, compact: true });
     const user = userEvent.setup();
-    // I4 converted the card body from div[role='button'] to a native <button>.
-    // Use the same selector as components/__tests__/Card.test.tsx.
-    const cardButton = container.querySelector("[data-task-type] > div > button:last-child");
+    // Iteration 2: the body lives one extra wrapper level deep, so use
+    // descendant rather than direct-child selector.
+    const cardButton = container.querySelector("[data-task-type] div[role='button']");
     expect(cardButton).not.toBeNull();
     await user.click(cardButton!);
     expect(onClick).toHaveBeenCalledTimes(1);
@@ -213,9 +213,7 @@ describe("Card — proposed_pr_path FileText icon", () => {
     renderCard({ task, onClick: () => {} });
     const btn = screen.getByTitle("PROPOSED PR (no GitHub remote)");
     expect(btn).toBeInTheDocument();
-    // I4 converted nested <button> inside card body <button> to span[role='button']
-    // to avoid invalid nested interactive elements (HTML spec violation).
-    expect(btn.tagName).toBe("SPAN");
+    expect(btn.tagName).toBe("BUTTON");
   });
 
   it("does NOT show the proposed-PR button when pr_url is set (pr_url takes precedence)", () => {
@@ -259,12 +257,13 @@ describe("Card — goal collapsible children", () => {
   }
 
   function getCardBody(container: HTMLElement): HTMLElement {
-    // I4 converted the card body from div[role='button'] to a native <button>.
-    // The card body is the last button child inside the flex wrapper under data-task-type.
+    // The role=button div directly inside the data-task-type wrapper is the
+    // clickable card body. In iteration-2 it is no longer the toggle target —
+    // the left gutter button now owns that responsibility.
     const root = container.querySelector(
-      "[data-task-type] > div > button:last-child",
+      "[data-task-type] div[role='button']",
     );
-    if (!root) throw new Error("Card body button not found");
+    if (!root) throw new Error("Card body (role=button) not found");
     return root as HTMLElement;
   }
 

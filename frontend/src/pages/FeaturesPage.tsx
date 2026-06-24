@@ -3,7 +3,6 @@ import { useParams, useSearchParams } from "react-router-dom";
 import { FeaturesBoard } from "../components/FeaturesBoard";
 import { SpaceFilterDropdown } from "../components/SpaceFilterDropdown";
 import { StickyToolbar } from "../components/ui/StickyToolbar";
-import { Skeleton } from "../components/ui/Skeleton";
 import { useSpaces } from "../hooks/useSpaces";
 
 const LS_KEY = "cronos.features.lastSpaceId";
@@ -88,10 +87,9 @@ function GlobalFeaturesPage() {
       </StickyToolbar>
 
       {spacesLoading && (
-        <div className="space-y-4 p-6">
-          <Skeleton variant="card" />
-          <Skeleton variant="card" />
-          <Skeleton variant="card" />
+        <div className="flex items-center gap-2 p-6 text-sm text-ink-muted">
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-hairline border-t-accent" />
+          Loading spaces…
         </div>
       )}
 

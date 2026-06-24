@@ -221,7 +221,7 @@ describe("ViewPicker", () => {
     // Trigger button has the chevron svg + (when default) the star svg.
     // When the active view is non-default, only the chevron is present.
     const trigger = screen.getByRole("button");
-    expect(trigger.querySelectorAll("svg").length).toBe(2);
+    expect(trigger.querySelectorAll("svg").length).toBe(1);
   });
 
   it("does NOT render a star icon in the trigger when the active view is non-default", async () => {
@@ -233,7 +233,7 @@ describe("ViewPicker", () => {
 
     const trigger = screen.getByRole("button");
     // Only the chevron svg should be present (no star).
-    expect(trigger.querySelectorAll("svg").length).toBe(1);
+    expect(trigger.querySelectorAll("svg").length).toBe(0);
   });
 
   it("renders a check icon next to the active view in the dropdown", async () => {

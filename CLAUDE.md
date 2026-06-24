@@ -116,6 +116,11 @@ Frontend types are **generated** from the backend OpenAPI schema via a committed
 | `frontend/src/pages/SpaceToolsPage.tsx` | AI Tools landing page at `/spaces/:spaceId/tools` — tabs for installed tools, available tools, and plugins (plugin management UI) |
 | `frontend/src/components/HarnessRunPanel.tsx` | Per-run detail panel with node status badges, live SSE indicator, cancel button, buffer-truncated badge |
 | `frontend/src/components/ToolDetailPanel.tsx` | Detail panel for tools displaying name, description, type badge (space/global/plugin), and components list |
+| `frontend/src/components/ui/DetailShell.tsx` | Shared shell component for task/feature detail modals — discriminated union `variant: 'task' | 'feature'`, Modal-wrapped, exports DetailShell + DetailShellSkeleton + FEATURE_STATE_BADGE; owns header, skeleton, error+retry, and footer/headerActions slots; used by Detail and FeatureDetail |
+| `frontend/src/components/Detail.tsx` | Task detail view — adopts DetailShell with two-pane workspace layout (context left, conversation right), sticky NOW running card for ACTIVE tasks, semantic token badge styles |
+| `frontend/src/components/FeatureDetail.tsx` | Feature detail view — adopts DetailShell, semantic token badge styles |
+| `frontend/src/components/TreeNode.tsx` | Tree node item with compact row markup + connector lines; dnd-kit useSortable wiring and GapZone preserved |
+| `frontend/src/components/TreeToolbar.tsx` | Tree view toolbar — Tree/DAG toggle button (note: F6 disclosure — toggle placed here rather than TreePage.tsx by I7 design choice) |
 | `frontend/src/hooks/useTasks.ts` | React Query hooks for task CRUD |
 | `frontend/src/hooks/useHarnessRuns.ts` | React Query hooks for harness run queries, mutations (trigger, cancel), and SSE stream subscription |
 | `frontend/src/api.ts` | HTTP client with task/space file URL helpers (taskFileUrl, spaceFileUrl), task/space file API functions (taskFiles, spaceFiles), and plugin management functions (plugins, installPlugin, uninstallPlugin, enablePlugin, disablePlugin, addMarketplace, removeMarketplace); includes harness run types (RunSummary, NodeState, HarnessRunState) and plugin types (PluginsResponse) |

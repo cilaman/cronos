@@ -1,9 +1,7 @@
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { Plus } from "lucide-react";
 import { cn } from "../utils/cn";
 import { EmptyState } from "./ui/EmptyState";
-import { Icon } from "./ui/Icon";
 import { StickyToolbar } from "./ui/StickyToolbar";
 import { Card } from "./Card";
 import type { TaskSummary } from "../types";
@@ -76,7 +74,7 @@ export function Lane({ state, label, tasks, onOpen, onAdd, compact = false, show
               aria-label="New task"
               className="rounded p-1 text-ink-muted transition hover:bg-surface-2 hover:text-accent-bright focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
             >
-              <Icon icon={Plus} size="sm" />
+              <span aria-hidden className="text-lg leading-none">＋</span>
             </button>
           )}
           {onHideLane && (

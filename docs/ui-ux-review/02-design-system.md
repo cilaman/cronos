@@ -174,9 +174,26 @@ elements per view; stagger list entrance 30–40ms; everything off under reduced
 
 ## 2.7 Iconography
 
+### System adoption (Phase 4 complete)
+
 **Adopt `lucide-react`** (tree-shakeable, stroke-based, themes via `currentColor`, matches
-the existing 1.5px hand-drawn SVG weight). Retire the 77 emoji used as structural icons
-and the scattered inline SVGs.
+the existing 1.5px hand-drawn SVG weight). The migration is complete: all 77 structural emoji glyphs and scattered inline SVGs have been replaced with a unified lucide-react icon system. See **[ICON_SYSTEM.md](../../ICON_SYSTEM.md)** for complete implementation details, migration status, testing, and troubleshooting.
+
+### Icon component API
+
+Use the `<Icon>` wrapper from `frontend/src/components/ui/Icon.tsx`:
+
+```tsx
+import { Icon } from '@/components/ui/Icon'
+import { ChevronDown, Plus, X, Menu, Sun, Moon } from 'lucide-react'
+
+<Icon icon={ChevronDown} />                    {/* default: md size */}
+<Icon icon={Plus} size="sm" />                 {/* dense toolbar */}
+<Icon icon={Sun} size="lg" />                  {/* page header */}
+<Icon icon={X} className="text-red-600" />   {/* themed color */}
+```
+
+### Size and stroke variants
 
 | Token | Size | Stroke | Use |
 |-------|------|--------|-----|
@@ -184,10 +201,19 @@ and the scattered inline SVGs.
 | `icon-md` | 16 | 1.5 | default — buttons, nav, list rows |
 | `icon-lg` | 20 | 1.75 | page headers, empty-state glyphs |
 
-Mapping examples: file categories 🤖→`Bot` ⚡→`Zap` ⌘→`Command` 📄→`FileText`
-💻→`Terminal` 🖼→`Image`; chrome ✕→`X` ＋→`Plus` ▾→`ChevronDown` →→`ArrowRight`.
-**Keep emoji** only where it is genuine user content — the per-space avatar glyph the
-user picks. Use one icon set everywhere; never mix filled and outline at the same level.
+### Icon mapping reference
+
+**File categories:** 🤖→`Bot`, ⚡→`Zap`, ⌘→`Command`, 📄→`FileText`, 💻→`Terminal`, 🖼→`Image`, 📑→`BookOpen`, 🗜→`Archive`, ⬛→`Binary`
+
+**Chrome glyphs:** ✕→`X`, ＋→`Plus`, ▾→`ChevronDown`, →→`ArrowRight`
+
+**Navigation & theme:** ☰→`Menu`, ☀→`Sun`, ☾→`Moon`, ⚡→`Zap`
+
+### User-content preservation
+
+**Keep emoji only where it is genuine user content** — the per-space avatar glyph the user picks. Space avatars are stored in `frontend/src/types.ts::SPACE_AVATAR_CHOICES` and render without the Icon wrapper because they are user-chosen identity markers, not structural UI icons.
+
+### Brand glyphs
 
 **Brand glyphs are separate from the lucide set.** The Cronos **mark** (logo) and the
 **runtime-state marks** (idle/active/passed/blocked/failed in `brand/states/`) are identity
@@ -206,6 +232,7 @@ Full prop specs in [05-roadmap.md](05-roadmap.md).
 |-----------|:--:|------|
 | `Button` | ⬆ | add `tertiary`/`link` variants, `focus-visible` ring, loading state, leading-icon slot |
 | `IconButton` | ⬆ | add `focus-visible` ring, guarantee 44px hit area |
+| `Icon` | ✅ | lucide-react wrapper; 3 size variants (sm/md/lg), stroke via currentColor, accessible aria-hidden |
 | `Modal` | ⬆ | enforce; standard scrim (`bg-black/60` + blur), Escape, focus-trap, scale-fade |
 | `FormInput` / `FormField` | ✅ | already shared and good — extend with helper text + inline validation |
 | `EmptyState` | ✅ | keep; add optional primary action |

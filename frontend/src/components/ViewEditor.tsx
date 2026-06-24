@@ -280,12 +280,17 @@ export function ViewEditor({ spaceId, currentViewId, onClose, onViewChange }: Vi
         handleSaveRef.current();
         return;
       }
-      // Escape for the main ViewEditor modal is handled by Modal.tsx.
-      // Delete-confirm Escape is also handled by Modal.tsx when that dialog is open.
+      if (e.key === "Escape") {
+        if (confirmDeleteId) {
+          setConfirmDeleteId(null);
+        } else {
+          handleCloseRef.current();
+        }
+      }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [confirmDeleteId]);
 
   const isNewView = selectedId === NEW_ID;
   const confirmDeleteView = confirmDeleteId ? views.find((v) => v.id === confirmDeleteId) : null;
@@ -511,9 +516,13 @@ export function ViewEditor({ spaceId, currentViewId, onClose, onViewChange }: Vi
 
       {/* ── Delete confirm dialog ──────────────────────────────────── */}
       {confirmDeleteId && confirmDeleteView && (
-        <Modal onClose={() => setConfirmDeleteId(null)}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          onClick={() => setConfirmDeleteId(null)}
+        >
           <div
-            className="p-5"
+            className="w-full max-w-sm rounded-lg border border-hairline bg-surface-1 p-5 shadow-lift"
+            onClick={(e) => e.stopPropagation()}
             role="alertdialog"
             aria-modal="true"
             aria-label="Confirm delete"
@@ -536,7 +545,7 @@ export function ViewEditor({ spaceId, currentViewId, onClose, onViewChange }: Vi
               </Button>
             </div>
           </div>
-        </Modal>
+        </div>
       )}
     </>
   );

@@ -12,15 +12,9 @@ const variants = {
     "border-hairline-strong bg-canvas text-ink-muted hover:border-danger hover:bg-danger/15 hover:text-danger",
 };
 
-/**
- * Size guide:
- * - sm / md  → h-11 w-11 (44 px) — WCAG 2.5.5 minimum touch target (default)
- * - compact  → h-8  w-8  (32 px) — opt-in for dense toolbars; explicitly waives WCAG minimum
- */
 const sizes = {
-  sm: "h-11 w-11 text-xs",
-  md: "h-11 w-11 text-sm",
-  compact: "h-8 w-8 text-xs",
+  sm: "h-7 w-7 text-xs",
+  md: "h-8 w-8 text-sm",
 };
 
 interface Props extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -45,7 +39,6 @@ export function IconButton({
       disabled={disabled || loading}
       className={cn(
         "flex items-center justify-center rounded border transition",
-        "focus:outline-none focus-visible:ring-1 focus-visible:ring-accent",
         "disabled:cursor-not-allowed disabled:opacity-50",
         variants[variant],
         sizes[size],

@@ -1,11 +1,8 @@
 import MDEditor from "@uiw/react-md-editor";
 import "@uiw/react-md-editor/markdown-editor.css";
 import { useEffect, useState } from "react";
-import { X } from "lucide-react";
 import { useTheme } from "../hooks/useTheme";
 import type { TaskFile } from "../types";
-import { Icon } from "./ui/Icon";
-import { Modal } from "./ui/Modal";
 
 type PreviewMode = "edit" | "preview" | "live";
 
@@ -46,9 +43,12 @@ export function MarkdownEditorModal({ file, fileUrl, onSave, savePending, onClos
       );
   }, [fileUrl]);
 
-  // Ctrl+S / Cmd+S shortcut (Escape is now handled by Modal.tsx)
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
       if (e.key === "s" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         if (onSave && dirty && content !== null && !savePending) {
@@ -59,7 +59,7 @@ export function MarkdownEditorModal({ file, fileUrl, onSave, savePending, onClos
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onSave, dirty, content, savePending]);
+  }, [onClose, onSave, dirty, content, savePending]);
 
   async function handleSave() {
     if (!onSave || content === null) return;
@@ -78,9 +78,13 @@ export function MarkdownEditorModal({ file, fileUrl, onSave, savePending, onClos
   }
 
   return (
-    <Modal onClose={onClose} dismissable={!dirty}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
       <div
-        className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden"
+        className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-lg border border-hairline bg-surface-1 shadow-lift"
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between gap-2 border-b border-hairline px-4 py-3">
@@ -119,7 +123,7 @@ export function MarkdownEditorModal({ file, fileUrl, onSave, savePending, onClos
                 type="button"
                 onClick={() => void handleSave()}
                 disabled={savePending || !dirty || content === null}
-                className="rounded border border-hairline px-3 py-1 text-xs text-ink-muted transition hover:border-hairline-strong hover:text-ink disabled:opacity-40 focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+                className="rounded border border-hairline px-3 py-1 text-xs text-ink-muted transition hover:border-hairline-strong hover:text-ink disabled:opacity-40"
               >
                 {savePending ? "Saving…" : "Save"}
               </button>
@@ -127,10 +131,10 @@ export function MarkdownEditorModal({ file, fileUrl, onSave, savePending, onClos
             <button
               type="button"
               onClick={onClose}
-              aria-label="Close editor"
-              className="rounded p-1 text-ink-muted transition hover:bg-surface-2 hover:text-ink focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+              aria-label="Close"
+              className="rounded p-1 text-ink-muted transition hover:bg-surface-2 hover:text-ink"
             >
-              <Icon icon={X} size="sm" />
+              ✕
             </button>
           </div>
         </div>
@@ -158,6 +162,6 @@ export function MarkdownEditorModal({ file, fileUrl, onSave, savePending, onClos
           )}
         </div>
       </div>
-    </Modal>
+    </div>
   );
 }

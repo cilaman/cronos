@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -19,6 +19,7 @@ import {
 } from "../hooks/useTasks";
 import { useTaskStats } from "../hooks/useStats";
 import { useTaskTestReportLatest } from "../hooks/useTestReports";
+import { STATE_BADGE } from "../state-badges";
 import {
   AGENT_MODELS,
   AGENT_MODES,
@@ -37,9 +38,7 @@ import { GoalDependencyGraph } from "./GoalDependencyGraph";
 import { TaskActionBar } from "./TaskActionBar";
 import { TaskForm } from "./TaskForm";
 import { TracePanel } from "./TracePanel";
-import { DetailShell } from "./ui/DetailShell";
-import { useLiveStream, type ToolCallEntry } from "../hooks/useLiveStream";
-import activeAnimatedSvgUrl from "../assets/cronos-state-active-animated.svg";
+import { Modal } from "./ui/Modal";
 import { SpaceTag } from "./ui/SpaceTag";
 
 // ── Stat formatting helpers ───────────────────────────────────────────────────
@@ -279,10 +278,10 @@ function StatsPanel({ taskId }: { taskId: string }) {
 // ── Priority badge ────────────────────────────────────────────────────────────
 
 const PRIORITY_BADGE_STYLES: Record<number, string> = {
-  1: "border-danger/30 bg-danger/10 text-danger dark:border-red-400/30 dark:bg-red-400/10 dark:text-red-400",
-  2: "border-warning/40 bg-warning/15 text-warning dark:border-orange-400/30 dark:bg-orange-400/10 dark:text-orange-400",
-  3: "border-warning/30 bg-warning/10 text-warning dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-400",
-  4: "border-hairline bg-surface-2 text-ink-muted dark:border-teal-400/30 dark:bg-teal-400/10 dark:text-teal-400",
+  1: "border-red-200 bg-red-50 text-red-600 dark:border-red-400/30 dark:bg-red-400/10 dark:text-red-400",
+  2: "border-orange-200 bg-orange-50 text-orange-600 dark:border-orange-400/30 dark:bg-orange-400/10 dark:text-orange-400",
+  3: "border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-400",
+  4: "border-teal-200 bg-teal-50 text-teal-600 dark:border-teal-400/30 dark:bg-teal-400/10 dark:text-teal-400",
   5: "border-hairline bg-surface-2 text-ink-faint",
 };
 
@@ -348,8 +347,8 @@ export function getDescendantIds(tasks: TaskSummary[], rootId: string): Set<stri
 }
 
 const TYPE_BADGE_STYLES: Partial<Record<TaskType, string>> = {
-  goal: "border-[rgb(var(--cat-goal)/0.4)] bg-[rgb(var(--cat-goal)/0.1)] text-[rgb(var(--cat-goal))] dark:border-violet-400/30 dark:bg-violet-400/10 dark:text-violet-400",
-  issue: "border-warning/30 bg-warning/10 text-warning dark:border-orange-400/30 dark:bg-orange-400/10 dark:text-orange-400",
+  goal: "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-400/30 dark:bg-violet-400/10 dark:text-violet-400",
+  issue: "border-orange-200 bg-orange-50 text-orange-600 dark:border-orange-400/30 dark:bg-orange-400/10 dark:text-orange-400",
 };
 
 export function TypeBadge({ type }: { type: TaskType }) {
@@ -795,6 +794,23 @@ interface Props {
   onClose: () => void;
 }
 
+function DetailSkeleton() {
+  return (
+    <div className="animate-pulse p-6 space-y-4">
+      <div className="flex gap-2">
+        <div className="h-5 w-16 rounded bg-surface-3" />
+        <div className="h-5 w-24 rounded bg-surface-3" />
+      </div>
+      <div className="h-7 w-2/3 rounded bg-surface-3" />
+      <div className="space-y-2 pt-2">
+        <div className="h-4 w-full rounded bg-surface-3" />
+        <div className="h-4 w-5/6 rounded bg-surface-3" />
+        <div className="h-4 w-4/6 rounded bg-surface-3" />
+      </div>
+    </div>
+  );
+}
+
 export function Detail({ taskId, onClose }: Props) {
   const { data: task, isLoading, error, refetch } = useTask(taskId);
   const updateTask = useUpdateTask(taskId);
@@ -809,18 +825,24 @@ export function Detail({ taskId, onClose }: Props) {
   );
   const [editing, setEditing] = useState(false);
   const [activeTab, setActiveTab] = useState<"details" | "stats" | "trace" | "files">("details");
-  const [mobilePaneTab, setMobilePaneTab] = useState<"context" | "conversation">("context");
   const [routeToast, setRouteToast] = useState<string | null>(null);
 
-  const { entries: liveEntries } = useLiveStream(taskId, task?.state === "active");
-  const liveToolName = useMemo(() => {
-    const lastToolCall = [...liveEntries].reverse().find((e): e is ToolCallEntry => e.kind === "tool_call");
-    return lastToolCall?.name ?? null;
-  }, [liveEntries]);
-  const liveStepCount = useMemo(
-    () => liveEntries.filter((e) => e.kind === "tool_call" || e.kind === "assistant").length,
-    [liveEntries],
-  );
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Escape" || editing) return;
+      const active = document.activeElement;
+      if (
+        active instanceof HTMLTextAreaElement ||
+        active instanceof HTMLInputElement ||
+        active instanceof HTMLSelectElement
+      ) {
+        return;
+      }
+      onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose, editing]);
 
   async function onDelete() {
     if (!task) return;
@@ -879,89 +901,121 @@ export function Detail({ taskId, onClose }: Props) {
 
   return (
     <>
-      <DetailShell
-        variant="task"
-        entity={task}
-        isLoading={isLoading}
-        error={error}
-        onRetry={() => void refetch()}
-        onClose={editing ? () => {} : onClose}
-        headerActions={
-          task ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <PriorityBadge priority={task.priority ?? 3} />
-              {task.space_name && (
-                <a
-                  href={`/spaces/${task.space_id}`}
-                  className="flex items-center rounded border border-hairline px-2 py-0.5 transition hover:border-hairline-strong hover:text-ink"
-                >
-                  <SpaceTag
-                    color={task.space_color}
-                    icon={task.space_icon}
-                    name={task.space_name}
-                    size="xs"
-                  />
-                </a>
-              )}
-              <TaskTestBadge taskId={task.id} />
-              <div className="flex flex-wrap items-center gap-4 text-xs">
-                <label className="flex items-center gap-2 text-ink-muted">
-                  <span className="font-display text-[10px] uppercase tracking-[0.18em] text-ink-faint">
-                    Priority
-                  </span>
-                  <select
-                    value={task.priority ?? 3}
-                    onChange={(e) =>
-                      void updateTask.mutateAsync({ priority: Number(e.target.value) })
-                    }
-                    className="rounded border border-hairline-strong bg-canvas px-2 py-1 text-xs font-medium text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-                  >
-                    <option value={1}>P1 — Highest</option>
-                    <option value={2}>P2 — High</option>
-                    <option value={3}>P3 — Medium</option>
-                    <option value={4}>P4 — Low</option>
-                    <option value={5}>P5 — Lowest</option>
-                  </select>
-                </label>
-                <label className="flex items-center gap-2 text-ink-muted">
-                  <span className="font-display text-[10px] uppercase tracking-[0.18em] text-ink-faint">
-                    Mode
-                  </span>
-                  <select
-                    value={task.agent_mode}
-                    onChange={(e) =>
-                      void onModeChange(e.target.value as AgentMode)
-                    }
-                    className="rounded border border-hairline-strong bg-canvas px-2 py-1 text-xs font-medium text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-                  >
-                    {AGENT_MODES.map((m) => (
-                      <option key={m.value} value={m.value}>{m.label}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="flex items-center gap-2 text-ink-muted">
-                  <span className="font-display text-[10px] uppercase tracking-[0.18em] text-ink-faint">
-                    Model
-                  </span>
-                  <select
-                    value={task.agent_model}
-                    onChange={(e) =>
-                      void onModelChange(e.target.value as AgentModel)
-                    }
-                    className="rounded border border-hairline-strong bg-canvas px-2 py-1 text-xs font-medium text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-                  >
-                    {AGENT_MODELS.map((m) => (
-                      <option key={m.value} value={m.value}>{m.label}</option>
-                    ))}
-                  </select>
-                </label>
-              </div>
+      <Modal onClose={onClose} className="z-30">
+        <div
+          className="flex h-full w-full max-w-5xl flex-col overflow-hidden border border-hairline bg-surface-1 shadow-lift sm:h-auto sm:max-h-[90vh] sm:rounded-lg glass-pane"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {isLoading && <DetailSkeleton />}
+          {error && (
+            <div className="flex flex-col items-center gap-3 p-10 text-center">
+              <p className="rounded border border-danger/40 bg-danger/15 px-4 py-3 text-sm text-danger">
+                {error.message}
+              </p>
+              <button
+                type="button"
+                onClick={() => void refetch()}
+                className="rounded border border-hairline-strong bg-canvas px-3 py-1.5 text-xs text-ink-muted transition hover:bg-surface-2 hover:text-ink"
+              >
+                Retry
+              </button>
             </div>
-          ) : null
-        }
-        footer={
-          task ? (
+          )}
+          {task && (
             <>
+              <header className="flex items-start justify-between gap-4 border-b border-hairline p-4">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      className={`rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] ${
+                        STATE_BADGE[task.state] ?? STATE_BADGE.backlog
+                      }`}
+                    >
+                      {task.state}
+                    </span>
+                    <PriorityBadge priority={task.priority ?? 3} />
+                    {task.space_name && (
+                      <a
+                        href={`/spaces/${task.space_id}`}
+                        className="flex items-center rounded border border-hairline px-2 py-0.5 transition hover:border-hairline-strong hover:text-ink"
+                      >
+                        <SpaceTag
+                          color={task.space_color}
+                          icon={task.space_icon}
+                          name={task.space_name}
+                          size="xs"
+                        />
+                      </a>
+                    )}
+                    <TaskTestBadge taskId={task.id} />
+                    <span className="font-mono text-xs text-ink-faint">{task.id}</span>
+                  </div>
+                  <h2 className="mt-2 text-xl font-semibold leading-tight tracking-tight text-ink">
+                    {task.title}
+                  </h2>
+                  <div className="mt-3 flex flex-wrap items-center gap-4 text-xs">
+                    <label className="flex items-center gap-2 text-ink-muted">
+                      <span className="font-display text-[10px] uppercase tracking-[0.18em] text-ink-faint">
+                        Priority
+                      </span>
+                      <select
+                        value={task.priority ?? 3}
+                        onChange={(e) =>
+                          void updateTask.mutateAsync({ priority: Number(e.target.value) })
+                        }
+                        className="rounded border border-hairline-strong bg-canvas px-2 py-1 text-xs font-medium text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                      >
+                        <option value={1}>P1 — Highest</option>
+                        <option value={2}>P2 — High</option>
+                        <option value={3}>P3 — Medium</option>
+                        <option value={4}>P4 — Low</option>
+                        <option value={5}>P5 — Lowest</option>
+                      </select>
+                    </label>
+                    <label className="flex items-center gap-2 text-ink-muted">
+                      <span className="font-display text-[10px] uppercase tracking-[0.18em] text-ink-faint">
+                        Mode
+                      </span>
+                      <select
+                        value={task.agent_mode}
+                        onChange={(e) =>
+                          void onModeChange(e.target.value as AgentMode)
+                        }
+                        className="rounded border border-hairline-strong bg-canvas px-2 py-1 text-xs font-medium text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                      >
+                        {AGENT_MODES.map((m) => (
+                          <option key={m.value} value={m.value}>{m.label}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="flex items-center gap-2 text-ink-muted">
+                      <span className="font-display text-[10px] uppercase tracking-[0.18em] text-ink-faint">
+                        Model
+                      </span>
+                      <select
+                        value={task.agent_model}
+                        onChange={(e) =>
+                          void onModelChange(e.target.value as AgentModel)
+                        }
+                        className="rounded border border-hairline-strong bg-canvas px-2 py-1 text-xs font-medium text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                      >
+                        {AGENT_MODELS.map((m) => (
+                          <option key={m.value} value={m.value}>{m.label}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  aria-label="Close"
+                  className="rounded p-1 text-ink-muted transition hover:bg-surface-2 hover:text-ink"
+                >
+                  ✕
+                </button>
+              </header>
+
               <TaskActionBar
                 taskState={task.state}
                 isStarting={startTask.isPending}
@@ -996,11 +1050,12 @@ export function Detail({ taskId, onClose }: Props) {
                     {tab}
                   </button>
                 ))}
+                {/* Files tab — only visible on mobile since desktop shows files as a sidebar */}
                 <button
                   type="button"
                   onClick={() => setActiveTab("files")}
                   className={[
-                    "relative mr-4 pb-2.5 pt-2 font-display text-[10px] uppercase tracking-[0.18em] transition",
+                    "lg:hidden relative mr-4 pb-2.5 pt-2 font-display text-[10px] uppercase tracking-[0.18em] transition",
                     activeTab === "files"
                       ? "text-ink after:absolute after:inset-x-0 after:bottom-0 after:h-[2px] after:rounded-t after:bg-accent"
                       : "text-ink-faint hover:text-ink-muted",
@@ -1012,37 +1067,9 @@ export function Detail({ taskId, onClose }: Props) {
 
               {/* Tab content */}
               {activeTab === "details" ? (
-                <>
-                  {/* Mobile sub-tab bar: Context / Conversation — hidden ≥md */}
-                  <div className="flex border-b border-hairline bg-surface-1 px-4 md:hidden">
-                    {(["context", "conversation"] as const).map((pane) => (
-                      <button
-                        key={pane}
-                        type="button"
-                        onClick={() => setMobilePaneTab(pane)}
-                        className={[
-                          "relative mr-4 pb-2.5 pt-2 font-display text-[10px] uppercase tracking-[0.18em] transition",
-                          mobilePaneTab === pane
-                            ? "text-ink after:absolute after:inset-x-0 after:bottom-0 after:h-[2px] after:rounded-t after:bg-accent"
-                            : "text-ink-faint hover:text-ink-muted",
-                        ].join(" ")}
-                      >
-                        {pane}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Two-pane workspace */}
-                  <div className="flex h-full min-h-0 flex-col md:flex-row">
-                    {/* Left pane: Context (Brief + PR + Hierarchy) */}
-                    <div
-                      data-testid="context-pane"
-                      className={[
-                        "flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-6 p-4",
-                        "border-b border-hairline md:border-b-0 md:border-r",
-                        mobilePaneTab === "conversation" ? "hidden md:block" : "",
-                      ].filter(Boolean).join(" ")}
-                    >
+                <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+                  <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                    <div className="flex-1 space-y-6 overflow-x-hidden overflow-y-auto overscroll-contain p-4">
                       <section>
                         <h3 className="font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
                           Brief
@@ -1090,69 +1117,28 @@ export function Detail({ taskId, onClose }: Props) {
                       )}
 
                       <HierarchySection task={task} />
+
+                      <ConversationStream task={task} />
                     </div>
 
-                    {/* Right pane: Conversation */}
-                    <div
-                      className={[
-                        "flex flex-1 min-h-0 flex-col",
-                        mobilePaneTab === "context" ? "hidden md:flex" : "",
-                      ].filter(Boolean).join(" ")}
-                    >
-                      {/* NOW running card — sticky at top of right pane when task is active */}
-                      {task.state === "active" && (
-                        <div
-                          data-testid="now-running-card"
-                          className="flex shrink-0 items-center gap-3 border-b border-hairline bg-surface-1 px-4 py-2"
-                        >
-                          <img
-                            src={activeAnimatedSvgUrl}
-                            alt=""
-                            aria-hidden="true"
-                            className="h-5 w-5 shrink-0"
-                          />
-                          <span className="font-display text-[10px] uppercase tracking-[0.18em] text-accent-bright">
-                            NOW running
-                          </span>
-                          {liveToolName && (
-                            <span
-                              data-testid="now-tool-name"
-                              className="truncate font-mono text-[10px] text-ink-muted"
-                            >
-                              {liveToolName}
-                            </span>
-                          )}
-                          <span
-                            data-testid="now-step-count"
-                            className="ml-auto shrink-0 font-mono text-[10px] text-ink-faint"
-                          >
-                            {liveStepCount} steps
-                          </span>
-                        </div>
-                      )}
-                      <div
-                        data-testid="conversation-pane"
-                        className="flex-1 min-h-0 overflow-y-auto overscroll-contain"
-                      >
-                        <ConversationStream task={task} />
-                      </div>
-                      <ChatInput
-                        taskState={task.state}
-                        waitingQuestion={task.waiting_question}
-                        pendingCount={task.pending_messages.length}
-                        isSending={replyTask.isPending}
-                        error={chatError}
-                        onSend={onSend}
-                        routeHint={
-                          routePreviewData?.routed_to
-                            ? `→ will route to: ${routePreviewData.routed_to.title}`
-                            : undefined
-                        }
-                        routeToast={routeToast}
-                      />
-                    </div>
+                    <ChatInput
+                      taskState={task.state}
+                      waitingQuestion={task.waiting_question}
+                      pendingCount={task.pending_messages.length}
+                      isSending={replyTask.isPending}
+                      error={chatError}
+                      onSend={onSend}
+                      routeHint={
+                        routePreviewData?.routed_to
+                          ? `→ will route to: ${routePreviewData.routed_to.title}`
+                          : undefined
+                      }
+                      routeToast={routeToast}
+                    />
                   </div>
-                </>
+
+                  <FilesPanel taskId={task.id} />
+                </div>
               ) : activeTab === "stats" ? (
                 <div className="flex min-h-0 flex-1 flex-col">
                   <StatsPanel taskId={task.id} />
@@ -1170,9 +1156,9 @@ export function Detail({ taskId, onClose }: Props) {
                 </div>
               )}
             </>
-          ) : null
-        }
-      />
+          )}
+        </div>
+      </Modal>
 
       {editing && task && (
         <TaskForm

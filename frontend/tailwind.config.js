@@ -78,10 +78,6 @@ export default {
         "grid-sm": "24px 24px",
         "grid-md": "40px 40px",
       },
-      transitionDuration: {
-        slow: "280ms",
-        base: "180ms",
-      },
     },
   },
   plugins: [typography],

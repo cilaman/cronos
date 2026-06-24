@@ -1,7 +1,5 @@
 import { useState } from "react";
 import { Outlet } from "react-router-dom";
-import { Menu } from "lucide-react";
-import { Icon } from "./components/ui/Icon";
 import { Sidebar } from "./components/Sidebar";
 
 export default function App() {
@@ -38,7 +36,11 @@ export default function App() {
             aria-label="Open navigation"
             className="rounded p-1.5 text-ink-muted transition hover:bg-surface-2 hover:text-ink"
           >
-            <Icon icon={Menu} />
+            <svg width="18" height="14" viewBox="0 0 18 14" fill="currentColor" aria-hidden="true">
+              <rect y="0" width="18" height="2" rx="1" />
+              <rect y="6" width="18" height="2" rx="1" />
+              <rect y="12" width="18" height="2" rx="1" />
+            </svg>
           </button>
         </header>
 

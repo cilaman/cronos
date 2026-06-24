@@ -1,6 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown } from "lucide-react";
-import { Icon } from "./ui/Icon";
 import { useSpaces } from "../hooks/useSpaces";
 
 interface Props {
@@ -63,7 +61,9 @@ export function SpaceFilterDropdown({
         ) : (
           <span className="text-ink-muted">All spaces</span>
         )}
-        <Icon icon={ChevronDown} size="sm" className="text-ink-faint" />
+        <span aria-hidden className="text-[10px] text-ink-faint">
+          ▾
+        </span>
       </button>
       {open && (
         <div className="absolute right-0 z-30 mt-1 w-56 overflow-hidden rounded-md border border-hairline bg-surface-1 shadow-lift">
