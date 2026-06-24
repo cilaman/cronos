@@ -1,0 +1,168 @@
+apiVersion: delivery/v1
+metadata:
+  name: sdlc-delivery
+
+defaults:
+  models:
+    reasoning: opus
+    build: sonnet
+    recon: haiku
+  budget:
+    usd_ceiling: 25.0
+    on_exceed: escalate
+
+nodes:
+  - id: scout
+    kind: agent
+    agent: scout
+    model: {use: recon}
+    produces: {class: research}
+
+  - id: g-scout
+    kind: gate
+    checks:
+      - {type: schema}
+
+  - id: analyze
+    kind: agent
+    agent: analyst
+    model: {use: build}
+    inputs: {from: [scout]}
+    produces: {class: analysis}
+
+  - id: g-analysis
+    kind: gate
+    checks:
+      - {type: schema}
+      - {type: traceability, of: REQ}
+      - {type: acceptance}
+
+  - id: signoff-scope
+    kind: human
+    prompt: "Right thing to build?"
+
+  - id: frontend
+    kind: agent
+    agent: frontend-designer
+    model: {use: build}
+    inputs: {from: [analyze]}
+    produces: {class: frontend}
+
+  - id: architect
+    kind: agent
+    agent: architect
+    model: {use: reasoning}
+    inputs: {from: [analyze, frontend]}
+    produces: {class: design}
+    recon: on
+
+  - id: g-design
+    kind: gate
+    checks:
+      - {type: schema}
+      - {type: traceability, of: DD}
+
+  - id: signoff-design
+    kind: human
+    prompt: "Right design?"
+
+  - id: testarch
+    kind: agent
+    agent: test-architect
+    model: {use: reasoning}
+    inputs: {from: [architect]}
+    produces: {class: test}
+
+  - id: implement
+    kind: agent
+    agent: implementor
+    model: {use: build}
+    tools: [Read, Edit, Write, Bash, Grep, Glob]
+    inputs: {from: [architect]}
+    produces: {class: implementation}
+    recon: on
+
+  - id: g-build
+    kind: gate
+    checks:
+      - {type: build}
+      - {type: lint}
+      - {type: types}
+
+  - id: review
+    kind: agent
+    agent: reviewer
+    model: {use: reasoning}
+    tools: [Read, Grep, Glob, Bash, Write]
+    inputs: {from: [implement, architect]}
+    produces: {class: review}
+    recon: on
+    loop:
+      until: "review.fields.verdict == 'pass'"
+      stall: [recurring_findings, no_diff_progress]
+      max: 5
+      on_exhaust: escalate
+
+  - id: g-review
+    kind: gate
+    checks:
+      - {type: schema}
+      - {type: diff_vs_acceptance}
+
+  - id: testrun
+    kind: agent
+    agent: tester
+    model: {use: build}
+    tools: [Read, Bash]
+    inputs: {from: [testarch]}
+    produces: {class: test}
+
+  - id: g-tests
+    kind: gate
+    checks:
+      - {type: test}
+    loop:
+      until: "g-tests.decision == 'proceed'"
+      stall: [no_diff_progress]
+      max: 3
+      on_exhaust: escalate
+
+  - id: doc
+    kind: agent
+    agent: doc-sync
+    model: {use: recon}
+    inputs: {from: [implement]}
+    produces: {class: doc}
+
+  - id: g-doc
+    kind: gate
+    checks:
+      - {type: schema}
+
+  - id: release
+    kind: human
+    prompt: "Sign-off to release."
+
+edges:
+  - {from: scout,        to: g-scout}
+  - {from: g-scout,      to: analyze,       when: "g-scout.decision == 'proceed'"}
+  - {from: analyze,      to: g-analysis}
+  - {from: g-analysis,   to: signoff-scope,  when: "g-analysis.decision == 'proceed'"}
+  - {from: signoff-scope, to: frontend,      when: "analyze.fields.has_ui == true"}
+  - {from: signoff-scope, to: architect,     when: "analyze.fields.has_ui == false"}
+  - {from: frontend,     to: architect}
+  - {from: architect,    to: g-design}
+  - {from: g-design,     to: signoff-design, when: "g-design.decision == 'proceed'"}
+  - {from: signoff-design, to: testarch}
+  - {from: signoff-design, to: implement}
+  - {from: implement,    to: g-build}
+  - {from: g-build,      to: review,         when: "g-build.decision == 'proceed'"}
+  - {from: review,       to: g-review}
+  - {from: g-review,     to: testrun,        when: "review.fields.verdict == 'pass'"}
+  - {from: g-review,     to: implement,      when: "review.fields.verdict == 'needs_fix' && review.fields.finding_class == 'local'"}
+  - {from: g-review,     to: architect,      when: "review.fields.verdict == 'needs_fix' && review.fields.finding_class == 'architectural'"}
+  - {from: testrun,      to: g-tests}
+  - {from: g-tests,      to: doc,            when: "g-tests.decision == 'proceed'"}
+  - {from: g-tests,      to: implement,      when: "g-tests.decision == 'needs_fix'"}
+  - {from: doc,          to: g-doc}
+  - {from: g-doc,        to: release,        when: "g-doc.decision == 'proceed'"}
