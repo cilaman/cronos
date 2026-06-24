@@ -71,3 +71,7 @@ I7 wires `lib.telemetry.TelemetrySink.emit()` into the Cronos backend so the del
 ## Open questions
 
 - None. USD-conversion, budget enforcement, and full StateStore integration are explicitly deferred to Phase 6.
+
+## Next consumer brief
+
+The test phase (I8 / pipeline-gate) should run `cd backend && python -m pytest tests/test_pipeline_telemetry_wiring.py -v --override-ini="addopts="` to confirm all 12 I7 tests pass. The full test suite (excluding pre-existing failures on the feature branch) should show no regressions in `tests/test_pipeline_state_writer.py` and `tests/test_run_side_effects.py`. Key invariants for downstream phases: (1) `_emit_delivery_telemetry` is importable from `app.run_side_effects`; (2) `PhaseMetrics.from_telemetry_sink()` accepts any `TelemetrySink` instance and a task_id, returning zero metrics for unknown nodes; (3) `lib.telemetry.TelemetrySink` and `lib.telemetry.BudgetExceededSignal` are both importable from the backend Python environment.
