@@ -4,16 +4,33 @@ import hmac
 import os
 
 import bcrypt
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
 security = HTTPBasic(auto_error=False)
 
 
-def require_auth(credentials: HTTPBasicCredentials | None = Depends(security)) -> None:
+def require_auth(
+    request: Request,
+    credentials: HTTPBasicCredentials | None = Depends(security),
+) -> None:
     # Explicit opt-out: must be the exact string "true" — any other value falls through.
     if os.environ.get("CRONOS_AUTH_DISABLED") == "true":
         return
+
+    # Internal service token: agents inside the container bypass bcrypt by
+    # sending Authorization: Bearer <CRONOS_INTERNAL_TOKEN>. Fail-closed: if
+    # CRONOS_INTERNAL_TOKEN is unset or empty, this bypass path is disabled.
+    internal_token = os.environ.get("CRONOS_INTERNAL_TOKEN")
+    if internal_token:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            provided = auth_header[len("Bearer "):]
+            if hmac.compare_digest(provided.encode(), internal_token.encode()):
+                return
+            # Token presented but wrong — fail immediately; do not fall through
+            # to the bcrypt check.
+            raise HTTPException(status_code=401)
 
     user = os.environ.get("CRONOS_BASIC_AUTH_USER")
     pw_hash = os.environ.get("CRONOS_BASIC_AUTH_HASH")
