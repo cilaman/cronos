@@ -25,6 +25,9 @@ dev = [
     "httpx>=0.27",
     "pytest-json-report",
     "pytest-cov",
+    # delivery-workflow portable lib — editable install from monorepo sibling package.
+    # Install with: pip install -e ../packages/delivery-workflow
+    "delivery-workflow",
 ]
 
 [build-system]
