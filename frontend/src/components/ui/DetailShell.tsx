@@ -76,7 +76,7 @@ export function DetailShell({
   const maxWidthCls = variant === "task" ? "max-w-5xl" : "max-w-3xl";
 
   return (
-    <Modal onClose={onClose}>
+    <Modal onClose={onClose} hideDefaultClose>
       <div
         className={`flex h-full w-full ${maxWidthCls} flex-col overflow-hidden border border-hairline bg-surface-1 shadow-lift sm:h-auto sm:max-h-[90vh] sm:rounded-lg glass-pane`}
         onClick={(e) => e.stopPropagation()}

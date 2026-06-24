@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -279,10 +279,10 @@ function StatsPanel({ taskId }: { taskId: string }) {
 // ── Priority badge ────────────────────────────────────────────────────────────
 
 const PRIORITY_BADGE_STYLES: Record<number, string> = {
-  1: "border-red-200 bg-red-50 text-red-600 dark:border-red-400/30 dark:bg-red-400/10 dark:text-red-400",
-  2: "border-orange-200 bg-orange-50 text-orange-600 dark:border-orange-400/30 dark:bg-orange-400/10 dark:text-orange-400",
-  3: "border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-400",
-  4: "border-teal-200 bg-teal-50 text-teal-600 dark:border-teal-400/30 dark:bg-teal-400/10 dark:text-teal-400",
+  1: "border-danger/30 bg-danger/10 text-danger dark:border-red-400/30 dark:bg-red-400/10 dark:text-red-400",
+  2: "border-warning/40 bg-warning/15 text-warning dark:border-orange-400/30 dark:bg-orange-400/10 dark:text-orange-400",
+  3: "border-warning/30 bg-warning/10 text-warning dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-400",
+  4: "border-hairline bg-surface-2 text-ink-muted dark:border-teal-400/30 dark:bg-teal-400/10 dark:text-teal-400",
   5: "border-hairline bg-surface-2 text-ink-faint",
 };
 
@@ -348,8 +348,8 @@ export function getDescendantIds(tasks: TaskSummary[], rootId: string): Set<stri
 }
 
 const TYPE_BADGE_STYLES: Partial<Record<TaskType, string>> = {
-  goal: "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-400/30 dark:bg-violet-400/10 dark:text-violet-400",
-  issue: "border-orange-200 bg-orange-50 text-orange-600 dark:border-orange-400/30 dark:bg-orange-400/10 dark:text-orange-400",
+  goal: "border-[rgb(var(--cat-goal)/0.4)] bg-[rgb(var(--cat-goal)/0.1)] text-[rgb(var(--cat-goal))] dark:border-violet-400/30 dark:bg-violet-400/10 dark:text-violet-400",
+  issue: "border-warning/30 bg-warning/10 text-warning dark:border-orange-400/30 dark:bg-orange-400/10 dark:text-orange-400",
 };
 
 export function TypeBadge({ type }: { type: TaskType }) {
@@ -822,23 +822,6 @@ export function Detail({ taskId, onClose }: Props) {
     [liveEntries],
   );
 
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key !== "Escape" || editing) return;
-      const active = document.activeElement;
-      if (
-        active instanceof HTMLTextAreaElement ||
-        active instanceof HTMLInputElement ||
-        active instanceof HTMLSelectElement
-      ) {
-        return;
-      }
-      onClose();
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, editing]);
-
   async function onDelete() {
     if (!task) return;
     if (!window.confirm(`Delete "${task.title}"? It will be moved to .trash/.`)) {
@@ -902,7 +885,7 @@ export function Detail({ taskId, onClose }: Props) {
         isLoading={isLoading}
         error={error}
         onRetry={() => void refetch()}
-        onClose={onClose}
+        onClose={editing ? () => {} : onClose}
         headerActions={
           task ? (
             <div className="flex flex-wrap items-center gap-2">

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useFeature, usePatchFeature, useProcessFeature, useSetRealize } from "../hooks/useFeatures";
@@ -19,23 +19,6 @@ export function FeatureDetail({ featureId, onClose }: Props) {
   const [editTitle, setEditTitle] = useState("");
   const [editBrief, setEditBrief] = useState("");
   const [editType, setEditType] = useState<"feature" | "fix">("feature");
-
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key !== "Escape" || editing) return;
-      const active = document.activeElement;
-      if (
-        active instanceof HTMLTextAreaElement ||
-        active instanceof HTMLInputElement ||
-        active instanceof HTMLSelectElement
-      ) {
-        return;
-      }
-      onClose();
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, editing]);
 
   function startEditing() {
     if (!feature) return;
@@ -83,7 +66,7 @@ export function FeatureDetail({ featureId, onClose }: Props) {
       isLoading={isLoading}
       error={error}
       onRetry={() => void refetch()}
-      onClose={onClose}
+      onClose={editing ? () => {} : onClose}
       headerActions={
         feature && !editing ? (
           <button
@@ -115,7 +98,7 @@ export function FeatureDetail({ featureId, onClose }: Props) {
                         onClick={() => setEditType("feature")}
                         className={`rounded px-3 py-1 text-xs font-semibold transition ${
                           editType === "feature"
-                            ? "bg-emerald-500 text-white"
+                            ? "bg-accent text-white"
                             : "text-ink-muted hover:text-ink"
                         }`}
                       >
@@ -126,7 +109,7 @@ export function FeatureDetail({ featureId, onClose }: Props) {
                         onClick={() => setEditType("fix")}
                         className={`rounded px-3 py-1 text-xs font-semibold transition ${
                           editType === "fix"
-                            ? "bg-rose-500 text-white"
+                            ? "bg-danger text-white"
                             : "text-ink-muted hover:text-ink"
                         }`}
                       >
@@ -199,12 +182,12 @@ export function FeatureDetail({ featureId, onClose }: Props) {
               <section>
                 <div
                   data-testid="waiting-question-box"
-                  className="rounded-lg border border-amber-300 bg-amber-50 p-4 dark:border-amber-400/40 dark:bg-amber-400/10"
+                  className="rounded-lg border border-warning/40 bg-warning/10 p-4 dark:border-amber-400/40 dark:bg-amber-400/10"
                 >
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-700 dark:text-amber-300">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-warning dark:text-amber-300">
                     Waiting
                   </p>
-                  <p className="mt-1 text-sm text-amber-800 dark:text-amber-200">
+                  <p className="mt-1 text-sm text-warning dark:text-amber-200">
                     {feature.waiting_question}
                   </p>
                 </div>
