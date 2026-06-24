@@ -1,0 +1,23 @@
+id: personal
+name: Personal
+color: '#15803D'
+icon: null
+description: Default space — created automatically on first launch.
+created_at: '2026-06-24T06:52:24Z'
+updated_at: '2026-06-24T06:52:24Z'
+git_repo_url: null
+git_branch: null
+git_share_cronos: false
+agent_defaults: {}
+autopilot: disabled
+views:
+- id: all
+  name: All lanes
+  lanes:
+  - backlog
+  - active
+  - waiting
+  - done
+  default: true
+  created_at: '2026-06-24T06:52:24Z'
+  updated_at: '2026-06-24T06:52:24Z'

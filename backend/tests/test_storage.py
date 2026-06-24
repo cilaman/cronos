@@ -145,6 +145,33 @@ def test_parse_file_invalid_raises(tmp_path):
         parse_file(bad, SPACE_ID)
 
 
+@pytest.mark.asyncio
+async def test_reload_all_skips_malformed_yaml_frontmatter(tmp_spaces_dir, space_store):
+    """A task file with broken YAML frontmatter raises yaml.YAMLError (NOT a
+    ValueError). reload_all must skip it and keep loading the rest instead of
+    crashing the whole backend startup (regression: 502 on every /api/* route)."""
+    tasks_dir = tmp_spaces_dir / SPACE_ID / ".cronos" / "tasks"
+    tasks_dir.mkdir(parents=True, exist_ok=True)
+
+    # A valid task that must still load.
+    _make_task_file(tasks_dir, id="2025-06-01-1200-good-task")
+
+    # An unquoted colon in a mapping value -> yaml.scanner.ScannerError
+    # ("mapping values are not allowed in this context") — the exact prod crash.
+    bad = tasks_dir / "2025-06-01-1201-broken.md"
+    bad.write_text(
+        "---\ntitle: Fix: login redirect\nstate: backlog\n---\n# Brief\n",
+        encoding="utf-8",
+    )
+
+    store = TaskStore(tmp_spaces_dir)
+    await store.reload_all()  # must not raise
+
+    ids = {t.id for t in store.all()}
+    assert "2025-06-01-1200-good-task" in ids
+    assert "2025-06-01-1201-broken" not in ids
+
+
 # ---------------------------------------------------------------------------
 # TaskStore.create
 # ---------------------------------------------------------------------------

@@ -401,7 +401,10 @@ def _sanitize_imported_tasks(space_dir: Path, space_id: str) -> None:
     for task_file in tasks_dir.glob("*.md"):
         try:
             task = parse_file(task_file, space_id)
-        except ValueError:
+        except Exception:
+            # Broken YAML frontmatter raises yaml.YAMLError (not ValueError);
+            # skip unparseable imported files rather than failing the import.
+            log.warning("Skipping unparseable imported task file %s", task_file)
             continue
         needs_update = task.state != TaskState.BACKLOG or task.claude_session_id is not None
         if needs_update:

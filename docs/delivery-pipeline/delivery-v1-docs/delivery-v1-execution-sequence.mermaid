@@ -1,0 +1,41 @@
+%%{init: {'theme':'neutral'}}%%
+sequenceDiagram
+    autonumber
+    participant C as Controller (reads spec)
+    participant S as State (state.json / events.jsonl)
+    participant A as Agent (subagent / Cronos task)
+    participant G as Gate (verify + re-exec)
+    participant H as Human
+
+    Note over C,S: one loop node — review, attempt k
+    C->>S: state.read()  →  node=review, attempt=k
+    C->>A: dispatchAgent(reviewer, inputs)
+    activate A
+    A->>A: read diff + design (Read/Grep — no Edit tool)
+    A-->>C: delivery_status { verdict, finding_class, telemetry }
+    deactivate A
+    C->>S: telemetry.emit(review, {usd, tokens, s}) + state.write(patch)
+
+    alt budget exceeded (usd_spent ≥ ceiling)
+        C->>H: escalate("budget ceiling hit")
+    else within budget
+        C->>G: runGate(g-review = schema + diff_vs_acceptance, artifact)
+        activate G
+        G->>G: schema-validate artifact header
+        G->>G: RE-EXECUTE diff_vs_acceptance (does the diff cover the criteria?)
+        G-->>C: { decision, errors, evidence }
+        deactivate G
+
+        alt verdict == pass
+            C->>S: state.write(advance → testrun)
+            Note over C: loop exits — CONVERGED
+        else needs_fix & finding_class == architectural
+            C->>S: state.write(route → architect)
+            Note over C: outer RE-DESIGN loop
+        else needs_fix & finding_class == local
+            C->>S: state.write(route → implement)
+            Note over C: inner fix loop
+        else stall (recurring_findings) OR attempt == max
+            C->>H: escalate("review stalled — no convergence")
+        end
+    end

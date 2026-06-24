@@ -1,0 +1,54 @@
+flowchart TD
+
+    %% ===================== PORTABLE PACKAGE (the bundle) =====================
+    subgraph BUNDLE["delivery-workflow — portable package (identical internals in-repo or own-repo)"]
+        direction TB
+        SPEC["delivery.workflow.yaml<br/>canonical graph: nodes / edges+conditions / loops / traceability<br/>(NO editor x,y cruft)"]
+        BNDL["single agent bundle<br/>agents/  ·  skills/  ·  hooks/  ·  schemas/"]
+        LIB["portable libs<br/>lib/state (state.json + events.jsonl)  ·  lib/telemetry"]
+    end
+
+    %% ===================== PORTABILITY BOUNDARY =====================
+    IFACE{{"EXECUTOR INTERFACE  — the portability boundary (6 ops)<br/>dispatchAgent · runGate · evalCondition · state.read/write · telemetry.emit · escalate<br/>a workflow runs anywhere a conformant executor exists"}}
+
+    BUNDLE ==>|"consumed by"| IFACE
+
+    %% ===================== RUNTIME A: CRONOS (built first) =====================
+    subgraph CRONOS["Cronos runtime  — BUILT FIRST"]
+        direction TB
+        CR["adapters/cronos implements the 6 ops:<br/>dispatchAgent -> goal + agent task<br/>runGate -> gate-task + verify.py + RE-EXEC outcome checks<br/>evalCondition -> executor edge cond (needs run_trace wired)<br/>state -> lib/state (Cronos ADOPTS, fixes dead metrics)<br/>telemetry -> trace store<br/>escalate -> task waiting (waiting_question)"]
+        CRHOST[("Cronos worker / task DAG<br/>depends_on advance · pipeline-state.json")]
+        CR -.-> CRHOST
+    end
+
+    %% ===================== RUNTIME B: STANDALONE (deferred) =====================
+    subgraph STANDALONE["Standalone CC-plugin runtime  — DEFERRED (GA substrate, not preview)"]
+        direction TB
+        SA["runner/ implements the 6 ops:<br/>dispatchAgent -> CC subagent (Task)<br/>runGate -> hook + re-run cmd / tests<br/>evalCondition -> runner branch on fields<br/>state -> lib/state<br/>telemetry -> CC usage / Agent SDK<br/>escalate -> /goal exhaust -> human prompt"]
+        SAHOST[("run-delivery skill<br/>/goal loops · hooks as gates")]
+        SA -.-> SAHOST
+    end
+
+    IFACE ==>|"implemented by"| CRONOS
+    IFACE ==>|"implemented by"| STANDALONE
+
+    %% ===================== PACKAGING =====================
+    PLUGIN["PLUGIN  = bundle + runner + spec  (claude plugin install)"]
+    EMBED["CRONOS EMBED  = bundle + spec + adapters/cronos"]
+    STANDALONE -.->|"packages as"| PLUGIN
+    CRONOS -.->|"packages as"| EMBED
+
+    NOTE["Fork 5: this package lives at packages/delivery-workflow/ in the Cronos repo now;<br/>extract to its own repo (git subtree split) when the standalone runner ships or a 2nd consumer appears."]
+    BUNDLE -.- NOTE
+
+    %% ===================== BLACK & WHITE STYLING =====================
+    classDef default fill:#ffffff,stroke:#222222,color:#111111;
+    classDef iface fill:#ffffff,stroke:#000000,stroke-width:3px,color:#000000;
+    classDef host fill:#ffffff,stroke:#222222,stroke-dasharray:5 3,color:#111111;
+    classDef note fill:#ffffff,stroke:#888888,color:#444444;
+    class IFACE iface;
+    class CRHOST,SAHOST host;
+    class NOTE,PLUGIN,EMBED note;
+    style BUNDLE fill:#ffffff,stroke:#444444;
+    style CRONOS fill:#ffffff,stroke:#444444;
+    style STANDALONE fill:#ffffff,stroke:#444444;

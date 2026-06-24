@@ -1,0 +1,82 @@
+flowchart TD
+    ENTRY(["Feature Request<br/>run init: state.json + budget ceiling"])
+
+    scout(["Scout · recon"])
+    analyze(["Analyst"])
+    frontend(["Frontend Designer"])
+    architect(["Architect · Detailed Design"])
+    testarch(["Test Architect<br/>writes suite · test-first"])
+    implement(["Developer / Implementor<br/>Edit + Write"])
+    review(["Reviewer · LOOP · no Edit"])
+    testrun(["Tester · Read + Bash<br/>runs the suite"])
+    doc(["Doc-Sync"])
+
+    Gs{"schema"}
+    Ga{"schema + trace(REQ)<br/>+ acceptance"}
+    Gd{"schema + trace(DD)"}
+    Gb{"OUTCOME · re-exec<br/>build · lint · types"}
+    Gr{"schema +<br/>diff_vs_acceptance"}
+    Gt{"OUTCOME · re-exec<br/>tests pass? real runner"}
+    Gdoc{"schema"}
+
+    Hscope[["HUMAN: right thing to build?"]]
+    Hdesign[["HUMAN: right design?"]]
+    Hrelease[["HUMAN: release sign-off"]]
+    ESC[["HUMAN: escalation<br/>resume or abort"]]
+
+    DONE(["RELEASED"])
+
+    %% ===== CONTROL FLOW (solid = triggers / advances the run) =====
+    ENTRY --> scout
+    scout --> Gs
+    Gs -->|proceed| analyze
+    analyze --> Ga
+    Ga -->|proceed| Hscope
+    Hscope -->|"has_ui == false"| architect
+    Hscope -->|"has_ui == true"| frontend
+    frontend --> architect
+    architect --> Gd
+    Gd -->|proceed| Hdesign
+    Hdesign --> testarch
+    Hdesign --> implement
+    implement --> Gb
+    Gb -->|proceed| review
+    review --> Gr
+    Gr -->|"verdict == pass"| testrun
+    testrun --> Gt
+    Gt -->|proceed| doc
+    doc --> Gdoc
+    Gdoc -->|proceed| Hrelease
+    Hrelease --> DONE
+
+    %% ===== CONTROL LOOP-BACKS (thick) =====
+    Gb ==>|"fail: build broke"| implement
+    Gr ==>|"needs_fix · local"| implement
+    Gr ==>|"needs_fix · architectural · RE-DESIGN"| architect
+    Gt ==>|"needs_fix · regression"| implement
+    review ==>|"stall / max 5 / budget"| ESC
+    Gt ==>|"stall / budget"| ESC
+
+    %% ===== DATA DEPENDENCIES (dotted = node READS artifact; does NOT trigger) =====
+    %% only OFF-control-path reads are drawn; on-path inputs ride their control edge
+    analyze -.->|"reads: analysis"| frontend
+    analyze -.->|"reads: analysis"| architect
+    architect -.->|"reads: design scope"| review
+    testarch -.->|"reads: test suite"| testrun
+    implement -.->|"reads: code"| doc
+
+    %% ===== NOTES =====
+    BUD["budget guard — every dispatchAgent adds usd;<br/>ceiling breach at ANY node ⇒ escalate"]
+    LEG["EDGES: solid = control (triggers/advances) · thick = control loop-back · dotted = data (reads artifact, no trigger)<br/>GATES: dashed border = contract (well-formed) · bold border = OUTCOME (re-executed claim)"]
+    BUD -.- review
+    LEG -.- Gb
+
+    classDef default fill:#ffffff,stroke:#222222,color:#111111;
+    classDef gschema fill:#ffffff,stroke:#222222,stroke-dasharray:5 3,color:#111111;
+    classDef goutcome fill:#ffffff,stroke:#000000,stroke-width:3px,color:#000000;
+    classDef term fill:#ffffff,stroke:#000000,stroke-width:3px,color:#000000;
+    classDef note fill:#ffffff,stroke:#888888,color:#444444;
+    class Gs,Ga,Gd,Gdoc gschema;
+    class Gb,Gt,Gr goutcome;
+    class DONE term;
+    class BUD,LEG note;

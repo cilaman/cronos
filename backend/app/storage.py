@@ -804,8 +804,12 @@ class TaskStore:
                 for path in sorted(tasks_dir.glob("*.md")):
                     try:
                         task = parse_file(path, space_id)
-                    except ValueError as e:
-                        log.warning("Skipping invalid task file: %s", e)
+                    except Exception as e:
+                        # A single malformed task file (e.g. broken YAML
+                        # frontmatter raising yaml.YAMLError, which is NOT a
+                        # ValueError) must never crash startup and take the whole
+                        # backend down. Log the offending path and skip it.
+                        log.warning("Skipping invalid task file %s: %s", path, e)
                         continue
                     self._by_id[task.id] = task
                     self._path_by_id[task.id] = path
@@ -845,8 +849,10 @@ class TaskStore:
             return
         try:
             task = parse_file(path, space_id)
-        except ValueError as e:
-            log.warning("Skipping invalid task file: %s", e)
+        except Exception as e:
+            # Broken YAML frontmatter raises yaml.YAMLError (not a ValueError);
+            # a single bad file must not crash the watcher reindex loop.
+            log.warning("Skipping invalid task file %s: %s", path, e)
             return
         self._by_id[task.id] = task
         self._path_by_id[task.id] = path
