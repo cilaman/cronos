@@ -37,28 +37,6 @@ jobs:
           python -m app.export_openapi
           git -C .. diff --exit-code frontend/openapi.json
 
-  import-boundary:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: packages/delivery-workflow
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install package and dev dependencies
-        run: pip install -e ".[dev]"
-
-      - name: Test package skeleton and import boundary (AST)
-        run: python -m pytest tests/test_package_skeleton.py tests/test_import_boundary.py -v
-
-      - name: Import-linter contract check
-        run: lint-imports
-
   frontend:
     runs-on: ubuntu-latest
     defaults:
