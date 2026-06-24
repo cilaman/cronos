@@ -292,9 +292,9 @@ export function ViewEditor({ spaceId, currentViewId, onClose, onViewChange }: Vi
 
   return (
     <>
-      <Modal onClose={handleClose}>
+      <Modal onClose={handleClose} hideDefaultClose panelClassName="max-w-3xl">
         <div
-          className="flex h-full w-full flex-col overflow-hidden bg-surface-1 sm:h-auto sm:max-h-[85vh] sm:max-w-3xl sm:flex-row sm:rounded-lg sm:border sm:border-hairline sm:shadow-lift"
+          className="flex max-h-[85vh] w-full flex-col overflow-hidden rounded-lg bg-surface-1 sm:max-w-3xl sm:flex-row sm:border sm:border-hairline sm:shadow-lift"
           onClick={(e) => e.stopPropagation()}
           role="dialog"
           aria-modal="true"

@@ -47,16 +47,24 @@ export function FeatureForm({ spaceId, onClose }: Props) {
     : null;
 
   return (
-    <Modal onClose={onClose}>
+    <Modal onClose={onClose} hideDefaultClose panelClassName="max-w-3xl">
       <form
         onClick={(e) => e.stopPropagation()}
         onSubmit={handleSubmit}
-        className="flex h-full w-full max-w-2xl flex-col overflow-hidden border border-hairline bg-surface-1 shadow-lift sm:h-auto sm:max-h-[90vh] sm:rounded-lg"
+        className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-hairline bg-surface-1 shadow-lift"
       >
         <header className="flex items-center justify-between border-b border-hairline p-4">
           <h2 className="font-display text-base font-semibold uppercase tracking-[0.18em] text-ink">
             {heading}
           </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="rounded p-1 text-ink-muted transition hover:bg-surface-2 hover:text-ink"
+          >
+            ✕
+          </button>
         </header>
 
         <div className="flex-1 space-y-4 overflow-x-hidden overflow-y-auto p-4">

@@ -108,7 +108,7 @@ export function TaskForm({
     : startImmediately ? "Create & Start" : "Create";
 
   return (
-    <Modal onClose={onCancel}>
+    <Modal onClose={onCancel} hideDefaultClose panelClassName="max-w-3xl">
       <form
         onClick={(e) => e.stopPropagation()}
         onSubmit={(e) => {
@@ -125,7 +125,7 @@ export function TaskForm({
             files,
           });
         }}
-        className="flex h-full w-full max-w-2xl flex-col overflow-hidden border border-hairline bg-surface-1 shadow-lift sm:h-auto sm:max-h-[90vh] sm:rounded-lg"
+        className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-hairline bg-surface-1 shadow-lift"
       >
         <header className="flex items-center justify-between border-b border-hairline p-4">
           <h2 className="font-display text-base font-semibold uppercase tracking-[0.18em] text-ink">

@@ -153,7 +153,7 @@ describe("MarkdownEditorModal — (d) dirty=true + X button DOES close", () => {
     renderModal(onClose);
     await makeDirty();
 
-    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    await userEvent.click(screen.getByRole("button", { name: "Close editor" }));
     expect(onClose).toHaveBeenCalledOnce();
   });
 });
@@ -187,10 +187,15 @@ describe("MarkdownEditorModal — fetch error", () => {
   });
 });
 
-describe("MarkdownEditorModal — X button present (uses Modal contract)", () => {
-  it("renders an X close button provided by Modal.tsx", async () => {
+describe("MarkdownEditorModal — single X close button (no Modal duplicate)", () => {
+  it("renders exactly one X close button (its own 'Close editor', Modal default suppressed)", async () => {
     renderModal();
     await waitForContent();
-    expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Close editor" }),
+    ).toBeInTheDocument();
+    // Modal's default "Close" must be suppressed via hideDefaultClose so the
+    // header doesn't show two close buttons.
+    expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
   });
 });

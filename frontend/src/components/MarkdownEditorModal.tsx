@@ -78,7 +78,7 @@ export function MarkdownEditorModal({ file, fileUrl, onSave, savePending, onClos
   }
 
   return (
-    <Modal onClose={onClose} dismissable={!dirty}>
+    <Modal onClose={onClose} dismissable={!dirty} hideDefaultClose panelClassName="max-w-6xl">
       <div
         className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden"
       >
