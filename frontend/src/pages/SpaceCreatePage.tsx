@@ -1,46 +1,41 @@
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { SpaceForm } from "../components/spaces/SpaceForm";
 import { useCreateSpace } from "../hooks/useSpaces";
+import { PageContainer } from "../components/ui/PageContainer";
+import { PageHeader } from "../components/ui/PageHeader";
 
 export function SpaceCreatePage() {
   const navigate = useNavigate();
   const createSpace = useCreateSpace();
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8 p-6 lg:p-8">
-      <header>
-        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink-faint">
-          <Link to="/" className="hover:text-accent-bright">
-            Dashboard
-          </Link>{" "}
-          / new space
-        </p>
-        <h1 className="font-display text-[22px] font-semibold uppercase tracking-[0.14em] text-ink">
-          New space
-        </h1>
-        <p className="mt-1 text-sm text-ink-muted">
-          Spaces own their own tasks, workspaces, and configuration.
-        </p>
-      </header>
+    <PageContainer width="reading">
+      <div className="space-y-8">
+        <PageHeader
+          breadcrumbs={[{ label: "Dashboard", href: "/" }, { label: "New space" }]}
+          title="New space"
+          subtitle="Spaces own their own tasks, workspaces, and configuration."
+        />
 
-      <SpaceForm
-        mode="create"
-        submitting={createSpace.isPending}
-        error={createSpace.error?.message ?? null}
-        onCancel={() => navigate(-1)}
-        onSubmit={async (values) => {
-          const space = await createSpace.mutateAsync({
-            name: values.name,
-            color: values.color,
-            icon: values.icon,
-            description: values.description,
-            repo_url: values.repoUrl,
-            branch: values.branch,
-            share_cronos: values.shareCronos,
-          });
-          navigate(`/spaces/${space.id}`);
-        }}
-      />
-    </div>
+        <SpaceForm
+          mode="create"
+          submitting={createSpace.isPending}
+          error={createSpace.error?.message ?? null}
+          onCancel={() => navigate(-1)}
+          onSubmit={async (values) => {
+            const space = await createSpace.mutateAsync({
+              name: values.name,
+              color: values.color,
+              icon: values.icon,
+              description: values.description,
+              repo_url: values.repoUrl,
+              branch: values.branch,
+              share_cronos: values.shareCronos,
+            });
+            navigate(`/spaces/${space.id}`);
+          }}
+        />
+      </div>
+    </PageContainer>
   );
 }

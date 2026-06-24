@@ -3,6 +3,8 @@ import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { SpaceForm } from "../components/spaces/SpaceForm";
 import { api } from "../api";
 import type { AutopilotMode, Space } from "../types";
+import { PageContainer } from "../components/ui/PageContainer";
+import { PageHeader } from "../components/ui/PageHeader";
 import {
   useDeleteSpace,
   useImportSpace,
@@ -361,39 +363,25 @@ export function SpaceSettingsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8 p-6 lg:p-8">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink-faint">
-            <Link to="/" className="hover:text-accent-bright">
-              Dashboard
-            </Link>{" "}
-            /{" "}
-            <Link
-              to={`/spaces/${space.id}`}
-              className="hover:text-accent-bright"
-            >
-              {space.name}
-            </Link>{" "}
-            / settings
-          </p>
-          <h1 className="flex items-center gap-2 font-display text-[22px] font-semibold uppercase tracking-[0.14em] text-ink">
-            <span
-              aria-hidden
-              className="h-4 w-4 rounded-sm"
-              style={{ backgroundColor: space.color }}
-            />
-            {space.icon && <span>{space.icon}</span>}
-            {space.name}
-          </h1>
-        </div>
-        <Link
-          to={`/spaces/${space.id}`}
-          className="flex h-9 items-center rounded px-3 text-[12px] text-ink-muted transition hover:bg-surface-2 hover:text-ink"
-        >
-          Back to board
-        </Link>
-      </header>
+    <PageContainer width="reading">
+      <PageHeader
+        breadcrumbs={[
+          { label: "Dashboard", href: "/" },
+          { label: space.name, href: `/spaces/${space.id}` },
+          { label: "settings" },
+        ]}
+        title={space.name}
+        actions={[
+          <Link
+            key="back"
+            to={`/spaces/${space.id}`}
+            className="flex h-9 items-center rounded px-3 text-[12px] text-ink-muted transition hover:bg-surface-2 hover:text-ink"
+          >
+            Back to board
+          </Link>,
+        ]}
+        className="mb-8"
+      />
 
       <SpaceForm
         mode="edit"
@@ -419,6 +407,6 @@ export function SpaceSettingsPage() {
           </>
         }
       />
-    </div>
+    </PageContainer>
   );
 }
