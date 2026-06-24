@@ -351,7 +351,7 @@ async def test_file_change_trigger_dispatches_fan_out(tmp_path: Path) -> None:
 
     stop_event = asyncio.Event()
 
-    async def _fake_awatch(path, stop_event):
+    async def _fake_awatch(*paths, stop_event, **kwargs):
         # Yield one synthetic change then stop
         from watchfiles import Change
         yield {(Change.modified, str(changed_file))}
@@ -551,7 +551,7 @@ async def test_file_change_50_events_under_2s(tmp_path: Path) -> None:
         for i in range(50)
     }
 
-    async def _fake_awatch(path, stop_event):
+    async def _fake_awatch(*paths, stop_event, **kwargs):
         yield batch
         stop_event.set()
 

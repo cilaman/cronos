@@ -174,6 +174,27 @@ async def evolve_tools_loop(
             log.exception("Error in evolve-tools loop; will retry next cycle")
 
 
+def _cronos_watch_paths(spaces_dir: Path, space_ids: set[str]) -> list[Path]:
+    """Return specific non-recursive watch targets for all known spaces.
+
+    Watching the full spaces directory tree exhausts the kernel inotify watch
+    limit (~37k) because task-workspace worktrees add 180k+ subdirectories.
+    Instead we watch only the .cronos/ leaf dirs we actually care about.
+    """
+    paths: list[Path] = [spaces_dir]  # flat — detects new top-level space dirs
+    watched_subdirs = ("tasks", "harnesses", "memory", "memory/items")
+    for space_id in space_ids:
+        cronos_dir = spaces_dir / space_id / CRONOS_SUBDIR
+        if not cronos_dir.exists():
+            continue
+        paths.append(cronos_dir)  # catches space.yml
+        for sub in watched_subdirs:
+            d = cronos_dir / sub
+            if d.exists():
+                paths.append(d)
+    return paths
+
+
 async def watch_spaces_dir(
     task_store: TaskStore,
     space_store: SpaceStore,
@@ -186,135 +207,165 @@ async def watch_spaces_dir(
     from pathlib import PurePath
     from .tools.adoption import NotAdopted, recompute_local_sha
 
-    log.info("Watching %s for task & space changes", SPACES_DIR)
+    log.info("Watching %s for task & space changes (targeted non-recursive)", SPACES_DIR)
     _sha_throttle: dict[tuple[str, str, str], float] = {}
-    async for changes in awatch(SPACES_DIR, stop_event=stop_event):
-        for _change, raw_path in changes:
-            path = Path(raw_path)
-            if _path_is_reserved(path, SPACES_DIR):
-                continue
-            # Only react to events inside `.cronos/` — repo files are not
-            # Cronos state and should not trigger reindex churn.
-            try:
-                rel = path.relative_to(SPACES_DIR)
-            except ValueError:
-                continue
-            if len(rel.parts) < 2 or rel.parts[1] != CRONOS_SUBDIR:
-                continue
-            if (
-                len(rel.parts) >= 6
-                and rel.parts[2] == "tools"
-                and path.name != "manifest.yml"
-            ):
-                space_id = rel.parts[0]
-                kind = rel.parts[3]
-                name = rel.parts[4]
-                key = (space_id, kind, name)
-                now = time.monotonic()
-                if now - _sha_throttle.get(key, 0.0) >= 1.0:
-                    _sha_throttle[key] = now
+    _known_space_ids: set[str] = {s.id for s in space_store.list_all()}
+
+    while not stop_event.is_set():
+        watch_paths = _cronos_watch_paths(SPACES_DIR, _known_space_ids)
+        log.debug("watch_spaces_dir: watching %d path(s)", len(watch_paths))
+        try:
+            async for changes in awatch(*watch_paths, recursive=False, stop_event=stop_event):
+                _new_space_detected = False
+                for _change, raw_path in changes:
+                    path = Path(raw_path)
+                    if _path_is_reserved(path, SPACES_DIR):
+                        continue
+                    # Only react to events inside `.cronos/` — repo files are not
+                    # Cronos state and should not trigger reindex churn.
                     try:
-                        recompute_local_sha(space_id, kind, name)
-                    except NotAdopted:
-                        pass
+                        rel = path.relative_to(SPACES_DIR)
+                    except ValueError:
+                        continue
+
+                    # Top-level directory: a new space may have appeared.
+                    if len(rel.parts) == 1 and path.is_dir():
+                        new_id = rel.parts[0]
+                        if new_id not in _known_space_ids and new_id not in RESERVED_SPACE_DIRS:
+                            log.info("watch_spaces_dir: detected new space %r; rebuilding watch list", new_id)
+                            _known_space_ids.add(new_id)
+                            _new_space_detected = True
+                        continue
+
+                    if len(rel.parts) < 2 or rel.parts[1] != CRONOS_SUBDIR:
+                        continue
+                    if (
+                        len(rel.parts) >= 6
+                        and rel.parts[2] == "tools"
+                        and path.name != "manifest.yml"
+                    ):
+                        space_id = rel.parts[0]
+                        kind = rel.parts[3]
+                        name = rel.parts[4]
+                        key = (space_id, kind, name)
+                        now = time.monotonic()
+                        if now - _sha_throttle.get(key, 0.0) >= 1.0:
+                            _sha_throttle[key] = now
+                            try:
+                                recompute_local_sha(space_id, kind, name)
+                            except NotAdopted:
+                                pass
+                            except Exception:
+                                log.exception(
+                                    "Error recomputing local_sha for %s/%s in space %s",
+                                    kind, name, space_id,
+                                )
+                    elif path.suffix == ".md":
+                        await task_store.reindex_path(path)
+                    elif path.name == "space.yml":
+                        await space_store.reindex_path(path)
+
+                    # --- File-change event trigger fan-out ---
+                    # Perform AFTER the existing reindex calls to preserve current
+                    # task throughput.  Fast early-exit: skip spaces with no
+                    # file-change triggers to avoid harness-store enumeration on
+                    # every filesystem event.
+                    #
+                    # Dispatch via asyncio.create_task() so the watcher hot path
+                    # never awaits harness-store reads — the loop only enqueues.
+                    if harness_store is None or worker_pool is None:
+                        continue
+
+                    # Derive space_id and space_dir from the path.  len(rel.parts)
+                    # is guaranteed >= 2 at this point (checked above).
+                    fc_space_id = rel.parts[0]
+                    fc_space_dir = SPACES_DIR / fc_space_id
+
+                    # Fast early-exit: list harnesses for the space and check
+                    # whether any file-change trigger nodes exist.  The list() call
+                    # is sync-backed by an in-memory dict so it is O(n_harnesses)
+                    # and typically negligible for ≤10 harnesses per space.
+                    try:
+                        harnesses = await harness_store.list(fc_space_dir)
                     except Exception:
                         log.exception(
-                            "Error recomputing local_sha for %s/%s in space %s",
-                            kind, name, space_id,
+                            "watch_spaces_dir: failed to list harnesses for space %s",
+                            fc_space_id,
                         )
-            elif path.suffix == ".md":
-                await task_store.reindex_path(path)
-            elif path.name == "space.yml":
-                await space_store.reindex_path(path)
-
-            # --- File-change event trigger fan-out ---
-            # Perform AFTER the existing reindex calls to preserve current
-            # task throughput.  Fast early-exit: skip spaces with no
-            # file-change triggers to avoid harness-store enumeration on
-            # every filesystem event.
-            #
-            # Dispatch via asyncio.create_task() so the watcher hot path
-            # never awaits harness-store reads — the loop only enqueues.
-            if harness_store is None or worker_pool is None:
-                continue
-
-            # Derive space_id and space_dir from the path.  len(rel.parts)
-            # is guaranteed >= 2 at this point (checked above).
-            fc_space_id = rel.parts[0]
-            fc_space_dir = SPACES_DIR / fc_space_id
-
-            # Fast early-exit: list harnesses for the space and check
-            # whether any file-change trigger nodes exist.  The list() call
-            # is sync-backed by an in-memory dict so it is O(n_harnesses)
-            # and typically negligible for ≤10 harnesses per space.
-            try:
-                harnesses = await harness_store.list(fc_space_dir)
-            except Exception:
-                log.exception(
-                    "watch_spaces_dir: failed to list harnesses for space %s",
-                    fc_space_id,
-                )
-                continue
-
-            # Build the set of (trigger_node, harness, debounce_seconds) for
-            # file-change triggers whose watch_pattern matches the changed path.
-            from datetime import UTC, datetime as _wdt  # noqa: PLC0415
-            file_path_str = str(path)
-            has_any_fc_trigger = False
-            for harness in harnesses:
-                for node in harness.nodes:
-                    if node.type.value != "trigger":
-                        continue
-                    if node.data.get("kind") != "file-change":
-                        continue
-                    has_any_fc_trigger = True
-                    # Pattern-match: PurePath.match() on the path relative to
-                    # space_dir to support patterns like ".cronos/tasks/*.md".
-                    watch_pattern = node.data.get("watch_pattern", "")
-                    try:
-                        rel_to_space = path.relative_to(fc_space_dir)
-                        matches = PurePath(rel_to_space).match(watch_pattern)
-                    except ValueError:
-                        matches = False
-
-                    if not matches:
                         continue
 
-                    # Build the EventBusEvent for this (space, pattern, path).
-                    event_id = f"file-change:{fc_space_id}:{watch_pattern}:{file_path_str}"
-                    event = EventBusEvent(
-                        kind="file-change",
-                        space_id=fc_space_id,
-                        event_id=event_id,
-                        payload={
-                            "path": file_path_str,
-                            "event": str(_change),
-                            "watch_pattern": watch_pattern,
-                        },
-                        timestamp=_wdt.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                    )
+                    # Build the set of (trigger_node, harness, debounce_seconds) for
+                    # file-change triggers whose watch_pattern matches the changed path.
+                    from datetime import UTC, datetime as _wdt  # noqa: PLC0415
+                    file_path_str = str(path)
+                    has_any_fc_trigger = False
+                    for harness in harnesses:
+                        for node in harness.nodes:
+                            if node.type.value != "trigger":
+                                continue
+                            if node.data.get("kind") != "file-change":
+                                continue
+                            has_any_fc_trigger = True
+                            # Pattern-match: PurePath.match() on the path relative to
+                            # space_dir to support patterns like ".cronos/tasks/*.md".
+                            watch_pattern = node.data.get("watch_pattern", "")
+                            try:
+                                rel_to_space = path.relative_to(fc_space_dir)
+                                matches = PurePath(rel_to_space).match(watch_pattern)
+                            except ValueError:
+                                matches = False
 
-                    # Dispatch via create_task — never await directly in the
-                    # watcher hot path (design risk mitigation).
-                    asyncio.create_task(
-                        fan_out_to_harnesses(
-                            event,
-                            harness_store=harness_store,
-                            task_store=task_store,
-                            worker_pool=worker_pool,
-                            space_dir=fc_space_dir,
-                        ),
-                        name=f"file-change-fanout:{fc_space_id}",
-                    )
-                    log.debug(
-                        "watch_spaces_dir: dispatched file-change fan-out for "
-                        "space=%s pattern=%r path=%r",
-                        fc_space_id, watch_pattern, file_path_str,
-                    )
+                            if not matches:
+                                continue
 
-            if not has_any_fc_trigger:
-                # Nothing to do for this space — skip without logging noise.
-                pass
+                            # Build the EventBusEvent for this (space, pattern, path).
+                            event_id = f"file-change:{fc_space_id}:{watch_pattern}:{file_path_str}"
+                            event = EventBusEvent(
+                                kind="file-change",
+                                space_id=fc_space_id,
+                                event_id=event_id,
+                                payload={
+                                    "path": file_path_str,
+                                    "event": str(_change),
+                                    "watch_pattern": watch_pattern,
+                                },
+                                timestamp=_wdt.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                            )
+
+                            # Dispatch via create_task — never await directly in the
+                            # watcher hot path (design risk mitigation).
+                            asyncio.create_task(
+                                fan_out_to_harnesses(
+                                    event,
+                                    harness_store=harness_store,
+                                    task_store=task_store,
+                                    worker_pool=worker_pool,
+                                    space_dir=fc_space_dir,
+                                ),
+                                name=f"file-change-fanout:{fc_space_id}",
+                            )
+                            log.debug(
+                                "watch_spaces_dir: dispatched file-change fan-out for "
+                                "space=%s pattern=%r path=%r",
+                                fc_space_id, watch_pattern, file_path_str,
+                            )
+
+                    if not has_any_fc_trigger:
+                        # Nothing to do for this space — skip without logging noise.
+                        pass
+
+                if _new_space_detected:
+                    # Restart the watcher with an updated path list that includes
+                    # the newly discovered space's .cronos/ subdirectories.
+                    break
+
+        except OSError as exc:
+            log.error(
+                "watch_spaces_dir: OS error setting up file watches (%s); "
+                "retrying in 5 s — new task/space files may not be picked up until then",
+                exc,
+            )
+            await asyncio.sleep(5)
 
 
 def _migrate_legacy_spaces() -> None:
