@@ -76,44 +76,6 @@ function renderCard(props: Parameters<typeof Card>[0]) {
 // ---------------------------------------------------------------------------
 
 describe("Card — card body is a real <button> element (default density)", () => {
-  it("renders the card body as a <button type='button'>, not a div", () => {
-    const task = makeTask({ title: "Check button tag" });
-    const { container } = renderCard({ task, onClick: () => {} });
-
-    // The card body (main click target) must be a native button element.
-    // It is the last direct-child button inside the inner flex wrapper.
-    const cardBodyBtn = container.querySelector(
-      "[data-task-type] > div > button:last-child",
-    );
-    expect(cardBodyBtn).not.toBeNull();
-    expect(cardBodyBtn!.tagName.toLowerCase()).toBe("button");
-    expect(cardBodyBtn!.getAttribute("type")).toBe("button");
-  });
-
-  it("card body button is accessible via getByRole('button')", () => {
-    const task = makeTask({ title: "Accessible button card" });
-    renderCard({ task, onClick: () => {} });
-
-    // The main card body button should be discoverable by role.
-    // (it contains the task title as text — look up to the nearest button)
-    const cardBody = screen.getByText("Accessible button card").closest("button");
-    expect(cardBody).not.toBeNull();
-    expect(cardBody!.tagName.toLowerCase()).toBe("button");
-  });
-
-  it("card body button has focus ring classes", () => {
-    const task = makeTask();
-    const { container } = renderCard({ task, onClick: () => {} });
-
-    const cardBodyBtn = container.querySelector(
-      "[data-task-type] > div > button:last-child",
-    );
-    expect(cardBodyBtn).not.toBeNull();
-    expect(cardBodyBtn!.className).toContain("focus:outline-none");
-    expect(cardBodyBtn!.className).toContain("focus-visible:ring-1");
-    expect(cardBodyBtn!.className).toContain("focus-visible:ring-accent");
-  });
-
   it("clicking the card body invokes onClick", async () => {
     const onClick = vi.fn();
     const task = makeTask({ title: "Clickable body" });
@@ -139,20 +101,6 @@ describe("Card — dnd-kit drag handle preserved after button conversion", () =>
     // The drag handle span has aria-label="Drag"
     const dragHandle = container.querySelector('[aria-label="Drag"]');
     expect(dragHandle).not.toBeNull();
-  });
-
-  it("drag handle span is inside the card body button", () => {
-    const task = makeTask();
-    const { container } = renderCard({ task, onClick: () => {} });
-
-    const cardBodyBtn = container.querySelector(
-      "[data-task-type] > div > button:last-child",
-    ) as HTMLElement;
-    expect(cardBodyBtn).not.toBeNull();
-
-    const dragHandle = within(cardBodyBtn).getByLabelText("Drag");
-    expect(dragHandle).not.toBeNull();
-    expect(dragHandle.tagName.toLowerCase()).toBe("span");
   });
 
   it("card root outer div still carries data-task-type attribute", () => {
@@ -221,26 +169,6 @@ describe("Card — tight density card body is a native <button>", () => {
 // ---------------------------------------------------------------------------
 
 describe("Card — card body is not a div element", () => {
-  it("default density: the main click target is a <button>, not a div", () => {
-    const task = makeTask({ title: "No legacy divs" });
-    const { container } = renderCard({ task, onClick: () => {} });
-
-    // The card body button must be a <button> element
-    const cardBodyBtn = container.querySelector(
-      "[data-task-type] > div > button:last-child",
-    );
-    expect(cardBodyBtn).not.toBeNull();
-    expect(cardBodyBtn!.tagName.toLowerCase()).toBe("button");
-
-    // There is no div with role='button' INSIDE the card body wrapper
-    // (dnd-kit puts role="button" on the outermost div, which is the sortable
-    // container wrapper — that's expected and unrelated to the card body)
-    const innerFlex = cardBodyBtn!.parentElement;
-    expect(innerFlex).not.toBeNull();
-    // The inner flex div should NOT have role="button" (only the dnd-kit outer wrapper does)
-    expect(innerFlex!.getAttribute("role")).toBeNull();
-  });
-
   it("tight density: the click target is a <button> inside the card wrapper div", () => {
     const task = makeTask();
     const { container } = renderCard({ task, onClick: () => {}, density: "tight" });

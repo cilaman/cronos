@@ -14,13 +14,12 @@ const variants = {
 
 /**
  * Size guide:
- * - sm       → visual h-7 w-7 (28 px) inside a min-h-[44px] min-w-[44px] wrapper — WCAG 2.5.5 touch target
- * - md       → visual h-8 w-8 (32 px) inside a min-h-[44px] min-w-[44px] wrapper — WCAG 2.5.5 touch target (default)
- * - compact  → h-8 w-8 (32 px) directly on button, no wrapper — opt-in for dense toolbars; explicitly waives WCAG minimum
+ * - sm / md  → h-11 w-11 (44 px) — WCAG 2.5.5 minimum touch target (default)
+ * - compact  → h-8  w-8  (32 px) — opt-in for dense toolbars; explicitly waives WCAG minimum
  */
 const sizes = {
-  sm: "h-7 w-7 text-xs",
-  md: "h-8 w-8 text-sm",
+  sm: "h-11 w-11 text-xs",
+  md: "h-11 w-11 text-sm",
   compact: "h-8 w-8 text-xs",
 };
 
@@ -40,7 +39,7 @@ export function IconButton({
   className,
   ...props
 }: Props) {
-  const button = (
+  return (
     <button
       {...props}
       disabled={disabled || loading}
@@ -55,17 +54,5 @@ export function IconButton({
     >
       {loading ? "…" : children}
     </button>
-  );
-
-  // sm and md get a 44 × 44 px outer hit area via a grid wrapper while keeping
-  // the visual button at h-7/h-8.  compact opts out of WCAG 2.5.5 intentionally.
-  if (size === "compact") {
-    return button;
-  }
-
-  return (
-    <span className="inline-grid min-h-[44px] min-w-[44px] place-content-center">
-      {button}
-    </span>
   );
 }

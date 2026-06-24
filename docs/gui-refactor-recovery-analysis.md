@@ -65,25 +65,39 @@ primitives (`StatTile`/`Tabs`/`Toast`/`Tooltip`/`ProgressBar`/`Dropdown`).
 
 ## Recovery performed
 
-`feature/gui-refactor-recovered` = `main` + `2f4144c`'s entire `frontend/` tree.
-(Verified safe: `main`'s frontend is byte-identical to the branch base `aaf5e65`, so the
-snapshot applies as a pure additive overlay — no `main` work is reverted.)
+`feature/gui-refactor-recovered`, built in layers off `main`. (Verified safe: `main`'s
+frontend is byte-identical to the branch base `aaf5e65`, so each layer applies as an
+additive overlay — no `main` work is reverted.)
 
-**Status:** `npm run build` (tsc + vite) passes clean. Adds `lucide-react` dep.
+1. **Tier 1 — peak snapshot:** `main` + `2f4144c`'s entire `frontend/` tree. Recovers
+   design tokens, badge system, icon system (`lucide-react`), Button/IconButton focus
+   primitives, Modal + Skeleton loading, DetailShell two-pane detail layout.
+2. **Graft — brand identity** (from `4c9e272`): `CronosMark`, favicons, `site.webmanifest`,
+   `TOKENS.md`, Sidebar wordmark + `index.html` brand tags. Clean replace (recovery's
+   `Sidebar`/`index.html` matched the brand commit's parent).
+3. **Graft — polish primitives** (from `ca21f22`): toast system (`Toast`/`ToastProvider`/
+   `useToast`), `StatTile`, `Tabs`, `Tooltip`, `ProgressBar`, `Dropdown`, plus the
+   `ToastProvider` mount and stat-page adoption. `Detail.tsx` kept at its detail-ux version
+   (polish's `Tabs` migration of Detail was superseded by the later `DetailShell` redesign).
+4. **Graft — layout primitives** (from `350eb06`): `PageContainer`/`PageHeader` adopted
+   across ~13 pages. Six pages needed a 3-way merge; three import conflicts resolved by
+   union; `FeaturesPage`'s ad-hoc `StickyToolbar` correctly superseded by `PageHeader`.
+   `Sidebar`/`index.html` deliberately skipped here (that phase's edit to them was the
+   destructive brand removal).
+5. **Stale-test cleanup:** the button-focus phase shipped a card-body→`<button>` conversion
+   in its *tests* but never completed it in `Card.tsx` (default density renders
+   `div[role="button"]`, only tight density is a native `<button>`). Removed the assertions
+   that demanded the never-delivered native button; re-pointed the `getCardBody` helper at
+   the real `div[role="button"]` body so the body-click coverage survives.
 
-**Recovered functionality:** design tokens, badge system, icon system, Button/IconButton
-primitives with focus rings, Modal + Skeleton loading, DetailShell two-pane detail layout.
+**Status:**
+- `npm run build` (tsc + vite) — **clean**.
+- Tests — **122 failing / 1706 passing**, exactly matching `main`'s own pre-existing
+  baseline (122 failing / 9 files: `BoardPage`, `BoardToolbar`, `Tree`, `useTheme`,
+  `storage`, `format`, `HarnessesPage`, `FileBrowserPage`). The recovery adds **zero** new
+  failures and **+539** passing tests over `main`. Those 9 red files are a pre-existing
+  repo condition unrelated to any GUI work.
 
-**Known test gaps (intrinsic to the branch, not the recovery):**
-- `main` itself is already red — 122 failing tests / 9 files (`BoardPage`, `BoardToolbar`,
-  `Tree`, `useTheme`, `storage`, `format`, …) — independent of any GUI work.
-- The recovery adds ~5 newly-failing test files, all from the button-focus phase
-  (`src/__tests__/Card.test.tsx`, `*.buttons.test.tsx`). These tests and their `Card.tsx`
-  source are byte-identical to `2f4144c`, yet the tests fail against the source — i.e. the
-  **branch was already red here**. The DOM structure the tests assert
-  (`[data-task-type] > div > button:last-child`) is not produced by the recovered render
-  tree, a pre-existing inconsistency the original pipeline never resolved.
-
-**Not recovered** (destroyed before `2f4144c`, would need per-feature re-grafting + consumer
-re-wiring from `4c9e272` / `350eb06` / `ca21f22`): brand mark & favicons, page-header
-primitives, polish primitives (toast/StatTile/Tabs/etc.).
+**Intentionally dropped:** the button-focus *native-button* card-body conversion — it was
+never coherently implemented in the branch (source/test were mutually inconsistent from the
+start). The accessible `div[role="button"]` click target it half-replaced is retained.

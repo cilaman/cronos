@@ -2,15 +2,12 @@ import { useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useSpaces, useSpaceTools, useUnadoptTool } from "../hooks/useSpaces";
 import { cn } from "../utils/cn";
-import { Tabs } from "../components/ui/Tabs";
 import { formatRelative } from "../utils/format";
 import type { AdoptedTool, AiToolEntry, HookEntry, PermissionEntry } from "../types";
 import { ToolDetailPanel } from "../components/ToolDetailPanel";
 import { DiscoveryPanel } from "../components/DiscoveryPanel";
 import { PluginsPanel } from "../components/PluginsPanel";
 import { AdoptedToolTelemetry } from "../components/AdoptedToolTelemetry";
-import { PageContainer } from "../components/ui/PageContainer";
-import { PageHeader } from "../components/ui/PageHeader";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -449,39 +446,60 @@ export function SpaceToolsPage() {
     (tools?.skills.length ?? 0) +
     (tools?.context_files.length ?? 0);
 
-  const spaceSelector =
-    activeTab === "installed" ? (
-      spacesLoading ? (
-        <span className="text-[12px] text-ink-muted">Loading…</span>
-      ) : (
-        <select
-          value={activeSpaceId ?? ""}
-          onChange={handleSpaceChange}
-          className="h-9 rounded border border-hairline-strong bg-surface-1 px-3 text-[12px] text-ink transition hover:border-accent focus:border-accent focus:outline-none"
-        >
-          <option value="">Select a space…</option>
-          {spaces.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.icon ? `${s.icon} ` : ""}{s.name}
-            </option>
-          ))}
-        </select>
-      )
-    ) : undefined;
-
   return (
-    <PageContainer className="space-y-8">
-      <PageHeader
-        title={activeSpace ? activeSpace.name : "Inventory"}
-        actions={spaceSelector ? [spaceSelector] : undefined}
-      />
+    <div className="mx-auto max-w-[1280px] space-y-8 p-6 lg:p-8">
+      {/* Page header */}
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink-faint">
+            Cronos · AI Tools
+          </p>
+          <h1 className="font-display text-[22px] font-semibold uppercase tracking-[0.14em] text-ink">
+            {activeSpace ? activeSpace.name : "Inventory"}
+          </h1>
+        </div>
+
+        {/* Space selector (only relevant for Installed tab; hidden for Discover and Plugins) */}
+        {activeTab === "installed" && (
+          <div className="flex items-center gap-2">
+            {spacesLoading ? (
+              <span className="text-[12px] text-ink-muted">Loading…</span>
+            ) : (
+              <select
+                value={activeSpaceId ?? ""}
+                onChange={handleSpaceChange}
+                className="h-9 rounded border border-hairline-strong bg-surface-1 px-3 text-[12px] text-ink transition hover:border-accent focus:border-accent focus:outline-none"
+              >
+                <option value="">Select a space…</option>
+                {spaces.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.icon ? `${s.icon} ` : ""}{s.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        )}
+      </header>
 
       {/* Tab switcher */}
-      <Tabs
-        items={TABS.map((t) => ({ value: t.id, label: t.label }))}
-        value={activeTab}
-        onChange={(v) => setActiveTab(v as Tab)}
-      />
+      <div className="flex gap-1 rounded-md border border-hairline bg-surface-1 p-1 w-fit shadow-inset-hairline">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+            className={cn(
+              "rounded px-4 py-1.5 font-display text-[12px] font-medium uppercase tracking-[0.1em] transition",
+              activeTab === tab.id
+                ? "bg-accent text-white shadow-sm"
+                : "text-ink-muted hover:text-ink",
+            )}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
       {/* Tool detail panel */}
       {selectedTool && activeSpaceId && (
@@ -617,6 +635,6 @@ export function SpaceToolsPage() {
           )}
         </>
       )}
-    </PageContainer>
+    </div>
   );
 }
