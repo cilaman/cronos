@@ -1,0 +1,201 @@
+# Synthetic SDLC scenario: "Add GET /api/v1/delivery-ping returning {pong: true}"
+#
+# This fixture drives the G6.2 milestone e2e test (DD-11). All agents are
+# monkeypatched; store + trace_store return scripted delivery_status per node.
+# Dispatch is sequential (parallel fan-out deferred per analyst OQ-3).
+#
+# Graph mirrors spec §12 worked example:
+#   scout → g-scout → analyze → g-analysis → signoff-scope →
+#   architect (has_ui=false skips frontend) → g-design → signoff-design →
+#   testarch → implement → g-build → review → g-review → testrun → g-tests →
+#   doc → g-doc → release
+#
+# Review routing:
+#   needs_fix·local  → implement  (attempt 1)
+#   pass             → testrun    (attempt 2)
+#
+# Outcome-gate loop:
+#   g-tests attempt 1: needs_fix → implement
+#   g-tests attempt 2: proceed   → doc
+#
+# Budget: token_cost_usd=0.001; each implement turn = 1000 tokens → usd_spent > 0
+
+spec: delivery-ping
+run_id: e2e-test-01
+usd_ceiling: 50.0
+token_cost_usd: 0.001
+
+nodes:
+  scout:
+    agent_ref: pipeline-scout
+    delivery_status:
+      status: done
+      artifact_paths: [.cronos/pipeline/delivery-ping/scout-report-delivery-ping.md]
+      produces: research
+      fields: {}
+      open_questions: []
+      telemetry: {tokens: 500, usd: 0.0005, seconds: 8}
+
+  g-scout:
+    gate_id: g-scout
+    gate_decision: proceed
+
+  analyze:
+    agent_ref: pipeline-analyst
+    delivery_status:
+      status: done
+      artifact_paths: [.cronos/pipeline/delivery-ping/analysis-report-delivery-ping.md]
+      produces: analysis
+      fields:
+        has_ui: "false"
+        requirements_count: "3"
+      open_questions: []
+      telemetry: {tokens: 800, usd: 0.0008, seconds: 12}
+
+  g-analysis:
+    gate_id: g-analysis
+    gate_decision: proceed
+
+  signoff-scope:
+    # Human checkpoint — immediately unblocked in the test
+    agent_ref: pipeline-signoff
+    delivery_status:
+      status: done
+      artifact_paths: []
+      produces: signoff
+      fields: {}
+      open_questions: []
+      telemetry: {tokens: 100, usd: 0.0001, seconds: 2}
+
+  architect:
+    agent_ref: pipeline-architect
+    delivery_status:
+      status: done
+      artifact_paths: [.cronos/pipeline/delivery-ping/design-report-delivery-ping.md]
+      produces: design
+      fields: {}
+      open_questions: []
+      telemetry: {tokens: 1200, usd: 0.0012, seconds: 18}
+
+  g-design:
+    gate_id: g-design
+    gate_decision: proceed
+
+  signoff-design:
+    agent_ref: pipeline-signoff
+    delivery_status:
+      status: done
+      artifact_paths: []
+      produces: signoff
+      fields: {}
+      open_questions: []
+      telemetry: {tokens: 100, usd: 0.0001, seconds: 2}
+
+  testarch:
+    agent_ref: pipeline-test-architect
+    delivery_status:
+      status: done
+      artifact_paths: [.cronos/pipeline/delivery-ping/test-report-delivery-ping.md]
+      produces: test
+      fields: {}
+      open_questions: []
+      telemetry: {tokens: 600, usd: 0.0006, seconds: 10}
+
+  # implement is called twice:
+  #   attempt 1: needs_fix (review routes back)
+  #   attempt 2: done (passes review)
+  implement_attempt1:
+    agent_ref: pipeline-implementor
+    delivery_status:
+      status: needs_fix
+      artifact_paths: [.cronos/pipeline/delivery-ping/impl-report-delivery-ping--i1.md]
+      produces: implementation
+      fields: {}
+      open_questions: []
+      telemetry: {tokens: 1000, usd: 0.001, seconds: 20}
+
+  implement_attempt2:
+    agent_ref: pipeline-implementor
+    delivery_status:
+      status: done
+      artifact_paths: [.cronos/pipeline/delivery-ping/impl-report-delivery-ping--i2.md]
+      produces: implementation
+      fields: {}
+      open_questions: []
+      telemetry: {tokens: 1000, usd: 0.001, seconds: 20}
+
+  g-build:
+    gate_id: g-build
+    gate_decision: proceed
+
+  # review routes: needs_fix·local → implement, then pass → testrun
+  review_attempt1:
+    agent_ref: pipeline-reviewer
+    delivery_status:
+      status: needs_fix
+      artifact_paths: [.cronos/pipeline/delivery-ping/review-report-delivery-ping--attempt1.md]
+      produces: review
+      fields:
+        verdict: needs_fix
+        category: local
+      open_questions: []
+      telemetry: {tokens: 700, usd: 0.0007, seconds: 12}
+
+  review_attempt2:
+    agent_ref: pipeline-reviewer
+    delivery_status:
+      status: done
+      artifact_paths: [.cronos/pipeline/delivery-ping/review-report-delivery-ping--attempt2.md]
+      produces: review
+      fields:
+        verdict: pass
+        category: ""
+      open_questions: []
+      telemetry: {tokens: 700, usd: 0.0007, seconds: 12}
+
+  g-review:
+    gate_id: g-review
+    gate_decision: proceed
+
+  testrun:
+    agent_ref: pipeline-tester
+    delivery_status:
+      status: done
+      artifact_paths: [.cronos/pipeline/delivery-ping/test-report-delivery-ping.md]
+      produces: test
+      fields: {}
+      open_questions: []
+      telemetry: {tokens: 500, usd: 0.0005, seconds: 8}
+
+  # g-tests: attempt 1 needs_fix (loop back to implement), attempt 2 proceed
+  g-tests_attempt1:
+    gate_id: g-tests
+    gate_decision: needs_fix
+
+  g-tests_attempt2:
+    gate_id: g-tests
+    gate_decision: proceed
+
+  doc:
+    agent_ref: pipeline-doc-sync
+    delivery_status:
+      status: done
+      artifact_paths: [.cronos/pipeline/delivery-ping/doc-report-delivery-ping.md]
+      produces: doc
+      fields: {}
+      open_questions: []
+      telemetry: {tokens: 400, usd: 0.0004, seconds: 6}
+
+  g-doc:
+    gate_id: g-doc
+    gate_decision: proceed
+
+  release:
+    agent_ref: pipeline-release
+    delivery_status:
+      status: done
+      artifact_paths: [.cronos/pipeline/delivery-ping/release-note.md]
+      produces: doc
+      fields: {}
+      open_questions: []
+      telemetry: {tokens: 300, usd: 0.0003, seconds: 5}

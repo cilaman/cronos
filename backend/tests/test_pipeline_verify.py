@@ -740,6 +740,15 @@ def test_research_empty_strategies_fails(tmp_path: Path) -> None:
     assert not result.passed
 
 
+def test_research_traceability_mapping_strategy_passes(tmp_path: Path) -> None:
+    h = research_header()
+    h["coverage_summary"]["strategies"] = ["memory_retrieval", "traceability_mapping"]
+    write_artifact(tmp_path, "research", "test-feature", h)
+    result = verify("research", "test-feature", tmp_path)
+    assert result.passed
+    assert result.outcome == "proceed"
+
+
 # ---------------------------------------------------------------------------
 # Analysis-class checks.
 # ---------------------------------------------------------------------------

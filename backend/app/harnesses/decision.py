@@ -286,14 +286,14 @@ _EVAL_SINGLE_RE = re.compile(
 # Legacy single-segment regex kept for backward compatibility reference.
 _VAR_COND_RE = re.compile(
     r"""^\s*
-        (?P<name>[A-Za-z_][A-Za-z0-9_]*)   # variable name
+        (?P<name>[A-Za-z_][A-Za-z0-9_.\\-]*)  # variable name (dotted / hyphenated)
         \s+
-        (?P<op>==|!=|in)                    # operator
+        (?P<op>==|!=|in)                       # operator
         \s+
-        (?P<val>                            # right-hand value
-            "(?:[^"\\]|\\.)*"              # double-quoted string
-            |'(?:[^'\\]|\\.)*'             # single-quoted string
-            |\S+                           # unquoted bare word / number
+        (?P<val>                               # right-hand value
+            "(?:[^"\\]|\\.)*"                 # double-quoted string
+            |'(?:[^'\\]|\\.)*'                # single-quoted string
+            |\S+                              # unquoted bare word / number
         )
     \s*$""",
     re.VERBOSE,

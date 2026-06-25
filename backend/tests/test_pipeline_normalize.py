@@ -317,6 +317,24 @@ class TestStrategyNormalise:
 
         assert not any("strategies" in f for f in r.fixes_applied)
 
+    def test_traceability_mapping_is_canonical_not_dropped(
+        self, tmp_path: Path
+    ) -> None:
+        h = _minimal_research_header()
+        h["coverage_summary"]["strategies"] = [
+            "read_targeted",
+            "traceability_mapping",
+        ]
+        write_artifact(tmp_path, "research", "my-feature", h)
+
+        r = normalize("research", "my-feature", tmp_path)
+
+        assert not any(
+            "traceability_mapping" in f and "dropped" in f for f in r.fixes_applied
+        )
+        saved = read_header(tmp_path, "research", "my-feature")
+        assert "traceability_mapping" in saved["coverage_summary"]["strategies"]
+
 
 # ---------------------------------------------------------------------------
 # section_case_canonical

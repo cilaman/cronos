@@ -639,6 +639,7 @@ def _check_research(result: VerifyResult, header: dict[str, Any]) -> None:
         "repo_map",
         "web_search",
         "fetch_url",
+        "traceability_mapping",
     }
     if isinstance(strategies, list):
         if not strategies:

@@ -360,9 +360,8 @@ REQ-002  ->  DD-014  ->  [TC-007, TC-008]  ->  [backend/app/x.py, …]  ->  [doc
 
 Gates check the `traceability.require` links resolve. This is also the substrate for
 **ripple/invalidation** (v2): when `DD-014` changes, look up everything referencing it,
-mark stale, re-trigger exactly those nodes. (v1 silently *drops* `traceability_mapping`
-as an "unknown strategy" during normalize — the enum lags the agents; the schema here
-makes traceability a required output, not a discarded one.)
+mark stale, re-trigger exactly those nodes. (`traceability_mapping` is now properly
+recognized as a canonical research strategy; the normalizer and verifier enums include it.)
 
 ---
 
