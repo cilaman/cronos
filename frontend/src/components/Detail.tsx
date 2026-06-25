@@ -1132,7 +1132,7 @@ export function Detail({ taskId, onClose }: Props) {
                       )}
                       <div
                         data-testid="conversation-pane"
-                        className="flex-1 min-h-0 overflow-y-auto overscroll-contain"
+                        className="flex-1 min-h-0 overflow-y-auto overscroll-contain min-h-[50vh] md:min-h-0"
                       >
                         <ConversationStream task={task} />
                       </div>
