@@ -3,7 +3,7 @@
   "goal_slug": "delivery-v1-cronos-adapter",
   "status": "running",
   "created_at": "2026-06-25T08:51:55.890736+00:00",
-  "updated_at": "2026-06-25T09:06:35.194180+00:00",
+  "updated_at": "2026-06-25T09:25:17.966273+00:00",
   "request_text": null,
   "phases": {
     "analysis": {
@@ -63,6 +63,34 @@
         "memory_hits": 0
       },
       "header_summary": {}
+    },
+    "implementation": {
+      "phase": "implementation",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-implementor",
+      "task_id": "2026-06-24-1340-impl-delivery-v1-cronos-adapter",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/delivery-v1-cronos-adapter/impl-report-delivery-v1-cronos-adapter--i1.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
     }
   },
   "telemetry": {
@@ -71,7 +99,7 @@
     "total_tool_calls": 0,
     "total_files_read": 0,
     "total_memory_hits": 0,
-    "phases_completed": 2,
+    "phases_completed": 3,
     "phases_escalated": 0,
     "phases_retried": 0,
     "phases_failed": 0

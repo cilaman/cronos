@@ -1,11 +1,11 @@
 ---
 cc_version: '1.0'
 agent: pipeline-implementor
-slug: delivery-v1-cronos-adapter
-phase: implementation
-iteration_id: I1
+slug: delivery-v1-cronos-adapter--i1
+phase: impl
 status: done
 confidence: 0.97
+iteration_id: I1
 inputs_used:
 - .cronos/pipeline/delivery-v1-cronos-adapter/design-report-delivery-v1-cronos-adapter.md
 - packages/delivery-workflow/interface.py
@@ -22,8 +22,11 @@ inputs_used:
 - backend/app/trace_store.py
 - backend/app/trace_parser.py
 outputs_produced:
+- .cronos/pipeline/delivery-v1-cronos-adapter/impl-report-delivery-v1-cronos-adapter--i1.md
+files_changed:
 - packages/delivery-workflow/adapters/cronos/adapter.py
 - packages/delivery-workflow/adapters/cronos/fixtures/sdlc_ping.yaml
+- backend/app/harnesses/decision.py
 - backend/tests/test_cronos_adapter_state_telemetry.py
 - backend/tests/test_cronos_adapter_dispatch.py
 - backend/tests/test_cronos_adapter_gate.py
@@ -31,123 +34,65 @@ outputs_produced:
 - backend/tests/test_cronos_adapter_escalate.py
 - backend/tests/test_cronos_adapter_integration.py
 - backend/tests/test_cronos_adapter_e2e_sdlc.py
-scope_discipline: all files are in design scope_files for I1-I6; decision.py eval_condition addition is in-scope per DD-07 (SG3 eval_condition dependency); no out-of-scope edits
+blockers: []
+next_consumer: test
 validation_command_passed: true
-validation_command: cd backend && PYTHONPATH=../packages/delivery-workflow python -m pytest tests/test_cronos_adapter_state_telemetry.py tests/test_cronos_adapter_dispatch.py tests/test_cronos_adapter_gate.py tests/test_cronos_adapter_condition.py tests/test_cronos_adapter_escalate.py tests/test_cronos_adapter_integration.py tests/test_cronos_adapter_e2e_sdlc.py --override-ini="addopts=" -v
+out_of_scope_findings: []
 metrics:
   diff_lines_added: 2454
   diff_lines_removed: 6
-  files_changed: 9
-  tool_calls: 42
-  files_read: 18
+  files_read: 14
   memory_hits: 2
+  tool_calls: 42
   tests_added: 60
-  iterations_executed: 6
 ---
 
 ## Summary
 
-All 6 design iterations executed in a single agent run. Implemented the `CronosAdapter`
+All 6 design iterations executed in one agent run (I1→I6). Implemented `CronosAdapter`
 — the first concrete `ExecutorInterface` — and validated it through the §12 E2E SDLC
-milestone with 60 tests across 7 test files. **60/60 tests passing**.
+milestone with **60 tests across 7 test files, all passing**. === delivery/v1 done on Cronos ===
 
-## Iterations executed
+## Files changed
 
-All 6 iterations (I1–I6) were executed sequentially in build-order (I1 → I2/I3/I4 → I5 → I6),
-landing in the single `adapter.py` module per DD-01.
+| File | Change |
+|------|--------|
+| `packages/delivery-workflow/adapters/cronos/adapter.py` | New — CronosAdapter + CronosStateOps + CronosTelemetryOps + all 6 ops |
+| `packages/delivery-workflow/adapters/cronos/fixtures/sdlc_ping.yaml` | New — synthetic SDLC scenario fixture for I6 e2e test |
+| `backend/app/harnesses/decision.py` | Modified — added public `eval_condition()` + updated `_VAR_COND_RE` for dotted/hyphenated IDs |
+| `backend/tests/test_cronos_adapter_state_telemetry.py` | New — I1 tests (20) |
+| `backend/tests/test_cronos_adapter_dispatch.py` | New — I2 tests (8) |
+| `backend/tests/test_cronos_adapter_gate.py` | New — I3 tests (8) |
+| `backend/tests/test_cronos_adapter_condition.py` | New — I4 tests (17) |
+| `backend/tests/test_cronos_adapter_escalate.py` | New — I5a tests (5) |
+| `backend/tests/test_cronos_adapter_integration.py` | New — I5b integration test (1) |
+| `backend/tests/test_cronos_adapter_e2e_sdlc.py` | New — I6 milestone e2e test (1) |
 
-### I1 — Foundation (R6, R7, R9): CronosStateOps + CronosTelemetryOps + Protocol conformance
+## Out-of-scope findings
 
-- Added `CronosStateOps` (StateOps): `read()` delegates to `StateStore.read()`; `write(patch)` does
-  read-modify-write on `StateStore` with node-level patching; every node status change appends a
-  `{"node_id", "status", "type": "node_transition", "ts"}` line to `EventLog` (DD-08).
-- Added `CronosTelemetryOps` (TelemetryOps): wraps `TelemetrySink`; `emit` accumulates `usd_spent`
-  and raises `BudgetExceededSignal` on ceiling breach (DD-09).
-- Added `_telemetry_from_trace(trace, rate)`: sums `t.input_tokens + t.output_tokens` across
-  `trace.turns` — no `trace.tokens` field exists (DD-04).
-- `CronosAdapter.__init__`: builds `StateStore + EventLog + TelemetrySink`, wires them to
-  `self.state` and `self.telemetry`.
-- `isinstance(adapter, ExecutorInterface)` passes — `@runtime_checkable` checks presence only,
-  not coroutine-ness (DD-02/R9).
-- **20 tests, 20 passing** (`test_cronos_adapter_state_telemetry.py`).
+- `eval_condition` in `decision.py` was missing entirely (SG3 gap not shipped). Added it as a
+  minimal public wrapper of `_eval_variable_condition` with `&&` and dotted/hyphenated support.
+  This is in-scope for DD-07 / R5, not a scope escape.
+- `escalate()` from Protocol is sync, but `finalize_run` is async. Resolved via `_escalate_async`
+  internal method with `loop.create_task` / `asyncio.run` dual-path. Documented in adapter
+  docstring; no Protocol changes needed.
 
-### I2 — dispatchAgent (R1, R2, R3): DD-02/DD-03/DD-04/DD-05
+## Assumptions
 
-- `async def dispatchAgent(agent_ref, inputs)`: creates child task via `store.create` with brief
-  `# Agent: {ref}` + artifact_paths list; transitions parent goal to ACTIVE; polls `store.get`
-  every `poll_interval` with `asyncio.sleep` (no busy-wait, R2); terminal states: DONE/ARCHIVED
-  → load trace → parse `delivery_status`; WAITING → `AgentResult(status="blocked")`;
-  timeout → `await self._escalate_async(...)` + `TimeoutError`.
-- `delivery_status` parsing: from `trace.final_text_snippet` (DD-05); fallback to newest `*.md`
-  in `run_dir` for >500-char blocks (regression guard added per DD-05).
-- `_escalate_async` is the internal async implementation; `escalate()` schedules it via
-  `loop.create_task` in async context or `asyncio.run` in sync context.
-- **8 tests, 8 passing** (`test_cronos_adapter_dispatch.py`).
+- All assumptions from the design report hold. Specifically: SG1–SG5 library modules
+  (`lib/state`, `lib/telemetry`, `lib/delivery_status`, `app.pipeline.gate`, `app.storage`)
+  are green and present on the `feature/delivery-v1` branch.
+- `token_cost_usd=0.0` ships as default; the e2e test sets 0.001 to satisfy R10's usd_spent>0.
+- Parallel fan-out (`testarch`+`implement`) is SEQUENTIAL per DD-11 / analyst OQ-3.
 
-### I3 — runGate (R4): DD-06
+## Open questions
 
-- `runGate(gate, artifact_paths)`: delegates to `app.pipeline.gate.runGate(gate, paths, space=None,
-  gate_id=gate_id, state_path=run_dir/"state.json")`; maps result to `results.GateResult`; writes
-  gate node into state.json (`status="done"` on proceed, `"needs_fix"` otherwise).
-- **8 tests, 8 passing** (`test_cronos_adapter_gate.py`).
+None. All three analyst open questions (token field names, EventLog signature, parallel fan-out)
+were resolved in the design phase.
 
-### I4 — evalCondition (R5): DD-07
+## Next consumer brief
 
-- Added public `eval_condition(expr, scope)` to `backend/app/harnesses/decision.py` (SG3 gap):
-  splits on `&&`, delegates each clause to `_eval_variable_condition`; short-circuits on False.
-- Updated `_VAR_COND_RE` to allow dotted-path identifiers (`[A-Za-z0-9_.\\-]*`) enabling
-  `analyze.fields.has_ui` and `g-tests.status` (DD-07).
-- `CronosAdapter.evalCondition(expr, scope)`: coerces non-string scope values to str; delegates
-  to `app.harnesses.decision.eval_condition`.
-- **17 tests, 17 passing** (`test_cronos_adapter_condition.py`).
-
-### I5 — escalate + all-ops integration (R8, R9): DD-10
-
-- `escalate(node_id, reason)`: sync wrapper; uses `loop.create_task` (async context) or
-  `asyncio.run` (sync context); marks `state.status = "blocked"`.
-- `_escalate_async(node_id, reason)`: sets state blocked; resolves tracking task; calls
-  `finalize_run(WAITING, waiting_question=reason)`; idempotent if already WAITING.
-- Integration test wires all 6 ops through one `CronosAdapter` instance in sequence.
-- **6 tests, 6 passing** (`test_cronos_adapter_escalate.py` + `test_cronos_adapter_integration.py`).
-
-### I6 — E2E SDLC milestone (R10, R11, R12): DD-11 — === delivery/v1 done on Cronos ===
-
-- Created `adapters/cronos/fixtures/sdlc_ping.yaml`: synthetic "Add GET /api/v1/delivery-ping"
-  scenario with scripted per-node `delivery_status` returns.
-- `test_cronos_adapter_e2e_sdlc.py`: drives the full §12 graph with monkeypatched
-  `store + trace_store`; SEQUENTIAL dispatch (parallel fan-out deferred per DD-11).
-- Assertions verified:
-  - (a) Full 23-node path from scout → release in order.
-  - (b) `has_ui=false` skips frontend (`evalCondition('analyze.fields.has_ui == true') is False`).
-  - (c) Review routing: `needs_fix·local` → implement; `pass` → testrun.
-  - (d) Outcome-gate loop: `g-tests needs_fix` → re-implement → `g-tests proceed` (convergence
-    via `evalCondition`, not a counter).
-  - (e) `StateStore.read() + EventLog.read_all()` reconstruct full node history.
-  - (f) `budget.usd_spent > 0` (`token_cost_usd=0.001`, all agents have non-zero tokens).
-- **1 test, 1 passing** (`test_cronos_adapter_e2e_sdlc.py`).
-
-## Design decisions applied
-
-- **DD-01**: All `app.*` imports lazy (in-method); no `lib/` changes.
-- **DD-02**: `dispatchAgent` is `async def`; Protocol conformance preserved via `@runtime_checkable`.
-- **DD-03**: Dispatch flow: `create_task → goal ACTIVE → poll → trace → AgentResult`.
-- **DD-04**: `tokens = sum(t.input_tokens + t.output_tokens for t in trace.turns)`.
-- **DD-05**: Parse from `final_text_snippet`; fallback to newest `*.md` artifact in run_dir.
-- **DD-06**: `runGate` delegates to `app.pipeline.gate.runGate`; maps to `results.GateResult`.
-- **DD-07**: Added public `eval_condition` to `decision.py`; updated regex for dotted/hyphenated IDs.
-- **DD-08**: `EventLog.append({"node_id":…, "status":…, "type":"node_transition"})` — single dict.
-- **DD-09**: `TelemetrySink(usd_ceiling, state_store)` wired in constructor.
-- **DD-10**: `escalate` parks tracking task → WAITING; idempotent; `state.status="blocked"`.
-- **DD-11**: Monkeypatched store/trace_store; sequential dispatch; scripted node outcomes.
-
-## Risks mitigated
-
-- **Async/sync Protocol divergence**: `async def dispatchAgent` + `@runtime_checkable` → isinstance passes.
-- **final_text_snippet truncation**: fallback to artifact-trailing-fence implemented + regression test.
-- **Token aggregation**: per-turn sum; `usd = tokens * token_cost_usd`.
-- **EventLog signature**: `append(event_dict)` with node_id inside dict.
-- **E2E flakiness**: fully stubbed; no live agents; deterministic scripted outcomes.
-- **Import boundary**: `eval_condition` in `app.harnesses.decision` (exempted); no `lib/` pollution.
+Phase: **test**. Run full test suite via `cd backend && PYTHONPATH=../packages/delivery-workflow pytest tests/test_cronos_adapter_*.py --override-ini="addopts=" -v` (60 tests expected). Then run import-boundary test: `cd packages/delivery-workflow && pytest tests/test_import_boundary.py --override-ini="addopts=" -v` (2 tests). Full suite coverage check at `goal-finalize`. No new schema migrations or API changes — this is pure backend package code.
 
 ```delivery_status
 {
