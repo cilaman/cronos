@@ -1033,7 +1033,7 @@ export function Detail({ taskId, onClose }: Props) {
                   </div>
 
                   {/* Two-pane workspace */}
-                  <div className="flex h-full min-h-0 flex-col md:flex-row">
+                  <div className="flex flex-1 min-h-0 flex-col md:flex-row">
                     {/* Left pane: Context (Brief + PR + Hierarchy) */}
                     <div
                       data-testid="context-pane"
