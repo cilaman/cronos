@@ -1,18 +1,9 @@
 """Cronos pipeline package.
 
 Houses the CC-v1 agent contract, per-class artifact schemas, verifier,
-normalizer, regression fixture harness, and the delivery/v1 gate engine
-used by the development pipeline.
-
-Key modules:
-  - contract: the CC-v1 artifact format
-  - gate: the delivery/v1 gate engine (runGate dispatcher and checks)
-  - verify: schema validation and cross-field rule checking
-  - normalize: artifact normalization and auto-improvement
-  - state_writer: pipeline state and telemetry persistence
+normalizer, and regression fixture harness used by the development pipeline.
 
 See ``CONTRACT.md`` (sibling file) for the human-readable specification.
-See ``docs/delivery-pipeline/delivery-v1-docs/GATE_ENGINE.md`` for the gate implementation.
 """
 
 from app.pipeline.contract import (
@@ -64,7 +55,6 @@ from app.pipeline.auto_improver import (
     bump_minor,
     read_cc_version,
 )
-from app.pipeline.gate import GateResult, runGate
 
 __all__ = [
     "AGENT_REPORTED_METRICS",
@@ -78,7 +68,6 @@ __all__ = [
     "EXIT_PROCEED",
     "EXIT_RETRY",
     "GATE_DECISIONS",
-    "GateResult",
     "HEADER_FIELDS",
     "HEADER_REQUIRED_FIELDS",
     "NEXT_CONSUMER_USER_SENTINEL",
@@ -107,7 +96,6 @@ __all__ = [
     "pipeline_dir",
     "read_cc_version",
     "record_phase_log",
-    "runGate",
     "state_path",
     "update_phase",
     "verify",
