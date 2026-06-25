@@ -163,7 +163,9 @@ export function DetailShell({
               </button>
             </header>
 
-            {footer}
+            <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
+              {footer}
+            </div>
           </>
         )}
       </div>
