@@ -149,6 +149,7 @@ _RESEARCH_STRATEGIES: frozenset[str] = frozenset(
         "repo_map",
         "web_search",
         "fetch_url",
+        "traceability_mapping",
     }
 )
 
