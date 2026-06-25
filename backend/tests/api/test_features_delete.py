@@ -22,6 +22,7 @@ AUTH_HEADER = {
 @pytest.fixture()
 def app_client(monkeypatch, tmp_path):
     """TestClient with auth activated and app.state wired to mocks."""
+    monkeypatch.delenv("CRONOS_BASIC_AUTH_HASH", raising=False)
     monkeypatch.delenv("CRONOS_AUTH_DISABLED", raising=False)
     monkeypatch.setenv("CRONOS_BASIC_AUTH_USER", TEST_USER)
     monkeypatch.setenv("CRONOS_BASIC_AUTH_PASSWORD", TEST_PASS)
