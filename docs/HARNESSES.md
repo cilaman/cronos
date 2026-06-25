@@ -30,14 +30,15 @@ real worked example you can copy and run.
 4. [Real-life example: a research → review → implement pipeline](#4-real-life-example)
 5. [Authoring a harness (YAML + API)](#5-authoring-a-harness)
 6. [Variables and interpolation](#6-variables-and-interpolation)
+6.1. [Loops on agent nodes (G3.1)](#61-loops-on-agent-nodes-g31)
 7. [Connecting nodes to real agents and skills](#7-connecting-nodes-to-real-agents-and-skills)
 8. [Control-flow nodes: decision, wait, aggregator](#8-control-flow-nodes)
 9. [Triggers: how a harness starts](#9-triggers)
 10. [Running a harness and watching it execute](#10-running-a-harness)
 11. [The run lifecycle and run state](#11-the-run-lifecycle)
 12. [Known limitations (read this)](#known-limitations-read-this)
-13. [Troubleshooting](#12-troubleshooting)
-14. [Quick reference](#13-quick-reference)
+13. [Troubleshooting](#13-troubleshooting)
+14. [Quick reference](#14-quick-reference)
 
 ---
 
@@ -317,6 +318,8 @@ via the API. See [Known limitations](#known-limitations-read-this).
 
 Source: `backend/app/harnesses/interpolate.py`.
 
+### Interpolation in prompts
+
 Prompts use Python `string.Template` syntax: `$name` or `${name}`.
 
 ```yaml
@@ -327,13 +330,18 @@ variables:
 prompt_template: "Research $topic. Write the fix in ${lang}."
 ```
 
-Scope and precedence:
+### Scope and precedence
 
 1. **Root variables** (`harness.variables`) form the base scope.
 2. **Upstream node outputs override root variables** on key collision. After an
-   agent node finishes `DONE`, its output (the agent's final text snippet) is
-   stored in the scope under the **node id**. So `$scout` in a later prompt
-   expands to the scout node's final output.
+   agent node finishes `DONE`, its final text snippet is stored in the scope
+   under the **node id**. So `$scout` in a later prompt expands to the scout
+   node's final output.
+3. **(G3.3) Dotted-path scope enrichment**: After an agent node emits a
+   `delivery_status` block, the executor automatically adds dotted-path keys to
+   the scope (e.g., `review.fields.verdict`). These are used by decision
+   conditions (see [Dotted-path conditions](#dotted-path-conditions-g32)), but
+   are **not** available for prompt interpolation (prompts only see flat keys).
 
 ```yaml
 # In the `build` node, reference the scout node's output:
@@ -350,6 +358,81 @@ Unresolved placeholders are **left intact** (`$missing` stays literally
 
 > Because upstream outputs are keyed by node id, give your agent nodes
 > meaningful ids if you intend to interpolate their output downstream.
+
+---
+
+## 6.1 Loops on agent nodes (G3.1)
+
+An agent node can be configured to run in a **loop** until a convergence condition is met.
+This is useful for iterative workflows (e.g., agent keeps writing code until a test passes,
+or refining findings until no new issues are found).
+
+Loop configuration goes in the `loop` sub-object of node `data`:
+
+```yaml
+data:
+  agent_ref: pipeline-implementor
+  prompt_template: "Fix the failing test."
+  loop:
+    until: "test_passing == \"true\""   # condition to exit the loop
+    stall:
+      - recurring_findings               # exit if findings repeat across attempts
+      - no_diff_progress                 # exit if code diff size doesn't grow
+    max: 5                               # backstop: max attempts (default 10)
+    on_exhaust: escalate                 # what to do if max is hit (default: escalate)
+```
+
+**Loop semantics:**
+
+When a node with `loop` configured finishes an attempt:
+
+1. **Check convergence signals** (in order):
+   - **`until` condition**: if a boolean expression evaluates to `True`, exit the loop.
+     The expression uses the same dotted-path grammar as decision conditions.
+   - **`stall: recurring_findings`**: parse the agent's `delivery_status.fields.finding_ids`
+     list. If this attempt's findings are identical to the previous attempt's, the loop
+     is considered stalled and exits.
+   - **`stall: no_diff_progress`**: check `delivery_status.fields.diff_bytes`. If the
+     diff size hasn't grown (current ≥ previous), the loop is stalled and exits.
+   - **`max` backstop**: if `attempt >= max`, exit (this triggers `on_exhaust`).
+
+2. **On exit**:
+   - If `until` condition was met or a stall signal fired, the node completes `DONE`.
+   - If `max` is exhausted, the `on_exhaust` action is taken:
+     - `escalate` (default): the run is **parked in WAITING** at the node,
+       and human intervention is required to unblock.
+
+3. **Resume after restart**: the executor saves loop state (`attempt`, `prior_finding_ids`)
+   to `run_state.json` after each attempt. If the process restarts, the loop resumes
+   from the last recorded attempt count.
+
+**Example**: a code reviewer that re-runs until the codebase has zero blockers:
+
+```yaml
+nodes:
+  - id: review-loop
+    type: agent
+    label: "Iterative code review"
+    data:
+      agent_ref: pipeline-reviewer
+      prompt_template: |
+        Review the code changes. Emit a delivery_status block with
+        fields: { verdict, blocker_count }.
+      loop:
+        until: 'review-loop.fields.blocker_count == "0"'
+        stall: [recurring_findings, no_diff_progress]
+        max: 8
+        on_exhaust: escalate
+```
+
+The agent emits:
+```
+```delivery_status
+{"status": "needs_fix", "fields": {"verdict": "fail", "blocker_count": 3}}
+```
+```
+on attempt 1, attempt 2 (blocker_count = 1), attempt 3 (blocker_count = 0), and
+at attempt 3 the `until` condition matches and the loop exits.
 
 ---
 
@@ -380,25 +463,40 @@ or a skill like `frontend-design`. (See the registered agents/skills tables in
 
 #### Agent completion sentinel
 
-When an agent task finishes, the executor reads its completion status from one of
-two channels:
+When an agent task finishes, the executor reads its completion status and
+structured output from one of three channels (in precedence order):
 
-1. **Structured channel (preferred)**: a fenced `cronos_status` JSON block at the
-   end of the agent's output:
+1. **Structured channel (preferred — G3.3)**: a fenced `delivery_status` JSON block at the
+   end of the agent's output (CC-v1 agents emit this):
+   ```
+   ```delivery_status
+   {"status": "DONE", "fields": {"verdict": "pass", "has_ui": false}}
+   ```
+   ```
+   - `status`: the primary signal (matching rules for decision edges).
+   - `fields`: a dict of structured fields (available as dotted-path keys in scope
+     for decision routing — e.g., `review.fields.verdict`).
+
+2. **Legacy structured channel**: a fenced `cronos_status` JSON block:
    ```
    ```cronos_status
    {"status": "DONE", "summary": "Completed without errors", "artifacts": []}
    ```
    ```
    Valid `status` values: `DONE`, `WAIT`, `BLOCKED`. The `summary` field is
-   human-readable; `artifacts` is optional.
+   human-readable; `artifacts` is optional. (Deprecated in favour of `delivery_status`.)
 
-2. **Legacy channel (deprecated)**: a `STATUS: DONE` line. Still supported but
+3. **Legacy text channel (deprecated)**: a `STATUS: DONE` line. Still supported but
    logs a warning; structured blocks are preferred.
 
-If neither is present, the run's `exit_reason` is set to `NO_CRONOS_STATUS`. See
+If none is present, the run's `exit_reason` is set to `NO_CRONOS_STATUS`. See
 the decision-routing section for how to drive harness control flow on these
 signals.
+
+**Scope enrichment** (G3.3 routing unblock): When an agent node reaches `DONE`
+with a `delivery_status` block, the executor automatically populates dotted-path
+scope keys so downstream decision nodes can reference structured output. This
+enables routing on agent output without regex or custom variable manipulation.
 
 The executor's **tools resolver** (`backend/app/worker.py:resolve_tool`) looks up
 the `agent_ref` name across multiple sources:
@@ -433,53 +531,96 @@ the upstream agent and follows the **first matching edge**. An edge with
 
 Signal precedence (`decision.py`, highest first):
 
-1. **`status` from `cronos_status` block** — a fenced-JSON block
+1. **`status` from `delivery_status` block** — a fenced-JSON block
+   `` ```delivery_status\n{"status": "<value>", ...}\n``` ``
+   found in the upstream node's output. The `status` field is matched case-sensitively
+   against `edge.condition`. This is the **preferred structured channel** for CC-v1 agents.
+2. **`status` from `cronos_status` block** — a fenced-JSON block
    `` ```cronos_status\n{"status": "<value>", ...}\n``` ``
    found in the upstream node's output. The `status` field is matched case-sensitively
-   against `edge.condition`.
-2. **`status` from legacy `STATUS:` marker** — a `STATUS: <value>` line (deprecated).
-   Matched case-sensitively. Logs a warning if found; `cronos_status` block is preferred.
-3. **`exit_reason`** — the run's exit reason string (e.g. `NO_CRONOS_STATUS` when
-   neither block nor marker is present).
-4. **`regex`** — `re.search(edge.condition, upstream_final_text)`. Python inline
+   against `edge.condition`. (Deprecated in favour of `delivery_status`.)
+3. **`status` from legacy `STATUS:` marker** — a `STATUS: <value>` line (deprecated).
+   Matched case-sensitively. Logs a warning if found; structured blocks are preferred.
+4. **`exit_reason`** — the run's exit reason string (e.g. `NO_CRONOS_STATUS` when
+   no structured block or marker is present).
+5. **`regex`** — `re.search(edge.condition, upstream_final_text)`. Python inline
    flags like `(?i)` are allowed. No `/pattern/flags` syntax, no `eval`.
-5. **`variable`** — a whitelisted expression on scope variables.
+6. **`variable`** / **dotted-path expression** — a whitelisted expression on scope variables
+   (see [Dotted-path conditions](#dotted-path-conditions-g32)).
 
-Variable-condition grammar (no `eval`): `<name> <op> <literal>` where `op` is
-`==`, `!=`, or `in` (comma-separated list for `in`):
+#### Dotted-path conditions (G3.2)
+
+Condition expressions now support **dotted paths** to structured fields from upstream
+`delivery_status` blocks. This enables harnesses to route on agent output without
+writing custom regex.
+
+Syntax: `<path> <op> <literal>` with optional `&&` (AND) conjunction.
+
+- **Path**: a dotted identifier (e.g., `status`, `review.fields.verdict`,
+  `my-node.status`). Hyphens in node ids are allowed (e.g., `my-node-1.fields.x`).
+- **Operator**: `==`, `!=`, or `in` (right side: comma-separated values).
+- **Value**: a double-quoted string, single-quoted string, or unquoted bare word.
+- **Conjunction**: multiple clauses separated by ` && ` (all must hold).
+
+**Dotted-path precedence** (when evaluating):
+1. The scope is first populated with **root variables** and **upstream node outputs** (flat keys).
+2. After an agent node completes with a `delivery_status` block, the executor
+   **enriches the scope** with dotted-path keys:
+   - `<node_id>.status` — the `status` field from the block
+   - `<node_id>.fields.<name>` — one key per entry in the `fields` object
+
+Example:
 
 ```yaml
+nodes:
+  - id: review
+    type: agent
+    label: "Code review"
+    data:
+      agent_ref: pipeline-reviewer
+      prompt_template: "Review the code."
+
+  - id: decide-quality
+    type: decision
+    # ...
+
 edges:
-  - id: d-yes
-    source: { node_id: decide, port_id: yes }   # decision nodes expose yes/no ports
-    target: { node_id: build,  port_id: in }
-    condition: 'has_ui == "true"'
-  - id: d-no
-    source: { node_id: decide, port_id: no }
-    target: { node_id: docs,   port_id: in }
-    condition: null                              # default branch
+  - id: e1
+    source: { node_id: review, port_id: out }
+    target: { node_id: decide-quality, port_id: in }
+    condition: null
+
+  # Match on the review agent's verdict field:
+  - id: e2
+    source: { node_id: decide-quality, port_id: yes }
+    target: { node_id: ship, port_id: in }
+    condition: 'review.fields.verdict == "pass"'
+
+  # Match on review status + multiple fields:
+  - id: e3
+    source: { node_id: decide-quality, port_id: no }
+    target: { node_id: revise, port_id: in }
+    condition: 'review.status == "needs_fix" && review.fields.blocker_count in 1,2,3'
 ```
 
-To drive a decision from an agent, have the upstream agent end its output with a
-structured block:
-
+When the `review` agent finishes with:
 ```
-```cronos_status
-{"status": "needs_ui", "summary": "UI needs to be updated", "artifacts": []}
+```delivery_status
+{"status": "needs_fix", "fields": {"verdict": "fail", "blocker_count": 2}}
 ```
 ```
+the scope is enriched with:
+- `review.status` = `"needs_fix"`
+- `review.fields.verdict` = `"fail"`
+- `review.fields.blocker_count` = `"2"`
 
-Then set the matching edge `condition: needs_ui`. The `summary` field is for
-human documentation and does not affect decision routing. Legacy free-text
-`STATUS: needs_ui` markers are still supported but deprecated (they log a
-warning).
+and edge `e3`'s condition is evaluated to `True`.
 
-If no condition matches and there is no default edge, the decision
-**fails** (and fail-fast kicks in) — so always provide a `condition: null` edge.
+**Backward compatibility**: Variable-condition syntax (`has_ui == "true"`) continues
+to work for backward compatibility (legacy single-segment scope keys).
 
-If an agent completes without emitting either a `cronos_status` block or a
-`STATUS:` marker, the run's `exit_reason` will be `NO_CRONOS_STATUS`; you
-can match on that in a decision edge condition.
+If no condition matches and there is no default edge, the decision **fails**
+(and fail-fast kicks in) — so always provide a `condition: null` edge.
 
 ### Wait — pause the run
 
@@ -613,7 +754,7 @@ You cannot delete a harness while it has a `running` run (the API returns 409).
 
 ---
 
-## 11. The run lifecycle
+## 11. The run lifecycle and run state
 
 When a run is triggered (UI, API, cron, webhook, or event):
 
@@ -638,7 +779,7 @@ Each node carries `status` (`pending`/`in_progress`/`done`/`failed`/`skipped`),
 
 ---
 
-## Known limitations (read this)
+## 12. Known limitations (read this)
 
 These are the concrete reasons the harness feature feels unusable from the UI
 today. They are **frontend ↔ backend contract mismatches** — the backend
@@ -658,7 +799,7 @@ variable editor). Ask and I can scope that as a follow-up goal.
 
 ---
 
-## 12. Troubleshooting
+## 13. Troubleshooting
 
 - **422 on create/update** — a validation rule failed. Check: `ports` is a dict;
   edge endpoints reference existing node + port ids (R3/R4); no cycle (R5);
@@ -670,23 +811,43 @@ variable editor). Ask and I can scope that as a follow-up goal.
 - **`$topic` shows up literally in the agent's task** — the variable isn't in
   scope. Confirm it's under `variables:` (root) or that you spelled the upstream
   node id correctly (outputs are keyed by node id).
-- **Run is stuck in WAITING** — that's a human wait node. Reply to the
-  "Harness run" task to resume. The `max_wait_seconds` guardrail will eventually
-  release it if you never reply.
+- **Run is stuck in WAITING** — either a human wait node or a loop escalation.
+  For a human wait, reply to the "Harness run" task to resume (the `max_wait_seconds`
+  guardrail will eventually release it if you never reply). For a loop escalation,
+  the log message will indicate the reason (e.g., "recurring_findings after 5 attempts").
 - **Decision raised "no matching edge and no default edge"** — add an edge with
   `condition: null` as the fallback.
+- **Dotted-path condition not matching** — confirm the upstream agent emitted a
+  `delivery_status` block with the expected `status` and `fields`. Check the
+  agent's task output in the board to verify. Unrecognised paths silently
+  evaluate to `False` (fall through to default edge).
+- **Loop keeps running or stops unexpectedly** — check the `until` condition
+  grammar against the emitted `delivery_status.fields` keys. The condition
+  evaluator logs warnings for unrecognised paths. Also verify `stall` checks
+  are configured correctly (e.g., agent must emit `finding_ids` or `diff_bytes`
+  in the `fields` dict).
 - **Manual edits don't show in the editor** — reload the page; the canvas is
   initialised from the harness on load.
 
 ---
 
-## 13. Quick reference
+## 14. Quick reference
 
 **Node `data` cheat sheet**
 
 ```yaml
-# agent
+# agent (without loop)
 data: { agent_ref: <name>, prompt_template: "... $var ..." }
+
+# agent (with loop) — G3.1
+data:
+  agent_ref: <name>
+  prompt_template: "..."
+  loop:
+    until: "condition"                 # optional: exit on boolean expression
+    stall: [recurring_findings, no_diff_progress]  # optional: exit on stall signals
+    max: 5                             # optional: max attempts (default 10)
+    on_exhaust: escalate               # optional: action on max hit (default: escalate)
 
 # trigger (manual/cron)
 data: {}                                   # manual
@@ -718,14 +879,42 @@ data: { mode: all }   # or: mode: any
 | wait       | `in`   | `out`         |
 | aggregator | `in` (N edges allowed) | `out` |
 
-**Decision condition grammar:** `<var> == "x"`, `<var> != "x"`, `<var> in a,b,c`
-— or a regex string (matched against upstream final text) — or match a
-`cronos_status` block (`{"status": "<value>", ...}`) — or match a legacy
-`STATUS: <value>` marker (deprecated). `condition: null` = default edge.
+**Decision condition grammar:** 
+
+Supports four layers (matched in precedence order):
+
+1. **Dotted-path expression** (G3.2): `<path> <op> <literal>` with optional `&&` AND.
+   - Path: `status`, `review.fields.verdict`, `my-node-1.status`
+   - Op: `==`, `!=`, `in` (right side: comma-separated list for `in`)
+   - Value: quoted string or bare word
+
+   Examples: `review.fields.verdict == "pass"` or `status == "done" && has_ui == "true"`
+
+2. **Regex**: matched against upstream final text; Python inline flags allowed.
+
+3. **Delivery/cronos status block**: match on `{"status": "<value>", ...}` (preferred).
+
+4. **Legacy `STATUS:` marker**: `STATUS: <value>` (deprecated).
+
+Default edge: `condition: null` (fallback when no condition matches).
+
+**Agent completion signals** (G3.3):
+
+Agents should emit a `delivery_status` block (preferred) or legacy `cronos_status`:
+
+```
+```delivery_status
+{"status": "DONE", "fields": {"verdict": "pass", "blocker_count": 0}}
+```
+```
+
+The `status` field is matched for decision routing; `fields` are auto-enriched
+as dotted-path scope keys (e.g., `agent_id.fields.verdict`).
 
 **Variable syntax:** `$name` / `${name}`. Root vars + upstream node outputs
 (keyed by node id); upstream wins on collision; unknown placeholders survive
-literally.
+literally. (Dotted-path scope keys are available for decision routing, not prompt
+interpolation.)
 
 ---
 
