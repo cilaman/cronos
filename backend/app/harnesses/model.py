@@ -79,7 +79,29 @@ Node ``data`` dict conventions (informational — enforced by validator.py):
         Value must be a valid ``TaskState`` string (e.g. ``'DONE'``, ``'ACTIVE'``,
         ``'WAITING'``).
 
-  Agent nodes have no mandatory ``data`` keys.
+  Agent nodes have no mandatory ``data`` keys.  The optional ``loop``
+  sub-object enables the loop-convergence policy (G3.1):
+
+  - ``until`` (str, optional): an ``eval_condition``-compatible expression
+    evaluated after each attempt; when it resolves to ``True`` the loop exits
+    normally.
+  - ``stall`` (list[str], optional): list of stall-signal names to check.
+    Recognised values: ``'recurring_findings'`` (fires when the current
+    finding-ID set is non-empty and equal to the prior attempt's set) and
+    ``'no_diff_progress'`` (fires when ``fields.diff_bytes`` is not strictly
+    less than the prior attempt).
+  - ``max`` (int, optional): absolute backstop iteration count.  The loop
+    escalates on the ``(max + 1)``-th attempt.  Defaults to ``10`` when
+    absent.
+  - ``on_exhaust`` (str, optional): action taken when all exit conditions are
+    exhausted without the ``until`` condition firing.  Only ``'escalate'`` is
+    supported in v1: the run goal is transitioned to ``TaskState.WAITING``
+    with a descriptive ``waiting_question`` naming the node and attempt count.
+    Default: ``'escalate'``.
+
+  The ``data`` dict is an open ``dict``; the validator passes through the
+  ``loop`` sub-object without structural validation (R1 — agent node loop
+  data is free-form).
 """
 
 from __future__ import annotations

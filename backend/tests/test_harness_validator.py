@@ -529,3 +529,52 @@ def test_decision_edge_cycle_rejected():
     assert "agent-a" in msg
     assert "decision-d" in msg
     assert "agent-b" in msg
+
+
+# ---------------------------------------------------------------------------
+# I4 / R1: loop sub-object in agent node data passes validation
+# ---------------------------------------------------------------------------
+
+
+def _make_single_agent_harness(node_data: dict) -> Harness:
+    """Return a minimal single-agent harness for validator tests."""
+    node = HarnessNode(
+        id="agent-loop",
+        type=NodeType.agent,
+        position=Position(x=0.0, y=0.0),
+        ports={"out": {"direction": "output"}},
+        data=node_data,
+        label="loop agent",
+    )
+    return Harness(name="loop-harness", nodes=[node], edges=[])
+
+
+class TestLoopDataPassesValidator:
+    """R1: agent node loop sub-object is passed through by the validator."""
+
+    def test_agent_with_loop_until_passes(self) -> None:
+        h = _make_single_agent_harness({
+            "agent_ref": "my-agent",
+            "loop": {"until": "review.fields.verdict == pass", "max": 5},
+        })
+        # Must not raise
+        validate_graph(h)
+
+    def test_agent_with_full_loop_config_passes(self) -> None:
+        h = _make_single_agent_harness({
+            "loop": {
+                "until": "review.status == done",
+                "stall": ["recurring_findings", "no_diff_progress"],
+                "max": 10,
+                "on_exhaust": "escalate",
+            }
+        })
+        validate_graph(h)
+
+    def test_agent_without_loop_passes(self) -> None:
+        h = _make_single_agent_harness({"agent_ref": "my-agent"})
+        validate_graph(h)
+
+    def test_agent_with_empty_loop_dict_passes(self) -> None:
+        h = _make_single_agent_harness({"loop": {}})
+        validate_graph(h)

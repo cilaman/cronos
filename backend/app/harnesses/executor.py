@@ -58,12 +58,13 @@ import os
 
 from ..logging_config import bind_run_context
 
+from ..memory_parser import parse_delivery_status_block
 from ..models import Space, TaskState
 from ..storage import TaskStore
 from ..trace_parser import RunTrace
 from .aggregator import AggregatorVerdict, aggregator_ready, compose_output
 from .brief_composer import compose_brief
-from .decision import evaluate_decision
+from .decision import eval_condition, evaluate_decision
 from .interpolate import interpolate
 from .model import Harness, HarnessEdge, HarnessNode, NodeType
 from . import run_index as _run_index
@@ -528,9 +529,13 @@ class HarnessExecutor:
             # Dispatch by node type
             # ------------------------------------------------------------------
             if node.type == NodeType.agent:
-                done, output, child_task_id = await self._execute_agent_node(
+                done, output, child_task_id, park = await self._execute_agent_node(
                     node, node_id, run_goal_id, harness, space, scope, state, run_state_path
                 )
+                if park:
+                    # Loop escalation: run is parked, waiting_node_id already set.
+                    _maybe_save(state, run_state_path)
+                    return state
                 if done:
                     if output is not None:
                         scope[node_id] = output
@@ -764,15 +769,179 @@ class HarnessExecutor:
         scope: dict[str, str],
         state: RunState,
         run_state_path: "Path | None",
-    ) -> tuple[bool, "str | None", "str | None"]:
-        """Execute an Agent node.
+    ) -> tuple[bool, "str | None", "str | None", bool]:
+        """Execute an Agent node — loop-aware dispatcher.
 
         Returns
         -------
-        (done, output, child_task_id)
-            done: True if the node completed successfully.
-            output: the node's output string (or None on failure).
-            child_task_id: the child task's id (or None on creation failure).
+        (done, output, child_task_id, park)
+            done:  True if the node completed successfully.
+            output: the node's output string (or None on failure / park).
+            child_task_id: the id of the last child task created.
+            park:  True if the run should be parked in WAITING (loop escalation).
+        """
+        loop_config = node.data.get("loop") if node.data else None
+        if not loop_config or not isinstance(loop_config, dict):
+            # No loop — single execution (I5 path, backward compat).
+            return await self._run_agent_once(
+                node, node_id, run_goal_id, harness, space, scope, state, run_state_path,
+            )
+
+        # I6: Loop-convergence policy.
+        until_cond: str | None = loop_config.get("until")
+        stall_checks: list = list(loop_config.get("stall") or [])
+        max_attempts: int = int(loop_config.get("max", 10))
+        on_exhaust: str = str(loop_config.get("on_exhaust", "escalate"))
+
+        # Reconcile attempt counter from persisted NodeState (resume support).
+        existing_ns = state.nodes_executed.get(node_id)
+        attempt: int = existing_ns.attempt if existing_ns else 0
+        prior_finding_ids: list[str] = list(existing_ns.prior_finding_ids if existing_ns else [])
+        prior_diff_bytes: int | None = None
+
+        last_output: str | None = None
+        last_child_task_id: str | None = None
+
+        while True:
+            attempt += 1
+            log.info(
+                "Node %r loop attempt %d / max=%d.", node_id, attempt, max_attempts,
+            )
+
+            done, output, child_task_id, park = await self._run_agent_once(
+                node, node_id, run_goal_id, harness, space, scope, state, run_state_path,
+            )
+            last_output = output
+            last_child_task_id = child_task_id
+
+            if park or not done:
+                # Attempt failed or was cancelled — propagate immediately.
+                return done, output, child_task_id, park
+
+            # Parse delivery_status from this attempt's output.
+            ds = parse_delivery_status_block(output or "")
+            current_finding_ids = _extract_finding_ids(ds)
+
+            # Check until condition.
+            if until_cond and eval_condition(until_cond, scope):
+                log.info(
+                    "Node %r loop: until condition met after %d attempt(s).",
+                    node_id, attempt,
+                )
+                break
+
+            # Check stall: recurring_findings.
+            if "recurring_findings" in stall_checks:
+                if current_finding_ids and set(current_finding_ids) == set(prior_finding_ids):
+                    log.warning(
+                        "Node %r stall: recurring_findings after %d attempt(s).",
+                        node_id, attempt,
+                    )
+                    return self._escalate_loop(
+                        node_id, run_goal_id, state, run_state_path,
+                        reason=f"recurring_findings after {attempt} attempt(s)",
+                    )
+
+            # Check stall: no_diff_progress.
+            if "no_diff_progress" in stall_checks and ds is not None:
+                fields = ds.get("fields") or {}
+                diff_bytes_raw = fields.get("diff_bytes")
+                if diff_bytes_raw is not None:
+                    try:
+                        current_diff_bytes = int(diff_bytes_raw)
+                        if prior_diff_bytes is not None and current_diff_bytes >= prior_diff_bytes:
+                            log.warning(
+                                "Node %r stall: no_diff_progress after %d attempt(s).",
+                                node_id, attempt,
+                            )
+                            return self._escalate_loop(
+                                node_id, run_goal_id, state, run_state_path,
+                                reason=f"no_diff_progress after {attempt} attempt(s)",
+                            )
+                        prior_diff_bytes = current_diff_bytes
+                    except (ValueError, TypeError):
+                        pass  # non-numeric diff_bytes: skip no_diff_progress check
+
+            # Check max backstop.
+            if attempt >= max_attempts:
+                log.warning(
+                    "Node %r loop exhausted (attempt=%d, max=%d).",
+                    node_id, attempt, max_attempts,
+                )
+                return self._escalate_loop(
+                    node_id, run_goal_id, state, run_state_path,
+                    reason=f"max_attempts={max_attempts} exhausted",
+                )
+
+            # Persist loop bookkeeping before next attempt (resume safety).
+            prior_finding_ids = current_finding_ids
+            existing = state.nodes_executed.get(node_id)
+            if existing is not None:
+                state.nodes_executed[node_id] = NodeState(
+                    status="in_progress",
+                    child_task_id=existing.child_task_id,
+                    output=existing.output,
+                    started_at=existing.started_at,
+                    attempt=attempt,
+                    prior_finding_ids=prior_finding_ids,
+                )
+            _maybe_save(state, run_state_path)
+
+        # Loop exited normally (until condition met).
+        return True, last_output, last_child_task_id, False
+
+    def _escalate_loop(
+        self,
+        node_id: str,
+        run_goal_id: str,
+        state: RunState,
+        run_state_path: "Path | None",
+        reason: str,
+    ) -> tuple[bool, None, None, bool]:
+        """Park the run in WAITING when a loop exhausts without convergence.
+
+        Sets ``state.waiting_node_id = node_id`` so the run-executor
+        transitions the goal task to ``TaskState.WAITING``.  The node remains
+        ``in_progress`` (not failed) per R5.
+        """
+        waiting_question = (
+            f"Loop node '{node_id}' escalated: {reason}. "
+            "Human intervention required to unblock."
+        )
+        log.warning(
+            "Node %r loop escalation: %s. Parking run %r in WAITING.",
+            node_id, reason, run_goal_id,
+        )
+        state.waiting_node_id = node_id
+        _maybe_save(state, run_state_path)
+        self._publish_event(run_goal_id, {
+            "type": "node_transition",
+            "node_id": node_id,
+            "from_status": "in_progress",
+            "to_status": "waiting",
+            "timestamp": _utcnow_iso(),
+            "waiting_question": waiting_question,
+        })
+        return False, None, None, True
+
+    async def _run_agent_once(
+        self,
+        node: HarnessNode,
+        node_id: str,
+        run_goal_id: str,
+        harness: Harness,
+        space: Space,
+        scope: dict[str, str],
+        state: RunState,
+        run_state_path: "Path | None",
+    ) -> tuple[bool, "str | None", "str | None", bool]:
+        """Single-attempt agent node execution (extracted from _execute_agent_node).
+
+        Returns
+        -------
+        (done, output, child_task_id, park)
+            park is always False from this function (park is only raised by
+            the loop controller _execute_agent_node).
         """
         # 1. Interpolate prompt
         prompt_template: str = node.data.get("prompt_template", "")
@@ -823,7 +992,7 @@ class HarnessExecutor:
                 "timestamp": now,
             })
             _maybe_save(state, run_state_path)
-            return False, None, None
+            return False, None, None, False
 
         child_task_id = child_task.id
 
@@ -858,7 +1027,7 @@ class HarnessExecutor:
                 try:
                     reloaded = load(run_state_path)
                     if reloaded is not None and reloaded.status == "cancelled":
-                        return False, None, child_task_id
+                        return False, None, child_task_id, False
                     if reloaded is not None:
                         state.nodes_executed = reloaded.nodes_executed
                         if reloaded.status not in ("done", "failed", "cancelled"):
@@ -880,7 +1049,7 @@ class HarnessExecutor:
                 "timestamp": ended_at,
             })
             _maybe_save(state, run_state_path)
-            return False, None, child_task_id
+            return False, None, child_task_id, False
 
         # 7. Finalize child via WorkerProtocol
         try:
@@ -892,7 +1061,7 @@ class HarnessExecutor:
                 try:
                     reloaded = load(run_state_path)
                     if reloaded is not None and reloaded.status == "cancelled":
-                        return False, None, child_task_id
+                        return False, None, child_task_id, False
                     if reloaded is not None:
                         state.nodes_executed = reloaded.nodes_executed
                         if reloaded.status not in ("done", "failed", "cancelled"):
@@ -914,7 +1083,7 @@ class HarnessExecutor:
                 "timestamp": ended_at,
             })
             _maybe_save(state, run_state_path)
-            return False, None, child_task_id
+            return False, None, child_task_id, False
 
         # 8. Determine node outcome
         ended_at = _utcnow_iso()
@@ -927,7 +1096,7 @@ class HarnessExecutor:
                         "Run %r cancelled after node %r completed; not persisting result.",
                         run_goal_id, node_id,
                     )
-                    return False, None, child_task_id
+                    return False, None, child_task_id, False
                 if reloaded is not None:
                     # Preserve any concurrent writes to other nodes.
                     state.nodes_executed = reloaded.nodes_executed
@@ -941,7 +1110,11 @@ class HarnessExecutor:
 
         if new_state == TaskState.DONE:
             output_value = trace.final_text_snippet if trace else ""
+            # Flat key — preserves existing scope convention.
             scope[node_id] = output_value
+            # R12: enrich scope with structured delivery_status fields so that
+            # conditional edges can branch on agent output (G3.3 routing unblock).
+            _enrich_scope_from_delivery_status(node_id, output_value, scope)
             state.nodes_executed[node_id] = NodeState(
                 status="done",
                 child_task_id=child_task_id,
@@ -958,7 +1131,7 @@ class HarnessExecutor:
             })
             _maybe_save(state, run_state_path)
             log.info("Node %s completed successfully.", node_id)
-            return True, output_value, child_task_id
+            return True, output_value, child_task_id, False
         else:
             # Node did not reach DONE — fail-fast.
             state.nodes_executed[node_id] = NodeState(
@@ -980,7 +1153,7 @@ class HarnessExecutor:
                 "Node %s failed (child %s ended in %s); activating fail-fast.",
                 node_id, child_task_id, new_state.value,
             )
-            return False, None, child_task_id
+            return False, None, child_task_id, False
 
     # ------------------------------------------------------------------
     # Decision node execution
@@ -1169,3 +1342,58 @@ def _maybe_save(state: RunState, path: "Path | None") -> None:
         save_atomic(path, state)
     except Exception:
         log.exception("Failed to persist run state to %s", path)
+
+
+def _enrich_scope_from_delivery_status(
+    node_id: str,
+    output: str,
+    scope: dict[str, str],
+) -> None:
+    """Populate dotted-path scope keys from a ```delivery_status block.
+
+    After a node reaches DONE, parses the agent's final_text_snippet for a
+    ```delivery_status JSON fence and adds the following keys to *scope*:
+      - ``"<node_id>.status"``        — normalised-lowercase status string
+      - ``"<node_id>.fields.<name>"`` — one key per entry in ``fields`` dict
+
+    The existing flat key ``scope[node_id]`` is NOT touched — this function
+    only adds new dotted-path keys (R12, G3.3 routing unblock).
+
+    Fields values are coerced to ``str`` so the scope stays ``dict[str, str]``.
+    """
+    if not output:
+        return
+    ds = parse_delivery_status_block(output)
+    if ds is None:
+        return
+    status_val = ds.get("status")
+    if isinstance(status_val, str):
+        scope[f"{node_id}.status"] = status_val  # already lowercase from parser
+    fields = ds.get("fields")
+    if isinstance(fields, dict):
+        for k, v in fields.items():
+            scope[f"{node_id}.fields.{k}"] = str(v)
+    log.debug(
+        "_enrich_scope_from_delivery_status: node=%r status=%r fields=%r",
+        node_id, status_val, list(fields.keys()) if isinstance(fields, dict) else None,
+    )
+
+
+def _extract_finding_ids(ds: "dict | None") -> list[str]:
+    """Extract finding IDs from a parsed delivery_status dict.
+
+    Precedence: ``fields.finding_ids`` (list[str]) over ``fields.findings[].id``.
+    Returns an empty list when the dict is None or contains no recognisable IDs.
+    """
+    if ds is None:
+        return []
+    fields = ds.get("fields")
+    if not isinstance(fields, dict):
+        return []
+    fids = fields.get("finding_ids")
+    if isinstance(fids, list) and fids:
+        return [str(f) for f in fids]
+    findings = fields.get("findings")
+    if isinstance(findings, list):
+        return [str(f.get("id", "")) for f in findings if isinstance(f, dict) and f.get("id")]
+    return []

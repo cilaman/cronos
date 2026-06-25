@@ -83,6 +83,51 @@ def parse_memory_blocks(text: str) -> list[MemoryBlock]:
     return blocks
 
 
+_DS_FENCE_OPEN = re.compile(r"^```delivery_status\s*$", re.IGNORECASE)
+
+
+def parse_delivery_status_block(text: str) -> dict | None:
+    """Parse the first ```delivery_status fenced JSON block from agent output.
+
+    Returns the parsed dict if found and valid JSON, None otherwise.
+    Tolerates missing optional fields; does NOT validate the ``status`` value
+    against the ``{DONE, WAIT, BLOCKED}`` set — all string values are accepted.
+    If ``status`` is present it is normalised to lowercase for consistent scope
+    key comparisons (``scope["<node>.status"] = "done"``).
+
+    Silently skips blocks that are unclosed or contain malformed JSON.
+    Only the first well-formed block is returned.
+    """
+    if not text:
+        return None
+
+    lines = text.splitlines()
+    in_fence = False
+    fence_lines: list[str] = []
+
+    for line in lines:
+        if not in_fence:
+            if _DS_FENCE_OPEN.match(line):
+                in_fence = True
+                fence_lines = []
+        else:
+            if _FENCE_CLOSE.match(line):
+                try:
+                    data = json.loads("\n".join(fence_lines))
+                except (json.JSONDecodeError, ValueError):
+                    return None
+                if not isinstance(data, dict):
+                    return None
+                # Normalise status to lowercase for scope-key comparisons.
+                if "status" in data and isinstance(data["status"], str):
+                    data["status"] = data["status"].lower()
+                return data
+            else:
+                fence_lines.append(line)
+
+    return None
+
+
 _CR_FENCE_OPEN = re.compile(r"^```cronos_remember\s*$", re.IGNORECASE)
 
 _CS_FENCE_OPEN = re.compile(r"^```cronos_status\s*$", re.IGNORECASE)

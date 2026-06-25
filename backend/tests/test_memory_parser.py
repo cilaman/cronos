@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.memory_parser import MemoryBlock, parse_memory_blocks
+from app.memory_parser import MemoryBlock, parse_delivery_status_block, parse_memory_blocks
 
 
 # ---------------------------------------------------------------------------
@@ -164,3 +164,122 @@ STATUS: DONE"""
     assert blocks[1].kind_hint == "procedure"
     assert blocks[2].kind_hint == "observation"
     assert "frontmatter" in blocks[2].content
+
+
+# ---------------------------------------------------------------------------
+# parse_delivery_status_block (I1 / R14)
+# ---------------------------------------------------------------------------
+
+
+def test_delivery_status_none_on_empty() -> None:
+    assert parse_delivery_status_block("") is None
+    assert parse_delivery_status_block(None) is None  # type: ignore[arg-type]
+
+
+def test_delivery_status_none_when_absent() -> None:
+    text = "Some output\nSTATUS: DONE"
+    assert parse_delivery_status_block(text) is None
+
+
+def test_delivery_status_basic_parse() -> None:
+    text = '```delivery_status\n{"status": "done", "summary": "all good"}\n```'
+    result = parse_delivery_status_block(text)
+    assert result is not None
+    assert result["status"] == "done"
+    assert result["summary"] == "all good"
+
+
+def test_delivery_status_normalises_status_to_lowercase() -> None:
+    text = '```delivery_status\n{"status": "DONE"}\n```'
+    result = parse_delivery_status_block(text)
+    assert result is not None
+    assert result["status"] == "done"
+
+
+def test_delivery_status_accepts_lowercase_status() -> None:
+    text = '```delivery_status\n{"status": "wait"}\n```'
+    result = parse_delivery_status_block(text)
+    assert result is not None
+    assert result["status"] == "wait"
+
+
+def test_delivery_status_does_not_validate_status_value() -> None:
+    text = '```delivery_status\n{"status": "custom_value", "fields": {}}\n```'
+    result = parse_delivery_status_block(text)
+    assert result is not None
+    assert result["status"] == "custom_value"
+
+
+def test_delivery_status_with_fields() -> None:
+    text = (
+        '```delivery_status\n'
+        '{"status": "done", "fields": {"verdict": "pass", "finding_count": "3"}}\n'
+        '```'
+    )
+    result = parse_delivery_status_block(text)
+    assert result is not None
+    assert result["fields"]["verdict"] == "pass"
+    assert result["fields"]["finding_count"] == "3"
+
+
+def test_delivery_status_missing_optional_fields() -> None:
+    text = '```delivery_status\n{"status": "done"}\n```'
+    result = parse_delivery_status_block(text)
+    assert result is not None
+    assert result.get("fields") is None
+
+
+def test_delivery_status_malformed_json_returns_none() -> None:
+    text = '```delivery_status\n{not valid json\n```'
+    assert parse_delivery_status_block(text) is None
+
+
+def test_delivery_status_unclosed_fence_returns_none() -> None:
+    text = '```delivery_status\n{"status": "done"}'
+    assert parse_delivery_status_block(text) is None
+
+
+def test_delivery_status_non_dict_returns_none() -> None:
+    text = '```delivery_status\n["not", "a", "dict"]\n```'
+    assert parse_delivery_status_block(text) is None
+
+
+def test_delivery_status_first_block_wins() -> None:
+    text = (
+        '```delivery_status\n{"status": "done", "summary": "first"}\n```\n'
+        '```delivery_status\n{"status": "wait", "summary": "second"}\n```'
+    )
+    result = parse_delivery_status_block(text)
+    assert result is not None
+    assert result["summary"] == "first"
+
+
+def test_delivery_status_case_insensitive_fence() -> None:
+    text = '```DELIVERY_STATUS\n{"status": "done"}\n```'
+    result = parse_delivery_status_block(text)
+    assert result is not None
+    assert result["status"] == "done"
+
+
+def test_delivery_status_with_finding_ids() -> None:
+    text = (
+        '```delivery_status\n'
+        '{"status": "done", "fields": {"finding_ids": ["f1", "f2"]}}\n'
+        '```'
+    )
+    result = parse_delivery_status_block(text)
+    assert result is not None
+    assert result["fields"]["finding_ids"] == ["f1", "f2"]
+
+
+def test_delivery_status_embedded_in_longer_output() -> None:
+    text = (
+        "The agent completed the review.\n\n"
+        "```delivery_status\n"
+        '{"status": "done", "fields": {"verdict": "pass"}}\n'
+        "```\n\n"
+        "STATUS: DONE"
+    )
+    result = parse_delivery_status_block(text)
+    assert result is not None
+    assert result["fields"]["verdict"] == "pass"

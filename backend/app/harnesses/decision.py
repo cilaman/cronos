@@ -181,9 +181,9 @@ def edge_matches(
             return False
 
     if layer == "variable":
-        # Whitelisted grammar: ``<name> <op> <literal>`` where op ∈ {==, !=, in}.
-        # No eval().
-        return _eval_variable_condition(edge.condition, scope)
+        # Whitelisted grammar: ``<path> <op> <literal>`` where op ∈ {==, !=, in}.
+        # Dotted/hyphenated paths and && conjunctions supported.  No eval().
+        return eval_condition(edge.condition, scope)
 
     # Unknown layer — no match.
     return False
@@ -263,13 +263,27 @@ def evaluate_decision(
 
 
 # ---------------------------------------------------------------------------
-# Variable condition evaluator (whitelisted grammar, no eval)
+# Condition evaluator — dotted-path, hyphenated ids, && conjunction (no eval)
 # ---------------------------------------------------------------------------
 
-# Pattern: ``<identifier> <op> <value>``
-# where <value> is a quoted string ``"..."`` or ``'...'`` or an unquoted bare word.
-# Operators: ==, !=, in
+# Matches a single ``<path> <op> <value>`` clause.
+# <path> supports: simple names, dotted paths, hyphenated node-ids.
+#   Examples: ``status``, ``review.fields.verdict``, ``my-node.status``
+# <op>: ==, !=, in
+# <value>: double-quoted, single-quoted, or unquoted bare word
 
+_EVAL_SINGLE_RE = re.compile(
+    r"^\s*"
+    r"(?P<name>[A-Za-z_][A-Za-z0-9_-]*(?:\.[A-Za-z0-9_-]+)*)"
+    r"\s+(?P<op>==|!=|in)\s+"
+    r"(?P<val>"
+    r'"(?:[^"\\]|\\.)*"'
+    r"|'(?:[^'\\]|\\.)*'"
+    r"|\S+"
+    r")\s*$"
+)
+
+# Legacy single-segment regex kept for backward compatibility reference.
 _VAR_COND_RE = re.compile(
     r"""^\s*
         (?P<name>[A-Za-z_][A-Za-z0-9_]*)   # variable name
@@ -286,23 +300,18 @@ _VAR_COND_RE = re.compile(
 )
 
 
-def _eval_variable_condition(condition: str, scope: dict[str, str]) -> bool:
-    """Evaluate a whitelisted variable condition without eval().
+def _eval_single_clause(clause: str, scope: dict[str, str]) -> bool:
+    """Evaluate one ``<path> <op> <literal>`` clause against *scope*.
 
-    Supported syntax: ``<varname> <op> <literal>``
-    where op is one of ``==``, ``!=``, ``in``.
-
-    For the ``in`` operator the right-hand side is treated as a
-    comma-separated list of values (no outer brackets required).
-
-    Returns False (never raises) on parse errors, so an unsupported
-    condition silently falls through to the default edge.
+    Returns False (never raises) when the clause does not match the
+    whitelisted grammar, so unsupported conditions fall through to the
+    default edge.
     """
-    m = _VAR_COND_RE.match(condition)
+    m = _EVAL_SINGLE_RE.match(clause)
     if m is None:
         log.warning(
-            "variable condition '%s' does not match whitelisted grammar; skipping.",
-            condition,
+            "eval_condition: clause %r does not match whitelisted grammar; returning False.",
+            clause,
         )
         return False
 
@@ -325,10 +334,55 @@ def _eval_variable_condition(condition: str, scope: dict[str, str]) -> bool:
     if op == "!=":
         return lhs != rhs
     if op == "in":
-        # rhs is treated as a comma-separated list: ``val1,val2,val3``
+        # rhs is a comma-separated list: ``val1,val2,val3``
         candidates = [v.strip() for v in rhs.split(",")]
         return lhs in candidates
 
     # Unreachable given the regex, but defensive:
-    log.warning("Unknown operator '%s' in variable condition '%s'.", op, condition)
+    log.warning("eval_condition: unknown operator %r in clause %r.", op, clause)
     return False
+
+
+def eval_condition(condition: str, scope: dict[str, str]) -> bool:
+    """Evaluate a whitelisted condition expression against *scope*.
+
+    Supported syntax
+    ----------------
+    ``<path> <op> <literal>``
+      where ``<path>`` is a dotted / hyphenated identifier (e.g.
+      ``review.fields.verdict``, ``my-node.status``), ``<op>`` is one of
+      ``==``, ``!=``, ``in``, and ``<literal>`` is a quoted string or
+      unquoted bare word (including ``true`` / ``false``).
+
+    ``<clause> && <clause> && ...``
+      All clauses must hold (short-circuit AND).  Clauses are split on the
+      literal four-character sequence `` && ``.
+
+    **V1 limitation**: splitting on `` && `` will mis-tokenise a clause
+    whose quoted string literal itself contains `` && ``.  No spec §12
+    worked-example edge needs this, so it is documented here rather than
+    fixed — a quoting-aware tokeniser is a known v2 follow-up.
+
+    No ``eval()`` is used.  Unrecognised expressions return ``False`` and
+    log a ``WARNING``.  Sandbox-escape attempts (e.g.
+    ``__import__('os').system(…)``) fail the grammar check and return
+    ``False`` without execution.
+    """
+    if not condition:
+        log.warning("eval_condition: empty condition string; returning False.")
+        return False
+
+    clauses = condition.split(" && ")
+    for clause in clauses:
+        if not _eval_single_clause(clause.strip(), scope):
+            return False
+    return True
+
+
+def _eval_variable_condition(condition: str, scope: dict[str, str]) -> bool:
+    """Backward-compatible wrapper — delegates to eval_condition.
+
+    Kept so external callers that imported this private function directly
+    continue to work.  New code should call ``eval_condition`` directly.
+    """
+    return eval_condition(condition, scope)

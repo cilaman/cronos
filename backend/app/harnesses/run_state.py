@@ -63,6 +63,11 @@ class NodeState:
     started_at: str | None = None  # ISO-8601 UTC; set when node transitions to 'in_progress'
     ended_at: str | None = None  # ISO-8601 UTC; set when node transitions to 'done'/'failed'/'skipped'
     wake_at: str | None = None  # ISO-8601 UTC absolute wake time for timed Wait nodes; None for non-timed/legacy
+    # Loop bookkeeping (G3.1): number of loop attempts completed so far.
+    attempt: int = 0
+    # Loop bookkeeping (G3.1): finding IDs from the previous loop attempt,
+    # used for recurring_findings stall detection.  Empty list when no prior run.
+    prior_finding_ids: list = field(default_factory=list)
 
 
 @dataclass
@@ -128,6 +133,8 @@ class RunState:
                 started_at=ns.get("started_at"),
                 ended_at=ns.get("ended_at"),
                 wake_at=ns.get("wake_at"),
+                attempt=ns.get("attempt", 0),
+                prior_finding_ids=ns.get("prior_finding_ids", []),
             )
             for node_id, ns in nodes_raw.items()
         }

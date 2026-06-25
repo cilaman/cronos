@@ -1643,3 +1643,112 @@ class TestTimedWaitResumeFix:
         assert len(sleep_calls) == 1
         assert sleep_calls[0] == 0.0, f"Expected 0s sleep for overdue wake_at, got {sleep_calls[0]}"
         assert result.nodes_executed["W1"].status == "done"
+
+
+# ---------------------------------------------------------------------------
+# I5 / R12: scope enrichment from delivery_status block (G3.3 routing unblock)
+# ---------------------------------------------------------------------------
+
+
+class TestScopeEnrichmentFromDeliveryStatus:
+    """After an agent node completes, delivery_status fields appear in scope."""
+
+    @pytest.mark.asyncio
+    async def test_delivery_status_fields_added_to_scope(self) -> None:
+        """R12: scope gains dotted-path keys from delivery_status after DONE."""
+        delivery_output = (
+            "```delivery_status\n"
+            '{"status": "done", "fields": {"verdict": "pass", "count": "3"}}\n'
+            "```\n"
+            "STATUS: DONE"
+        )
+
+        store = _make_store_mock()
+        worker = StubWorker(task_state=TaskState.DONE, final_text=delivery_output)
+        harness = _make_single_agent_harness()
+        space = _make_space()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch("app.harnesses.executor._DATA_DIR", Path(tmpdir)):
+                with patch("app.harnesses.executor._run_index.update_run_status",
+                           new_callable=AsyncMock):
+                    executor = HarnessExecutor(store, worker, _tools_resolver)
+                    result = await executor.execute("run-1", harness, space)
+
+        assert result.nodes_executed["A1"].status == "done"
+        # Check scope via the run — we can't inspect scope directly, but can verify
+        # the node output was captured (flat key populated).
+        assert result.nodes_executed["A1"].output == delivery_output
+
+    @pytest.mark.asyncio
+    async def test_decision_routes_on_delivery_status_verdict(self) -> None:
+        """R13/G3.3: conditional edge can branch on delivery_status.fields.verdict."""
+        delivery_output = (
+            "```delivery_status\n"
+            '{"status": "done", "fields": {"verdict": "pass"}}\n'
+            "```"
+        )
+
+        store = _make_store_mock()
+        worker = StubWorker(task_state=TaskState.DONE, final_text=delivery_output)
+        space = _make_space()
+
+        # Harness: agent-review → decision → pass-branch OR fail-branch
+        review = _make_agent_node("review")
+        decision = _make_decision_node("gate")
+        pass_node = _make_agent_node("pass-node")
+        fail_node = _make_agent_node("fail-node")
+
+        harness = Harness(
+            name="verdict-routing",
+            nodes=[review, decision, pass_node, fail_node],
+            edges=[
+                _make_edge("e1", "review", "gate"),
+                _make_edge("e2", "gate", "pass-node",
+                           condition="review.fields.verdict == pass"),
+                _make_edge("e3", "gate", "fail-node",
+                           condition="review.fields.verdict == fail"),
+            ],
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch("app.harnesses.executor._DATA_DIR", Path(tmpdir)):
+                with patch("app.harnesses.executor._run_index.update_run_status",
+                           new_callable=AsyncMock):
+                    executor = HarnessExecutor(store, worker, _tools_resolver)
+                    result = await executor.execute("run-routing", harness, space)
+
+        # The decision should have routed to pass-node, not fail-node.
+        assert result.nodes_executed.get("pass-node", NodeState(status="pending")).status == "done"
+        assert result.nodes_executed.get("fail-node") is None or \
+               result.nodes_executed["fail-node"].status == "skipped"
+
+    @pytest.mark.asyncio
+    async def test_no_delivery_status_block_no_dotted_keys(self) -> None:
+        """When agent output has no delivery_status fence, no dotted keys are added."""
+        plain_output = "Work done.\nSTATUS: DONE"
+
+        store = _make_store_mock()
+        worker = StubWorker(task_state=TaskState.DONE, final_text=plain_output)
+        harness = _make_single_agent_harness()
+        space = _make_space()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch("app.harnesses.executor._DATA_DIR", Path(tmpdir)):
+                with patch("app.harnesses.executor._run_index.update_run_status",
+                           new_callable=AsyncMock):
+                    executor = HarnessExecutor(store, worker, _tools_resolver)
+                    result = await executor.execute("run-plain", harness, space)
+
+        # Node should succeed with plain output
+        assert result.nodes_executed["A1"].status == "done"
+        assert result.nodes_executed["A1"].output == plain_output
+
+
+def _make_single_agent_harness(
+    node_id: str = "A1",
+    prompt: str = "do work",
+) -> Harness:
+    """Return a minimal single-agent harness for scope enrichment tests."""
+    node = _make_agent_node(node_id, prompt_template=prompt)
+    return Harness(name="single-agent", nodes=[node], edges=[])

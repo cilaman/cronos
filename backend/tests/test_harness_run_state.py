@@ -669,3 +669,129 @@ def test_full_run_state_with_timing_and_status(tmp_path: Path) -> None:
     assert nc.status == "skipped"
     assert nc.started_at is None
     assert nc.ended_at is None
+
+
+# ---------------------------------------------------------------------------
+# NodeState.attempt / prior_finding_ids — loop bookkeeping fields (I3 / R6)
+# ---------------------------------------------------------------------------
+
+
+def test_node_state_attempt_defaults_to_zero() -> None:
+    """New NodeState instances have attempt=0 by default (R6 ac-2 legacy compat)."""
+    ns = NodeState(status="pending")
+    assert ns.attempt == 0
+
+
+def test_node_state_prior_finding_ids_defaults_to_empty() -> None:
+    """New NodeState instances have prior_finding_ids=[] by default."""
+    ns = NodeState(status="pending")
+    assert ns.prior_finding_ids == []
+
+
+def test_node_state_attempt_set_and_retrieve() -> None:
+    ns = NodeState(status="in_progress", attempt=3)
+    assert ns.attempt == 3
+
+
+def test_node_state_prior_finding_ids_set_and_retrieve() -> None:
+    ns = NodeState(status="in_progress", prior_finding_ids=["f1", "f2", "f3"])
+    assert ns.prior_finding_ids == ["f1", "f2", "f3"]
+
+
+def test_node_state_attempt_round_trip(tmp_path: Path) -> None:
+    """R6 ac-1: attempt survives a to_dict/from_dict round-trip."""
+    state = RunState(
+        run_id="r-loop",
+        harness_id="h1",
+        goal_task_id="g1",
+        nodes_executed={
+            "loop-node": NodeState(
+                status="in_progress",
+                child_task_id="ct-1",
+                attempt=5,
+                prior_finding_ids=["fid-a", "fid-b"],
+            )
+        },
+    )
+    target = tmp_path / "loop_state.json"
+    save_atomic(target, state)
+    loaded = load(target)
+
+    assert loaded is not None
+    ns = loaded.nodes_executed["loop-node"]
+    assert ns.attempt == 5
+    assert ns.prior_finding_ids == ["fid-a", "fid-b"]
+
+
+def test_node_state_loop_fields_to_dict_from_dict() -> None:
+    """R6 ac-1: to_dict includes attempt and prior_finding_ids; from_dict restores them."""
+    ns = NodeState(status="in_progress", attempt=2, prior_finding_ids=["x", "y"])
+    d = {"status": "in_progress", "child_task_id": None, "output": None,
+         "reason": None, "started_at": None, "ended_at": None, "wake_at": None,
+         "attempt": ns.attempt, "prior_finding_ids": ns.prior_finding_ids}
+    # Round-trip via RunState.from_dict
+    state = RunState(
+        run_id="r",
+        harness_id="h",
+        goal_task_id="g",
+        nodes_executed={"n1": ns},
+    )
+    restored = RunState.from_dict(state.to_dict())
+    rns = restored.nodes_executed["n1"]
+    assert rns.attempt == 2
+    assert rns.prior_finding_ids == ["x", "y"]
+
+
+def test_node_state_legacy_json_without_attempt(tmp_path: Path) -> None:
+    """R6 ac-2: from_dict on legacy JSON lacking attempt/prior_finding_ids gives defaults."""
+    legacy_node = {
+        "status": "done",
+        "child_task_id": "ct-old",
+        "output": "old output",
+        "reason": None,
+        "started_at": None,
+        "ended_at": None,
+        # No 'attempt' or 'prior_finding_ids' — simulates pre-I3 persisted file
+    }
+    legacy_data = {
+        "run_id": "old-run",
+        "harness_id": "h1",
+        "goal_task_id": "g1",
+        "nodes_executed": {"n1": legacy_node},
+    }
+    restored = RunState.from_dict(legacy_data)
+    ns = restored.nodes_executed["n1"]
+    assert ns.attempt == 0
+    assert ns.prior_finding_ids == []
+
+
+def test_node_state_attempt_increments_and_persists(tmp_path: Path) -> None:
+    """Loop handler can increment attempt and persist between iterations."""
+    state = RunState(
+        run_id="r-loop-incr",
+        harness_id="h1",
+        goal_task_id="g1",
+        nodes_executed={
+            "loop-node": NodeState(status="in_progress", attempt=1, prior_finding_ids=["f1"])
+        },
+    )
+    target = tmp_path / "loop_incr.json"
+    save_atomic(target, state)
+
+    # Simulate loop handler incrementing attempt on next iteration
+    ns = state.nodes_executed["loop-node"]
+    state.nodes_executed["loop-node"] = NodeState(
+        status="in_progress",
+        child_task_id=ns.child_task_id,
+        output=ns.output,
+        started_at=ns.started_at,
+        attempt=2,
+        prior_finding_ids=["f2"],
+    )
+    save_atomic(target, state)
+    loaded = load(target)
+
+    assert loaded is not None
+    ns_loaded = loaded.nodes_executed["loop-node"]
+    assert ns_loaded.attempt == 2
+    assert ns_loaded.prior_finding_ids == ["f2"]
