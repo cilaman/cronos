@@ -267,23 +267,42 @@ def evaluate_decision(
 # ---------------------------------------------------------------------------
 
 # Pattern: ``<identifier> <op> <value>``
+# where <identifier> allows dotted paths and hyphens (delivery/v1 scope keys).
 # where <value> is a quoted string ``"..."`` or ``'...'`` or an unquoted bare word.
 # Operators: ==, !=, in
 
 _VAR_COND_RE = re.compile(
     r"""^\s*
-        (?P<name>[A-Za-z_][A-Za-z0-9_]*)   # variable name
+        (?P<name>[A-Za-z_][A-Za-z0-9_.\\-]*)  # variable name (dotted / hyphenated)
         \s+
-        (?P<op>==|!=|in)                    # operator
+        (?P<op>==|!=|in)                       # operator
         \s+
-        (?P<val>                            # right-hand value
-            "(?:[^"\\]|\\.)*"              # double-quoted string
-            |'(?:[^'\\]|\\.)*'             # single-quoted string
-            |\S+                           # unquoted bare word / number
+        (?P<val>                               # right-hand value
+            "(?:[^"\\]|\\.)*"                 # double-quoted string
+            |'(?:[^'\\]|\\.)*'                # single-quoted string
+            |\S+                              # unquoted bare word / number
         )
     \s*$""",
     re.VERBOSE,
 )
+
+
+def eval_condition(expr: str, scope: dict[str, str]) -> bool:
+    """Evaluate a delivery/v1 edge condition expression against a flat scope dict.
+
+    Supports:
+    - Dotted-path identifiers: ``analyze.fields.has_ui``, ``g-tests.status``
+    - ``&&`` conjunction: ``"a == 'x' && b != 'y'"``
+    - Operators: ``==``, ``!=``, ``in``
+
+    Returns False (never raises) on unknown variables or parse errors.
+    Short-circuits on first False clause.
+    """
+    clauses = [c.strip() for c in expr.split("&&")]
+    for clause in clauses:
+        if not _eval_variable_condition(clause, scope):
+            return False
+    return True
 
 
 def _eval_variable_condition(condition: str, scope: dict[str, str]) -> bool:
