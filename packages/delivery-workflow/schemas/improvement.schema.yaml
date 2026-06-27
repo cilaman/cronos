@@ -43,6 +43,21 @@ properties:
         items:
           type: string
         description: Error messages for any findings that failed to apply.
+      tier1_pr_urls:
+        type: array
+        items:
+          type: string
+        description: PR URLs (or PROPOSED_PR.md paths) emitted for Tier-1 findings.
+      tier1_findings:
+        type: array
+        items:
+          type: string
+        description: Finding ids routed to Tier-1 (never in-place applied).
+      tier2_escalated:
+        type: array
+        items:
+          type: string
+        description: Finding ids escalated as Tier-2 (no file write, no PR).
   open_questions:
     type: array
     items:
