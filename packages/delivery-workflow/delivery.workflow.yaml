@@ -170,6 +170,24 @@ nodes:
     kind: human
     prompt: "Sign-off to release."
 
+  - id: retro
+    kind: agent
+    agent: retro
+    model: {use: reasoning}
+    produces: {class: retro}
+
+  - id: g-retro
+    kind: gate
+    checks:
+      - {type: schema}
+
+  - id: improve
+    kind: agent
+    agent: improve
+    model: {use: build}
+    inputs: {from: [g-retro, retro]}
+    produces: {class: improvement}
+
 edges:
   - {from: scout,        to: g-scout}
   - {from: g-scout,      to: analyze,       when: "g-scout.decision == 'proceed'"}
@@ -198,3 +216,6 @@ edges:
   - {from: g-tests,      to: implement,      when: "g-tests.decision == 'needs_fix'"}
   - {from: doc,          to: g-doc}
   - {from: g-doc,        to: release,        when: "g-doc.decision == 'proceed'"}
+  - {from: release,      to: retro}
+  - {from: retro,        to: g-retro}
+  - {from: g-retro,      to: improve,        when: "g-retro.decision == 'proceed'"}
