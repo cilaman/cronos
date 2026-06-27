@@ -26,6 +26,8 @@ packages/delivery-workflow/
 │
 ├── lib/                      # Portable libraries (no app.* imports)
 │   ├── delivery_status.py    # Parse delivery_status blocks from agent output
+│   ├── git_pr.py            # PR emission helper — git/gh subprocess, PROPOSED_PR.md fallback
+│   ├── improve.py           # Tier-1/Tier-2 back-half applier (classifier + PR routing)
 │   ├── state/
 │   │   ├── store.py         # StateStore: read/write state.json atomically
 │   │   └── events.py        # EventLog: append-only events.jsonl
@@ -216,6 +218,73 @@ tokens_used: 8240
 
 Returns a typed `DeliveryStatus` object with phase, status, artifacts, and token counts.
 
+### `lib/git_pr`
+
+**Portable git/gh PR helper** for emitting Tier-1 improvement proposals (spec §3.2, DD-002). Provides `emit_pr()` which creates a GitHub PR via the `gh` CLI when available, or writes a fallback `PROPOSED_PR.md` when unavailable.
+
+**Key features:**
+- Captures a stable base ref before creating any branch (prevents branch-stacking across findings)
+- Always restores HEAD to the original branch after emission (success or failure)
+- Subprocess-only, zero `app.*`/`backend.*` imports — fully portable
+- Injectable `runner` and `gh_probe` parameters for testing without real git/gh
+
+```python
+from lib.git_pr import emit_pr
+
+url_or_path = emit_pr(
+    title="tier1-improvement(F1): agent_prompt — clearer instructions",
+    body="## Tier-1 Improvement Proposal\n...",
+    finding_id="F1",
+    branch="delivery-improve-tier1-F1",
+    repo_root="/data/repo",
+    proposals_dir="/data/repo/.cronos/improvement-tier1/",
+)
+# Returns: "https://github.com/user/repo/pull/123" or "/data/repo/.cronos/improvement-tier1/proposed-pr-F1.md"
+```
+
+### `lib/improve`
+
+**Tier-1/Tier-2 back-half applier** for delivery/v1 self-improvement (spec §3.2–3.5, DD-001–003). Routes retro findings into three tiers and applies the correct action per tier:
+- **Tier 0:** auto-applied in-place (snapshot → apply → eval → keep/rollback; handled elsewhere)
+- **Tier 1:** emit a PR (proposal document, never in-place source edit)
+- **Tier 2:** escalate to human (no file write, no branch)
+
+**Public API:**
+```python
+from lib.improve import classify_findings, render_proposal, run_back_half
+
+# 1. Classify findings by fix_type (fix_type is authoritative, not declared tier)
+routed = classify_findings(findings)  # → Routed(tier0=[], tier1=[...], tier2=[...])
+
+# 2. Render PR title/body for a Tier-1 finding
+title, body = render_proposal(finding)
+
+# 3. Run the Tier-1/Tier-2 back-half (emits PRs when evals pass)
+result = run_back_half(
+    tier1=routed.tier1,
+    tier2=routed.tier2,
+    evals_passed=True,  # Only emit Tier-1 PRs if evals exit 0
+    repo_root="/data/repo",
+    proposals_dir="/data/repo/.cronos/improvement-tier1/",
+)
+# → BackHalfResult(tier1_pr_urls=["..."], tier1_findings=["F1"], tier2_escalated=["A1"], errors=[])
+```
+
+**CLI usage:**
+```bash
+python -m lib.improve <retro_artifact> \
+    --evals-passed [true|false] \
+    --proposals-dir <path> \
+    [--repo-root <path>]
+# Prints JSON: {tier1_pr_urls, tier1_findings, tier2_escalated, errors}
+```
+
+**Key design:**
+- `classify_findings()` is the sole router (fix_type-authoritative)
+- Tier-0 consume only `tier0` list; back-half consumes `tier1`/`tier2` (structural safety guarantee for REQ-005)
+- No PR is emitted if `evals_passed=False` (REQ-002)
+- All writes are additive proposal documents, never in-place source edits
+
 ### `lib/state`
 
 **`StateStore`** — CRUD for `state.json`:
@@ -291,7 +360,7 @@ A separate orchestrator (Phase 6+) will:
 
 ## Testing
 
-The package includes 231 tests:
+The package includes 324 tests:
 
 - **test_package_skeleton.py** — module structure, imports
 - **test_import_boundary.py** — AST verification that no `app.*` imports leak into portable core
@@ -301,6 +370,8 @@ The package includes 231 tests:
 - **test_delivery_status.py** — parsing `delivery_status` blocks
 - **test_state.py** — `StateStore` read/write, atomic updates, resume policy
 - **test_telemetry.py** — `TelemetrySink` accumulation, budget ceiling, persistence
+- **test_tier1_no_auto_apply.py** — REQ-005 hard safety: agents/skills files byte-identical after Tier-1 run
+- **test_improve.py** — Tier-1/Tier-2 routing, no-PR-on-red, one-PR-per-finding, Tier-2 escalate-only, fence fields
 
 Run with:
 ```bash
