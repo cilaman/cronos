@@ -1,0 +1,108 @@
+$schema: "http://json-schema.org/draft-07/schema#"
+title: delivery/v1 Retro-Class Delivery Status Block
+description: >
+  Schema for the delivery_status fenced-block emitted by the retro agent.
+  Captures five-dimension scores and structured findings (tier 0/1/2).
+type: object
+required:
+  - status
+  - artifact_paths
+  - produces
+  - fields
+  - telemetry
+additionalProperties: false
+properties:
+  status:
+    type: string
+    enum: [done, blocked, needs_fix, failed]
+  artifact_paths:
+    type: array
+    items:
+      type: string
+  produces:
+    type: string
+    const: retro
+  fields:
+    type: object
+    required:
+      - pipeline_status
+      - scores
+      - findings
+    additionalProperties: true
+    properties:
+      pipeline_status:
+        type: string
+        enum: [done, failed, blocked, escalated]
+        description: The run's actual terminal status (separate from this retro's own status).
+      scores:
+        type: object
+        required: [planning, error_handling, efficiency, completion, communication]
+        additionalProperties: false
+        properties:
+          planning:
+            type: integer
+            minimum: 1
+            maximum: 5
+          error_handling:
+            type: integer
+            minimum: 1
+            maximum: 5
+          efficiency:
+            type: integer
+            minimum: 1
+            maximum: 5
+          completion:
+            type: integer
+            minimum: 1
+            maximum: 5
+          communication:
+            type: integer
+            minimum: 1
+            maximum: 5
+      findings:
+        type: array
+        items:
+          type: object
+          required: [id, severity, tier, fix_type, target, evidence, suggested_action]
+          additionalProperties: true
+          properties:
+            id:
+              type: string
+              pattern: "^F[0-9]+$"
+            severity:
+              type: string
+              enum: [critical, high, medium, low]
+            tier:
+              type: integer
+              minimum: 0
+              maximum: 2
+            fix_type:
+              type: string
+              enum: [fixture, threshold, gate_check, agent_prompt, skill, schema, workflow]
+            target:
+              type: string
+            evidence:
+              type: string
+              maxLength: 500
+            suggested_action:
+              type: string
+            recipe:
+              description: "Tier-0 only: {content: ...} for fixture, {old: ..., new: ...} for threshold. Null or absent for tier-1+."
+  open_questions:
+    type: array
+    items:
+      type: string
+  telemetry:
+    type: object
+    required: [tokens, usd, seconds]
+    additionalProperties: false
+    properties:
+      tokens:
+        type: integer
+        minimum: 0
+      usd:
+        type: number
+        minimum: 0
+      seconds:
+        type: number
+        minimum: 0

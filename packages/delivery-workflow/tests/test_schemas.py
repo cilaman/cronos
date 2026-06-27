@@ -1,5 +1,5 @@
 """
-Tests for the 8 delivery/v1 artifact-class delivery_status schemas.
+Tests for the 10 delivery/v1 artifact-class delivery_status schemas.
 
 Each schema validates the delivery_status block (structured return)
 for a specific produces class. Tests cover:
@@ -28,6 +28,8 @@ ARTIFACT_CLASSES = [
     "review",
     "test",
     "doc",
+    "retro",
+    "improvement",
 ]
 
 
@@ -110,6 +112,35 @@ VALID_BLOCKS = {
         docs_updated=["docs/delivery-pipeline/README.md"],
         intentionally_not_updated=[],
         modules_documented=3,
+    ),
+    "retro": _base_block(
+        "retro",
+        pipeline_status="done",
+        scores={
+            "planning": 4,
+            "error_handling": 4,
+            "efficiency": 3,
+            "completion": 5,
+            "communication": 4,
+        },
+        findings=[
+            {
+                "id": "F1",
+                "severity": "medium",
+                "tier": 1,
+                "fix_type": "agent_prompt",
+                "target": "agent:implementor",
+                "evidence": "impl trace: backtrack_count=4 across 3 reads of foo.py after a Write",
+                "suggested_action": "read each scope_file once before first Edit; re-read only after gate failure",
+                "recipe": None,
+            }
+        ],
+    ),
+    "improvement": _base_block(
+        "improvement",
+        tier0_applied=1,
+        tier0_rolled_back=0,
+        errors=[],
     ),
 }
 
