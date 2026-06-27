@@ -50,7 +50,9 @@ packages/delivery-workflow/
 │   ├── implementation.schema.yaml
 │   ├── review.schema.yaml
 │   ├── test.schema.yaml
-│   └── doc.schema.yaml
+│   ├── doc.schema.yaml
+│   ├── retro.schema.yaml
+│   └── improvement.schema.yaml
 │
 ├── tests/                    # 231 tests covering all modules
 ├── hooks/                    # Extensibility points (Phase 6+)
