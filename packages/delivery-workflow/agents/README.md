@@ -16,6 +16,7 @@ role, the skill owns the how.
 | **test-architect** | Opus | Test suite + test plan | design-report | test suite + `test-plan` (`test`) | test files | `test-design` |
 | **implementor** | Sonnet | Build per-iteration | design-report (one `iterations[]` entry) | `impl-report` (`implementation`) | source code | `implement` |
 | **reviewer** | Opus | Judge diff vs design | design + impl diff | `review-report--attempt{N}` (`review`): verdict, findings[] | — | `code-review` |
+| **security-reviewer** | Opus | Judge diff for security vulnerabilities | design + impl diff | `review-report--attempt{N}` (`review`): verdict, findings[] with OWASP/CWE tags | — | `security-review` |
 | **tester** | Sonnet | Execution + coverage | test suite + built code | `test-report` (`test`) | — | — |
 | **doc-sync** | Haiku | Update docs for changes | impl + design + code | `doc-report` (`doc`) | doc files | `doc` |
 
@@ -80,6 +81,7 @@ is "recon's job, not yours"; writing non-artifact files is off-limits. Tool list
 | test-architect | Read, Edit, Write, Bash, Grep, Glob | Can Edit test files; Write own artifact + test suite |
 | implementor | Read, Edit, Write, Bash, Grep, Glob | The app-source writer — free to edit source files in scope |
 | reviewer | Read, Grep, Glob, Bash, Write | **No Edit** by design — reads diffs, writes findings only |
+| security-reviewer | Read, Grep, Glob, Bash, Write | **No Edit** by design — judges security findings, writes review report only |
 | tester | Read, Bash | Execution only; no Write (results POSTed via the runtime) |
 | doc-sync | Read, Glob, Bash, Write | Can Write doc files + own artifact; no Edit (regenerate, don't patch) |
 
