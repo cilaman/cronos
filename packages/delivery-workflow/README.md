@@ -28,6 +28,11 @@ packages/delivery-workflow/
 │   ├── delivery_status.py    # Parse delivery_status blocks from agent output
 │   ├── git_pr.py            # PR emission helper — git/gh subprocess, PROPOSED_PR.md fallback
 │   ├── improve.py           # Tier-1/Tier-2 back-half applier (classifier + PR routing)
+│   ├── security.py          # Security check evaluator — scanner execution, JSON parsing, decision logic
+│   ├── evals/               # Portable eval corpus runner (no CC-v1 coupling)
+│   │   ├── __init__.py      # Exports EvalResult and run_eval_corpus()
+│   │   ├── corpus.py        # EvalResult dataclass and run_eval_corpus() implementation
+│   │   └── __main__.py      # CLI: python -m lib.evals [--repo-root] [--json]
 │   ├── state/
 │   │   ├── store.py         # StateStore: read/write state.json atomically
 │   │   └── events.py        # EventLog: append-only events.jsonl
@@ -56,7 +61,7 @@ packages/delivery-workflow/
 │   ├── retro.schema.yaml
 │   └── improvement.schema.yaml
 │
-├── tests/                    # 231 tests covering all modules
+├── tests/                    # 347 tests covering all modules
 ├── hooks/                    # Extensibility points (Phase 6+)
 ├── pyproject.toml
 └── .importlinter             # Import boundary enforcement
@@ -285,6 +290,73 @@ python -m lib.improve <retro_artifact> \
 - No PR is emitted if `evals_passed=False` (REQ-002)
 - All writes are additive proposal documents, never in-place source edits
 
+### `lib/security`
+
+**Security check evaluator** — extracts scanner execution and decision logic from the Cronos `gate.py` into a portable module, shared by both Cronos and the Phase-6 standalone runner.
+
+**Public API:**
+```python
+from lib.security import evaluate_security
+
+decision, errors, evidence = evaluate_security(
+    check={
+        "scanners": ["bandit", "semgrep"],
+        "fail_on": ["HIGH"],
+        "on_missing_scanner": "skip",
+    },
+    artifact_paths=["artifact.md"],
+    space=Path("."),
+)
+# decision: "proceed" | "needs_fix" | "fail" | "retry"
+# evidence dict includes: effective_finding_class, has_fail_on_hit, agent_verdict, scanner_results, ...
+```
+
+**Key features:**
+- Runs real security scanners (bandit, semgrep, etc.) and parses JSON output
+- **Full JSON parsing** (not truncated) — fixes DD-002 fail-open bug where >2 KB scanner output was silently scored clean
+- Reconciles scanner findings with agent verdict from security-reviewer artifact
+- Maps findings to decision (proceed/needs_fix/fail) based on severity and fail_on policy
+- Handles missing scanners per policy (fail/skip/warn)
+- Infra crashes (scanner not found, JSON parse error) trigger auto-retry
+- Zero `app.*` imports — fully portable
+
+**Signature:**
+- `evaluate_security(check: dict, artifact_paths: list[str], space: Path | None) -> tuple[str, list[str], dict]`
+- Returns the same contract as Cronos `gate.py:_check_security` for drop-in delegation
+
+### `lib/evals`
+
+**Portable eval corpus runner** — invokes a test/validation command and returns structured results. Enables Cronos gate, improve flow, and Phase-6 standalone runner to share one eval mechanism.
+
+**Public API:**
+```python
+from lib.evals import run_eval_corpus, EvalResult
+
+result = run_eval_corpus(
+    repo_root="/path/to/repo",
+    eval_cmd="pytest packages/delivery-workflow/tests/ -q",  # or None to use default
+    env={"DELIVERY_EVAL_CMD": "pytest ... -k custom"},       # or None
+    runner=subprocess.run,  # injectable for testing
+)
+# result: EvalResult(passed=True, exit_code=0, command="...", output_tail="...")
+```
+
+**CLI:**
+```bash
+python -m lib.evals [--repo-root /path] [--json]
+# Exits with corpus exit code; --json prints EvalResult as JSON
+```
+
+**Command precedence:** `eval_cmd` arg → `DELIVERY_EVAL_CMD` env → default `pytest packages/delivery-workflow/tests/ -q --no-header`
+
+**Key features:**
+- Single source of truth for default + override (no more inlined shell prose in improve SKILL)
+- Structured `EvalResult` dataclass with passed flag, exit code, and output
+- Environment variable override for standalone + Cronos parity
+- Fully portable; no `app.*` imports
+
+**Used by:** `lib/improve.py` (Tier-0 keep/rollback decision) and `improve/SKILL.md` (Step 5 corpus evaluation)
+
 ### `lib/state`
 
 **`StateStore`** — CRUD for `state.json`:
@@ -360,14 +432,16 @@ A separate orchestrator (Phase 6+) will:
 
 ## Testing
 
-The package includes 324 tests:
+The package includes 347 tests:
 
 - **test_package_skeleton.py** — module structure, imports
-- **test_import_boundary.py** — AST verification that no `app.*` imports leak into portable core
+- **test_import_boundary.py** — AST verification that no `app.*` imports leak into portable core (auto-verifies new `lib/security.py` and `lib/evals/` modules)
 - **test_interface_nullruntime.py** — Protocol compliance, `NullRuntime` raises `NotImplementedError`
 - **test_spec_loader.py** — spec loading, validation against schema, malformed rejection
 - **test_schemas.py** — artifact-class schemas (research, analysis, design, etc.)
 - **test_delivery_status.py** — parsing `delivery_status` blocks
+- **test_security_lib.py** — `lib/security.py` scanner execution, JSON parsing, missing-scanner policy, agent-verdict precedence, DD-002 regression (>2 KB JSON must parse, not score clean)
+- **test_evals_lib.py** — `lib/evals` corpus runner, command precedence (arg→env→default), passed flag, exit-code propagation, CLI smoke tests
 - **test_state.py** — `StateStore` read/write, atomic updates, resume policy
 - **test_telemetry.py** — `TelemetrySink` accumulation, budget ceiling, persistence
 - **test_tier1_no_auto_apply.py** — REQ-005 hard safety: agents/skills files byte-identical after Tier-1 run
