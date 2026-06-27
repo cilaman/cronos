@@ -24,6 +24,7 @@ import yaml
 
 from app.pipeline.verify import split_frontmatter
 from app.pipeline.verify import verify as _cc_verify
+from lib.security import evaluate_security as _evaluate_security
 
 
 GATE_DECISIONS = frozenset({"proceed", "needs_fix", "fail", "retry"})
@@ -574,173 +575,13 @@ def _check_security(
     artifact_paths: list[str],
     space: Path | None,
 ) -> tuple[str, list[str], dict[str, Any]]:
-    """Security gate: read security agent artifact + re-execute scanners, reconcile.
+    """Security gate: delegate to lib.security.evaluate_security.
 
-    Decision:
-      proceed  — agent verdict==pass AND no scanner fail_on hit AND no required
-                 scanner missing under on_missing_scanner=fail.
-      needs_fix — agent verdict==needs_fix OR any scanner reports fail_on severity
-                 OR a required scanner is missing under on_missing_scanner=fail.
-      fail     — agent verdict==fail.
-      retry    — unreadable agent artifact OR scanner infrastructure crash
-                 (non-zero exit + unparseable output, distinct from a finding).
-
-    Derives the effective routing finding_class (design>dependency>code) and
-    includes it in evidence so routing edges can read it.
+    Decision semantics are documented in lib/security.py. This wrapper keeps
+    the named _check_* convention used by CHECK_REGISTRY while sharing one
+    portable implementation with the standalone runner.
     """
-    fail_on: list[str] = [s.lower() for s in (check.get("fail_on") or [])]
-    on_missing: str = check.get("on_missing_scanner", "fail")
-    scanners: dict[str, str] = check.get("scanners") or {}
-    cwd = space if space is not None else Path(".")
-
-    # Read security agent artifact (optional — scanners can run standalone)
-    agent_verdict: str | None = None
-    agent_finding_class: str | None = None
-    agent_findings: list[dict] = []
-
-    artifact_path = _resolve_artifact_path(check, artifact_paths)
-    if artifact_path:
-        header, err = _read_header(artifact_path)
-        if err:
-            return "retry", [f"cannot read security agent artifact: {err}"], {}
-        if header is not None:
-            agent_verdict = header.get("verdict")
-            agent_finding_class = header.get("finding_class")
-            agent_findings = header.get("findings") or []
-
-    # Run scanners
-    scanner_results: dict[str, Any] = {}
-    scanner_errors: list[str] = []
-    has_fail_on_hit = False
-    has_missing_fail = False
-    dep_hit = False
-    code_hit = False
-
-    for name, cmd in scanners.items():
-        result = _run_command(cmd, cwd)
-
-        is_missing = result.exit_code == 127 or (
-            "not found" in result.stderr_tail.lower()
-            or "command not found" in result.stderr_tail.lower()
-        )
-        if is_missing:
-            scanner_results[name] = {"status": "missing", "exit_code": result.exit_code}
-            if on_missing == "fail":
-                has_missing_fail = True
-                scanner_errors.append(
-                    f"scanner '{name}' is missing (exit {result.exit_code});"
-                    " on_missing_scanner=fail"
-                )
-            else:
-                scanner_errors.append(
-                    f"scanner '{name}' is missing — skipped (on_missing_scanner=skip)"
-                )
-            continue
-
-        # Parse JSON output to determine findings/severities
-        parsed: Any = None
-        stdout = result.stdout_tail.strip()
-        if stdout:
-            try:
-                parsed = json.loads(stdout)
-            except (json.JSONDecodeError, ValueError):
-                parsed = None
-
-        if parsed is None and result.exit_code not in (0, 1):
-            # Non-zero exit + unparseable output = infrastructure crash → retry
-            scanner_results[name] = {
-                "status": "crash",
-                "exit_code": result.exit_code,
-                "stderr_tail": _tail(result.stderr_tail),
-            }
-            return (
-                "retry",
-                scanner_errors + [
-                    f"scanner '{name}' crashed (exit {result.exit_code},"
-                    " unparseable output)"
-                ],
-                {"security": {"scanner_results": scanner_results, "infra_crash": True}},
-            )
-
-        # Extract severity hits from parsed output
-        severity_hits: list[str] = []
-        items: list[Any] = []
-        if isinstance(parsed, list):
-            items = parsed
-        elif isinstance(parsed, dict):
-            items = (
-                parsed.get("findings")
-                or parsed.get("results")
-                or parsed.get("vulnerabilities")
-                or []
-            )
-
-        for item in items:
-            if isinstance(item, dict):
-                sev = (item.get("severity") or item.get("Severity") or "").lower()
-                if sev and fail_on and sev in fail_on:
-                    severity_hits.append(sev)
-
-        scanner_results[name] = {
-            "status": "hit" if severity_hits else "clean",
-            "exit_code": result.exit_code,
-            "severity_hits": severity_hits,
-            "findings_count": len(severity_hits),
-        }
-
-        if severity_hits:
-            has_fail_on_hit = True
-            if name.startswith("deps"):
-                dep_hit = True
-            else:
-                code_hit = True
-            scanner_errors.append(
-                f"scanner '{name}' found {len(severity_hits)}"
-                f" {'/'.join(sorted(set(severity_hits)))} finding(s)"
-            )
-
-    # Derive effective routing finding_class (design > dependency > code)
-    if agent_finding_class == "design":
-        effective_class: str = "design"
-    elif dep_hit or agent_finding_class == "dependency":
-        effective_class = "dependency"
-    else:
-        effective_class = "code"
-
-    blocking_count = sum(
-        1 for f in agent_findings if isinstance(f, dict) and f.get("blocking") is True
-    )
-
-    evidence: dict[str, Any] = {
-        "security": {
-            "agent_verdict": agent_verdict,
-            "agent_finding_class": agent_finding_class,
-            "agent_blocking_finding_count": blocking_count,
-            "scanner_results": scanner_results,
-            "effective_finding_class": effective_class,
-            "has_fail_on_hit": has_fail_on_hit,
-            "has_missing_fail": has_missing_fail,
-        }
-    }
-
-    errors: list[str] = list(scanner_errors)
-
-    if agent_verdict == "fail":
-        errors.insert(0, f"security agent verdict=fail ({blocking_count} blocking findings)")
-        return "fail", errors, evidence
-
-    not_proceed = (
-        agent_verdict == "needs_fix" or has_fail_on_hit or has_missing_fail
-    )
-    if not_proceed:
-        if agent_verdict == "needs_fix":
-            errors.insert(
-                0,
-                f"security agent verdict=needs_fix ({blocking_count} blocking findings)",
-            )
-        return "needs_fix", errors, evidence
-
-    return "proceed", [], evidence
+    return _evaluate_security(check, artifact_paths, space)
 
 
 def _check_g_review(

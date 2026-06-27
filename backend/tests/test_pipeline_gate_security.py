@@ -246,3 +246,45 @@ def test_missing_scanner_skip_is_recorded_in_evidence():
     assert evidence["security"]["scanner_results"]["secrets"]["status"] == "missing"
     # The missing scanner should appear in scanner_errors, but not force needs_fix
     assert decision == "proceed"
+
+
+# ---------------------------------------------------------------------------
+# DD-002 regression (via gate delegate): >2 KB JSON must NOT score clean
+# ---------------------------------------------------------------------------
+
+
+def test_large_json_scanner_output_is_detected_via_gate_delegate(tmp_path: Path):
+    """Gate delegate: scanner emitting >2 KB JSON with HIGH finding → needs_fix (not clean).
+
+    Exercises the DD-002 fix path through the Cronos gate's _check_security
+    thin delegate → lib.security.evaluate_security full-stdout capture.
+    """
+    import json as _json
+
+    padding = [
+        {"severity": "info", "description": f"padding finding {i}"}
+        for i in range(50)
+    ]
+    high_finding = {"severity": "high", "description": "real vuln at the end"}
+    payload = _json.dumps(padding + [high_finding])
+    assert len(payload) > 2000, "Payload must exceed 2 KB to exercise the fix"
+
+    # Write scanner to a script file to avoid shell-quoting issues with JSON
+    scanner_script = tmp_path / "big_scanner.py"
+    scanner_script.write_text(
+        f"import sys\nprint({payload!r})\nsys.exit(1)\n"
+    )
+    check = {
+        "type": "security",
+        "scanners": {"sast": f"{PY} {scanner_script}"},
+        "fail_on": ["high", "critical"],
+        "on_missing_scanner": "fail",
+    }
+    decision, errors, evidence = _check_security(check, [], tmp_path)
+
+    assert decision != "proceed", (
+        f"Large-JSON scanner with HIGH finding must not be scored clean via gate; got {decision!r}"
+    )
+    sec = evidence["security"]
+    assert sec["has_fail_on_hit"] is True
+    assert sec["scanner_results"]["sast"]["status"] == "hit"
