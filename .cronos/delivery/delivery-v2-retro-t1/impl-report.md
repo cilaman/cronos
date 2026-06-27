@@ -11,8 +11,15 @@ validation_command_passed: true
 
 ## Summary
 
-All 5 iterations executed in topological order (I1 → I3 → I2 → I5 → I4). 319 tests pass
-(no regressions). Import boundary clean. All validation commands pass on first run.
+All 5 iterations executed in topological order (I1 → I3 → I2 → I5 → I4). 324 tests pass
+(no regressions). Import boundary clean. All validation commands pass.
+
+**Review-fix (attempt 2):** Addressed all 3 reviewer findings — F1 (blocking): stable base ref
+capture + `git checkout -b <branch> <base>` + `finally` HEAD restore in `emit_pr`; injectable
+`runner` parameter added; 5 new gh-path tests cover stable-base branching, HEAD restore on
+success/failure, 2-finding sequential run, and end-to-end `run_back_half` with real `emit_pr`
++ fake runner. F2: corrected stale step-number comments in SKILL.md Step 2. F3: CLI now
+derives repo_root via `.git` walk-up (`_find_repo_root`) or explicit `--repo-root` arg.
 
 ---
 
@@ -90,7 +97,7 @@ All 5 iterations executed in topological order (I1 → I3 → I2 → I5 → I4).
 ## Full suite result
 
 ```
-319 passed in 3.14s
+324 passed in 3.24s  (attempt 2 — includes 5 new gh-path tests)
 ```
 
 ---
@@ -113,8 +120,8 @@ All 5 iterations executed in topological order (I1 → I3 → I2 → I5 → I4).
       "packages/delivery-workflow/tests/test_tier1_no_auto_apply.py",
       "packages/delivery-workflow/tests/test_improve.py"
     ],
-    "diff_lines_added": 530,
-    "diff_lines_removed": 14
+    "diff_lines_added": 763,
+    "diff_lines_removed": 29
   },
   "open_questions": []
 }
