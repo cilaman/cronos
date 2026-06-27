@@ -109,6 +109,33 @@ nodes:
       - {type: schema}
       - {type: diff_vs_acceptance}
 
+  - id: security
+    kind: agent
+    agent: security-reviewer
+    model: {use: reasoning}
+    tools: [Read, Grep, Glob, Bash, Write]
+    inputs: {from: [implement, architect]}
+    produces: {class: review}
+    recon: on
+    loop:
+      until: "security.fields.verdict == 'pass'"
+      stall: [recurring_findings, no_diff_progress]
+      max: 3
+      on_exhaust: escalate
+
+  - id: g-security
+    kind: gate
+    checks:
+      - type: security
+        scanners:
+          sast: "semgrep --config auto --json ."
+          secrets: "gitleaks detect --report-format json --report-path /dev/stdout"
+          deps_python: "pip-audit -r requirements.txt -f json"
+          deps_node: "npm audit --json"
+        fail_on: [critical, high]
+        on_missing_scanner: fail
+        reconcile: true
+
   - id: testrun
     kind: agent
     agent: tester
@@ -158,9 +185,14 @@ edges:
   - {from: implement,    to: g-build}
   - {from: g-build,      to: review,         when: "g-build.decision == 'proceed'"}
   - {from: review,       to: g-review}
-  - {from: g-review,     to: testrun,        when: "review.fields.verdict == 'pass'"}
+  - {from: g-review,     to: security,       when: "review.fields.verdict == 'pass'"}
   - {from: g-review,     to: implement,      when: "review.fields.verdict == 'needs_fix' && review.fields.finding_class == 'local'"}
   - {from: g-review,     to: architect,      when: "review.fields.verdict == 'needs_fix' && review.fields.finding_class == 'architectural'"}
+  - {from: security,     to: g-security}
+  - {from: g-security,   to: testrun,        when: "g-security.decision == 'proceed'"}
+  - {from: g-security,   to: implement,      when: "g-security.decision == 'needs_fix' && security.fields.finding_class == 'code'"}
+  - {from: g-security,   to: implement,      when: "g-security.decision == 'needs_fix' && security.fields.finding_class == 'dependency'"}
+  - {from: g-security,   to: architect,      when: "g-security.decision == 'needs_fix' && security.fields.finding_class == 'design'"}
   - {from: testrun,      to: g-tests}
   - {from: g-tests,      to: doc,            when: "g-tests.decision == 'proceed'"}
   - {from: g-tests,      to: implement,      when: "g-tests.decision == 'needs_fix'"}
