@@ -205,6 +205,7 @@ class RunExecutor:
             new_task_state = TaskState.WAITING
             new_feature_state = FeatureState.WAITING
         else:
+            assert result is not None
             body = result.final_text.strip() or "(no assistant text)"
             if result.exit_code != 0:
                 body += f"\n\n(exit code {result.exit_code}; stderr tail: {result.stderr_tail.strip()})"
@@ -319,9 +320,14 @@ class RunExecutor:
     async def execute_harness_run_body(
         self, task_id: str, harness_id: str, space_id: str, *, initial_run: bool, space: Any
     ) -> bool:
-        space_dir = str(self.space_store.spaces_dir / space_id)
+        space_store = self.space_store
+        harness_store = self.harness_store
+        if space_store is None or harness_store is None:
+            log.error("execute_harness_run_body: space_store or harness_store not configured")
+            return False
+        space_dir = str(space_store.spaces_dir / space_id)
         try:
-            harness = await self.harness_store.get(space_dir, harness_id)
+            harness = await harness_store.get(space_dir, harness_id)
         except Exception:
             log.exception(
                 "Failed to load harness %r for task %s; cannot %s harness run.",
@@ -334,7 +340,7 @@ class RunExecutor:
         from .worker import resolve_tool
 
         def _tools_resolver(space_id: str, agent_ref: str) -> AiToolEntry | None:
-            space_claude_dir = self.space_store.spaces_dir / space_id / ".claude"
+            space_claude_dir = space_store.spaces_dir / space_id / ".claude"
             global_claude_dir = Path.home() / ".claude"
             return resolve_tool(space_claude_dir, global_claude_dir, agent_ref)
 
@@ -600,6 +606,7 @@ class RunExecutor:
             return
 
         # Sync space_store/pool from Worker to Finalizer (may be patched in tests).
+        assert result is not None
         self._finalizer.space_store = self.space_store
         self._finalizer.pool = w._pool
         await self._finalizer.finalize(task_id, result, started_at=started_at, memory_injected=memory_injected)

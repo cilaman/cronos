@@ -51,6 +51,7 @@ def _clear_auth_env(monkeypatch):
     monkeypatch.delenv("CRONOS_BASIC_AUTH_USER", raising=False)
     monkeypatch.delenv("CRONOS_BASIC_AUTH_PASSWORD", raising=False)
     monkeypatch.delenv("CRONOS_AUTH_DISABLED", raising=False)
+    monkeypatch.delenv("CRONOS_BASIC_AUTH_HASH", raising=False)
 
 
 # ---------------------------------------------------------------------------

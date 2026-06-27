@@ -272,8 +272,9 @@ def _check_traceability(
         return "proceed", [], {"traceability": {"resolved_ids": [], "missing_ids": []}}
 
     present_ids = sorted(
-        {row.get("requirement_id") for row in traceability if isinstance(row, dict)}
-        - {None}
+        rid
+        for row in traceability
+        if isinstance(row, dict) and (rid := row.get("requirement_id")) is not None
     )
     missing_ids = [rid for rid in required_ids if rid not in present_ids]
 

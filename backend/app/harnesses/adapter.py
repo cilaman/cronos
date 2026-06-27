@@ -55,7 +55,10 @@ class WorkerAdapter:
             if self._worker.space_store
             else None
         )
-        result: AgentResult = await run_agent(task, user_message=None, space=space)
+        async def _on_event(event: dict) -> None:
+            self._worker._bus.publish(task_id, event)
+
+        result: AgentResult = await run_agent(task, user_message=None, on_event=_on_event, space=space)
         now = _dt.now(tz=UTC)
         return RunTrace(
             task_id=task_id,

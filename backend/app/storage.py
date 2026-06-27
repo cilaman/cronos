@@ -831,7 +831,7 @@ class TaskStore:
 
     async def reindex_path(self, path: Path) -> None:
         async with self._lock:
-            self._reindex_locked(path)
+            await asyncio.to_thread(self._reindex_locked, path)
 
     def _reindex_locked(self, path: Path) -> None:
         space_id = self._space_for(path)
@@ -1604,7 +1604,7 @@ class TaskStore:
                 os.replace(path, dest)
                 self._by_id.pop(t.id, None)
                 self._path_by_id.pop(t.id, None)
-                self._db_delete(t.id)
+                await asyncio.to_thread(self._db_delete, t.id)
                 deleted_ids.append(t.id)
                 log.info("Trashed task %s -> %s", t.id, dest.name)
             return deleted_ids

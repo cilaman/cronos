@@ -58,6 +58,6 @@ def require_auth(
         except ValueError:
             pw_ok = False
     else:
-        pw_ok = hmac.compare_digest(credentials.password.encode(), password.encode())
+        pw_ok = hmac.compare_digest(credentials.password.encode(), (password or "").encode())
     if not (user_ok and pw_ok):
         raise HTTPException(status_code=401, headers={"WWW-Authenticate": "Basic"})

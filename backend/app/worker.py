@@ -596,8 +596,6 @@ def _extract_subagent_types(events: list[dict]) -> list[str]:
 
 async def sse_events(task_id: str, worker: Worker) -> AsyncIterator[str]:
     """Yields formatted SSE lines for a subscriber on `task_id`."""
-    import json
-
     replay, q = worker.subscribe(task_id)
     try:
         # Flush headers + force EventSource.onopen to fire even when no
@@ -622,8 +620,6 @@ async def sse_space_events(worker: Worker) -> AsyncIterator[str]:
 
     Stays open indefinitely; the client disconnects when done.
     """
-    import json
-
     q = worker.subscribe_space()
     try:
         yield ": ok\n\n"

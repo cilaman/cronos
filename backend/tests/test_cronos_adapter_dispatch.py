@@ -138,7 +138,7 @@ class TestDispatchAgentHappyPath:
         # Reset side_effect to stop iteration issues — last call always DONE
         store.get = MagicMock(return_value=_make_task("DONE"))
 
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             adapter.dispatchAgent(
                 "pipeline-scout",
                 {"artifact_paths": ["docs/spec.md"], "parent_id": None},
@@ -162,7 +162,7 @@ class TestDispatchAgentHappyPath:
         trace_store.load_latest = AsyncMock(return_value=_make_trace())
 
         adapter = _adapter(tmp_path, store, trace_store)
-        asyncio.get_event_loop().run_until_complete(
+        asyncio.run(
             adapter.dispatchAgent(
                 "pipeline-scout",
                 {"artifact_paths": ["docs/spec.md"]},
@@ -183,7 +183,7 @@ class TestDispatchAgentHappyPath:
         trace_store.load_latest = AsyncMock(return_value=_make_trace())
 
         adapter = _adapter(tmp_path, store, trace_store)
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             adapter.dispatchAgent("pipeline-scout", {})
         )
         assert result.status == "done"
@@ -199,7 +199,7 @@ class TestDispatchAgentHappyPath:
         trace_store.load_latest = AsyncMock(return_value=trace)
 
         adapter = _adapter(tmp_path, store, trace_store)
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             adapter.dispatchAgent("pipeline-scout", {})
         )
         assert result.telemetry.tokens == 1500
@@ -218,7 +218,7 @@ class TestDispatchAgentBlocked:
         store.transition = AsyncMock()
 
         adapter = _adapter(tmp_path, store, trace_store)
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             adapter.dispatchAgent("pipeline-scout", {})
         )
         assert result.status == "blocked"
@@ -239,7 +239,7 @@ class TestDispatchAgentTimeout:
         # timeout=0.1, poll_interval=0.01 → will expire after ~10 polls
 
         with pytest.raises(TimeoutError):
-            asyncio.get_event_loop().run_until_complete(
+            asyncio.run(
                 adapter.dispatchAgent("pipeline-scout", {})
             )
 
@@ -261,7 +261,7 @@ class TestDispatchAgentNoTrace:
         trace_store.load_latest = AsyncMock(return_value=None)
 
         adapter = _adapter(tmp_path, store, trace_store)
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             adapter.dispatchAgent("pipeline-scout", {})
         )
         assert result.status == "failed"
@@ -304,7 +304,7 @@ class TestDispatchAgentDeliveryStatusFallback:
         report = run_dir / "scout-report.md"
         report.write_text(f"# Scout Report\n\n```delivery_status\n{long_ds_json}\n```\n")
 
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             adapter.dispatchAgent("pipeline-scout", {})
         )
         assert result.status == "done"
