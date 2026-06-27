@@ -124,18 +124,28 @@ Resolve the config YAML file that contains this threshold. For delivery/v1:
 ## 5. Run the eval corpus
 
 After all candidates have been applied (or skipped with errors), run the delivery/v1 eval
-corpus:
+corpus through `lib.evals` — the single source of truth for the default command and
+`DELIVERY_EVAL_CMD` env override. Run from repo root:
 
 ```sh
-DELIVERY_EVAL_CMD="${DELIVERY_EVAL_CMD:-pytest packages/delivery-workflow/tests/ -q --no-header}"
+python -m lib.evals --repo-root <repo_root>
 ```
 
-If `DELIVERY_EVAL_CMD` is set in the environment, use it. Otherwise default to
-`pytest packages/delivery-workflow/tests/ -q --no-header`. Run from repo root.
+Or from Python:
 
-**Exit code 0** → evals green → keep all changes.
+```python
+from lib.evals import run_eval_corpus
+result = run_eval_corpus(repo_root=repo_root)
+evals_passed = result.passed
+```
 
-**Exit code non-zero** → evals red → rollback:
+`lib.evals` resolves the command with this precedence: `eval_cmd` argument →
+`DELIVERY_EVAL_CMD` env var → default `pytest packages/delivery-workflow/tests/ -q --no-header`.
+Do not inline the default or the env-override logic here — that lives in `lib.evals`.
+
+**Exit code 0** (`result.passed is True`) → evals green → keep all changes.
+
+**Exit code non-zero** (`result.passed is False`) → evals red → rollback:
 - Restore every snapshot entry:
   - If entry has content (`bytes`): overwrite the file with that content.
   - If entry has `None` (file was new): delete the file.
@@ -150,8 +160,8 @@ If `DELIVERY_EVAL_CMD` is set in the environment, use it. Otherwise default to
 
 ## 6. Run the Tier-1/Tier-2 back-half
 
-Run the eval corpus **once** (shared with Step 5 Tier-0 keep/rollback) and capture the boolean
-verdict. Then invoke the back-half module:
+The `evals_passed` boolean comes from the Step 5 `run_eval_corpus()` call — do not re-run
+the corpus here. Invoke the back-half module:
 
 ```sh
 # From repo root:
