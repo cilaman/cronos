@@ -43,19 +43,28 @@ If the retro artifact is missing or its `delivery_status` fence is absent/malfor
 
 ---
 
-## 2. Filter to Tier-0 candidates
+## 2. Classify all findings via the authoritative classifier
 
-For each finding in `fields.findings[]`:
+Run `classify_findings()` from `lib.improve` on `fields.findings[]` to partition
+every finding into `tier0 / tier1 / tier2` (DD-003, fix_type-authoritative):
 
+```python
+from lib.improve import classify_findings
+routed = classify_findings(findings)
+# routed.tier0 — these go to Step 3 (Tier-0 apply)
+# routed.tier1 — these go to Step 7 (Tier-1 PR back-half)
+# routed.tier2 — these go to Step 8 (Tier-2 escalation)
 ```
-SKIP if tier != 0
-SKIP if fix_type not in {fixture, threshold}
-SKIP if recipe is null or absent
-BLOCK (escalate) if target starts with "agent:retro" or "skill:retro"
-```
 
-Everything else is a Tier-0 candidate. If zero candidates, report `tier0_applied: 0,
-tier0_rolled_back: 0, errors: []` with `status: done` and stop (no-op run is success).
+The `tier` value in each finding is **ignored** — `fix_type` is authoritative:
+- `gate_check`, `agent_prompt`, `skill` → **tier1** (PR path, never in-place)
+- `schema`, `workflow` → **tier2** (escalate only)
+- `fixture`, `threshold` (or anything else) → **tier0** (in-place apply)
+
+**The Tier-0 apply step (Steps 3–5) consumes ONLY `routed.tier0`.**
+
+If `routed.tier0` is empty, skip Steps 3–5 (set `tier0_applied: 0,
+tier0_rolled_back: 0, errors: []`) and proceed to Step 6.
 
 ---
 
@@ -139,7 +148,44 @@ If `DELIVERY_EVAL_CMD` is set in the environment, use it. Otherwise default to
 
 ---
 
-## 6. Write the improve report and emit delivery_status
+## 6. Run the Tier-1/Tier-2 back-half
+
+Run the eval corpus **once** (shared with Step 5 Tier-0 keep/rollback) and capture the boolean
+verdict. Then invoke the back-half module:
+
+```sh
+# From repo root:
+python -m lib.improve <retro_artifact_path> \
+    --evals-passed <true|false> \
+    --proposals-dir <repo_root>/.cronos/improvement-tier1/
+```
+
+Or call from Python:
+
+```python
+from lib.improve import run_back_half
+back = run_back_half(
+    routed.tier1,
+    routed.tier2,
+    evals_passed=evals_passed,        # from Step 5 eval run
+    repo_root=repo_root,
+    proposals_dir=Path(repo_root) / ".cronos" / "improvement-tier1",
+)
+# back.tier1_pr_urls   — PR URLs or PROPOSED_PR.md paths (one per Tier-1 finding)
+# back.tier1_findings  — finding ids routed to Tier-1
+# back.tier2_escalated — finding ids recorded as Tier-2 escalations
+# back.errors          — per-finding emission failures
+```
+
+**Tier-1 gate (REQ-002):** if `evals_passed` is False, `tier1_pr_urls` and
+`tier1_findings` will be empty — no PRs are emitted on red evals.
+
+**Tier-2 (REQ-004):** tier2 findings are recorded in `tier2_escalated` only. No file is
+written, no branch is created, no PR is opened. This happens regardless of eval verdict.
+
+---
+
+## 7. Write the improve report and emit delivery_status
 
 Write a short `improve-report.md` at the runtime-supplied output path:
 
@@ -152,7 +198,8 @@ run_id: <from state.json>
 # Improve Report
 
 ## Summary
-<1-2 sentences: how many tier-0 findings considered, applied, rolled back, errors.>
+<1-2 sentences: how many tier-0 findings considered, applied, rolled back;
+how many tier-1 PRs emitted; how many tier-2 escalated; errors.>
 
 ## Applied
 <list: finding id, target, recipe type, files written>
@@ -162,15 +209,23 @@ run_id: <from state.json>
 <list if any; eval failure detail>
 - None. (if zero rolled back)
 
+## Tier-1 PRs
+<list: finding id, PR URL or PROPOSED_PR.md path>
+- None. (if zero tier-1 findings or evals red)
+
+## Tier-2 Escalated
+<list: finding id, fix_type, target — for human follow-up>
+- None. (if zero tier-2 findings)
+
 ## Errors
 <list if any>
 - None. (if no errors)
 
 ## Skipped
-<count of non-tier-0 findings skipped; not a list — just the count and reason>
+<count of non-tier-0 findings skipped (i.e. routed to tier1/tier2); not a list>
 ```
 
-Then emit the structured return:
+Then emit the structured return (merge Tier-0 counts with Tier-1/Tier-2 back-half results):
 
 ```delivery_status
 {
@@ -180,7 +235,10 @@ Then emit the structured return:
   "fields": {
     "tier0_applied": <int>,
     "tier0_rolled_back": <int>,
-    "errors": ["<error strings if any>"]
+    "errors": ["<error strings if any>"],
+    "tier1_pr_urls": ["<PR URL or PROPOSED_PR.md path per Tier-1 finding>"],
+    "tier1_findings": ["<finding ids routed to Tier-1>"],
+    "tier2_escalated": ["<finding ids escalated as Tier-2>"]
   },
   "open_questions": []
 }
