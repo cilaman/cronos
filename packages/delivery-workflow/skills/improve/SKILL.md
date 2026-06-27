@@ -52,8 +52,8 @@ every finding into `tier0 / tier1 / tier2` (DD-003, fix_type-authoritative):
 from lib.improve import classify_findings
 routed = classify_findings(findings)
 # routed.tier0 — these go to Step 3 (Tier-0 apply)
-# routed.tier1 — these go to Step 7 (Tier-1 PR back-half)
-# routed.tier2 — these go to Step 8 (Tier-2 escalation)
+# routed.tier1 — these go to Step 6 (Tier-1/Tier-2 back-half)
+# routed.tier2 — these go to Step 6 (Tier-1/Tier-2 back-half)
 ```
 
 The `tier` value in each finding is **ignored** — `fix_type` is authoritative:

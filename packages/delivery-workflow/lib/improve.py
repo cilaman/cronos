@@ -20,7 +20,8 @@ CLI usage
 ---------
     python -m lib.improve <retro_artifact_path> \\
         --evals-passed [true|false] \\
-        --proposals-dir <path>
+        --proposals-dir <path> \\
+        [--repo-root <path>]   # default: walk up from artifact to nearest .git
 
 Prints JSON: {tier1_pr_urls, tier1_findings, tier2_escalated, errors}.
 
@@ -186,6 +187,21 @@ def run_back_half(
     return result
 
 
+def _find_repo_root(start: Path) -> Path:
+    """Walk up from *start* until a .git directory is found; return that directory.
+
+    Falls back to *start* itself if no .git ancestor is found (e.g. in tests).
+    """
+    current = start.resolve()
+    while True:
+        if (current / ".git").exists():
+            return current
+        parent = current.parent
+        if parent == current:
+            return start.resolve()
+        current = parent
+
+
 def _parse_findings_from_artifact(artifact_path: str) -> list[dict[str, Any]]:
     """Parse findings[] from a retro artifact's delivery_status fence."""
     text = Path(artifact_path).read_text(encoding="utf-8")
@@ -213,11 +229,19 @@ def _main(argv: list[str] | None = None) -> int:
         help="Whether the eval corpus exited 0 (true|false)",
     )
     parser.add_argument("--proposals-dir", required=True, help="Directory for PROPOSED_PR.md fallbacks")
+    parser.add_argument(
+        "--repo-root",
+        default=None,
+        help="Repository root for git/gh calls (default: walk up from artifact to nearest .git)",
+    )
     args = parser.parse_args(argv)
 
     evals_passed = args.evals_passed == "true"
     proposals_dir = args.proposals_dir
-    repo_root = Path(args.retro_artifact).resolve().parent
+    if args.repo_root:
+        repo_root = Path(args.repo_root)
+    else:
+        repo_root = _find_repo_root(Path(args.retro_artifact).resolve().parent)
 
     try:
         findings = _parse_findings_from_artifact(args.retro_artifact)

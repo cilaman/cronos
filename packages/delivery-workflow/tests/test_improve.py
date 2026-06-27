@@ -458,3 +458,184 @@ class TestBackHalfResultFields:
         assert result.tier1_pr_urls == []
         # findings are still tracked even if emission failed
         assert set(result.tier1_findings) == {"AP-1", "SK-1"}
+
+
+# ---------------------------------------------------------------------------
+# Real-gh path: stable base ref + HEAD restore (F1 fix coverage)
+# ---------------------------------------------------------------------------
+
+class TestGhPath:
+    """Tests for the real-gh emit_pr path using an injectable runner."""
+
+    def _make_fake_runner(self, pr_url: str = "https://github.com/owner/repo/pull/1"):
+        """Return (calls_list, fake_runner) where calls_list accumulates every argv."""
+        calls: list[list[str]] = []
+
+        def fake_runner(cmd: list[str], *, cwd=None) -> tuple[int, str, str]:
+            calls.append(list(cmd))
+            if cmd[:2] == ["git", "rev-parse"]:
+                return (0, "main", "")
+            if cmd[:2] == ["gh", "pr"]:
+                return (0, pr_url, "")
+            # git checkout, add, commit, push — all succeed silently
+            return (0, "", "")
+
+        return calls, fake_runner
+
+    def test_emit_pr_gh_path_uses_stable_base_ref(self, tmp_path):
+        """Branch is created with the stable base ref as explicit parent."""
+        from lib.git_pr import emit_pr
+
+        calls, fake_runner = self._make_fake_runner()
+        proposals = tmp_path / "proposals"
+
+        url = emit_pr(
+            "Test PR", "body content", "F1",
+            branch="delivery-improve-tier1-F1",
+            repo_root=tmp_path,
+            proposals_dir=proposals,
+            gh_probe=lambda *_: True,
+            runner=fake_runner,
+        )
+
+        assert url == "https://github.com/owner/repo/pull/1"
+
+        # checkout -b must include the base ref as the 4th arg
+        checkout_b = [c for c in calls if c[:3] == ["git", "checkout", "-b"]]
+        assert len(checkout_b) == 1
+        assert checkout_b[0] == ["git", "checkout", "-b", "delivery-improve-tier1-F1", "main"], (
+            f"Expected checkout with stable base 'main', got: {checkout_b[0]}"
+        )
+
+    def test_emit_pr_gh_path_restores_head_after_success(self, tmp_path):
+        """HEAD is restored to the original branch after a successful PR emission."""
+        from lib.git_pr import emit_pr
+
+        calls, fake_runner = self._make_fake_runner()
+        proposals = tmp_path / "proposals"
+
+        emit_pr(
+            "Test PR", "body", "F1",
+            branch="delivery-improve-tier1-F1",
+            repo_root=tmp_path,
+            proposals_dir=proposals,
+            gh_probe=lambda *_: True,
+            runner=fake_runner,
+        )
+
+        # git checkout <base> (without -b) must appear after the branch work
+        restore_calls = [
+            c for c in calls
+            if c[:2] == ["git", "checkout"] and len(c) == 3 and "-b" not in c
+        ]
+        assert any(c[2] == "main" for c in restore_calls), (
+            f"Expected HEAD restore to 'main', got restore calls: {restore_calls}"
+        )
+
+    def test_emit_pr_gh_path_restores_head_on_failure(self, tmp_path):
+        """HEAD is restored even when gh pr create fails (finally block)."""
+        from lib.git_pr import emit_pr
+
+        calls: list[list[str]] = []
+
+        def failing_runner(cmd: list[str], *, cwd=None) -> tuple[int, str, str]:
+            calls.append(list(cmd))
+            if cmd[:2] == ["git", "rev-parse"]:
+                return (0, "main", "")
+            if cmd[:2] == ["gh", "pr"]:
+                return (1, "", "error: not a GitHub repo")  # gh fails
+            return (0, "", "")
+
+        proposals = tmp_path / "proposals"
+        # Falls back to PROPOSED_PR.md since gh returned rc=1
+        result = emit_pr(
+            "Test PR", "body", "F1",
+            branch="delivery-improve-tier1-F1",
+            repo_root=tmp_path,
+            proposals_dir=proposals,
+            gh_probe=lambda *_: True,
+            runner=failing_runner,
+        )
+
+        # Result is the fallback file path
+        assert Path(result).exists()
+
+        # HEAD must still be restored
+        restore_calls = [
+            c for c in calls
+            if c[:2] == ["git", "checkout"] and len(c) == 3 and "-b" not in c
+        ]
+        assert any(c[2] == "main" for c in restore_calls), (
+            f"HEAD must be restored even on gh failure; restore calls: {restore_calls}"
+        )
+
+    def test_two_findings_branch_from_same_stable_base(self, tmp_path):
+        """REQ-003 + F1 fix: 2 sequential emit_pr calls both branch from the same base."""
+        from lib.git_pr import emit_pr
+
+        calls, fake_runner = self._make_fake_runner()
+        proposals = tmp_path / "proposals"
+
+        for fid, branch in [("F1", "delivery-improve-tier1-F1"), ("F2", "delivery-improve-tier1-F2")]:
+            emit_pr(
+                f"PR for {fid}", f"body {fid}", fid,
+                branch=branch,
+                repo_root=tmp_path,
+                proposals_dir=proposals,
+                gh_probe=lambda *_: True,
+                runner=fake_runner,
+            )
+
+        checkout_b_calls = [c for c in calls if c[:3] == ["git", "checkout", "-b"]]
+        assert len(checkout_b_calls) == 2, f"Expected 2 branch creations, got: {checkout_b_calls}"
+
+        # Both branches must be created from the SAME base ref
+        bases = [c[4] for c in checkout_b_calls]
+        assert bases[0] == bases[1], (
+            f"Branches stacked on different bases: {bases[0]!r} vs {bases[1]!r}. "
+            "Each call must capture a fresh base ref (they'll both be 'main' here)."
+        )
+
+    def test_run_back_half_two_findings_all_get_prs(self, tmp_path):
+        """end-to-end: run_back_half with gh path produces one PR per finding."""
+        from lib.git_pr import emit_pr
+
+        pr_counter = [0]
+
+        def counting_runner(cmd: list[str], *, cwd=None) -> tuple[int, str, str]:
+            if cmd[:2] == ["git", "rev-parse"]:
+                return (0, "main", "")
+            if cmd[:2] == ["gh", "pr"]:
+                pr_counter[0] += 1
+                return (0, f"https://github.com/owner/repo/pull/{pr_counter[0]}", "")
+            return (0, "", "")
+
+        def gh_emitter(title, body, finding_id, *, branch, repo_root, proposals_dir, **_):
+            return emit_pr(
+                title, body, finding_id,
+                branch=branch,
+                repo_root=Path(repo_root),
+                proposals_dir=Path(proposals_dir),
+                gh_probe=lambda *_: True,
+                runner=counting_runner,
+            )
+
+        findings = [
+            {"id": "A1", "tier": 1, "fix_type": "agent_prompt", "target": "agents/implementor.md",
+             "severity": "med", "evidence": "e", "suggested_action": "s"},
+            {"id": "B2", "tier": 1, "fix_type": "skill", "target": "skills/improve/SKILL.md",
+             "severity": "low", "evidence": "e", "suggested_action": "s"},
+        ]
+        routed = classify_findings(findings)
+        result = run_back_half(
+            routed.tier1, routed.tier2,
+            evals_passed=True,
+            repo_root=str(tmp_path),
+            proposals_dir=str(tmp_path / "proposals"),
+            pr_emitter=gh_emitter,
+        )
+
+        assert len(result.tier1_pr_urls) == 2
+        assert all(url.startswith("https://") for url in result.tier1_pr_urls)
+        assert set(result.tier1_findings) == {"A1", "B2"}
+        assert result.errors == []

@@ -53,12 +53,15 @@ def emit_pr(
     repo_root: Path | str,
     proposals_dir: Path | str,
     gh_probe: object = None,
+    runner: object = None,
 ) -> str:
     """
     Emit a PR for a single Tier-1 finding.
 
-    When gh + a GitHub remote are available, creates a branch, commits a
-    proposal document, and runs ``gh pr create``, returning the PR URL.
+    When gh + a GitHub remote are available, creates a branch from a stable
+    base ref, commits a proposal document, and runs ``gh pr create``,
+    returning the PR URL. HEAD is always restored to the original branch
+    after emission (whether the PR succeeded or not).
 
     When unavailable (or after a gh failure), writes a PROPOSED_PR.md
     fallback to ``{proposals_dir}/proposed-pr-{finding_id}.md`` and
@@ -73,36 +76,46 @@ def emit_pr(
     repo_root:     repository root for git/gh calls
     proposals_dir: directory for fallback PROPOSED_PR.md files
     gh_probe:      injectable callable(repo_root) -> bool; defaults to _gh_available
+    runner:        injectable subprocess runner (cmd, *, cwd) -> (rc, stdout, stderr);
+                   defaults to _run; allows tests to exercise the gh path without real git/gh
     """
     repo_root = Path(repo_root)
     proposals_dir = Path(proposals_dir)
     proposals_dir.mkdir(parents=True, exist_ok=True)
 
+    _runner = runner if runner is not None else _run
     probe = gh_probe if gh_probe is not None else _gh_available
     has_gh = probe(repo_root)
 
     if has_gh:
-        # Write proposal doc to proposals_dir (it will be committed to the branch)
+        # Capture a stable base ref BEFORE creating any branch.
+        # Using --abbrev-ref gives the branch name (or "HEAD" in detached state).
+        _, base_ref, _ = _runner(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=repo_root)
+        base_ref = base_ref.strip() or "HEAD"
+
+        # Write proposal doc (committed to the proposal branch, never to the base)
         proposal_path = proposals_dir / f"proposed-pr-{finding_id}.md"
         proposal_path.write_text(f"# {title}\n\n{body}\n", encoding="utf-8")
 
         try:
-            # Create the PR branch off the current HEAD
-            _run(["git", "checkout", "-b", branch], cwd=repo_root)
-            _run(["git", "add", str(proposal_path)], cwd=repo_root)
-            _run(
+            # Create branch FROM the stable base ref (not from any previous proposal branch)
+            _runner(["git", "checkout", "-b", branch, base_ref], cwd=repo_root)
+            _runner(["git", "add", str(proposal_path)], cwd=repo_root)
+            _runner(
                 ["git", "commit", "-m", f"tier1-proposal({finding_id}): {title}"],
                 cwd=repo_root,
             )
-            _run(["git", "push", "-u", "origin", branch], cwd=repo_root)
-            rc, out, _ = _run(
+            _runner(["git", "push", "-u", "origin", branch], cwd=repo_root)
+            rc, out, _ = _runner(
                 ["gh", "pr", "create", "--title", title, "--body", body, "--head", branch],
                 cwd=repo_root,
             )
             if rc == 0 and out.strip():
                 return out.strip()
-        except Exception:
-            pass
+        finally:
+            # Always restore HEAD to the original branch so subsequent calls
+            # start from the same base (prevents branch-stacking across findings)
+            _runner(["git", "checkout", base_ref], cwd=repo_root)
 
     # Fallback: write PROPOSED_PR.md
     fallback_path = proposals_dir / f"proposed-pr-{finding_id}.md"
