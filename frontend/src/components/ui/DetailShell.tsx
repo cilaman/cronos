@@ -74,11 +74,12 @@ export function DetailShell({
   footer,
 }: DetailShellProps) {
   const maxWidthCls = variant === "task" ? "max-w-6xl" : "max-w-3xl";
+  const heightCls = variant === "task" ? "min-h-[60svh]" : "";
 
   return (
     <Modal onClose={onClose} hideDefaultClose panelClassName={maxWidthCls}>
       <div
-        className={`flex max-h-[90vh] w-full ${maxWidthCls} flex-col overflow-hidden rounded-lg border border-hairline bg-surface-1 shadow-lift glass-pane`}
+        className={`flex max-h-[90svh] w-full ${maxWidthCls} ${heightCls} flex-col overflow-hidden rounded-lg border border-hairline bg-surface-1 shadow-lift glass-pane`}
         onClick={(e) => e.stopPropagation()}
       >
         {isLoading && <DetailShellSkeleton />}

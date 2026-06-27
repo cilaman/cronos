@@ -37,6 +37,15 @@ export function Modal({
   const dismissableRef = useRef(dismissable);
   dismissableRef.current = dismissable;
 
+  // Body scroll lock — prevents touch scroll from leaking to the page behind the modal.
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
   // Focus trap — registered once on mount, cleaned up on unmount.
   useEffect(() => {
     const previouslyFocused = document.activeElement as HTMLElement | null;
