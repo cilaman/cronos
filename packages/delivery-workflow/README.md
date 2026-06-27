@@ -26,6 +26,13 @@ packages/delivery-workflow/
 │
 ├── lib/                      # Portable libraries (no app.* imports)
 │   ├── delivery_status.py    # Parse delivery_status blocks from agent output
+│   ├── git_pr.py            # PR emission helper — git/gh subprocess, PROPOSED_PR.md fallback
+│   ├── improve.py           # Tier-1/Tier-2 back-half applier (classifier + PR routing)
+│   ├── security.py          # Security check evaluator — scanner execution, JSON parsing, decision logic
+│   ├── evals/               # Portable eval corpus runner (no CC-v1 coupling)
+│   │   ├── __init__.py      # Exports EvalResult and run_eval_corpus()
+│   │   ├── corpus.py        # EvalResult dataclass and run_eval_corpus() implementation
+│   │   └── __main__.py      # CLI: python -m lib.evals [--repo-root] [--json]
 │   ├── state/
 │   │   ├── store.py         # StateStore: read/write state.json atomically
 │   │   └── events.py        # EventLog: append-only events.jsonl
@@ -50,9 +57,11 @@ packages/delivery-workflow/
 │   ├── implementation.schema.yaml
 │   ├── review.schema.yaml
 │   ├── test.schema.yaml
-│   └── doc.schema.yaml
+│   ├── doc.schema.yaml
+│   ├── retro.schema.yaml
+│   └── improvement.schema.yaml
 │
-├── tests/                    # 231 tests covering all modules
+├── tests/                    # 347 tests covering all modules
 ├── hooks/                    # Extensibility points (Phase 6+)
 ├── pyproject.toml
 └── .importlinter             # Import boundary enforcement
@@ -214,6 +223,140 @@ tokens_used: 8240
 
 Returns a typed `DeliveryStatus` object with phase, status, artifacts, and token counts.
 
+### `lib/git_pr`
+
+**Portable git/gh PR helper** for emitting Tier-1 improvement proposals (spec §3.2, DD-002). Provides `emit_pr()` which creates a GitHub PR via the `gh` CLI when available, or writes a fallback `PROPOSED_PR.md` when unavailable.
+
+**Key features:**
+- Captures a stable base ref before creating any branch (prevents branch-stacking across findings)
+- Always restores HEAD to the original branch after emission (success or failure)
+- Subprocess-only, zero `app.*`/`backend.*` imports — fully portable
+- Injectable `runner` and `gh_probe` parameters for testing without real git/gh
+
+```python
+from lib.git_pr import emit_pr
+
+url_or_path = emit_pr(
+    title="tier1-improvement(F1): agent_prompt — clearer instructions",
+    body="## Tier-1 Improvement Proposal\n...",
+    finding_id="F1",
+    branch="delivery-improve-tier1-F1",
+    repo_root="/data/repo",
+    proposals_dir="/data/repo/.cronos/improvement-tier1/",
+)
+# Returns: "https://github.com/user/repo/pull/123" or "/data/repo/.cronos/improvement-tier1/proposed-pr-F1.md"
+```
+
+### `lib/improve`
+
+**Tier-1/Tier-2 back-half applier** for delivery/v1 self-improvement (spec §3.2–3.5, DD-001–003). Routes retro findings into three tiers and applies the correct action per tier:
+- **Tier 0:** auto-applied in-place (snapshot → apply → eval → keep/rollback; handled elsewhere)
+- **Tier 1:** emit a PR (proposal document, never in-place source edit)
+- **Tier 2:** escalate to human (no file write, no branch)
+
+**Public API:**
+```python
+from lib.improve import classify_findings, render_proposal, run_back_half
+
+# 1. Classify findings by fix_type (fix_type is authoritative, not declared tier)
+routed = classify_findings(findings)  # → Routed(tier0=[], tier1=[...], tier2=[...])
+
+# 2. Render PR title/body for a Tier-1 finding
+title, body = render_proposal(finding)
+
+# 3. Run the Tier-1/Tier-2 back-half (emits PRs when evals pass)
+result = run_back_half(
+    tier1=routed.tier1,
+    tier2=routed.tier2,
+    evals_passed=True,  # Only emit Tier-1 PRs if evals exit 0
+    repo_root="/data/repo",
+    proposals_dir="/data/repo/.cronos/improvement-tier1/",
+)
+# → BackHalfResult(tier1_pr_urls=["..."], tier1_findings=["F1"], tier2_escalated=["A1"], errors=[])
+```
+
+**CLI usage:**
+```bash
+python -m lib.improve <retro_artifact> \
+    --evals-passed [true|false] \
+    --proposals-dir <path> \
+    [--repo-root <path>]
+# Prints JSON: {tier1_pr_urls, tier1_findings, tier2_escalated, errors}
+```
+
+**Key design:**
+- `classify_findings()` is the sole router (fix_type-authoritative)
+- Tier-0 consume only `tier0` list; back-half consumes `tier1`/`tier2` (structural safety guarantee for REQ-005)
+- No PR is emitted if `evals_passed=False` (REQ-002)
+- All writes are additive proposal documents, never in-place source edits
+
+### `lib/security`
+
+**Security check evaluator** — extracts scanner execution and decision logic from the Cronos `gate.py` into a portable module, shared by both Cronos and the Phase-6 standalone runner.
+
+**Public API:**
+```python
+from lib.security import evaluate_security
+
+decision, errors, evidence = evaluate_security(
+    check={
+        "scanners": ["bandit", "semgrep"],
+        "fail_on": ["HIGH"],
+        "on_missing_scanner": "skip",
+    },
+    artifact_paths=["artifact.md"],
+    space=Path("."),
+)
+# decision: "proceed" | "needs_fix" | "fail" | "retry"
+# evidence dict includes: effective_finding_class, has_fail_on_hit, agent_verdict, scanner_results, ...
+```
+
+**Key features:**
+- Runs real security scanners (bandit, semgrep, etc.) and parses JSON output
+- **Full JSON parsing** (not truncated) — fixes DD-002 fail-open bug where >2 KB scanner output was silently scored clean
+- Reconciles scanner findings with agent verdict from security-reviewer artifact
+- Maps findings to decision (proceed/needs_fix/fail) based on severity and fail_on policy
+- Handles missing scanners per policy (fail/skip/warn)
+- Infra crashes (scanner not found, JSON parse error) trigger auto-retry
+- Zero `app.*` imports — fully portable
+
+**Signature:**
+- `evaluate_security(check: dict, artifact_paths: list[str], space: Path | None) -> tuple[str, list[str], dict]`
+- Returns the same contract as Cronos `gate.py:_check_security` for drop-in delegation
+
+### `lib/evals`
+
+**Portable eval corpus runner** — invokes a test/validation command and returns structured results. Enables Cronos gate, improve flow, and Phase-6 standalone runner to share one eval mechanism.
+
+**Public API:**
+```python
+from lib.evals import run_eval_corpus, EvalResult
+
+result = run_eval_corpus(
+    repo_root="/path/to/repo",
+    eval_cmd="pytest packages/delivery-workflow/tests/ -q",  # or None to use default
+    env={"DELIVERY_EVAL_CMD": "pytest ... -k custom"},       # or None
+    runner=subprocess.run,  # injectable for testing
+)
+# result: EvalResult(passed=True, exit_code=0, command="...", output_tail="...")
+```
+
+**CLI:**
+```bash
+python -m lib.evals [--repo-root /path] [--json]
+# Exits with corpus exit code; --json prints EvalResult as JSON
+```
+
+**Command precedence:** `eval_cmd` arg → `DELIVERY_EVAL_CMD` env → default `pytest packages/delivery-workflow/tests/ -q --no-header`
+
+**Key features:**
+- Single source of truth for default + override (no more inlined shell prose in improve SKILL)
+- Structured `EvalResult` dataclass with passed flag, exit code, and output
+- Environment variable override for standalone + Cronos parity
+- Fully portable; no `app.*` imports
+
+**Used by:** `lib/improve.py` (Tier-0 keep/rollback decision) and `improve/SKILL.md` (Step 5 corpus evaluation)
+
 ### `lib/state`
 
 **`StateStore`** — CRUD for `state.json`:
@@ -289,16 +432,20 @@ A separate orchestrator (Phase 6+) will:
 
 ## Testing
 
-The package includes 231 tests:
+The package includes 347 tests:
 
 - **test_package_skeleton.py** — module structure, imports
-- **test_import_boundary.py** — AST verification that no `app.*` imports leak into portable core
+- **test_import_boundary.py** — AST verification that no `app.*` imports leak into portable core (auto-verifies new `lib/security.py` and `lib/evals/` modules)
 - **test_interface_nullruntime.py** — Protocol compliance, `NullRuntime` raises `NotImplementedError`
 - **test_spec_loader.py** — spec loading, validation against schema, malformed rejection
 - **test_schemas.py** — artifact-class schemas (research, analysis, design, etc.)
 - **test_delivery_status.py** — parsing `delivery_status` blocks
+- **test_security_lib.py** — `lib/security.py` scanner execution, JSON parsing, missing-scanner policy, agent-verdict precedence, DD-002 regression (>2 KB JSON must parse, not score clean)
+- **test_evals_lib.py** — `lib/evals` corpus runner, command precedence (arg→env→default), passed flag, exit-code propagation, CLI smoke tests
 - **test_state.py** — `StateStore` read/write, atomic updates, resume policy
 - **test_telemetry.py** — `TelemetrySink` accumulation, budget ceiling, persistence
+- **test_tier1_no_auto_apply.py** — REQ-005 hard safety: agents/skills files byte-identical after Tier-1 run
+- **test_improve.py** — Tier-1/Tier-2 routing, no-PR-on-red, one-PR-per-finding, Tier-2 escalate-only, fence fields
 
 Run with:
 ```bash

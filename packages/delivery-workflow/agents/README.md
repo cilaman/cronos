@@ -18,10 +18,11 @@ role, the skill owns the how.
 | **reviewer** | Opus | Judge diff vs design | design + impl diff | `review-report--attempt{N}` (`review`): verdict, findings[] | — | `code-review` |
 | **tester** | Sonnet | Execution + coverage | test suite + built code | `test-report` (`test`) | — | — |
 | **doc-sync** | Haiku | Update docs for changes | impl + design + code | `doc-report` (`doc`) | doc files | `doc` |
+| **retro** | Opus | Post-run retrospective & scoring | run state (state.json, events.jsonl, artifacts, traces) | `retro-report` (`retro`): scores, tier/fix-type findings | — | `retro` |
 
 **The Modifies column is the guardrail:** only three agents write existing project files
-(test-architect, implementor, doc-sync), over disjoint file trees. The two agents that *judge*
-quality (reviewer, tester) have no Edit tool, so they cannot patch what they evaluate.
+(test-architect, implementor, doc-sync), over disjoint file trees. The three agents that *judge*
+quality (reviewer, tester, retro) have no Edit tool, so they cannot patch what they evaluate.
 
 ---
 
@@ -35,7 +36,7 @@ free-text `STATUS:` line. Format (fenced YAML):
 {
   "status": "done | blocked | needs_fix | failed",
   "artifact_paths": ["path/to/report.md"],
-  "produces": "research | analysis | design | implementation | review | test | doc | frontend",
+  "produces": "research | analysis | design | implementation | review | test | doc | frontend | retro | improvement",
   "fields": {
     "verdict": "pass | needs_fix",              # for reviewer, tester gates
     "has_ui": true,                              # for analyst → frontend branch
@@ -82,6 +83,7 @@ is "recon's job, not yours"; writing non-artifact files is off-limits. Tool list
 | reviewer | Read, Grep, Glob, Bash, Write | **No Edit** by design — reads diffs, writes findings only |
 | tester | Read, Bash | Execution only; no Write (results POSTed via the runtime) |
 | doc-sync | Read, Glob, Bash, Write | Can Write doc files + own artifact; no Edit (regenerate, don't patch) |
+| retro | Read, Grep, Glob, Bash, Write | **No Edit** — reads run state, writes findings only (propose, never apply) |
 
 **Guardrail principle:** if an agent's job is to *judge* (reviewer, tester), it has no Edit.
 If its job is to *write* a specific tree (tests, source, docs), it has Edit only for that tree.

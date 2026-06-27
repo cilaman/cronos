@@ -205,3 +205,80 @@ def test_error_message_is_non_empty():
         spec_loader._validate(bad)
     msg = str(exc.value)
     assert len(msg) > 10, "Error message should be descriptive, not empty or trivial"
+
+
+# ---------------------------------------------------------------------------
+# Security check type — I2 (REQ-003)
+# ---------------------------------------------------------------------------
+
+_SECURITY_GATE_NODE = {
+    "id": "g-security",
+    "kind": "gate",
+    "checks": [
+        {
+            "type": "security",
+            "scanners": {
+                "sast": "semgrep --config auto --json .",
+                "secrets": "gitleaks detect --report-format json --report-path /dev/stdout",
+                "deps_python": "pip-audit -r requirements.txt -f json",
+                "deps_node": "npm audit --json",
+            },
+            "fail_on": ["critical", "high"],
+            "on_missing_scanner": "fail",
+            "reconcile": True,
+        }
+    ],
+}
+
+
+def _spec_with_security_gate() -> dict:
+    """Return a valid in-memory spec that includes a g-security gate node."""
+    base = _load_clean()
+    base["nodes"].append(_SECURITY_GATE_NODE)
+    # add a connector edge so the spec is structurally sound
+    base["edges"].append({"from": "g-review", "to": "g-security"})
+    return base
+
+
+def test_security_check_type_validates_clean():
+    """A gate node with type=security + all four new fields must validate clean."""
+    spec = _spec_with_security_gate()
+    # must not raise
+    result = spec_loader.loads_spec(
+        __import__("yaml").dump(spec, default_flow_style=False, allow_unicode=True)
+    )
+    assert any(n["id"] == "g-security" for n in result["nodes"])
+
+
+def test_security_check_minimal_validates_clean():
+    """A security check with only type=security (no optional fields) is valid."""
+    base = _load_clean()
+    base["nodes"].append(
+        {"id": "g-sec-min", "kind": "gate", "checks": [{"type": "security"}]}
+    )
+    base["edges"].append({"from": "g-review", "to": "g-sec-min"})
+    result = spec_loader.loads_spec(
+        __import__("yaml").dump(base, default_flow_style=False, allow_unicode=True)
+    )
+    assert any(n["id"] == "g-sec-min" for n in result["nodes"])
+
+
+def test_security_bad_on_missing_scanner_rejected():
+    """on_missing_scanner must be 'skip' or 'fail'; 'warn' is rejected."""
+    base = _load_clean()
+    bad_node = {
+        "id": "g-security-bad",
+        "kind": "gate",
+        "checks": [
+            {
+                "type": "security",
+                "on_missing_scanner": "warn",  # invalid value
+            }
+        ],
+    }
+    base["nodes"].append(bad_node)
+    base["edges"].append({"from": "g-review", "to": "g-security-bad"})
+    spec_text = __import__("yaml").dump(base, default_flow_style=False, allow_unicode=True)
+    with pytest.raises(ValueError) as exc:
+        spec_loader.loads_spec(spec_text)
+    assert exc.value.args[0]

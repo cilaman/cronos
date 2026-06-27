@@ -159,8 +159,24 @@ definitions:
                 - test
                 - diff_vs_acceptance
                 - custom
+                - security
             of:
               type: string
+            scanners:
+              type: object
+              additionalProperties:
+                type: string
+            fail_on:
+              type: array
+              items:
+                type: string
+            on_missing_scanner:
+              type: string
+              enum:
+                - skip
+                - fail
+            reconcile:
+              type: boolean
           additionalProperties: false
       on_fail:
         type: string

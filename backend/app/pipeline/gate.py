@@ -24,6 +24,7 @@ import yaml
 
 from app.pipeline.verify import split_frontmatter
 from app.pipeline.verify import verify as _cc_verify
+from lib.security import evaluate_security as _evaluate_security
 
 
 GATE_DECISIONS = frozenset({"proceed", "needs_fix", "fail", "retry"})
@@ -569,6 +570,20 @@ def _check_diff_vs_acceptance(
     return "proceed", [], evidence
 
 
+def _check_security(
+    check: dict[str, Any],
+    artifact_paths: list[str],
+    space: Path | None,
+) -> tuple[str, list[str], dict[str, Any]]:
+    """Security gate: delegate to lib.security.evaluate_security.
+
+    Decision semantics are documented in lib/security.py. This wrapper keeps
+    the named _check_* convention used by CHECK_REGISTRY while sharing one
+    portable implementation with the standalone runner.
+    """
+    return _evaluate_security(check, artifact_paths, space)
+
+
 def _check_g_review(
     check: dict[str, Any],
     artifact_paths: list[str],
@@ -638,6 +653,7 @@ CHECK_REGISTRY: dict[str, Callable] = {
     "test": _check_test,
     "diff_vs_acceptance": _check_diff_vs_acceptance,
     "g-review": _check_g_review,
+    "security": _check_security,
 }
 
 

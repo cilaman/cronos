@@ -1,0 +1,78 @@
+$schema: "http://json-schema.org/draft-07/schema#"
+title: delivery/v1 Improvement-Class Delivery Status Block
+description: >
+  Schema for the delivery_status fenced-block emitted by the improve agent.
+  Captures Tier-0 apply/rollback counts and error list from the snapshot→eval→keep/rollback cycle.
+type: object
+required:
+  - status
+  - artifact_paths
+  - produces
+  - fields
+  - telemetry
+additionalProperties: false
+properties:
+  status:
+    type: string
+    enum: [done, blocked, needs_fix, failed]
+  artifact_paths:
+    type: array
+    items:
+      type: string
+  produces:
+    type: string
+    const: improvement
+  fields:
+    type: object
+    required:
+      - tier0_applied
+      - tier0_rolled_back
+      - errors
+    additionalProperties: true
+    properties:
+      tier0_applied:
+        type: integer
+        minimum: 0
+        description: Count of Tier-0 findings successfully applied and kept after eval passed.
+      tier0_rolled_back:
+        type: integer
+        minimum: 0
+        description: Count of Tier-0 findings applied then rolled back because eval failed.
+      errors:
+        type: array
+        items:
+          type: string
+        description: Error messages for any findings that failed to apply.
+      tier1_pr_urls:
+        type: array
+        items:
+          type: string
+        description: PR URLs (or PROPOSED_PR.md paths) emitted for Tier-1 findings.
+      tier1_findings:
+        type: array
+        items:
+          type: string
+        description: Finding ids routed to Tier-1 (never in-place applied).
+      tier2_escalated:
+        type: array
+        items:
+          type: string
+        description: Finding ids escalated as Tier-2 (no file write, no PR).
+  open_questions:
+    type: array
+    items:
+      type: string
+  telemetry:
+    type: object
+    required: [tokens, usd, seconds]
+    additionalProperties: false
+    properties:
+      tokens:
+        type: integer
+        minimum: 0
+      usd:
+        type: number
+        minimum: 0
+      seconds:
+        type: number
+        minimum: 0
