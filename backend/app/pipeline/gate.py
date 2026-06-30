@@ -22,8 +22,8 @@ from typing import Any, Callable, Literal
 
 import yaml
 
-from app.pipeline.verify import split_frontmatter
-from app.pipeline.verify import verify as _cc_verify
+from lib.verify import split_frontmatter
+from lib.verify import verify as _cc_verify
 from lib.security import evaluate_security as _evaluate_security
 
 

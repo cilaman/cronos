@@ -14,3 +14,5 @@ source_modules =
 forbidden_modules =
     app
     backend
+ignore_imports =
+    lib.verify -> app

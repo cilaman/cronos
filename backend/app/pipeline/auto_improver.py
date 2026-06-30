@@ -97,8 +97,10 @@ _PIPELINE_PKG_DIR: Path = Path(__file__).resolve().parent
 _BACKEND_DIR: Path = _PIPELINE_PKG_DIR.parent.parent
 _REPO_ROOT: Path = _BACKEND_DIR.parent
 _NORMALIZE_RULES_PATH: Path = _PIPELINE_PKG_DIR / "normalize_rules.json"
-_CONTRACT_PY_PATH: Path = _PIPELINE_PKG_DIR / "contract.py"
-_SCHEMAS_DIR: Path = _PIPELINE_PKG_DIR / "schemas"
+# contract.py and schemas/ now live in the portable lib package (SG7 lift).
+_LIB_PKG_DIR: Path = _REPO_ROOT / "packages" / "delivery-workflow" / "lib"
+_CONTRACT_PY_PATH: Path = _LIB_PKG_DIR / "contract.py"
+_SCHEMAS_DIR: Path = _LIB_PKG_DIR / "schemas"
 _FIXTURES_DIR: Path = _PIPELINE_PKG_DIR / "fixtures"
 _FIXTURES_ROOT_REL: str = "backend/app/pipeline/fixtures/"
 
@@ -532,8 +534,9 @@ def _bump_and_propagate(
     alone — e.g. the ``wrong_cc_version`` negative fixture stays at its
     intentionally-bogus value.
     """
-    contract_path = repo_root / "backend" / "app" / "pipeline" / "contract.py"
-    schemas_dir = repo_root / "backend" / "app" / "pipeline" / "schemas"
+    # contract.py and schemas/ now live in lib/ (SG7 lift); fixtures stay in backend.
+    contract_path = repo_root / "packages" / "delivery-workflow" / "lib" / "contract.py"
+    schemas_dir = repo_root / "packages" / "delivery-workflow" / "lib" / "schemas"
     fixtures_dir = repo_root / "backend" / "app" / "pipeline" / "fixtures"
 
     old_version = read_cc_version(contract_path)
@@ -692,7 +695,7 @@ def apply_retro_improvements(
             slug,
             len(result.skipped),
         )
-        result.cc_version_before = read_cc_version(repo / "backend" / "app" / "pipeline" / "contract.py")
+        result.cc_version_before = read_cc_version(repo / "packages" / "delivery-workflow" / "lib" / "contract.py")
         return result
 
     if dry_run:
@@ -707,7 +710,7 @@ def apply_retro_improvements(
                     files_modified=[],
                 )
             )
-        result.cc_version_before = read_cc_version(repo / "backend" / "app" / "pipeline" / "contract.py")
+        result.cc_version_before = read_cc_version(repo / "packages" / "delivery-workflow" / "lib" / "contract.py")
         result.cc_version_after = bump_minor(result.cc_version_before)
         return result
 

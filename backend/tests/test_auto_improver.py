@@ -44,29 +44,34 @@ from app.pipeline.auto_improver import (
 
 REAL_REPO_ROOT = Path(__file__).resolve().parent.parent.parent  # workspace root
 REAL_PIPELINE_DIR = REAL_REPO_ROOT / "backend" / "app" / "pipeline"
+REAL_LIB_DIR = REAL_REPO_ROOT / "packages" / "delivery-workflow" / "lib"
 
 
 @pytest.fixture
 def repo_root(tmp_path: Path) -> Path:
     """Build a minimal synthetic repo root under ``tmp_path``.
 
-    Copies the real ``backend/app/pipeline/{contract.py,schemas,fixtures,
-    normalize_rules.json}`` so the applier can patch them in isolation and
-    re-running evals against the synthetic root is cheap.
+    Copies the real lib/{contract.py,schemas/} and backend/app/pipeline/
+    {fixtures,normalize_rules.json} so the applier can patch them in isolation.
+    contract.py and schemas/ now live in lib/ (SG7 canonical lift).
     """
+    # lib/ — contract.py, verify.py and schemas/ (canonical sources after SG7)
+    dst_lib = tmp_path / "packages" / "delivery-workflow" / "lib"
+    dst_lib.mkdir(parents=True)
+    shutil.copy(REAL_LIB_DIR / "__init__.py", dst_lib / "__init__.py")
+    shutil.copy(REAL_LIB_DIR / "contract.py", dst_lib / "contract.py")
+    shutil.copy(REAL_LIB_DIR / "verify.py", dst_lib / "verify.py")
+    shutil.copytree(REAL_LIB_DIR / "schemas", dst_lib / "schemas")
+
     src_pipeline = REAL_PIPELINE_DIR
     dst_pipeline = tmp_path / "backend" / "app" / "pipeline"
     dst_pipeline.mkdir(parents=True)
 
-    # Contract module + normalize_rules registry
-    shutil.copy(src_pipeline / "contract.py", dst_pipeline / "contract.py")
+    # normalize_rules registry stays in backend/app/pipeline/
     shutil.copy(
         src_pipeline / "normalize_rules.json",
         dst_pipeline / "normalize_rules.json",
     )
-
-    # Per-class schemas (used by _patch_schema_version)
-    shutil.copytree(src_pipeline / "schemas", dst_pipeline / "schemas")
 
     # Fixtures (the applier propagates the version bump here)
     shutil.copytree(src_pipeline / "fixtures", dst_pipeline / "fixtures")
@@ -181,7 +186,7 @@ def test_bump_minor_rejects_bad_shapes() -> None:
 
 
 def test_read_cc_version_returns_one_dot_oh(repo_root: Path) -> None:
-    contract = repo_root / "backend" / "app" / "pipeline" / "contract.py"
+    contract = repo_root / "packages" / "delivery-workflow" / "lib" / "contract.py"
     assert read_cc_version(contract) == "1.0"
 
 
@@ -216,7 +221,7 @@ def test_prompt_refinement_findings_are_skipped(
     assert result.skipped[0].fix_type == "agent_prompt_refinement"
     assert "human review" in result.skipped[0].reason
     assert result.cc_version_after is None
-    assert read_cc_version(repo_root / "backend/app/pipeline/contract.py") == "1.0"
+    assert read_cc_version(repo_root / "packages/delivery-workflow/lib/contract.py") == "1.0"
 
 
 def test_contract_change_findings_are_skipped(
@@ -343,7 +348,7 @@ def test_normalize_rule_applied_and_version_bumped_when_evals_pass(
     assert result.cc_version_after == "1.1"
 
     # contract.py rewritten
-    contract_path = repo_root / "backend/app/pipeline/contract.py"
+    contract_path = repo_root / "packages/delivery-workflow/lib/contract.py"
     assert read_cc_version(contract_path) == "1.1"
 
     # normalize_rules.json now has the synonym
@@ -353,7 +358,7 @@ def test_normalize_rule_applied_and_version_bumped_when_evals_pass(
 
     # Schemas + fixtures pinned at the new version
     research_schema = (
-        repo_root / "backend/app/pipeline/schemas/research.schema.yaml"
+        repo_root / "packages/delivery-workflow/lib/schemas/research.schema.yaml"
     ).read_text(encoding="utf-8")
     assert 'const: "1.1"' in research_schema
     research_golden = (
@@ -380,12 +385,12 @@ def test_rollback_when_evals_fail(repo_root: Path, space: Path) -> None:
     )
     write_retro_artifact(space, "my-feature", [finding])
 
-    contract_path = repo_root / "backend/app/pipeline/contract.py"
+    contract_path = repo_root / "packages/delivery-workflow/lib/contract.py"
     rules_path = repo_root / "backend/app/pipeline/normalize_rules.json"
     before_contract = contract_path.read_text(encoding="utf-8")
     before_rules = rules_path.read_text(encoding="utf-8")
     before_research_schema = (
-        repo_root / "backend/app/pipeline/schemas/research.schema.yaml"
+        repo_root / "packages/delivery-workflow/lib/schemas/research.schema.yaml"
     ).read_text(encoding="utf-8")
     before_golden = (
         repo_root / "backend/app/pipeline/fixtures/golden/research.md"
@@ -412,7 +417,7 @@ def test_rollback_when_evals_fail(repo_root: Path, space: Path) -> None:
     assert contract_path.read_text(encoding="utf-8") == before_contract
     assert rules_path.read_text(encoding="utf-8") == before_rules
     assert (
-        repo_root / "backend/app/pipeline/schemas/research.schema.yaml"
+        repo_root / "packages/delivery-workflow/lib/schemas/research.schema.yaml"
     ).read_text(encoding="utf-8") == before_research_schema
     assert (
         repo_root / "backend/app/pipeline/fixtures/golden/research.md"
@@ -583,7 +588,7 @@ def test_empty_findings_does_nothing(repo_root: Path, space: Path) -> None:
     assert result.evals_ran is False
     # No bump happened — version still 1.0.
     assert (
-        read_cc_version(repo_root / "backend/app/pipeline/contract.py")
+        read_cc_version(repo_root / "packages/delivery-workflow/lib/contract.py")
         == "1.0"
     )
 
@@ -599,7 +604,7 @@ def test_dry_run_classifies_without_writing(
     finding = make_normalize_synonym_finding("F1", "kbq", "memory_retrieval")
     write_retro_artifact(space, "my-feature", [finding])
 
-    contract_path = repo_root / "backend/app/pipeline/contract.py"
+    contract_path = repo_root / "packages/delivery-workflow/lib/contract.py"
     rules_path = repo_root / "backend/app/pipeline/normalize_rules.json"
     before_contract = contract_path.read_text(encoding="utf-8")
     before_rules = rules_path.read_text(encoding="utf-8")
@@ -711,12 +716,16 @@ def test_strategy_synonym_recipe_keeps_fixture_harness_green(
         "-p",
         "no:cacheprovider",
     )
-    # Make the synthetic backend importable for the subprocess — prepend so
-    # it wins over the workspace backend the parent test imported from.
+    # Make the synthetic backend AND lib importable for the subprocess — prepend
+    # so they win over the workspace backend the parent test imported from.
+    # lib_pkg must be on PYTHONPATH so the stub verify.py (which does
+    # `from lib.verify import verify`) resolves to the synthetic lib where
+    # _bump_and_propagate() has already updated CC_VERSION.
+    lib_pkg = repo_root / "packages" / "delivery-workflow"
     existing = os.environ.get("PYTHONPATH", "")
     monkeypatch.setenv(
         "PYTHONPATH",
-        str(backend) + (":" + existing if existing else ""),
+        str(backend) + ":" + str(lib_pkg) + (":" + existing if existing else ""),
     )
 
     result = apply_retro_improvements(

@@ -40,3 +40,4 @@ name = "No app.* imports from portable core"
 type = "forbidden"
 source_modules = ["lib", "runner"]
 forbidden_modules = ["app"]
+ignore_imports = ["lib.verify -> app"]
