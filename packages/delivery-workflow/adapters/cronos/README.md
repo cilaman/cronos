@@ -12,7 +12,7 @@ The adapter translates the portable `ExecutorInterface` into concrete Cronos bac
 
 | Portable Op | Cronos Implementation | Maps To |
 |---|---|---|
-| `dispatchAgent` | `CronosAdapter.dispatchAgent()` async | TaskStore: create child task, poll state, load trace, parse delivery_status |
+| `dispatchAgent` | `CronosAdapter.dispatchAgent()` async | TaskStore: create child task, poll state, load trace, parse node_status (primary) or delivery_status (legacy) |
 | `runGate` | `CronosAdapter.runGate()` | app.pipeline.gate: run contract checks + outcome re-execution |
 | `evalCondition` | `CronosAdapter.evalCondition()` | app.harnesses.decision: evaluate conditional edges |
 | `state.read/write` | `CronosStateOps` | lib/state/StateStore + EventLog: atomic state.json + events.jsonl |
@@ -25,7 +25,7 @@ The adapter translates the portable `ExecutorInterface` into concrete Cronos bac
 - **Async dispatch, sync others**: `dispatchAgent` is `async def` for the poll loop; other ops are sync.
 - **Atomic state**: `state.write()` uses read-modify-write with `StateStore` + append-only `EventLog`.
 - **Budget enforcement**: `TelemetrySink` raises `BudgetExceededSignal` on ceiling breach; `escalate` parks the run.
-- **Delivery status fallback**: If trace parsing fails, scan pipeline artifacts for trailing `delivery_status` fence.
+- **Node status fallback**: If trace parsing fails, scan `node_status` fence first, then fallback to `delivery_status`.
 
 ## Module: `CronosAdapter`
 
@@ -63,13 +63,13 @@ async def dispatchAgent(self, agent_ref: str, inputs: dict[str, Any]) -> AgentRe
 3. Transition parent goal to ACTIVE (if in BACKLOG)
 4. Poll `store.get(child_id)` every `poll_interval` seconds until DONE/WAITING/ARCHIVED
 5. On timeout: escalate + raise `TimeoutError`
-6. On DONE: load trace from trace_store, parse `delivery_status`, return `AgentResult`
+6. On DONE: load trace from trace_store, parse `node_status` or `delivery_status`, return `AgentResult`
 7. On WAITING: return `AgentResult(status="blocked", open_questions=[waiting_question])`
 
 **Telemetry:** Sums per-turn tokens from trace; calculates USD via `token_cost_usd` rate.
 
-**Delivery Status Parsing (DD-05):**
-1. Primary: parse `delivery_status` fence from trace's `final_text_snippet` (500 chars)
+**Node Status Parsing (DD-05):**
+1. Primary: parse `node_status` fence (tier-0) ; fallback to `delivery_status` fence (tier-3) from trace's `final_text_snippet` (500 chars)
 2. Fallback: scan newest `*.md` file in `run_dir` (catches clipped long traces)
 3. Fallback: return `AgentResult(status="failed")` with error question
 
@@ -79,7 +79,7 @@ class AgentResult:
     status: str                  # "done" | "blocked" | "failed"
     artifact_paths: list[str]    # Produced deliverables
     produces: str                # Semantic label (e.g., "design-report")
-    fields: dict[str, str]       # delivery_status metadata (phase, version, etc.)
+    fields: dict[str, str]       # node_status metadata (routing fields) (phase, version, etc.)
     open_questions: list[str]    # Blockers or errors
     telemetry: TelemetryData     # tokens, usd, seconds
 ```
@@ -111,7 +111,7 @@ def evalCondition(self, expr: str, scope: dict[str, Any]) -> bool
 
 **Flow:**
 1. Coerce all scope values to strings (for whitelisted grammar)
-2. Delegate to `app.harnesses.decision.eval_condition(expr, flat_scope)`
+2. Delegate to `lib.conditions.eval_condition(expr, flat_scope)`
 3. Return boolean result
 
 **Grammar (from harnesses.decision):**
@@ -228,7 +228,7 @@ async def _escalate_async(self, node_id: str, reason: str)
 ### Decision Logic (G6.1 I3)
 
 **`evalCondition()` delegates to:**
-- `app.harnesses.decision.eval_condition()` — harness executor logic (from G3)
+- `lib.conditions.eval_condition()` — portable condition evaluator with `||` (OR-of-ANDs) support
 - Supports dotted paths, hyphenated identifiers, `==` / `!=` / `in`, `&&`, parentheses
 
 ### Telemetry (G6.1 I4)
@@ -243,7 +243,7 @@ async def _escalate_async(self, node_id: str, reason: str)
 **`dispatchAgent()` depends on:**
 - `app.storage.TaskStore` — task CRUD + state transitions
 - `app.trace_store.TraceStore` — load run traces
-- `lib.delivery_status.parse_delivery_status()` — parse artifact fences
+- `lib.node_status.parse_node_status()` + `lib.delivery_status.parse_delivery_status()` — parse node_status (primary) and delivery_status (legacy) fences
 - Task polling loop (every `poll_interval` seconds)
 
 ### Escalation (G6.1 I6)
@@ -294,7 +294,7 @@ nodes:
 **dispatchAgent:**
 - Task disappears → return `AgentResult(status="failed")`
 - Timeout → escalate + raise `TimeoutError`
-- No delivery_status → return `AgentResult(status="failed")`
+- No node_status or delivery_status → return `AgentResult(status="failed")`
 
 **evalCondition:**
 - Syntax error in expression → propagates from `eval_condition()`

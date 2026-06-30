@@ -70,7 +70,7 @@ After (almost) every agent node there is a **gate node**. A gate is a list of de
 
 Crucially, gates do **not** read the agent's prose or trust a self-reported "PASS." Every routing
 decision is derived from machine-readable fields. (Agents emit those fields in a fenced
-`delivery_status` block — see [the structured return](#how-agents-report-back).)
+`node_status` block — see [the structured return](#how-agents-report-back).)
 
 ### Human checkpoints
 
@@ -113,11 +113,11 @@ nodes are skipped, failed/torn nodes are re-dispatched, absent nodes run for the
 
 ### How agents report back
 
-Every agent ends its turn with a fenced **`delivery_status`** block — the runtime's routing
+Every agent ends its turn with a fenced **`node_status`** block — the runtime's routing
 surface. It is *not* free-text; the runtime parses these fields, never the prose:
 
 ````
-```delivery_status
+```node_status
 {
   "status": "done",                       // done | blocked | needs_fix | failed
   "produces": "implementation",           // the artifact class
@@ -188,7 +188,7 @@ What you provide:
 - **A budget ceiling** (optional) — overrides `defaults.budget.usd_ceiling`.
 
 The adapter takes care of the rest: creating child tasks, polling them to completion, parsing
-each `delivery_status`, running gates, evaluating conditional edges, and persisting state.
+each `node_status` (or legacy `delivery_status`), running gates, evaluating conditional edges, and persisting state.
 
 ### 2. Watch it flow
 
@@ -392,7 +392,7 @@ class ExecutorInterface(Protocol):
 
 | Operation | Your job |
 |---|---|
-| `dispatchAgent` | Run the named agent with the given inputs; return its `delivery_status` as an `AgentResult` (`status`, `artifact_paths`, `produces`, `fields`, `open_questions`, `telemetry`). |
+| `dispatchAgent` | Run the named agent with the given inputs; return its `node_status` (or legacy `delivery_status`) as an `AgentResult` (`status`, `artifact_paths`, `produces`, `fields`, `open_questions`, `telemetry`). |
 | `runGate` | Execute the gate's checks against the artifacts; return a `GateResult` (`decision`, `errors`, `evidence`). |
 | `evalCondition` | Evaluate an edge `when` against a scope; return a bool. |
 | `state.read/write` | Load / atomically patch the `WorkflowState`. |
@@ -409,7 +409,7 @@ implementations you can wire in:
 - **[`lib/state/EventLog`](../lib/state/events.py)** — append-only `events.jsonl`.
 - **[`lib/telemetry/TelemetrySink`](../lib/telemetry/sink.py)** — accumulates tokens/USD and raises
   `BudgetExceededSignal` on ceiling breach.
-- **[`lib/delivery_status`](../lib/delivery_status.py)** — parse the `delivery_status` block from
+- **[`lib/node_status`](../lib/node_status.py)** — parse `node_status` (primary) and legacy `delivery_status` blocks from
   agent output.
 - **[`spec_loader`](../spec_loader.py)** — load + schema-validate a workflow spec.
 - **[`null_runtime`](../null_runtime.py)** — a `NullRuntime` stub for testing your wiring.
@@ -433,7 +433,7 @@ Cronos. Mirror that pattern.
 
 | Portable op | Cronos mapping |
 |---|---|
-| `dispatchAgent` | Create a child task → poll to DONE/WAITING → load the run trace → parse `delivery_status`. |
+| `dispatchAgent` | Create a child task → poll to DONE/WAITING → load the run trace → parse `node_status` (primary) or `delivery_status` (legacy). |
 | `runGate` | Delegate to the Cronos gate engine; map its result to `GateResult`. |
 | `evalCondition` | Delegate to the harness decision evaluator. |
 | `state.read/write` | `CronosStateOps` → `StateStore` + `EventLog`. |

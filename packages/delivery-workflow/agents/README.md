@@ -26,13 +26,13 @@ quality (reviewer, tester, retro) have no Edit tool, so they cannot patch what t
 
 ---
 
-## Structured return: `delivery_status`
+## Structured return: `node_status` (primary) & `delivery_status` (legacy)
 
 Every agent emits a **structured control signal** (the parsing-gate's routing surface), not a
-free-text `STATUS:` line. Format (fenced YAML):
+free-text `STATUS:` line. Format (fenced JSON):
 
 ````
-```delivery_status
+```node_status
 {
   "status": "done | blocked | needs_fix | failed",
   "artifact_paths": ["path/to/report.md"],
@@ -97,7 +97,7 @@ If its job is to *write* a specific tree (tests, source, docs), it has Edit only
 1. **Harvest** — Identify an existing agent/skill in Cronos or a prior pipeline that plays this
    role (or a closely adjacent one). Read its method, its outputs, its I/O.
 2. **Adapt the role** — Re-author the agent definition (markdown frontmatter + prose role) to
-   match `delivery/v1`: emit `delivery_status`, drop `verify.py` calls, narrow scope, keep
+   match `delivery/v1`: emit `node_status` (or legacy `delivery_status`), drop `verify.py` calls, narrow scope, keep
    ≤~80 lines. The role definition should *not* carry implementation detail; it defines the
    input/output contract and the hard rules. See `reviewer.md` exemplar.
 3. **Craft the skill** — The agent definition references a paired skill (except scout, tester).
@@ -123,7 +123,7 @@ Why:
    `artifact_paths` parameters.
 2. **No Cronos API calls** — no `curl http://backend:8000/api/...`, no task creation, no
    memory manipulation. The executor provides the interface; the harness is the control plane.
-3. **No `verify.py` / `STATUS:` sentinels** — emit `delivery_status` JSON only. No legacy
+3. **No `verify.py` / `STATUS:` sentinels** — emit `node_status` JSON only (legacy `delivery_status` also supported). No legacy
    `STATUS: DONE`/`BLOCKED` lines (they break parsers expecting the new format).
 4. **No loop or routing logic** — agents emit verdicts and findings; the harness routes on
    them. Never decide "I'll run scout again" or "skip the next phase." That is the harness's
@@ -207,7 +207,7 @@ iteratively, validate, and emit the structured return.
 
 Write the impl artifact (class `implementation`), then emit:
 
-```delivery_status
+```node_status
 {
   "status": "done",
   "produces": "implementation",
@@ -235,7 +235,7 @@ Write the impl artifact (class `implementation`), then emit:
 - [ ] Agent frontmatter: name, description, model, tools, recon (if applicable)
 - [ ] Agent prose: ≤80 lines, role only (method goes in skill)
 - [ ] Inputs documented: what you read from the harness
-- [ ] Output documented: artifact + structured return (delivery_status JSON)
+- [ ] Output documented: artifact + structured return (node_status JSON)
 - [ ] Hard rules: scope, no .cronos, no routing logic, no STATUS: lines
 - [ ] Paired skill: written, if the agent references one
 - [ ] Tool allowlist: exact match to the delivery/v1 table above
