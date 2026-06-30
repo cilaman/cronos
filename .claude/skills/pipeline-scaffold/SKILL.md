@@ -1,10 +1,12 @@
 ---
 name: pipeline-scaffold
-description: Bootstrap a CC-v1 pipeline in any Cronos space. Given a feature request, owns the goal slug, writes request.md + initial pipeline-state.json, and POSTs a goal plus the seven phase tasks (scout / analysis / design / impl / test / review / doc) with depends_on wired and the /pipeline-gate step appended to each. Cronos analogue of the Delivery Notes orchestrator's Phase 0.
+description: "[DEPRECATED — use /create-delivery-goal instead] Bootstrap a CC-v1 pipeline in any Cronos space. Given a feature request, owns the goal slug, writes request.md + initial pipeline-state.json, and POSTs a goal plus the seven phase tasks (scout / analysis / design / impl / test / review / doc) with depends_on wired and the /pipeline-gate step appended to each. Cronos analogue of the Delivery Notes orchestrator's Phase 0. Do not invoke for new goals — the delivery-workflow runner supersedes this pattern."
 license: Internal — Cronos project.
 ---
 
 # Pipeline Scaffold
+
+> **DEPRECATED — do not invoke for new goals.** This skill pre-creates a seven-phase CC-v1 task DAG that the delivery-workflow runner now supersedes. Use `/create-delivery-goal` instead: it creates a single goal with a sentinel that the runner picks up automatically, without pre-creating any phase tasks. This file is retained for historical reference only.
 
 This skill is the **Cronos Phase 0**: it turns a free-form feature request into a wired pipeline goal on the Cronos board. After it runs, the worker can pick up the first phase task and the rest of the pipeline self-drives — each phase task spawns its CC-v1 sub-agent, then closes itself with [[pipeline-gate]] which decides PASS / BLOCK from the artifact's YAML header.
 

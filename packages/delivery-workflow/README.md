@@ -401,7 +401,7 @@ The Cronos backend adopts delivery/v1 via `CronosAdapter` in `packages/delivery-
 |---|---|
 | `dispatchAgent` | Create child task, poll state, load trace, parse delivery_status → `AgentResult` |
 | `runGate` | Delegate to `app.pipeline.gate.runGate()` → `GateResult` with decision/errors/evidence |
-| `evalCondition` | Delegate to `app.harnesses.decision.eval_condition()` for conditional routing |
+| `evalCondition` | Delegate to `lib.conditions.eval_condition()` for conditional routing |
 | `state.read/write` | `CronosStateOps` → `lib/state/StateStore` atomic read/write + EventLog audit trail |
 | `telemetry.emit` | `CronosTelemetryOps` → `lib/telemetry/TelemetrySink` accumulate tokens/USD with ceiling |
 | `escalate` | Park tracking task → WAITING + waiting_question for human intervention |

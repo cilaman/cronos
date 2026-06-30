@@ -3,16 +3,135 @@
   "goal_slug": "sg4-executor-shared-ir-compiler-a-runner",
   "status": "running",
   "created_at": "2026-06-30T13:01:58.872736+00:00",
-  "updated_at": "2026-06-30T13:01:58.872736+00:00",
+  "updated_at": "2026-06-30T16:39:26.107743+00:00",
   "request_text": "Spec 4 — The executor: shared IR + Compiler A + runner (full harvest)\n\nFixes #3: delivery workflow routing edges (`needs_fix → implement`) are dead because the runner is a stub and the worker uses static depends_on instead.\n\n### 4.1 Shared graph IR (package, app-free)\n\n```\nIRNode: id, kind, data, loop: LoopPolicy|None\n  kind = union of delivery + Harness kinds:\n    agent | gate | human | decision | wait | aggregator | trigger\n\nIREdge: source, target, when (guard expr from lib/conditions), port (metadata only)\n\nIRGraph: nodes, edges, variables, metadata\n  entry_nodes: computed\n  cycles: LEGAL (validation is structural only)\n```\n\nDesign decisions:\n- kind is the UNION of both formats (delivery: agent/gate/human; Harness: decision/wait/aggregator/trigger) — both compile in losslessly\n- Edges route on when (delivery's when ≡ Harness's condition); ports are metadata only\n- Cycles are legal — IR validation is structural, not topological\n- decision nodes are pure routing (no dispatch)\n- LoopPolicy is uniform: {until, stall[], max, on_exhaust}\n\nRuntime state: package's WorkflowState (state_types.py) — per-node status/attempt/artifacts/telemetry\n\n### 4.2 Compiler A\n\nInput: validated spec dict from spec_loader.load_spec. Mostly 1:1 — each node (agent/gate/human) → IRNode; each edge (from/to/when) → IREdge; resolve defaults.models into concrete agent.model; fold defaults.budget into metadata. Lives in package. app-free.\n\n### 4.3 Runner (cyclic work-list walker, full harvest)\n\nFixpoint work-list walker (NOT topological sort):\n- Per-node state from WorkflowState for resume (NodeState.attempt present)\n- Entry from trigger/root nodes; node runs when inputs satisfied\n- Execute node → evaluate outgoing edges' when against scope enriched from node_status fields → enqueue chosen targets\n- Back-edges = loop iterations; increments attempt counter; resets downstream\n- Per-node loop {until, stall, max, on_exhaust}; on_exhaust:escalate → ExecutorInterface.escalate (HARVEST from _execute_agent_node)\n- Gate nodes → ExecutorInterface.runGate (CronosAdapter → app.pipeline.gate)\n- FULL HARVEST of all node kinds from HarnessExecutor → port to WorkflowState+ExecutorInterface:\n    agent, gate, human, decision (HARVEST _execute_decision_node),\n    wait with human+timed park/resume (HARVEST _execute_wait_node),\n    aggregator any/all (HARVEST _execute_aggregator_node),\n    trigger pass-through\n- Events via ExecutorInterface events op (not lifted from HarnessExecutor._publish)\n- Cancel-race guards at work-list boundaries (HARVEST)\n- NullRuntime already exists in package\n\n### 4.4 Cronos integration\n\nDriver: construct CronosAdapter → runner.run(Compiler_A(spec_loader.load(...)), adapter). Worker in backend/app/worker.py: detect delivery-workflow-bound goal → route to driver instead of _topo_children. Runner tags dispatched child tasks (marker in task brief or metadata) for needs_fix→DONE bridge mapping.\n\n### References\n- `packages/delivery-workflow/` — the package; spec_loader.py, state_types.py, interface.py, null_runtime.py all exist\n- `backend/app/harnesses/executor.py` — HarnessExecutor to harvest (BFS walker to replace with runner)\n- `backend/app/worker.py` — _topo_children route to intercept for delivery goals\n- `backend/app/harnesses/decision.py` — decision/aggregator/wait handlers to harvest\n- `packages/delivery-workflow/.importlinter` — boundary enforced; runner must not import app\n",
-  "phases": {},
+  "phases": {
+    "research": {
+      "phase": "research",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-scout",
+      "task_id": "2026-06-30-1301-scout-sg4-executor-shared-ir-compiler-a",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/sg4-executor-shared-ir-compiler-a-runner/scout-report-sg4-executor-shared-ir-compiler-a-runner.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "analysis": {
+      "phase": "analysis",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-analyst",
+      "task_id": "2026-06-30-1301-analysis-sg4-executor-shared-ir-compiler",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/sg4-executor-shared-ir-compiler-a-runner/analysis-report-sg4-executor-shared-ir-compiler-a-runner.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [
+          "coverage_summary.strategies[3]: dropped unknown free-text strategy 'requirements_decomposition'"
+        ],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "design": {
+      "phase": "design",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-architect",
+      "task_id": "2026-06-30-1301-design-sg4-executor-shared-ir-compiler-a",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/sg4-executor-shared-ir-compiler-a-runner/design-report-sg4-executor-shared-ir-compiler-a-runner.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [
+          "coverage_summary.strategies[3]: dropped unknown free-text strategy 'component_decomposition'",
+          "coverage_summary.strategies[4]: dropped unknown free-text strategy 'iteration_planning'",
+          "coverage_summary.strategies[5]: dropped unknown free-text strategy 'risk_identification'"
+        ],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "implementation": {
+      "phase": "implementation",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-implementor",
+      "task_id": "2026-06-30-1301-impl-sg4-executor-shared-ir-compiler-a-r",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/sg4-executor-shared-ir-compiler-a-runner/impl-report-sg4-executor-shared-ir-compiler-a-runner--i8.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    }
+  },
   "telemetry": {
     "total_duration_s": 0.0,
     "total_token_spend": 0,
     "total_tool_calls": 0,
     "total_files_read": 0,
     "total_memory_hits": 0,
-    "phases_completed": 0,
+    "phases_completed": 4,
     "phases_escalated": 0,
     "phases_retried": 0,
     "phases_failed": 0

@@ -111,7 +111,7 @@ def evalCondition(self, expr: str, scope: dict[str, Any]) -> bool
 
 **Flow:**
 1. Coerce all scope values to strings (for whitelisted grammar)
-2. Delegate to `app.harnesses.decision.eval_condition(expr, flat_scope)`
+2. Delegate to `lib.conditions.eval_condition(expr, flat_scope)`
 3. Return boolean result
 
 **Grammar (from harnesses.decision):**
@@ -228,7 +228,7 @@ async def _escalate_async(self, node_id: str, reason: str)
 ### Decision Logic (G6.1 I3)
 
 **`evalCondition()` delegates to:**
-- `app.harnesses.decision.eval_condition()` — harness executor logic (from G3)
+- `lib.conditions.eval_condition()` — portable condition evaluator with `||` (OR-of-ANDs) support
 - Supports dotted paths, hyphenated identifiers, `==` / `!=` / `in`, `&&`, parentheses
 
 ### Telemetry (G6.1 I4)

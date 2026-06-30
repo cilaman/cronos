@@ -3,16 +3,331 @@
   "goal_slug": "sg3-lift-condition-grammar-to-package",
   "status": "running",
   "created_at": "2026-06-30T13:01:58.753710+00:00",
-  "updated_at": "2026-06-30T13:01:58.753710+00:00",
+  "updated_at": "2026-06-30T14:44:51.171731+00:00",
   "request_text": "Spec 3 — Lift the condition grammar to the package\n\nThe condition evaluator `eval_condition` lives in `backend/app/harnesses/decision.py` (Cronos-coupled). The workflow's `when` edges depend on it. But `_eval_single_clause` (decision.py:303) is PURE — `(clause, scope) -> bool`, no app imports (verified).\n\nCurrent grammar supports: `==`, `!=`, `in`, `&&` — NO `||` (forces duplicate edges in delivery.workflow.yaml).\n\n### Action\n1. Lift pure evaluator (`_eval_single_clause` + `&&` splitter) to `packages/delivery-workflow/lib/conditions.py`\n2. Add `||` operator there\n3. Collapse duplicate delivery workflow edges (e.g. two `g-security → implement` edges for `code` vs `dependency`) into single `||` edges\n4. Re-export from `app.harnesses.decision` via a shim so visual-harness tests stay green\n5. Runner will call `lib/conditions` directly (keep `evalCondition` as thin ExecutorInterface pass-through for backward compat)\n\n### References\n- `backend/app/harnesses/decision.py` — `_eval_single_clause` at line 303, `_eval_single_clause` is the pure core\n- `packages/delivery-workflow/` — the package with enforced `.importlinter` boundary\n- `packages/delivery-workflow/lib/` — where the new file goes\n- `delivery.workflow.yaml` — the workflow spec with duplicate edges to collapse\n\n### Tests\nParity tests for all operators: `==`, `!=`, `in`, `&&`, `||`; importlinter check (`app` must not be imported in lib); existing visual-harness decision tests stay green.\n",
-  "phases": {},
+  "phases": {
+    "research": {
+      "phase": "research",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-scout",
+      "task_id": "2026-06-30-1301-scout-sg3-lift-condition-grammar-to-pack",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/sg3-lift-condition-grammar-to-package/scout-report-sg3-lift-condition-grammar-to-package.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "analysis": {
+      "phase": "analysis",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-analyst",
+      "task_id": "2026-06-30-1301-analysis-sg3-lift-condition-grammar-to-p",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/sg3-lift-condition-grammar-to-package/analysis-report-sg3-lift-condition-grammar-to-package.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [
+          "coverage_summary.strategies[2]: dropped unknown free-text strategy 'requirements_decomposition'"
+        ],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "design": {
+      "phase": "design",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-architect",
+      "task_id": "2026-06-30-1301-design-sg3-lift-condition-grammar-to-pac",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/sg3-lift-condition-grammar-to-package/design-report-sg3-lift-condition-grammar-to-package.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [
+          "coverage_summary.strategies[2]: dropped unknown free-text strategy 'component_decomposition'",
+          "coverage_summary.strategies[3]: dropped unknown free-text strategy 'iteration_planning'",
+          "coverage_summary.strategies[4]: dropped unknown free-text strategy 'risk_identification'"
+        ],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "implementation_i1": {
+      "phase": "implementation_i1",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-implementor",
+      "task_id": "2026-06-30-1301-impl-sg3-lift-condition-grammar-to-packa",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/sg3-lift-condition-grammar-to-package/impl-report-sg3-lift-condition-grammar-to-package--i1.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "implementation_i2": {
+      "phase": "implementation_i2",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-implementor",
+      "task_id": "2026-06-30-1301-impl-sg3-lift-condition-grammar-to-packa",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/sg3-lift-condition-grammar-to-package/impl-report-sg3-lift-condition-grammar-to-package--i2.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "implementation_i3": {
+      "phase": "implementation_i3",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-implementor",
+      "task_id": "2026-06-30-1301-impl-sg3-lift-condition-grammar-to-packa",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/sg3-lift-condition-grammar-to-package/impl-report-sg3-lift-condition-grammar-to-package--i3.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "implementation_i4": {
+      "phase": "implementation_i4",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-implementor",
+      "task_id": "2026-06-30-1301-impl-sg3-lift-condition-grammar-to-packa",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/sg3-lift-condition-grammar-to-package/impl-report-sg3-lift-condition-grammar-to-package--i4.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "implementation_i5": {
+      "phase": "implementation_i5",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-implementor",
+      "task_id": "2026-06-30-1301-impl-sg3-lift-condition-grammar-to-packa",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/sg3-lift-condition-grammar-to-package/impl-report-sg3-lift-condition-grammar-to-package--i5.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "test": {
+      "phase": "test",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "tester",
+      "task_id": "2026-06-30-1301-test-sg3-lift-condition-grammar-to-packa",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/sg3-lift-condition-grammar-to-package/test-report-sg3-lift-condition-grammar-to-package.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "review": {
+      "phase": "review",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-reviewer",
+      "task_id": "2026-06-30-1301-review-sg3-lift-condition-grammar-to-pac",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/sg3-lift-condition-grammar-to-package/review-report-sg3-lift-condition-grammar-to-package--attempt1.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    },
+    "doc": {
+      "phase": "doc",
+      "status": "done",
+      "cc_version": "1.0",
+      "agent": "pipeline-doc-sync",
+      "task_id": "2026-06-30-1301-doc-sg3-lift-condition-grammar-to-packag",
+      "run_index": 0,
+      "gate": "auto",
+      "started_at": "",
+      "completed_at": "",
+      "artifact_path": ".cronos/pipeline/sg3-lift-condition-grammar-to-package/doc-report-sg3-lift-condition-grammar-to-package.md",
+      "verify_result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "normalize_fixes": [],
+        "gate_decision": "proceed",
+        "gate_reason": "all checks passed"
+      },
+      "metrics": {
+        "duration_s": 0.0,
+        "token_spend": 0,
+        "tool_calls": 0,
+        "files_read": 0,
+        "memory_hits": 0
+      },
+      "header_summary": {}
+    }
+  },
   "telemetry": {
     "total_duration_s": 0.0,
     "total_token_spend": 0,
     "total_tool_calls": 0,
     "total_files_read": 0,
     "total_memory_hits": 0,
-    "phases_completed": 0,
+    "phases_completed": 11,
     "phases_escalated": 0,
     "phases_retried": 0,
     "phases_failed": 0

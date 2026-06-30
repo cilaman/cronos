@@ -193,6 +193,7 @@ Test reports stored at `{space}/.cronos/test-reports/{timestamp}.json`; coverage
 | [frontend-design](.claude/skills/frontend-design/) | Frontend styling and UX work |
 | [evaluate-run](.claude/skills/evaluate-run/) | Assesses agent run outcomes |
 | [create-goal](.claude/skills/create-goal/) | Creates a goal with child tasks in the Cronos board via the backend API |
+| [create-delivery-goal](.claude/skills/create-delivery-goal/) | Creates a delivery-workflow goal (binds to runner via sentinel; do NOT pre-create phase tasks) |
 | [create-task](.claude/skills/create-task/) | Creates a single task in the Cronos board via the backend API |
 | [write-memory](.claude/skills/write-memory/) | Writes memory to the correct workspace-scoped path (never the space root) |
 | [task-finalize](.claude/skills/task-finalize/) | Mandatory last step of every task — verify completion, handle git, write memory, emit STATUS |

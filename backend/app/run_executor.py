@@ -18,6 +18,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from .agent import AgentResult, CRONOS_SUBDIR
+from .delivery_driver import detect_delivery_workflow_spec, run_delivery_goal
 from .event_bus import EventBus
 from .logging_config import bind_run_context
 from .models import AiToolEntry, TaskState
@@ -31,6 +32,94 @@ if TYPE_CHECKING:
     from .harnesses.store import HarnessStore
 
 log = logging.getLogger("cronos.worker")
+
+
+# ---------------------------------------------------------------------------
+# Executor-variant helpers (R10 / R12)
+# ---------------------------------------------------------------------------
+# RunState.to_dict() uses dataclasses.asdict() which only serialises declared
+# fields.  ``executor_variant`` is stored as an extra top-level key in the raw
+# JSON rather than as a declared RunState field, so it survives round-trips
+# through save_atomic() without requiring a change to run_state.py.
+# ---------------------------------------------------------------------------
+
+_EXECUTOR_VARIANT_KEY = "executor_variant"
+_DEFAULT_EXECUTOR_VARIANT = "bfs"
+
+
+def _read_executor_variant(run_state_path: Path) -> str:
+    """Read the executor variant from the run-state JSON file.
+
+    Returns ``'bfs'`` (backward-compatible default) if:
+    - the file does not exist,
+    - the file cannot be parsed, or
+    - the ``executor_variant`` key is absent (files written before SG5).
+    """
+    if not run_state_path.exists():
+        return _DEFAULT_EXECUTOR_VARIANT
+    try:
+        with run_state_path.open("r", encoding="utf-8") as fh:
+            data = _json.load(fh)
+        return str(data.get(_EXECUTOR_VARIANT_KEY, _DEFAULT_EXECUTOR_VARIANT))
+    except Exception:
+        log.debug(
+            "_read_executor_variant: failed to read %s; defaulting to %r",
+            run_state_path, _DEFAULT_EXECUTOR_VARIANT,
+        )
+        return _DEFAULT_EXECUTOR_VARIANT
+
+
+def _write_executor_variant(
+    run_state_path: Path,
+    variant: str,
+    run_id: str,
+    harness_id: str,
+) -> None:
+    """Persist *variant* as the ``executor_variant`` key in the run-state JSON.
+
+    If the file does not yet exist (initial run before the BFS/runner path has
+    created it), this function writes a minimal stub JSON containing only the
+    identity fields and the variant.  The BFS/runner path will later overwrite
+    the file with a full RunState.
+
+    If the file already exists, the function patches it in-place (read → add
+    key → write atomically via os.replace).
+    """
+    import os as _os
+    import tempfile
+
+    run_state_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if run_state_path.exists():
+        try:
+            with run_state_path.open("r", encoding="utf-8") as fh:
+                data = _json.load(fh)
+        except Exception:
+            log.debug(
+                "_write_executor_variant: could not parse %s; creating stub.", run_state_path
+            )
+            data = {"run_id": run_id, "harness_id": harness_id, "goal_task_id": run_id,
+                    "nodes_executed": {}}
+    else:
+        data = {"run_id": run_id, "harness_id": harness_id, "goal_task_id": run_id,
+                "nodes_executed": {}}
+
+    data[_EXECUTOR_VARIANT_KEY] = variant
+
+    payload = _json.dumps(data, indent=2, ensure_ascii=False)
+    fd, tmp_path = tempfile.mkstemp(
+        dir=run_state_path.parent, prefix=".exec_variant_", suffix=".tmp"
+    )
+    try:
+        with _os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(payload)
+        _os.replace(tmp_path, run_state_path)
+    except Exception:
+        try:
+            _os.unlink(tmp_path)
+        except OSError:
+            pass
+        log.exception("_write_executor_variant: atomic write failed for %s", run_state_path)
 
 
 def _topo_children_local(goal_id: str, store: TaskStore) -> list[str]:
@@ -335,6 +424,51 @@ class RunExecutor:
             )
             return False
 
+        # ------------------------------------------------------------------
+        # Executor-variant selection (R10 / R12)
+        # ------------------------------------------------------------------
+        # The run-state JSON may carry an ``executor_variant`` key written by a
+        # prior execution of this function (either 'bfs' or 'runner').  On
+        # initial-run path we determine the variant from the env flag and
+        # persist it so that a later resume always dispatches to the same path,
+        # regardless of the current env-flag value.  On resume path we read the
+        # stored variant (NOT the env flag).
+        run_state_path = (
+            self._data_dir() / "spaces" / space_id / ".cronos" / "harness-runs" / f"{task_id}.json"
+        )
+
+        if initial_run:
+            import os as _os
+            _flag = _os.environ.get("CRONOS_HARNESS_RUNNER", "")
+            executor_variant: str = "runner" if _flag == "1" else "bfs"
+            # Persist the variant so resume reads it from the stored JSON.
+            _write_executor_variant(run_state_path, executor_variant, task_id, harness_id)
+            log.info(
+                "execute_harness_run_body: initial run %r; executor_variant=%r (CRONOS_HARNESS_RUNNER=%r).",
+                task_id, executor_variant, _flag,
+            )
+        else:
+            # Resume: read stored variant from the JSON file.  Default to 'bfs'
+            # for backward-compat with files written before SG5.
+            executor_variant = _read_executor_variant(run_state_path)
+            log.info(
+                "execute_harness_run_body: resume run %r; executor_variant=%r (from stored state).",
+                task_id, executor_variant,
+            )
+
+        # ------------------------------------------------------------------
+        # Runner path (CRONOS_HARNESS_RUNNER=1 on initial run, or stored
+        # executor_variant == 'runner' on resume)
+        # ------------------------------------------------------------------
+        if executor_variant == "runner":
+            return await self._execute_harness_run_runner(
+                task_id, harness_id, space_id, initial_run=initial_run,
+                space=space, run_state_path=run_state_path, harness=harness,
+            )
+
+        # ------------------------------------------------------------------
+        # Default BFS path — old HarnessExecutor preserved verbatim (R12)
+        # ------------------------------------------------------------------
         from .harnesses.executor import HarnessExecutor
         from .harnesses.adapter import WorkerAdapter
         from .worker import resolve_tool
@@ -353,7 +487,7 @@ class RunExecutor:
         )
 
         log.info(
-            "%s harness run %r (harness=%r) via executor.execute().",
+            "%s harness run %r (harness=%r) via executor.execute() [bfs].",
             "Starting" if initial_run else "Resuming",
             task_id,
             harness_id,
@@ -397,6 +531,180 @@ class RunExecutor:
                 )
             except Exception:
                 log.exception("Failed to finalize harness run %s to DONE", task_id)
+
+        return True
+
+    async def _execute_harness_run_runner(
+        self,
+        task_id: str,
+        harness_id: str,
+        space_id: str,
+        *,
+        initial_run: bool,
+        space: Any,
+        run_state_path: Path,
+        harness: Any,
+    ) -> bool:
+        """Execute a harness run via the delivery-workflow runner (R11).
+
+        Called when ``executor_variant == 'runner'``.  Compiles the Harness to
+        an IRGraph, constructs a HarnessExecutorAdapter, calls
+        ``runner.core.run()``, and maps the resulting WorkflowState back to a
+        RunState for finalization.
+
+        The existing BFS HarnessExecutor is NOT touched (R12 — it remains
+        importable and unchanged).
+        """
+        from .harnesses.compiler import compile as compile_harness
+        from .harnesses.executor_adapter import HarnessExecutorAdapter
+        from .harnesses.run_state import RunState, load as load_run_state, save_atomic
+        from .harnesses.state_mapping import workflowstate_to_runstate
+        from .harnesses.adapter import WorkerAdapter
+
+        space_store = self.space_store
+        assert space_store is not None  # checked by caller
+
+        log.info(
+            "%s harness run %r (harness=%r) via runner.core.run() [runner].",
+            "Starting" if initial_run else "Resuming",
+            task_id,
+            harness_id,
+        )
+
+        # ------------------------------------------------------------------
+        # 1. Load existing RunState (resume) or build a fresh one (initial).
+        # ------------------------------------------------------------------
+        if run_state_path.exists():
+            try:
+                base_run_state = load_run_state(run_state_path)
+            except Exception:
+                log.exception(
+                    "_execute_harness_run_runner: failed to load RunState for %s; starting fresh.",
+                    task_id,
+                )
+                base_run_state = None
+        else:
+            base_run_state = None
+
+        if base_run_state is None:
+            base_run_state = RunState(
+                run_id=task_id,
+                harness_id=harness_id,
+                goal_task_id=task_id,
+            )
+
+        # ------------------------------------------------------------------
+        # 2. Compile Harness → IRGraph (pure, no I/O).
+        # ------------------------------------------------------------------
+        try:
+            ir_graph = compile_harness(harness)
+        except Exception:
+            log.exception(
+                "_execute_harness_run_runner: compile() failed for harness %r run %s.",
+                harness_id, task_id,
+            )
+            return False
+
+        # ------------------------------------------------------------------
+        # 3. Build HarnessExecutorAdapter.
+        # ------------------------------------------------------------------
+        _worker_adapter = WorkerAdapter(self._worker)
+
+        def _publish_cb(tid: str, event: dict) -> None:
+            # Fire-and-forget; we're in a sync call from runner.core.run().
+            import asyncio
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    loop.create_task(self._publish(tid, event))
+                else:
+                    loop.run_until_complete(self._publish(tid, event))
+            except Exception:
+                log.debug("_publish_cb: failed to publish event %r for %s", event, tid)
+
+        adapter = HarnessExecutorAdapter(
+            worker_adapter=_worker_adapter,
+            run_state=base_run_state,
+            harness_id=harness_id,
+            goal_task_id=task_id,
+            publish_cb=_publish_cb,
+        )
+
+        # ------------------------------------------------------------------
+        # 4. Run the runner (synchronous; runner.core.run() is not async).
+        # ------------------------------------------------------------------
+        import sys
+        import os as _os
+        _SPACE_ROOT = str(Path(__file__).resolve().parent.parent.parent.parent)
+        _DW_PKG = _os.path.join(_SPACE_ROOT, "packages", "delivery-workflow")
+        if _DW_PKG not in sys.path:
+            sys.path.insert(0, _DW_PKG)
+
+        try:
+            from runner.core import run as runner_run  # noqa: PLC0415
+            workflow_state = runner_run(ir_graph, adapter, state_ops=adapter.state)
+        except Exception:
+            log.exception(
+                "_execute_harness_run_runner: runner.core.run() failed for harness run %s.",
+                task_id,
+            )
+            return True
+
+        # ------------------------------------------------------------------
+        # 5. Map WorkflowState → RunState and persist.
+        # ------------------------------------------------------------------
+        result_run_state = workflowstate_to_runstate(workflow_state, base_run_state)
+
+        try:
+            save_atomic(run_state_path, result_run_state)
+            # Re-write executor_variant after save_atomic (asdict() doesn't include it).
+            _write_executor_variant(run_state_path, "runner", task_id, harness_id)
+        except Exception:
+            log.exception(
+                "_execute_harness_run_runner: failed to persist RunState for %s.", task_id
+            )
+
+        # ------------------------------------------------------------------
+        # 6. Finalize the Cronos task based on outcome.
+        # ------------------------------------------------------------------
+        timestamp = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        wf_status = workflow_state.status
+
+        if wf_status == "blocked":
+            # Human-wait park: the adapter set waiting_node_id on the run state.
+            # Read it back from the persisted state.
+            waiting_node_id = result_run_state.waiting_node_id
+            log.info(
+                "Harness run %r parked at waiting_node_id=%r (runner path).",
+                task_id, waiting_node_id,
+            )
+            history_entry = (
+                f"```\n{timestamp} [harness]\n"
+                f"Waiting at node: {waiting_node_id}\n```"
+            )
+            try:
+                await self.store.finalize_run(
+                    task_id,
+                    new_state=TaskState.WAITING,
+                    session_id=None,
+                    waiting_question=f"Harness waiting at node: {waiting_node_id}",
+                    history_entry=history_entry,
+                )
+            except Exception:
+                log.exception("Failed to finalize harness run %s to WAITING (runner)", task_id)
+        else:
+            log.info("Harness run %r completed with status=%r (runner path).", task_id, wf_status)
+            history_entry = f"```\n{timestamp} [harness]\nHarness run completed.\n```"
+            try:
+                await self.store.finalize_run(
+                    task_id,
+                    new_state=TaskState.DONE,
+                    session_id=None,
+                    waiting_question=None,
+                    history_entry=history_entry,
+                )
+            except Exception:
+                log.exception("Failed to finalize harness run %s to DONE (runner)", task_id)
 
         return True
 
@@ -631,6 +939,30 @@ class RunExecutor:
         started_at = datetime.now(tz=UTC)
 
         await self._publish(goal_id, {"type": "run_start", "task_id": goal_id})
+
+        # ---------------------------------------------------------------
+        # Delivery-workflow pre-dispatch: detect sentinel and delegate.
+        # ---------------------------------------------------------------
+        _spec_path = detect_delivery_workflow_spec(goal.brief or "")
+        if _spec_path is not None:
+            log.info(
+                "run_goal: sentinel detected in goal %s — delegating to delivery_driver",
+                goal_id,
+            )
+            _space_id = goal.space_id
+            _space_dir = self.space_store.spaces_dir / _space_id
+            _run_dir = _space_dir / CRONOS_SUBDIR / "delivery-runs" / goal_id
+            await run_delivery_goal(
+                goal_id=goal_id,
+                spec_path=_spec_path,
+                store=self.store,
+                trace_store=w.trace_store,
+                space_id=_space_id,
+                space_dir=_space_dir,
+                run_dir=_run_dir,
+            )
+            return
+        # ---------------------------------------------------------------
 
         ordered_child_ids = _topo_children_local(goal_id, self.store)
         goal_context = f"# Goal: {goal.title}\n\n{goal.brief}"

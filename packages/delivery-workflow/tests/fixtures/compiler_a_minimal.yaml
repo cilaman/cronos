@@ -1,0 +1,39 @@
+apiVersion: delivery/v1
+metadata:
+  name: minimal-test
+
+defaults:
+  models:
+    build: sonnet
+    recon: haiku
+  budget:
+    usd_ceiling: 5.0
+    on_exceed: escalate
+
+nodes:
+  - id: scout
+    kind: agent
+    agent: scout
+    model: {use: recon}
+    produces: {class: research}
+
+  - id: g-scout
+    kind: gate
+    checks:
+      - {type: schema}
+
+  - id: implement
+    kind: agent
+    agent: implementor
+    model: {use: build}
+    inputs: {from: [scout]}
+    produces: {class: implementation}
+    loop:
+      until: "g-scout.decision == 'proceed'"
+      stall: [no_diff_progress]
+      max: 3
+      on_exhaust: escalate
+
+edges:
+  - {from: scout, to: g-scout}
+  - {from: g-scout, to: implement, when: "g-scout.decision == 'proceed'"}

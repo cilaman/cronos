@@ -14,7 +14,7 @@ Design decisions implemented here:
   DD-04  Telemetry: sum per-turn tokens; usd = tokens * token_cost_usd.
   DD-05  delivery_status parsed from final_text_snippet; fallback to artifact fence.
   DD-06  runGate delegates to app.pipeline.gate.runGate.
-  DD-07  evalCondition delegates to app.harnesses.decision.eval_condition.
+  DD-07  evalCondition delegates to lib.conditions.eval_condition.
   DD-08  state.write patches StateStore; node transitions appended to EventLog.
   DD-09  TelemetrySink wired to StateStore; BudgetExceededSignal → escalate.
   DD-10  escalate parks tracking task → WAITING + waiting_question; idempotent.
@@ -389,13 +389,13 @@ class CronosAdapter:
     # ------------------------------------------------------------------
 
     def evalCondition(self, expr: str, scope: dict[str, Any]) -> bool:
-        """Delegate to app.harnesses.decision.eval_condition (DD-07, R5).
+        """Delegate to lib.conditions.eval_condition (DD-07, R5).
 
         The orchestrator pre-builds ``scope`` from ``state.read().nodes``
         delivery_status fields; this op only evaluates the expression.
         Non-string scope values are coerced to str for the whitelisted grammar.
         """
-        from app.harnesses.decision import eval_condition
+        from lib.conditions import eval_condition
 
         flat: dict[str, str] = {k: str(v) for k, v in scope.items()}
         return eval_condition(expr, flat)

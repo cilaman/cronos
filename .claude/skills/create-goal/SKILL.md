@@ -31,7 +31,7 @@ The backend is always reachable at `http://backend:8000` from inside a Cronos wo
 | `agent_mode` | string | no | `"auto"` (default), `"plan"`, or `"ask"` |
 | `agent_model` | string | no | `"default"`, `"sonnet"`, `"opus"`, `"haiku"` |
 
-## Choosing a goal structure
+## Choosing a goal structure (coordination/ops only)
 
 ### Simple goal (coordination / ops tasks)
 
@@ -44,32 +44,6 @@ Goal
 └── Task C
 ```
 
-### Feature goal (builds or changes product functionality)
-
-When the goal delivers a feature — new UI, new API endpoint, a significant refactor — use the **CC-v1 pipeline structure**: one shared scout task at the goal level, then one sub-goal per feature slice, each containing the six pipeline phases.
-
-```
-Goal
-├── Task: scout  (shared, runs first; agent_model: haiku)
-├── Sub-Goal: Feature slice A
-│   ├── Task: analyst   (depends_on: [scout_id];     agent_model: sonnet)
-│   ├── Task: architect (depends_on: [analyst_id];   agent_model: opus)
-│   ├── Task: impl      (depends_on: [architect_id]; agent_model: sonnet)
-│   ├── Task: test      (depends_on: [impl_id];      agent_model: sonnet)
-│   ├── Task: review    (depends_on: [test_id];      agent_model: opus)
-│   └── Task: doc       (depends_on: [review_id];    agent_model: haiku)
-├── Sub-Goal: Feature slice B  (depends_on: [sub_goal_a_id] if sequential)
-│   └── analyst → architect → impl → test → review → doc
-└── Sub-Goal: Feature slice C  (depends_on: [sub_goal_b_id] if sequential)
-    └── analyst → architect → impl → test → review → doc
-```
-
-**Rules:**
-- One scout at goal level — never duplicate it per sub-goal (same codebase, one scan).
-- Sub-goals are independent feature slices (e.g. backend endpoint, frontend component, routing).
-- Do NOT create a separate "Tests" task — the `test` phase inside each sub-goal covers it.
-- Sequential sub-goals: set `depends_on` on **Sub-Goal B itself** (the sibling goal object, not its analyst) pointing to Sub-Goal A's id. `_topo_children` only considers **sibling** `depends_on` for execution ordering — cross-sub-goal task deps (analyst of B → doc of A) are invisible to it and cause alphabetical ordering which is almost always wrong.
-- Each pipeline task brief must: (1) reference the scout report path, (2) name the CC-v1 agent contract file (`.claude/agents/pipeline-{agent}.md`), (3) specify the artifact output path, (4) end with `/pipeline-gate`.
 
 ## Procedure — simple goal
 
@@ -120,99 +94,6 @@ for t in [
                "parent_id": GOAL_ID, "priority": 2, "agent_mode": "auto"})
     r = api_post(t)
     print(f"  Task: {r['id']} -- {r['title']}")
-```
-
-## Procedure — feature goal (CC-v1 pipeline structure)
-
-```python
-import os
-import urllib.request, json
-
-SPACE = "cronos-development"
-GOAL_SLUG = "my-feature-slug"   # kebab-case, used in artifact paths
-PIPELINE_DIR = f".cronos/pipeline/{GOAL_SLUG}"
-
-def api_post(payload):
-    data = json.dumps(payload).encode()
-    token = os.environ.get("CRONOS_INTERNAL_TOKEN", "")
-    headers = {"Content-Type": "application/json"}
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    req = urllib.request.Request(
-        "http://backend:8000/api/tasks", data=data,
-        headers=headers, method="POST")
-    with urllib.request.urlopen(req) as r:
-        return json.loads(r.read())
-
-# 1. Top-level goal
-goal = api_post({
-    "space_id": SPACE, "type": "goal", "priority": 2,
-    "title": "My Feature Goal",
-    "brief": "…motivation and list of sub-goals…",
-})
-GOAL_ID = goal["id"]
-
-# 2. Shared scout (all sub-goals' analysts depend on it)
-scout = api_post({
-    "space_id": SPACE, "type": "task", "parent_id": GOAL_ID,
-    "priority": 2, "agent_model": "haiku", "agent_mode": "auto",
-    "title": f"scout – {GOAL_SLUG}",
-    "brief": f"""CC-v1 scout phase. Research all files relevant to this feature.
-
-Emit `scout-report-{GOAL_SLUG}.md` (class=research) at `{PIPELINE_DIR}/scout-report-{GOAL_SLUG}.md`.
-
-Then run: /pipeline-gate""",
-})
-SCOUT_ID = scout["id"]
-
-# 3. Sub-goals with pipeline phases
-PHASES = [
-    ("analyst",   "sonnet", "analyst"),
-    ("architect", "opus",   "architect"),
-    ("impl",      "sonnet", "implementor"),
-    ("test",      "sonnet", "tester"),
-    ("review",    "opus",   "reviewer"),
-    ("doc",       "haiku",  "doc-sync"),
-]
-
-# Define slices; for sequential ordering, analyst of slice N+1 depends on doc of slice N
-slices = [
-    {"slug": "slice-a", "title": "Sub-Goal A", "brief": "…", "scope": "file_a.py, file_b.py"},
-    {"slug": "slice-b", "title": "Sub-Goal B", "brief": "…", "scope": "file_c.tsx"},
-]
-
-prev_sg_id = None  # previous sub-goal id for sibling ordering
-
-for sl in slices:
-    sg = api_post({
-        "space_id": SPACE, "type": "goal", "parent_id": GOAL_ID,
-        "priority": 2, "title": sl["title"], "brief": sl["brief"],
-        # Sibling dep: ensures _topo_children runs slices in the right order.
-        # Without this, all sub-goals have manual_order=0 and sort alphabetically.
-        "depends_on": [prev_sg_id] if prev_sg_id else [],
-    })
-    SG_ID = sg["id"]
-
-    prev_phase_id = SCOUT_ID  # every slice's analyst starts from the shared scout
-    for phase, model, agent_name in PHASES:
-        t = api_post({
-            "space_id": SPACE, "type": "task", "parent_id": SG_ID,
-            "priority": 2, "agent_model": model, "agent_mode": "auto",
-            "depends_on": [prev_phase_id],
-            "title": f"{phase} – {sl['slug']}",
-            "brief": f"""CC-v1 {phase} phase for: {sl['title']}.
-
-Read scout report: `{PIPELINE_DIR}/scout-report-{GOAL_SLUG}.md`
-Scope: {sl['scope']}
-Agent contract: `.claude/agents/pipeline-{agent_name}.md`
-Artifact: `{PIPELINE_DIR}/{phase}-report-{sl['slug']}.md`
-
-Then run: /pipeline-gate""",
-        })
-        print(f"  [{sl['slug']}] {phase}: {t['id']}")
-        prev_phase_id = t["id"]
-
-    prev_sg_id = SG_ID  # next sub-goal's sibling dep points here
 ```
 
 ## Verify

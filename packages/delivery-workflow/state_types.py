@@ -17,6 +17,7 @@ class NodeState:
     gate: dict[str, Any] | None = None
     artifact_paths: list[str] = field(default_factory=list)
     telemetry: dict[str, float] | None = None
+    fields: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
