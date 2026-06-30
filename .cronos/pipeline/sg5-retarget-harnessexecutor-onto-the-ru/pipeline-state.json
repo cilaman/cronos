@@ -1,0 +1,20 @@
+{
+  "cc_version": "1.0",
+  "goal_slug": "sg5-retarget-harnessexecutor-onto-the-ru",
+  "status": "running",
+  "created_at": "2026-06-30T13:01:58.948264+00:00",
+  "updated_at": "2026-06-30T13:01:58.948264+00:00",
+  "request_text": "Spec 5 — Retarget HarnessExecutor onto the runner\n\nThe unification. End-state: HarnessExecutor.execute = load harness → Compiler B → runner.run(ir, CronosAdapter). The runner is the substrate; the Harness visual editor becomes a consumer.\n\n### 5.1 Compiler B — Harness → IR (Cronos-side)\n\nInput: Harness (backend/app/harnesses/model.py). Map:\n- HarnessNode.type → IRNode.kind (1:1 mapping)\n- HarnessEdge{source:NodeRef, target:NodeRef, condition} → IREdge{source.node_id, target.node_id, when=condition, port=(source.port_id,target.port_id)}\n- node.data.loop → IRNode.loop\n\nBoundary: Compiler B imports the Harness model → lives in backend/app/harnesses/, NOT the package. IR types are the shared currency in the package. .importlinter stays green.\n\n### 5.2 Runtime-state reconciliation\n\nHarnessExecutor persists runs as RunState (harnesses/run_state.py); portable runner uses WorkflowState (package). Pick WorkflowState (app-free). Provide RunState→WorkflowState mapping in Cronos driver. Drain in-flight harness runs before cutover OR ship one-shot migration.\n\n### 5.3 Migration (parity-gated)\n\n1. (prereq) SG4 shipped — runner walks the IR, full harvest, proven on delivery\n2. Compiler B; unit-test every .cronos/harnesses/*.yml fixture compiles to valid IR\n3. PARITY HARNESS (the gate): run representative harnesses through both old BFS and runner(Compiler_B(harness)); assert identical RunState↔WorkflowState, event stream, and outcome. Cover: human-wait park/resume AND any/all aggregator\n4. Events op reconciliation: runner emits via events op; CronosAdapter forwards to bus (replaces _publish)\n5. Adapter reconciliation: HarnessExecutor's WorkerProtocol (run_agent/finalize_child/_publish) maps onto ExecutorInterface. CronosAdapter.dispatchAgent already creates+polls child tasks — reconciliation, not new behaviour\n6. Cut over behind CRONOS_HARNESS_RUNNER; parity/shadow in prod; remove old BFS\n\n### 5.4 No-regression argument\n\nExisting harnesses are acyclic (current executor rejects cycles via _topo_sort). Dropping cycle-rejection ONLY ADDS capability — no regression by construction.\n\n### References\n- backend/app/harnesses/executor.py — HarnessExecutor to retarget\n- backend/app/harnesses/model.py — Harness, HarnessNode, HarnessEdge types (Compiler B input)\n- backend/app/harnesses/run_state.py — RunState (to reconcile with WorkflowState)\n- packages/delivery-workflow/ — runner (SG4), WorkflowState, ExecutorInterface\n- .cronos/harnesses/*.yml — existing harness fixtures to test Compiler B\n",
+  "phases": {},
+  "telemetry": {
+    "total_duration_s": 0.0,
+    "total_token_spend": 0,
+    "total_tool_calls": 0,
+    "total_files_read": 0,
+    "total_memory_hits": 0,
+    "phases_completed": 0,
+    "phases_escalated": 0,
+    "phases_retried": 0,
+    "phases_failed": 0
+  }
+}

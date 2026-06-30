@@ -1,0 +1,20 @@
+{
+  "cc_version": "1.0",
+  "goal_slug": "sg1-sentinel-bridge",
+  "status": "running",
+  "created_at": "2026-06-30T13:01:58.679407+00:00",
+  "updated_at": "2026-06-30T13:01:58.679407+00:00",
+  "request_text": "Spec 1 — `node_status`/`delivery_status` → `cronos_status` bridge\n\nFixes #2: delivery tasks finish with `delivery_status: done` or `node_status: done` but the worker sees WAITING.\n\n### Root cause\n`agent.py::parse_status` only checks for `cronos_status` and bare `STATUS:` lines. The delivery pipeline emits `delivery_status: done` fenced blocks, which aren't handled. All unrecognized output → task stays WAITING forever.\n\n### Required change\nIn `backend/app/agent.py::parse_status`, add 4-tier resolution (additive):\n1. `node_status` (new; highest priority; Spec 2 adds the parser)\n2. `cronos_status` (existing legacy board signal)  \n3. `delivery_status` (existing legacy delivery signal — already has a parser in memory_parser.py)\n4. `STATUS:` (existing deprecated free-text last line)\n\nStatus vocab (case-insensitive): {done, wait, blocked, needs_fix, failed}\n- done → DONE\n- wait → WAIT (with waiting_question from summary or open_questions[0])\n- blocked → BLOCKED (waiting_question from summary/open_questions[0])\n- failed → BLOCKED\n- needs_fix → DONE for runner-tagged tasks; BLOCKED for all others\n\nThe runner tags child tasks it dispatches so the bridge knows to apply needs_fix→DONE only for routed tasks.\n\n### Tests\nUnit: test_parse_status_bridge.py — each vocab value → expected Status; multi-fence precedence; malformed JSON → (None, None); absent → falls through. Integration: finalize a task whose text contains node_status:done or delivery_status:done → DONE not WAITING. Regression: existing cronos_status and STATUS: tests stay green.\n\nReferences: spec §1.1–§1.6; `backend/app/agent.py` lines 84+ (Status enum), parse_status function; `backend/app/memory_parser.py` (existing parsers).\n",
+  "phases": {},
+  "telemetry": {
+    "total_duration_s": 0.0,
+    "total_token_spend": 0,
+    "total_tool_calls": 0,
+    "total_files_read": 0,
+    "total_memory_hits": 0,
+    "phases_completed": 0,
+    "phases_escalated": 0,
+    "phases_retried": 0,
+    "phases_failed": 0
+  }
+}

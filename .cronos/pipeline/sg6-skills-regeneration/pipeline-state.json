@@ -1,0 +1,20 @@
+{
+  "cc_version": "1.0",
+  "goal_slug": "sg6-skills-regeneration",
+  "status": "running",
+  "created_at": "2026-06-30T13:01:59.001101+00:00",
+  "updated_at": "2026-06-30T13:01:59.001101+00:00",
+  "request_text": "Spec 6 — Skills regeneration\n\nFixes #1: agents building pipelines using the stale create-goal skill that hardcodes CC-v1 six-phase tree (analyst → architect → impl → test → review → doc per sub-goal).\n\nUnder the runner this shape is obsolete: a delivery goal is ONE goal bound to the sdlc-delivery workflow, and per-agent child tasks are created dynamically by the runner's dispatchAgent.\n\n### Required changes\n\n1. **Strip CC-v1 pipeline section from `.claude/skills/create-goal/SKILL.md`**\n   - Remove: the \"Feature goal (CC-v1 pipeline structure)\" section with its analyst/architect/impl/test/review/doc hardcoding\n   - Keep: the API/field reference, the simple goal structure, the git workflow section\n   - These remain for ad-hoc/coordination/ops goals\n\n2. **Strip CC-v1 references from `.claude/skills/create-task/SKILL.md`** (if it references pipeline phases)\n   - Keep: API/field reference, general task creation\n\n3. **New skill: `.claude/skills/create-delivery-goal/SKILL.md`**\n   - Creates one goal with `workflow_binding: sdlc-delivery` (or equivalent field) \n   - Does NOT enumerate phases, agents, gates, or depends_on\n   - References delivery.workflow.yaml as the single source of truth for structure\n   - Includes note: \"The runner's dispatchAgent creates child tasks dynamically; do not pre-create them\"\n   - Add \"use POST /api/tasks; no custom scripts\" guidance for agents spawning sub-work\n\n4. **Update v2 agent contracts** — any .md agent files in `.claude/agents/` that reference pipeline phases or suggest spawning phase tasks should be updated to reference the runner and `create-delivery-goal`\n\n### Contract test\nAfter creating a delivery goal with the new skill: exactly 1 goal created, 0 pre-created phase tasks, worker immediately routes to runner (not _topo_children).\n\n### References\n- `.claude/skills/create-goal/SKILL.md` — the skill to prune\n- `.claude/skills/create-task/SKILL.md` — may need similar pruning\n- `delivery.workflow.yaml` — the single source of truth for delivery structure\n- `backend/app/worker.py` — the runner dispatch path (SG4 adds this)\n",
+  "phases": {},
+  "telemetry": {
+    "total_duration_s": 0.0,
+    "total_token_spend": 0,
+    "total_tool_calls": 0,
+    "total_files_read": 0,
+    "total_memory_hits": 0,
+    "phases_completed": 0,
+    "phases_escalated": 0,
+    "phases_retried": 0,
+    "phases_failed": 0
+  }
+}
