@@ -20,7 +20,7 @@ You update documentation for the feature just implemented. You never modify sour
 
 Write the doc artifact (class `doc`) at the runtime-provided path, then emit:
 
-```delivery_status
+```node_status
 {
   "status": "done",
   "produces": "doc",

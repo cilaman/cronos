@@ -371,3 +371,81 @@ class TestLoopBookkeeping:
         assert result.nodes_executed["reviewer"].status == "done"
         assert result.waiting_node_id is None
         assert worker.call_count == 3
+
+
+# ---------------------------------------------------------------------------
+# I5 / SG2: node_status fence support in loop stall-detection
+# ---------------------------------------------------------------------------
+
+
+def _ns_block(status: str = "done", fields: dict | None = None) -> str:
+    payload: dict = {"status": status}
+    if fields is not None:
+        payload["fields"] = fields
+    return f"```node_status\n{json.dumps(payload)}\n```"
+
+
+class TestLoopRecurringFindingsNodeStatus:
+    """I5: Loop stall-detection works with node_status fence (migrated agents)."""
+
+    @pytest.mark.asyncio
+    async def test_escalates_when_finding_ids_repeat_node_status(self) -> None:
+        """recurring_findings stall triggers when node_status emits same finding_ids twice."""
+        ns_stall = _ns_block(
+            status="needs_fix", fields={"finding_ids": ["F1", "F2"]}
+        )
+        worker = _MultiTraceWorker([
+            _make_trace(final_text=f"First attempt.\n{ns_stall}"),
+            _make_trace(final_text=f"Second attempt — same findings.\n{ns_stall}"),
+        ])
+        harness = _make_loop_harness(
+            loop={"stall": ["recurring_findings"], "max": 10}
+        )
+        result = await _run_harness(harness, worker)
+        # Should escalate: waiting_node_id is set, park triggered
+        assert result.waiting_node_id == "reviewer"
+        assert worker.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_no_stall_when_node_status_findings_change(self) -> None:
+        """No stall when node_status emits different finding_ids between attempts."""
+        # Include a simple string field ("verdict") for the until condition;
+        # finding_ids is a list and stored as str(list) in scope, so use verdict for until.
+        ns1 = _ns_block(status="needs_fix", fields={"finding_ids": ["F1"], "verdict": "fail"})
+        ns2 = _ns_block(status="done", fields={"finding_ids": ["F2"], "verdict": "pass"})
+        worker = _MultiTraceWorker([
+            _make_trace(final_text=f"First.\n{ns1}"),
+            _make_trace(final_text=f"Second.\n{ns2}"),
+        ])
+        harness = _make_loop_harness(
+            loop={
+                "until": "reviewer.fields.verdict == pass",
+                "stall": ["recurring_findings"],
+                "max": 10,
+            }
+        )
+        result = await _run_harness(harness, worker)
+        # Finding IDs changed (F1 → F2) so no stall; until condition fired on attempt 2.
+        assert result.waiting_node_id is None
+        assert worker.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_node_status_and_delivery_status_coexist_in_loop(self) -> None:
+        """R6 coexistence: first attempt delivery_status, second attempt node_status — no stall."""
+        ds1 = _ds_block(status="needs_fix", fields={"finding_ids": ["F1"], "verdict": "fail"})
+        ns2 = _ns_block(status="done", fields={"finding_ids": ["F2"], "verdict": "pass"})
+        worker = _MultiTraceWorker([
+            _make_trace(final_text=f"Legacy agent.\n{ds1}"),
+            _make_trace(final_text=f"Migrated agent.\n{ns2}"),
+        ])
+        harness = _make_loop_harness(
+            loop={
+                "until": "reviewer.fields.verdict == pass",
+                "stall": ["recurring_findings"],
+                "max": 10,
+            }
+        )
+        result = await _run_harness(harness, worker)
+        # Different finding IDs across fence types → no stall; until fires on attempt 2.
+        assert result.waiting_node_id is None
+        assert worker.call_count == 2

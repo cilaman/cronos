@@ -1745,6 +1745,121 @@ class TestScopeEnrichmentFromDeliveryStatus:
         assert result.nodes_executed["A1"].output == plain_output
 
 
+# ---------------------------------------------------------------------------
+# I5 / SG2: scope enrichment from node_status block + coexistence
+# ---------------------------------------------------------------------------
+
+
+class TestScopeEnrichmentFromNodeStatus:
+    """After an agent node completes, node_status fields appear in scope (SG2)."""
+
+    @pytest.mark.asyncio
+    async def test_node_status_fields_added_to_scope(self) -> None:
+        """node_status fields populate the same dotted-path scope keys as delivery_status."""
+        node_output = (
+            "```node_status\n"
+            '{"status": "done", "fields": {"verdict": "pass", "count": "5"}}\n'
+            "```\n"
+            "STATUS: DONE"
+        )
+        store = _make_store_mock()
+        worker = StubWorker(task_state=TaskState.DONE, final_text=node_output)
+        harness = _make_single_agent_harness()
+        space = _make_space()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch("app.harnesses.executor._DATA_DIR", Path(tmpdir)):
+                with patch("app.harnesses.executor._run_index.update_run_status",
+                           new_callable=AsyncMock):
+                    executor = HarnessExecutor(store, worker, _tools_resolver)
+                    result = await executor.execute("run-ns-1", harness, space)
+
+        assert result.nodes_executed["A1"].status == "done"
+        assert result.nodes_executed["A1"].output == node_output
+
+    @pytest.mark.asyncio
+    async def test_decision_routes_on_node_status_verdict(self) -> None:
+        """Conditional edge can branch on node_status.fields.verdict (SG2 R3)."""
+        node_output = (
+            "```node_status\n"
+            '{"status": "done", "fields": {"verdict": "pass"}}\n'
+            "```"
+        )
+        store = _make_store_mock()
+        worker = StubWorker(task_state=TaskState.DONE, final_text=node_output)
+        space = _make_space()
+
+        review = _make_agent_node("review")
+        decision = _make_decision_node("gate")
+        pass_node = _make_agent_node("pass-node")
+        fail_node = _make_agent_node("fail-node")
+
+        harness = Harness(
+            name="ns-routing",
+            nodes=[review, decision, pass_node, fail_node],
+            edges=[
+                _make_edge("e1", "review", "gate"),
+                _make_edge("e2", "gate", "pass-node",
+                           condition="review.fields.verdict == pass"),
+                _make_edge("e3", "gate", "fail-node",
+                           condition="review.fields.verdict == fail"),
+            ],
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch("app.harnesses.executor._DATA_DIR", Path(tmpdir)):
+                with patch("app.harnesses.executor._run_index.update_run_status",
+                           new_callable=AsyncMock):
+                    executor = HarnessExecutor(store, worker, _tools_resolver)
+                    result = await executor.execute("run-ns-routing", harness, space)
+
+        assert result.nodes_executed.get("pass-node", NodeState(status="pending")).status == "done"
+        assert result.nodes_executed.get("fail-node") is None or \
+               result.nodes_executed["fail-node"].status == "skipped"
+
+    @pytest.mark.asyncio
+    async def test_node_status_preferred_over_delivery_status(self) -> None:
+        """R6 coexistence: when both fences present, node_status scope wins."""
+        both_output = (
+            "```node_status\n"
+            '{"status": "done", "fields": {"verdict": "pass"}}\n'
+            "```\n"
+            "```delivery_status\n"
+            '{"status": "done", "fields": {"verdict": "fail"}}\n'
+            "```"
+        )
+        store = _make_store_mock()
+        worker = StubWorker(task_state=TaskState.DONE, final_text=both_output)
+        space = _make_space()
+
+        review = _make_agent_node("review")
+        decision = _make_decision_node("gate")
+        pass_node = _make_agent_node("pass-node")
+        fail_node = _make_agent_node("fail-node")
+
+        harness = Harness(
+            name="ns-coexist",
+            nodes=[review, decision, pass_node, fail_node],
+            edges=[
+                _make_edge("e1", "review", "gate"),
+                _make_edge("e2", "gate", "pass-node",
+                           condition="review.fields.verdict == pass"),
+                _make_edge("e3", "gate", "fail-node",
+                           condition="review.fields.verdict == fail"),
+            ],
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch("app.harnesses.executor._DATA_DIR", Path(tmpdir)):
+                with patch("app.harnesses.executor._run_index.update_run_status",
+                           new_callable=AsyncMock):
+                    executor = HarnessExecutor(store, worker, _tools_resolver)
+                    result = await executor.execute("run-ns-coexist", harness, space)
+
+        # node_status (verdict=pass) takes priority → pass-node runs
+        assert result.nodes_executed.get("pass-node", NodeState(status="pending")).status == "done"
+
+
 def _make_single_agent_harness(
     node_id: str = "A1",
     prompt: str = "do work",

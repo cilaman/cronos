@@ -32,7 +32,7 @@ Every agent emits a **structured control signal** (the parsing-gate's routing su
 free-text `STATUS:` line. Format (fenced YAML):
 
 ````
-```delivery_status
+```node_status
 {
   "status": "done | blocked | needs_fix | failed",
   "artifact_paths": ["path/to/report.md"],
@@ -207,7 +207,7 @@ iteratively, validate, and emit the structured return.
 
 Write the impl artifact (class `implementation`), then emit:
 
-```delivery_status
+```node_status
 {
   "status": "done",
   "produces": "implementation",

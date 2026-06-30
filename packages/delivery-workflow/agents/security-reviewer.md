@@ -37,7 +37,7 @@ confirmed.
 Write the review artifact (class `review`) using the structure in the `security-review` skill,
 then emit the return the harness routes on:
 
-```delivery_status
+```node_status
 {
   "status": "done",
   "produces": "review",

@@ -21,7 +21,7 @@ You transform the analyst's requirements into an executable implementation DAG. 
 
 Write the design artifact (class `design`) at the runtime-provided path, then emit:
 
-```delivery_status
+```node_status
 {
   "status": "done",
   "produces": "design",
