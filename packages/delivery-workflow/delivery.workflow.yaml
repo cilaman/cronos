@@ -208,7 +208,8 @@ edges:
   - {from: g-review,     to: architect,      when: "review.fields.verdict == 'needs_fix' && review.fields.finding_class == 'architectural'"}
   - {from: security,     to: g-security}
   - {from: g-security,   to: testrun,        when: "g-security.decision == 'proceed'"}
-  - {from: g-security,   to: implement,      when: "g-security.decision == 'needs_fix' && security.fields.finding_class in code,dependency"}
+  - {from: g-security,   to: implement,      when: "g-security.decision == 'needs_fix' && security.fields.finding_class == 'code'"}
+  - {from: g-security,   to: implement,      when: "g-security.decision == 'needs_fix' && security.fields.finding_class == 'dependency'"}
   - {from: g-security,   to: architect,      when: "g-security.decision == 'needs_fix' && security.fields.finding_class == 'design'"}
   - {from: testrun,      to: g-tests}
   - {from: g-tests,      to: doc,            when: "g-tests.decision == 'proceed'"}
