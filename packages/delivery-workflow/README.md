@@ -9,7 +9,7 @@ The delivery/v1 pipeline is a multi-agent orchestration system where agents (e.g
 **Key responsibilities:**
 - Define the executor interface (6 operations typed as runtime-checkable Protocols)
 - Load and validate workflow specs (`delivery.workflow.yaml`) against JSON-Schema
-- Parse `delivery_status` artifacts from agent outputs
+- Parse agent return envelopes (`node_status` primary, `delivery_status` legacy)
 - Manage execution state (read/write, atomic updates, resume policy)
 - Accumulate telemetry (tokens, USD, duration) with budget ceiling enforcement
 - Provide a null implementation for testing
@@ -26,6 +26,7 @@ packages/delivery-workflow/
 │
 ├── lib/                      # Portable libraries (no app.* imports)
 │   ├── delivery_status.py    # Parse delivery_status blocks from agent output
+│   ├── node_status.py      # Parse node_status blocks from agent output (primary envelope)
 │   ├── git_pr.py            # PR emission helper — git/gh subprocess, PROPOSED_PR.md fallback
 │   ├── improve.py           # Tier-1/Tier-2 back-half applier (classifier + PR routing)
 │   ├── security.py          # Security check evaluator — scanner execution, JSON parsing, decision logic
@@ -209,9 +210,33 @@ Atomic writes to `state.json` (tempfile + `os.replace`) ensure consistency.
 
 ## Libraries
 
-### `lib/delivery_status`
 
-Parses `delivery_status` fenced blocks from agent output, extracting phase metadata:
+### `lib/node_status`
+
+**Primary agent return envelope parser** — parses `node_status` fenced JSON blocks from agent output (the general-purpose envelope introduced in SG2).
+
+```markdown
+node_status
+{
+  "status": "done | blocked | needs_fix | failed",
+  "artifact_paths": ["path/to/report.md"],
+  "produces": "research | analysis | design | implementation | review | test | doc | frontend",
+  "fields": {
+    "verdict": "pass | needs_fix",
+    "has_ui": true,
+    "files_changed": ["src/x.py"]
+  },
+  "open_questions": []
+}
+```
+
+Returns a typed `NodeStatusBlock` object with status, artifact paths, and routing fields. Agents migrated to `node_status` (all 12 canonical agents as of SG2) now use this envelope; the runtime prefers parsing `node_status` over the legacy `delivery_status`.
+
+### `lib/delivery_status` (legacy)
+
+**Legacy agent return envelope parser** — parses `delivery_status` fenced blocks from agent output. Fully supported as a tier-3 fallback for backward compatibility. No deprecation warning — runtimes should handle both fence types indefinitely.
+
+Parses `delivery_status` blocks:
 
 ```markdown
 delivery_status
@@ -222,6 +247,7 @@ tokens_used: 8240
 ```
 
 Returns a typed `DeliveryStatus` object with phase, status, artifacts, and token counts.
+
 
 ### `lib/git_pr`
 
@@ -399,7 +425,7 @@ The Cronos backend adopts delivery/v1 via `CronosAdapter` in `packages/delivery-
 
 | Operation | Implementation |
 |---|---|
-| `dispatchAgent` | Create child task, poll state, load trace, parse delivery_status → `AgentResult` |
+| `dispatchAgent` | Create child task, poll state, load trace, parse node_status (primary) or delivery_status (legacy) → `AgentResult` |
 | `runGate` | Delegate to `app.pipeline.gate.runGate()` → `GateResult` with decision/errors/evidence |
 | `evalCondition` | Delegate to `lib.conditions.eval_condition()` for conditional routing |
 | `state.read/write` | `CronosStateOps` → `lib/state/StateStore` atomic read/write + EventLog audit trail |
@@ -439,7 +465,8 @@ The package includes 347 tests:
 - **test_interface_nullruntime.py** — Protocol compliance, `NullRuntime` raises `NotImplementedError`
 - **test_spec_loader.py** — spec loading, validation against schema, malformed rejection
 - **test_schemas.py** — artifact-class schemas (research, analysis, design, etc.)
-- **test_delivery_status.py** — parsing `delivery_status` blocks
+- **test_node_status.py** — parsing `node_status` blocks (primary)
+- **test_delivery_status.py** — parsing `delivery_status` blocks (legacy)
 - **test_security_lib.py** — `lib/security.py` scanner execution, JSON parsing, missing-scanner policy, agent-verdict precedence, DD-002 regression (>2 KB JSON must parse, not score clean)
 - **test_evals_lib.py** — `lib/evals` corpus runner, command precedence (arg→env→default), passed flag, exit-code propagation, CLI smoke tests
 - **test_state.py** — `StateStore` read/write, atomic updates, resume policy
