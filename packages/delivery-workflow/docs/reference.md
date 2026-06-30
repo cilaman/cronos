@@ -58,12 +58,12 @@ validates against.
 
 The workflow spec itself validates against `delivery.workflow.schema.yaml`.
 
-## `delivery_status` block
+## `node_status` block (primary) & `delivery_status` (legacy)
 
-Every agent ends with this fenced block (the runtime's routing surface — prose is never parsed):
+Every agent ends with a `node_status` fenced block (the primary routing surface; `delivery_status` also fully supported for backward compatibility):
 
 ````
-```delivery_status
+```node_status
 {
   "status": "done | blocked | needs_fix | failed",
   "produces": "research | analysis | design | implementation | review | test | doc | frontend",

@@ -17,7 +17,7 @@ You run the tests. You receive the test-design artifact from `test-architect`, e
 
 Run each TC. Then emit:
 
-```delivery_status
+```node_status
 {
   "status": "done",
   "produces": "test",

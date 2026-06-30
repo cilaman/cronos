@@ -29,7 +29,7 @@ carry-forward discipline. This definition holds only your role, inputs, and the 
 Write the review artifact (class `review`) using the structure in the `code-review` skill,
 then emit the return the harness routes on:
 
-```delivery_status
+```node_status
 {
   "status": "done",
   "produces": "review",

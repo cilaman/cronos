@@ -20,7 +20,7 @@ You turn a feature brief and scout-report into a structured set of testable requ
 
 Write the analysis artifact (class `analysis`) at the runtime-provided path, then emit:
 
-```delivery_status
+```node_status
 {
   "status": "done",
   "produces": "analysis",

@@ -20,7 +20,7 @@ You design the test suite for the feature being implemented. You assign `TC-ids`
 
 Write the test-design artifact (class `test`) at the runtime-provided path, then emit:
 
-```delivery_status
+```node_status
 {
   "status": "done",
   "produces": "test",

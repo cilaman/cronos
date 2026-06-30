@@ -30,7 +30,7 @@ holds only your role, inputs, and the hard rules.
 Write the retro artifact (class `retro`) using the structure in the `retro` skill, then emit the
 return the loop routes on:
 
-```delivery_status
+```node_status
 {
   "status": "done | blocked | failed",
   "produces": "retro",

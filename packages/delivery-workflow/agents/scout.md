@@ -24,7 +24,7 @@ You are a **read-only** reconnaissance agent. You never edit code. Your only wri
 
 Write the scout report (class `research`) at the runtime-provided path. Then emit:
 
-```delivery_status
+```node_status
 {
   "status": "done",
   "produces": "research",

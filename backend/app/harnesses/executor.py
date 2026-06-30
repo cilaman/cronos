@@ -48,7 +48,9 @@ Key design decisions
 
 from __future__ import annotations
 
+import json
 import logging
+import re
 from collections import deque
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -818,8 +820,8 @@ class HarnessExecutor:
                 # Attempt failed or was cancelled — propagate immediately.
                 return done, output, child_task_id, park
 
-            # Parse delivery_status from this attempt's output.
-            ds = parse_delivery_status_block(output or "")
+            # Parse node_status (preferred) or delivery_status from this attempt's output.
+            ds = _parse_status_envelope(output or "")
             current_finding_ids = _extract_finding_ids(ds)
 
             # Check until condition.
@@ -1344,15 +1346,50 @@ def _maybe_save(state: RunState, path: "Path | None") -> None:
         log.exception("Failed to persist run state to %s", path)
 
 
+_NS_FENCE_RE = re.compile(
+    r"^```node_status\s*$\n(.*?)^```\s*$",
+    re.MULTILINE | re.DOTALL | re.IGNORECASE,
+)
+
+
+def _parse_status_envelope(output: str) -> "dict | None":
+    """Parse node_status (preferred) then delivery_status envelope from output.
+
+    Returns a uniform dict matching parse_delivery_status_block's shape —
+    ``status`` is lowercased, ``fields`` is a dict.  Returns None when neither
+    fence is found or the JSON is malformed.
+
+    node_status is tried first (tier-0 preferred per SG2 design); delivery_status
+    is the fallback (backward-compatible, R6).
+
+    TODO(OQ-1 sg2-node-status-general-sentinel): this helper now handles both
+    fence types; renaming the outer call sites is a deferred housekeeping item.
+    """
+    if not output:
+        return None
+    m = _NS_FENCE_RE.search(output)
+    if m:
+        try:
+            data = json.loads(m.group(1).strip())
+        except (json.JSONDecodeError, ValueError):
+            data = None
+        if isinstance(data, dict):
+            if "status" in data and isinstance(data["status"], str):
+                data["status"] = data["status"].lower()
+            return data
+    return parse_delivery_status_block(output)
+
+
 def _enrich_scope_from_delivery_status(
     node_id: str,
     output: str,
     scope: dict[str, str],
 ) -> None:
-    """Populate dotted-path scope keys from a ```delivery_status block.
+    """Populate dotted-path scope keys from a node_status or delivery_status block.
 
     After a node reaches DONE, parses the agent's final_text_snippet for a
-    ```delivery_status JSON fence and adds the following keys to *scope*:
+    ``node_status`` fence first (preferred), then ``delivery_status`` as fallback,
+    and adds the following keys to *scope*:
       - ``"<node_id>.status"``        — normalised-lowercase status string
       - ``"<node_id>.fields.<name>"`` — one key per entry in ``fields`` dict
 
@@ -1360,10 +1397,14 @@ def _enrich_scope_from_delivery_status(
     only adds new dotted-path keys (R12, G3.3 routing unblock).
 
     Fields values are coerced to ``str`` so the scope stays ``dict[str, str]``.
+
+    NOTE: function name is preserved for minimal churn per OQ-1 deferral
+    (sg2-node-status-general-sentinel design). It now handles both fence types
+    via _parse_status_envelope.
     """
     if not output:
         return
-    ds = parse_delivery_status_block(output)
+    ds = _parse_status_envelope(output)
     if ds is None:
         return
     status_val = ds.get("status")

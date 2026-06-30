@@ -212,6 +212,25 @@ class TestTierPrecedence:
         assert status == Status.DONE
         assert ctx == "cronos wins"
 
+    def test_node_status_beats_delivery_status_without_cronos(self) -> None:
+        # I3 coexistence: tier-1 (node_status) wins over tier-3 (delivery_status)
+        # even when tier-2 (cronos_status) is absent.
+        text = (
+            _node_status("blocked", "node blocked")
+            + "\n"
+            + _delivery_status("done", "delivery done")
+        )
+        status, ctx = parse_status(text)
+        assert status == Status.BLOCKED
+        assert ctx == "node blocked"
+
+    def test_delivery_status_active_when_no_node_status(self) -> None:
+        # I3 coexistence: when node_status is absent, tier-3 delivery_status applies.
+        text = _delivery_status("done", "delivery wins")
+        status, ctx = parse_status(text)
+        assert status == Status.DONE
+        assert ctx == "delivery wins"
+
 
 # ---------------------------------------------------------------------------
 # R4: needs_fix dual-branch

@@ -19,7 +19,7 @@ You design the UI for a feature. You produce mockups and a structured frontend s
 
 Write the frontend artifact (class `frontend`) at the runtime-provided path, then emit:
 
-```delivery_status
+```node_status
 {
   "status": "done",
   "produces": "frontend",
