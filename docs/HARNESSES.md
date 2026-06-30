@@ -464,29 +464,39 @@ or a skill like `frontend-design`. (See the registered agents/skills tables in
 #### Agent completion sentinel
 
 When an agent task finishes, the executor reads its completion status and
-structured output from one of three channels (in precedence order):
+structured output from one of four channels (in precedence order):
 
-1. **Structured channel (preferred — G3.3)**: a fenced `delivery_status` JSON block at the
-   end of the agent's output (CC-v1 agents emit this):
+1. **Sentinel Bridge channel (new)**: a fenced `node_status` JSON block at the
+   end of the agent's output (used by some external systems):
    ```
-   ```delivery_status
-   {"status": "DONE", "fields": {"verdict": "pass", "has_ui": false}}
+   ```node_status
+   {"status": "done", "summary": "Work completed"}
    ```
    ```
-   - `status`: the primary signal (matching rules for decision edges).
-   - `fields`: a dict of structured fields (available as dotted-path keys in scope
-     for decision routing — e.g., `review.fields.verdict`).
+   - `status`: lowercase status value (`done`, `wait`, `blocked`, `failed`, `needs_fix`);
+     mapped to Cronos statuses internally.
+   - `summary`: optional context string (used as waiting question or blocker reason).
 
-2. **Legacy structured channel**: a fenced `cronos_status` JSON block:
+2. **Primary structured channel**: a fenced `cronos_status` JSON block (standard Cronos format):
    ```
    ```cronos_status
    {"status": "DONE", "summary": "Completed without errors", "artifacts": []}
    ```
    ```
-   Valid `status` values: `DONE`, `WAIT`, `BLOCKED`. The `summary` field is
-   human-readable; `artifacts` is optional. (Deprecated in favour of `delivery_status`.)
+   Valid `status` values: `DONE`, `WAIT`, `BLOCKED` (uppercase). The `summary` field is
+   human-readable; `artifacts` is optional.
 
-3. **Legacy text channel (deprecated)**: a `STATUS: DONE` line. Still supported but
+3. **Delivery/v2 bridge channel**: a fenced `delivery_status` JSON block (CC-v1 agents emit this):
+   ```
+   ```delivery_status
+   {"status": "done", "fields": {"verdict": "pass", "has_ui": false}}
+   ```
+   ```
+   - `status`: lowercase status value; mapped to Cronos statuses internally.
+   - `fields`: a dict of structured fields (available as dotted-path keys in scope
+     for decision routing — e.g., `review.fields.verdict`).
+
+4. **Legacy text channel (deprecated)**: a `STATUS: DONE` line. Still supported but
    logs a warning; structured blocks are preferred.
 
 If none is present, the run's `exit_reason` is set to `NO_CRONOS_STATUS`. See
@@ -531,21 +541,31 @@ the upstream agent and follows the **first matching edge**. An edge with
 
 Signal precedence (`decision.py`, highest first):
 
-1. **`status` from `delivery_status` block** — a fenced-JSON block
-   `` ```delivery_status\n{"status": "<value>", ...}\n``` ``
-   found in the upstream node's output. The `status` field is matched case-sensitively
-   against `edge.condition`. This is the **preferred structured channel** for CC-v1 agents.
+1. **`status` from `node_status` block** — a fenced-JSON block
+   `` ```node_status
+{"status": "<value>", ...}
+``` ``
+   found in the upstream node's output. The `status` field (lowercase) is mapped to Cronos Status.
+   (Sentinel Bridge tier; new in SG1.)
 2. **`status` from `cronos_status` block** — a fenced-JSON block
-   `` ```cronos_status\n{"status": "<value>", ...}\n``` ``
+   `` ```cronos_status
+{"status": "<value>", ...}
+``` ``
    found in the upstream node's output. The `status` field is matched case-sensitively
-   against `edge.condition`. (Deprecated in favour of `delivery_status`.)
-3. **`status` from legacy `STATUS:` marker** — a `STATUS: <value>` line (deprecated).
+   against `edge.condition`. (Primary Cronos channel.)
+3. **`status` from `delivery_status` block** — a fenced-JSON block
+   `` ```delivery_status
+{"status": "<value>", ...}
+``` ``
+   found in the upstream node's output. The `status` field (lowercase) is mapped to Cronos Status.
+   (Delivery/v2 bridge tier.)
+4. **`status` from legacy `STATUS:` marker** — a `STATUS: <value>` line (deprecated).
    Matched case-sensitively. Logs a warning if found; structured blocks are preferred.
-4. **`exit_reason`** — the run's exit reason string (e.g. `NO_CRONOS_STATUS` when
+5. **`exit_reason`** — the run's exit reason string (e.g. `NO_CRONOS_STATUS` when
    no structured block or marker is present).
-5. **`regex`** — `re.search(edge.condition, upstream_final_text)`. Python inline
+6. **`regex`** — `re.search(edge.condition, upstream_final_text)`. Python inline
    flags like `(?i)` are allowed. No `/pattern/flags` syntax, no `eval`.
-6. **`variable`** / **dotted-path expression** — a whitelisted expression on scope variables
+7. **`variable`** / **dotted-path expression** — a whitelisted expression on scope variables
    (see [Dotted-path conditions](#dotted-path-conditions-g32)).
 
 #### Dotted-path conditions (G3.2)
@@ -900,16 +920,15 @@ Default edge: `condition: null` (fallback when no condition matches).
 
 **Agent completion signals** (G3.3):
 
-Agents should emit a `delivery_status` block (preferred) or legacy `cronos_status`:
+Agents can emit one of four channels (in precedence order): `node_status` (new), `cronos_status` (preferred for standard tasks), `delivery_status` (CC-v1 agents), or legacy `STATUS:` line.
 
 ```
-```delivery_status
-{"status": "DONE", "fields": {"verdict": "pass", "blocker_count": 0}}
+```cronos_status
+{"status": "DONE", "summary": "Work done"}
 ```
 ```
 
-The `status` field is matched for decision routing; `fields` are auto-enriched
-as dotted-path scope keys (e.g., `agent_id.fields.verdict`).
+For `delivery_status` (CC-v1) or `node_status` (external systems), the lowercase `status` field is mapped to Cronos statuses and `fields` are auto-enriched as dotted-path scope keys for decision routing (e.g., `agent_id.fields.verdict`).
 
 **Variable syntax:** `$name` / `${name}`. Root vars + upstream node outputs
 (keyed by node id); upstream wins on collision; unknown placeholders survive
