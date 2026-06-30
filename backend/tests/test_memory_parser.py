@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.memory_parser import MemoryBlock, parse_delivery_status_block, parse_memory_blocks
+from app.memory_parser import MemoryBlock, parse_delivery_status_block, parse_memory_blocks, parse_node_status_block
 
 
 # ---------------------------------------------------------------------------
@@ -283,3 +283,101 @@ def test_delivery_status_embedded_in_longer_output() -> None:
     result = parse_delivery_status_block(text)
     assert result is not None
     assert result["fields"]["verdict"] == "pass"
+
+
+# ---------------------------------------------------------------------------
+# parse_node_status_block
+# ---------------------------------------------------------------------------
+
+
+def test_node_status_none_on_empty() -> None:
+    assert parse_node_status_block("") == (None, None)
+    assert parse_node_status_block(None) == (None, None)  # type: ignore[arg-type]
+
+
+def test_node_status_none_when_absent() -> None:
+    text = "Some output\nSTATUS: DONE"
+    assert parse_node_status_block(text) == (None, None)
+
+
+def test_node_status_basic_parse() -> None:
+    text = '```node_status\n{"status": "done", "summary": "node finished"}\n```'
+    status, summary = parse_node_status_block(text)
+    assert status == "done"
+    assert summary == "node finished"
+
+
+def test_node_status_lowercases_status() -> None:
+    text = '```node_status\n{"status": "DONE"}\n```'
+    status, summary = parse_node_status_block(text)
+    assert status == "done"
+    assert summary is None
+
+
+def test_node_status_uppercase_wait() -> None:
+    text = '```node_status\n{"status": "WAIT", "summary": "waiting"}\n```'
+    status, summary = parse_node_status_block(text)
+    assert status == "wait"
+    assert summary == "waiting"
+
+
+def test_node_status_summary_none_when_non_string() -> None:
+    text = '```node_status\n{"status": "done", "summary": 42}\n```'
+    status, summary = parse_node_status_block(text)
+    assert status == "done"
+    assert summary is None
+
+
+def test_node_status_malformed_json_returns_none() -> None:
+    text = '```node_status\n{not valid json\n```'
+    assert parse_node_status_block(text) == (None, None)
+
+
+def test_node_status_unclosed_fence_returns_none() -> None:
+    text = '```node_status\n{"status": "done"}'
+    assert parse_node_status_block(text) == (None, None)
+
+
+def test_node_status_non_dict_returns_none() -> None:
+    text = '```node_status\n["not", "a", "dict"]\n```'
+    assert parse_node_status_block(text) == (None, None)
+
+
+def test_node_status_missing_status_field_returns_none() -> None:
+    text = '```node_status\n{"summary": "done"}\n```'
+    assert parse_node_status_block(text) == (None, None)
+
+
+def test_node_status_extra_unknown_fields_tolerated() -> None:
+    text = '```node_status\n{"status": "done", "node_id": "n1", "extra": true}\n```'
+    status, summary = parse_node_status_block(text)
+    assert status == "done"
+
+
+def test_node_status_case_insensitive_fence() -> None:
+    text = '```NODE_STATUS\n{"status": "done"}\n```'
+    status, summary = parse_node_status_block(text)
+    assert status == "done"
+
+
+def test_node_status_first_block_wins() -> None:
+    text = (
+        '```node_status\n{"status": "done", "summary": "first"}\n```\n'
+        '```node_status\n{"status": "wait", "summary": "second"}\n```'
+    )
+    status, summary = parse_node_status_block(text)
+    assert status == "done"
+    assert summary == "first"
+
+
+def test_node_status_embedded_in_longer_output() -> None:
+    text = (
+        "Agent completed.\n\n"
+        "```node_status\n"
+        '{"status": "needs_fix", "summary": "review required"}\n'
+        "```\n\n"
+        "STATUS: DONE"
+    )
+    status, summary = parse_node_status_block(text)
+    assert status == "needs_fix"
+    assert summary == "review required"

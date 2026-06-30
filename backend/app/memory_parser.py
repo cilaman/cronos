@@ -128,6 +128,58 @@ def parse_delivery_status_block(text: str) -> dict | None:
     return None
 
 
+_NS_FENCE_OPEN = re.compile(r"^```node_status\s*$", re.IGNORECASE)
+
+
+def parse_node_status_block(text: str) -> tuple[str | None, str | None]:
+    """Parse the first ```node_status fenced JSON block from agent output.
+
+    Mirrors ``parse_delivery_status_block`` exactly: lenient on extra fields,
+    lowercases the ``status`` field, returns ``summary`` only when it is a
+    string.  Returns ``(status_lower, summary)`` on success or ``(None, None)``
+    on missing block, unclosed fence, or malformed JSON.
+
+    Schema assumption: ``{"status": "<value>", "summary": "<optional>", ...}``.
+    No ``node_id`` or other field is required at the bridge boundary.  Unknown
+    extra fields are silently ignored — keeping the parser forward-compatible
+    with future producer changes.
+    """
+    if not text:
+        return None, None
+
+    lines = text.splitlines()
+    in_fence = False
+    fence_lines: list[str] = []
+
+    for line in lines:
+        if not in_fence:
+            if _NS_FENCE_OPEN.match(line):
+                in_fence = True
+                fence_lines = []
+        else:
+            if _FENCE_CLOSE.match(line):
+                try:
+                    data = json.loads("\n".join(fence_lines))
+                except (json.JSONDecodeError, ValueError):
+                    return None, None
+                if not isinstance(data, dict):
+                    return None, None
+                status = data.get("status")
+                if not isinstance(status, str):
+                    return None, None
+                # Normalise to lowercase — defensive double-normalise mirrors
+                # parse_delivery_status_block (line 122-123).
+                status = status.lower()
+                summary = data.get("summary")
+                if not isinstance(summary, str):
+                    summary = None
+                return status, summary
+            else:
+                fence_lines.append(line)
+
+    return None, None
+
+
 _CR_FENCE_OPEN = re.compile(r"^```cronos_remember\s*$", re.IGNORECASE)
 
 _CS_FENCE_OPEN = re.compile(r"^```cronos_status\s*$", re.IGNORECASE)

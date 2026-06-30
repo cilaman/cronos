@@ -12,7 +12,11 @@ from pathlib import Path
 
 from . import git_ops
 from .logging_config import bind_run_context
-from .memory_parser import parse_cronos_status_block
+from .memory_parser import (
+    parse_cronos_status_block,
+    parse_delivery_status_block,
+    parse_node_status_block,
+)
 from .models import MemoryItem, Space, Task
 
 log = logging.getLogger("cronos.agent")
@@ -89,26 +93,83 @@ class Status(str, Enum):
 
 _STATUS_LINE = re.compile(r"^\s*\*{0,3}STATUS:\s*(DONE|WAIT|BLOCKED)\*{0,3}\s*$")
 
+_VOCAB_MAP = {
+    "done": Status.DONE,
+    "wait": Status.WAIT,
+    "blocked": Status.BLOCKED,
+    "failed": Status.BLOCKED,
+    # needs_fix is context-sensitive — handled in _map_vocab
+}
 
-def parse_status(text: str) -> tuple[Status | None, str | None]:
+
+def _map_vocab(raw: str, is_runner_task: bool) -> Status | None:
+    """Map a 5-value delivery/node vocab string to a Cronos Status.
+
+    Lowercases ``raw`` first (single normalization point).  Returns None for
+    any value outside the 5-vocab set so the 4-tier dispatch falls through to
+    the next tier cleanly.
+
+    Vocab map: done→DONE, wait→WAIT, blocked→BLOCKED, failed→BLOCKED,
+    needs_fix→DONE (if is_runner_task) else BLOCKED.
+    """
+    lowered = raw.lower() if raw else ""
+    if lowered == "needs_fix":
+        # TODO(OQ-1 sg1-sentinel-bridge): runner-tag dispatch wiring deferred —
+        # flip is_runner_task=True at runner call sites once OQ-1 is resolved.
+        return Status.DONE if is_runner_task else Status.BLOCKED
+    return _VOCAB_MAP.get(lowered)
+
+
+def parse_status(
+    text: str, *, is_runner_task: bool = False
+) -> tuple[Status | None, str | None]:
     """Return (status, context_line) parsed from the agent's final text.
 
-    Checks for a structured ```cronos_status fenced JSON block first (primary
-    channel). Falls back to the deprecated free-text _STATUS_LINE scan if no
-    valid block is found, emitting a deprecation warning.
+    4-tier precedence (first non-None Status wins):
 
-    The context_line is the summary from the structured block, or the
-    immediately preceding non-blank line for the free-text fallback.
+    1. ``node_status`` fenced JSON block — new Sentinel Bridge tier; status
+       mapped via ``_map_vocab``.
+    2. ``cronos_status`` fenced JSON block — primary Cronos channel; status
+       must be one of {DONE, WAIT, BLOCKED} (uppercase); used directly via
+       ``Status(status_str)`` — NOT routed through ``_map_vocab``.
+    3. ``delivery_status`` fenced JSON block — Delivery/v2 bridge tier; status
+       mapped via ``_map_vocab``.
+    4. Free-text ``STATUS:`` line scan — deprecated fallback; emits a warning.
+
+    Context (waiting_question / blocker reason) is ``block.summary`` for tiers
+    1–3, or the immediately preceding non-blank line for tier 4 (unchanged).
+
+    ``is_runner_task`` (keyword-only, default False) toggles ``needs_fix``
+    mapping: True → DONE (runner child task, dispatchAgent poll terminates);
+    False → BLOCKED (all other tasks).  See TODO(OQ-1 sg1-sentinel-bridge) in
+    ``_map_vocab`` for the deferred wiring spec.
     """
     if not text:
         return None, None
 
-    # Primary: structured cronos_status block
+    # Tier 1: node_status block (new Sentinel Bridge channel)
+    ns_status, ns_summary = parse_node_status_block(text)
+    if ns_status is not None:
+        mapped = _map_vocab(ns_status, is_runner_task)
+        if mapped is not None:
+            return mapped, ns_summary
+
+    # Tier 2: cronos_status block (primary Cronos channel; stays untouched)
     status_str, summary = parse_cronos_status_block(text)
     if status_str is not None:
         return Status(status_str), summary
 
-    # Deprecated fallback: free-text STATUS: line scan
+    # Tier 3: delivery_status block (Delivery/v2 bridge channel)
+    ds_block = parse_delivery_status_block(text)
+    if ds_block is not None:
+        ds_status = ds_block.get("status")
+        if isinstance(ds_status, str):
+            mapped = _map_vocab(ds_status, is_runner_task)
+            if mapped is not None:
+                ds_summary = ds_block.get("summary")
+                return mapped, ds_summary if isinstance(ds_summary, str) else None
+
+    # Tier 4: deprecated free-text STATUS: line scan (R5 — behavior unchanged)
     lines = text.rstrip().splitlines()
     if not lines:
         return None, None
