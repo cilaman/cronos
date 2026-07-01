@@ -233,7 +233,10 @@ async def test_run_goal_skips_done_goal():
 
 
 @pytest.mark.asyncio
-async def test_run_goal_with_no_children_finishes():
+async def test_run_goal_with_no_children_parks_waiting():
+    # A childless goal is parked WAITING (needs decomposition) rather than
+    # silently DONE — see run_executor finalize guard (symptom: nested empty
+    # subgoals cascading a whole tree to DONE).
     goal = _make_task(task_type="goal")
     store = _make_store(goal)
     store.all = MagicMock(return_value=[])
@@ -241,7 +244,7 @@ async def test_run_goal_with_no_children_finishes():
     await ex.run_goal("t1", None)
     store.finalize_run.assert_called_once()
     call_kwargs = store.finalize_run.call_args.kwargs
-    assert call_kwargs["new_state"] == TaskState.DONE
+    assert call_kwargs["new_state"] == TaskState.WAITING
 
 
 @pytest.mark.asyncio

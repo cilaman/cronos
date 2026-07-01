@@ -2,8 +2,11 @@
 import pathlib
 import yaml
 
-LIB_SCHEMAS = pathlib.Path("/data/spaces/cronos-development/packages/delivery-workflow/lib/schemas")
-BACKEND_SCHEMAS = pathlib.Path("/data/spaces/cronos-development/backend/app/pipeline/schemas")
+# Derive paths from the repo layout (this file is backend/tests/…) so the test
+# is portable across machines/CI instead of pinned to one deployment's path.
+_REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
+LIB_SCHEMAS = _REPO_ROOT / "packages" / "delivery-workflow" / "lib" / "schemas"
+BACKEND_SCHEMAS = _REPO_ROOT / "backend" / "app" / "pipeline" / "schemas"
 EXPECTED = {
     "research", "analysis", "design", "implementation",
     "test", "review", "doc", "retro",

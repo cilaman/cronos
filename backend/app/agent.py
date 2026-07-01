@@ -114,8 +114,10 @@ def _map_vocab(raw: str, is_runner_task: bool) -> Status | None:
     """
     lowered = raw.lower() if raw else ""
     if lowered == "needs_fix":
-        # TODO(OQ-1 sg1-sentinel-bridge): runner-tag dispatch wiring deferred —
-        # flip is_runner_task=True at runner call sites once OQ-1 is resolved.
+        # Wired (OQ-1 resolved): delivery-runner child tasks are detected in
+        # _run_agent_body via the delivery-node sentinel and call parse_status
+        # with is_runner_task=True, so needs_fix → DONE (routable); every other
+        # task keeps needs_fix → BLOCKED.
         return Status.DONE if is_runner_task else Status.BLOCKED
     return _VOCAB_MAP.get(lowered)
 
@@ -667,17 +669,23 @@ async def _run_agent_body(
 
     stderr = b"".join(stderr_chunks).decode("utf-8", errors="replace")[-2000:]
 
+    # A delivery-workflow runner child task (brief carries the delivery-node
+    # sentinel) routes ``needs_fix`` → DONE so the runner can read the verdict
+    # from the artifact and loop back, rather than parking the child WAITING
+    # and halting the run.  All other tasks keep needs_fix → BLOCKED.
+    is_runner_task = "<!-- delivery-node:" in (task.brief or "")
+
     final_text = "\n\n".join(final_text_parts).strip()
-    status, context = parse_status(final_text)
+    status, context = parse_status(final_text, is_runner_task=is_runner_task)
     # Fallback: if the concatenated text buries an earlier STATUS marker, try
     # parsing just the last turn's text in isolation.
     if status is None and final_text_parts:
-        status, context = parse_status(final_text_parts[-1])
+        status, context = parse_status(final_text_parts[-1], is_runner_task=is_runner_task)
     # Second fallback: scan all turns in reverse so a STATUS marker from turn N
     # is not lost when later turns pushed it outside the 10-line scan window.
     if status is None and len(final_text_parts) > 1:
         for turn_text in reversed(final_text_parts[:-1]):
-            status, context = parse_status(turn_text)
+            status, context = parse_status(turn_text, is_runner_task=is_runner_task)
             if status is not None:
                 break
 

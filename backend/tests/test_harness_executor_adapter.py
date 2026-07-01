@@ -396,6 +396,28 @@ class TestDispatchAgent:
         assert len(worker.run_agent_calls) == 1
         assert len(worker.finalize_calls) == 1
 
+    def test_dispatch_agent_done_enriches_verdict_fields(self) -> None:
+        """P0-1: a delivery_status/node_status envelope in the agent's output is
+        parsed and its structured fields (verdict, finding_class) surface in
+        AgentResult.fields so verdict-routed edges can fire.  Node status stays
+        'done' so runner/scope exposes the fields."""
+        envelope = (
+            "Review complete.\n\n"
+            "```delivery_status\n"
+            '{"status": "needs_fix", "produces": "review",\n'
+            ' "fields": {"verdict": "needs_fix", "finding_class": "local"}}\n'
+            "```\n"
+        )
+        trace = _make_run_trace(final_text_snippet=envelope)
+        worker = StubWorkerAdapter(run_agent_result=trace, finalize_result=TaskState.DONE)
+        adapter = _make_adapter(worker=worker)
+
+        result = adapter.dispatchAgent("reviewer", {"node_id": "g-review", "scope": {}})
+
+        assert result.status == "done"  # routable — runner/scope gates on 'done'
+        assert result.fields.get("verdict") == "needs_fix"
+        assert result.fields.get("finding_class") == "local"
+
     def test_dispatch_agent_failed_finalize(self) -> None:
         """When finalize_child returns non-DONE, AgentResult.status='failed'."""
         worker = StubWorkerAdapter(finalize_result=TaskState.WAITING)

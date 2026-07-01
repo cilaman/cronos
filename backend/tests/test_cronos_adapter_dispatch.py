@@ -173,6 +173,31 @@ class TestDispatchAgentHappyPath:
         assert call_kwargs["brief"].startswith("# Agent: pipeline-scout")
         assert "docs/spec.md" in call_kwargs["brief"]
 
+    def test_child_brief_tagged_and_parented_to_tracking_goal(self, tmp_path: Path) -> None:
+        # The child brief must carry the delivery-node sentinel (so the worker
+        # treats it as a runner task: needs_fix → DONE, P0-2), and — since the
+        # runner's inputs dict carries no parent_id — the child must be parented
+        # to the run's tracking goal so it isn't orphaned on the board.
+        store = MagicMock()
+        trace_store = MagicMock()
+
+        store.create = AsyncMock(return_value=_make_task("DONE"))
+        store.get = MagicMock(return_value=_make_task("DONE"))
+        store.transition = AsyncMock()
+        trace_store.load_latest = AsyncMock(return_value=_make_trace())
+
+        adapter = _adapter(tmp_path, store, trace_store)  # tracking_task_id="tracking-001"
+        asyncio.run(
+            adapter.dispatchAgent(
+                "reviewer",
+                {"node_id": "g-review", "artifact_paths": []},  # no parent_id
+            )
+        )
+
+        call_kwargs = store.create.call_args.kwargs
+        assert "<!-- delivery-node: g-review -->" in call_kwargs["brief"]
+        assert call_kwargs["parent_id"] == "tracking-001"
+
     def test_archived_treated_as_done(self, tmp_path: Path) -> None:
         store = MagicMock()
         trace_store = MagicMock()

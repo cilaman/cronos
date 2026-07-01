@@ -6,6 +6,12 @@ The test runs in a subprocess to get a pristine Python environment.
 """
 import subprocess
 import sys
+from pathlib import Path
+
+# Package root (packages/delivery-workflow) — where ``lib`` lives on sys.path.
+# Derived from this file so the subprocess is portable across machines/CI,
+# not pinned to a single deployment's absolute path.
+_PKG_ROOT = str(Path(__file__).resolve().parents[1])
 
 
 def test_lib_verify_importable_without_app():
@@ -27,7 +33,7 @@ print(f"OK: lib.verify imported cleanly; {len(new_modules)} new modules, none fr
         [sys.executable, "-c", code],
         capture_output=True,
         text=True,
-        cwd="/data/spaces/cronos-development/backend",  # ensures lib is on sys.path
+        cwd=_PKG_ROOT,  # ensures lib is on sys.path
     )
     assert result.returncode == 0, (
         f"lib.verify import pulled in app modules:\nstdout: {result.stdout}\nstderr: {result.stderr}"
@@ -52,7 +58,7 @@ print(f"OK: lib.contract imported cleanly")
         [sys.executable, "-c", code],
         capture_output=True,
         text=True,
-        cwd="/data/spaces/cronos-development/backend",
+        cwd=_PKG_ROOT,
     )
     assert result.returncode == 0, (
         f"lib.contract import pulled in app modules:\nstdout: {result.stdout}\nstderr: {result.stderr}"
@@ -74,6 +80,6 @@ print(f"OK: SCHEMAS_DIR={schemas_dir}, {yaml_count} yaml files")
         [sys.executable, "-c", code],
         capture_output=True,
         text=True,
-        cwd="/data/spaces/cronos-development/backend",
+        cwd=_PKG_ROOT,
     )
     assert result.returncode == 0, f"SCHEMAS_DIR check failed:\n{result.stdout}\n{result.stderr}"

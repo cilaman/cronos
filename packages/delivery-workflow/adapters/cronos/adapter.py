@@ -229,15 +229,26 @@ class CronosAdapter:
            On WAITING: AgentResult(status="blocked", open_questions=[wq]).
         """
         from app.storage import WORKER_TRANSITIONS, TaskState
+        from app.delivery_driver import DELIVERY_NODE_SENTINEL
 
         # 1. Build brief and create child task.
         artifact_lines = "\n".join(
             f"- {p}" for p in inputs.get("artifact_paths", [])
         )
-        brief = f"# Agent: {agent_ref}\n\n{artifact_lines}".strip()
+        # Tag the brief with the delivery-node sentinel (R8 / DD-DRV-05) so the
+        # worker recognises this as a runner child task — that flips
+        # parse_status's ``is_runner_task`` so a ``needs_fix`` verdict resolves
+        # to DONE (routable) instead of parking the child WAITING and halting
+        # the whole run.
+        node_id = inputs.get("node_id", agent_ref)
+        sentinel = DELIVERY_NODE_SENTINEL.format(node_id=node_id)
+        brief = f"# Agent: {agent_ref}\n\n{artifact_lines}\n\n{sentinel}".strip()
         depends_on = inputs.get("depends_on", [])
 
-        goal_id = inputs.get("parent_id")
+        # The goal is the run's tracking task; the runner's inputs dict does not
+        # carry parent_id, so fall back to it (else children are orphaned and the
+        # goal is never surfaced/linked on the board).
+        goal_id = inputs.get("parent_id") or self._tracking_task_id
 
         child_task = await self._store.create(
             space_id=self._space_id,

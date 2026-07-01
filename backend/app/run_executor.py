@@ -1195,6 +1195,17 @@ class RunExecutor:
                     f"Waiting for in-flight child task to complete. "
                     f"Completed {len(completed)}, skipped {len(skipped)} already-done."
                 )
+        elif not ordered_child_ids:
+            # Goal has no child tasks at all — do NOT silently mark it DONE.
+            # A childless goal that self-completes cascades up a nested-goal tree
+            # ("start parent → everything jumps to DONE" without any work).  Park
+            # it for attention instead so the user can decompose it.
+            goal_new_state = TaskState.WAITING
+            goal_waiting_question = (
+                "Goal has no child tasks to execute — decompose it into child "
+                "tasks (or delete it) before starting."
+            )
+            summary = "No child tasks to execute — goal parked for decomposition."
         else:
             goal_new_state = TaskState.DONE
             goal_waiting_question = None

@@ -256,12 +256,17 @@ class TestImportBoundary:
         if not lib_dir.exists():
             return
         forbidden_patterns = ["from app", "import app", "from backend", "import backend"]
+        # Only *module-level* (unindented) imports break import-time portability
+        # — those are what load app.* when ``import lib.x`` runs.  A deferred,
+        # function-local import (indented, e.g. lib/verify.py's CLI-only
+        # ``from app.pipeline.normalize import normalize`` behind ``--normalize``)
+        # does not, and is verified by test_lib_verify_portability's subprocess
+        # import check.  So match the raw line, not the stripped one.
         violations: list[str] = []
         for py_file in lib_dir.rglob("*.py"):
             text = py_file.read_text(encoding="utf-8")
             for line_num, line in enumerate(text.splitlines(), 1):
-                stripped = line.strip()
                 for pat in forbidden_patterns:
-                    if stripped.startswith(pat):
-                        violations.append(f"{py_file.relative_to(lib_dir)}:{line_num}: {stripped}")
+                    if line.startswith(pat):
+                        violations.append(f"{py_file.relative_to(lib_dir)}:{line_num}: {line.strip()}")
         assert violations == [], "Import boundary violation in lib/:\n" + "\n".join(violations)

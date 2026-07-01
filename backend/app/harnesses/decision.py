@@ -34,12 +34,27 @@ nodes.
 from __future__ import annotations
 
 import re
+import sys
 import logging
+from pathlib import Path
 from typing import Any
 
 from .model import HarnessEdge, HarnessNode
 from .run_state import NodeState
 from ..trace_parser import RunTrace
+
+# ---------------------------------------------------------------------------
+# Import boundary (SG3): the condition grammar lives in the portable
+# ``lib.conditions`` module so the runner, adapter, and this backend decision
+# path share one evaluator (with ``||`` OR-of-ANDs support).  Bootstrap the
+# delivery-workflow package onto sys.path before importing, mirroring
+# state_mapping.py / compiler.py — the editable install may be absent.
+# ---------------------------------------------------------------------------
+_DELIVERY_WF = Path(__file__).parent.parent.parent.parent / "packages" / "delivery-workflow"
+if str(_DELIVERY_WF) not in sys.path:
+    sys.path.insert(0, str(_DELIVERY_WF))
+
+from lib.conditions import eval_condition  # noqa: E402
 
 log = logging.getLogger(__name__)
 
@@ -263,120 +278,10 @@ def evaluate_decision(
 
 
 # ---------------------------------------------------------------------------
-# Condition evaluator — dotted-path, hyphenated ids, && conjunction (no eval)
+# Condition evaluator — shim; implementation lives in lib.conditions (SG3)
 # ---------------------------------------------------------------------------
-
-# Matches a single ``<path> <op> <value>`` clause.
-# <path> supports: simple names, dotted paths, hyphenated node-ids.
-#   Examples: ``status``, ``review.fields.verdict``, ``my-node.status``
-# <op>: ==, !=, in
-# <value>: double-quoted, single-quoted, or unquoted bare word
-
-_EVAL_SINGLE_RE = re.compile(
-    r"^\s*"
-    r"(?P<name>[A-Za-z_][A-Za-z0-9_-]*(?:\.[A-Za-z0-9_-]+)*)"
-    r"\s+(?P<op>==|!=|in)\s+"
-    r"(?P<val>"
-    r'"(?:[^"\\]|\\.)*"'
-    r"|'(?:[^'\\]|\\.)*'"
-    r"|\S+"
-    r")\s*$"
-)
-
-# Legacy single-segment regex kept for backward compatibility reference.
-_VAR_COND_RE = re.compile(
-    r"""^\s*
-        (?P<name>[A-Za-z_][A-Za-z0-9_.\\-]*)  # variable name (dotted / hyphenated)
-        \s+
-        (?P<op>==|!=|in)                       # operator
-        \s+
-        (?P<val>                               # right-hand value
-            "(?:[^"\\]|\\.)*"                 # double-quoted string
-            |'(?:[^'\\]|\\.)*'                # single-quoted string
-            |\S+                              # unquoted bare word / number
-        )
-    \s*$""",
-    re.VERBOSE,
-)
-
-
-def _eval_single_clause(clause: str, scope: dict[str, str]) -> bool:
-    """Evaluate one ``<path> <op> <literal>`` clause against *scope*.
-
-    Returns False (never raises) when the clause does not match the
-    whitelisted grammar, so unsupported conditions fall through to the
-    default edge.
-    """
-    m = _EVAL_SINGLE_RE.match(clause)
-    if m is None:
-        log.warning(
-            "eval_condition: clause %r does not match whitelisted grammar; returning False.",
-            clause,
-        )
-        return False
-
-    var_name: str = m.group("name")
-    op: str = m.group("op")
-    raw_val: str = m.group("val")
-
-    # Decode quoted string or bare word.
-    if (raw_val.startswith('"') and raw_val.endswith('"')) or (
-        raw_val.startswith("'") and raw_val.endswith("'")
-    ):
-        rhs = raw_val[1:-1]
-    else:
-        rhs = raw_val
-
-    lhs: str | None = scope.get(var_name)
-
-    if op == "==":
-        return lhs == rhs
-    if op == "!=":
-        return lhs != rhs
-    if op == "in":
-        # rhs is a comma-separated list: ``val1,val2,val3``
-        candidates = [v.strip() for v in rhs.split(",")]
-        return lhs in candidates
-
-    # Unreachable given the regex, but defensive:
-    log.warning("eval_condition: unknown operator %r in clause %r.", op, clause)
-    return False
-
-
-def eval_condition(condition: str, scope: dict[str, str]) -> bool:
-    """Evaluate a whitelisted condition expression against *scope*.
-
-    Supported syntax
-    ----------------
-    ``<path> <op> <literal>``
-      where ``<path>`` is a dotted / hyphenated identifier (e.g.
-      ``review.fields.verdict``, ``my-node.status``), ``<op>`` is one of
-      ``==``, ``!=``, ``in``, and ``<literal>`` is a quoted string or
-      unquoted bare word (including ``true`` / ``false``).
-
-    ``<clause> && <clause> && ...``
-      All clauses must hold (short-circuit AND).  Clauses are split on the
-      literal four-character sequence `` && ``.
-
-    **V1 limitation**: splitting on `` && `` will mis-tokenise a clause
-    whose quoted string literal itself contains `` && ``.  No spec §12
-    worked-example edge needs this, so it is documented here rather than
-    fixed — a quoting-aware tokeniser is a known v2 follow-up.
-
-    No ``eval()`` is used.  Unrecognised expressions return ``False`` and
-    log a ``WARNING``.  Sandbox-escape attempts (e.g.
-    ``__import__('os').system(…)``) fail the grammar check and return
-    ``False`` without execution.
-    """
-    if not condition:
-        log.warning("eval_condition: empty condition string; returning False.")
-        return False
-
-    clauses = condition.split(" && ")
-    for clause in clauses:
-        if not _eval_single_clause(clause.strip(), scope):
-            return False
-    return True
+# eval_condition is imported from lib.conditions at the top of this module.
+# The lib package supports ==, !=, in, && (AND), and || (OR-of-ANDs).
 
 
 def _eval_variable_condition(condition: str, scope: dict[str, str]) -> bool:

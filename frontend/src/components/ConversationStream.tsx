@@ -108,24 +108,36 @@ function bucketLive(entries: StreamEntry[]): LiveBucket {
     return last && last.kind === "systems" ? last : null;
   };
 
+  const pushSystemRow = (id: string, text: string) => {
+    currentGroup = null;
+    const existing = lastSystemsBlock();
+    if (existing) {
+      const lastRow = existing.rows[existing.rows.length - 1];
+      if (lastRow && lastRow.text === text) {
+        lastRow.count += 1;
+      } else {
+        existing.rows.push({ text, count: 1 });
+      }
+    } else {
+      blocks.push({ kind: "systems", id, rows: [{ text, count: 1 }] });
+    }
+  };
+
   entries.forEach((entry, idx) => {
     if (entry.kind === "system") {
-      currentGroup = null;
-      const existing = lastSystemsBlock();
-      if (existing) {
-        const lastRow = existing.rows[existing.rows.length - 1];
-        if (lastRow && lastRow.text === entry.text) {
-          lastRow.count += 1;
-        } else {
-          existing.rows.push({ text: entry.text, count: 1 });
-        }
-      } else {
-        blocks.push({
-          kind: "systems",
-          id: entry.id,
-          rows: [{ text: entry.text, count: 1 }],
-        });
-      }
+      pushSystemRow(entry.id, entry.text);
+      return;
+    }
+    if (entry.kind === "goal_activity") {
+      // Surface goal orchestration (child/subgoal start/end/skip) as system
+      // rows so an orchestrating goal's detail view isn't blank.
+      const label =
+        entry.phase === "start"
+          ? `▶ started ${entry.title}`
+          : entry.phase === "skipped"
+          ? `⤼ skipped ${entry.title} (already done)`
+          : `■ ${entry.title} → ${entry.newState ?? "done"}`;
+      pushSystemRow(entry.id, label);
       return;
     }
     if (entry.kind === "tool_result") {
