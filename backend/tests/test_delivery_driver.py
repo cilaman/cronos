@@ -251,6 +251,76 @@ edges: []
 
 
 @pytest.mark.asyncio
+async def test_run_delivery_goal_blocked_parks_active_goal(tmp_path):
+    """Runner status=blocked but goal still ACTIVE (adapter didn't park) → park WAITING."""
+    spec_file = tmp_path / "workflow.yaml"
+    spec_file.write_text(MINIMAL_SPEC_YAML)
+    run_dir = tmp_path / "runs" / "goal-1"
+
+    from app.models import TaskState as _TS
+    from state_types import BudgetState, WorkflowState
+    store = _make_store()
+    store.get.return_value = SimpleNamespace(
+        id="goal-1", state=_TS.ACTIVE, title="T", brief="...", waiting_question=None,
+    )
+    ts = _make_trace_store()
+
+    blocked_state = WorkflowState(
+        spec="test-workflow", run_id="goal-1", status="blocked",
+        budget=BudgetState(usd_ceiling=5.0),
+    )
+    import runner as _runner_mod
+    original_run = _runner_mod.run
+    _runner_mod.run = lambda graph, executor, state_ops=None: blocked_state
+    try:
+        with patch("adapters.cronos.adapter.CronosAdapter"):
+            await run_delivery_goal(
+                goal_id="goal-1", spec_path="workflow.yaml", store=store,
+                trace_store=ts, space_id="space", space_dir=tmp_path, run_dir=run_dir,
+            )
+    finally:
+        _runner_mod.run = original_run
+
+    store.finalize_run.assert_called_once()
+    assert store.finalize_run.call_args.kwargs["new_state"] == _TS.WAITING
+
+
+@pytest.mark.asyncio
+async def test_run_delivery_goal_blocked_does_not_clobber_waiting(tmp_path):
+    """Runner status=blocked and goal already WAITING (human signoff) → left as-is."""
+    spec_file = tmp_path / "workflow.yaml"
+    spec_file.write_text(MINIMAL_SPEC_YAML)
+    run_dir = tmp_path / "runs" / "goal-1"
+
+    from app.models import TaskState as _TS
+    from state_types import BudgetState, WorkflowState
+    store = _make_store()
+    store.get.return_value = SimpleNamespace(
+        id="goal-1", state=_TS.WAITING, title="T", brief="...",
+        waiting_question="signoff: proceed?",
+    )
+    ts = _make_trace_store()
+
+    blocked_state = WorkflowState(
+        spec="test-workflow", run_id="goal-1", status="blocked",
+        budget=BudgetState(usd_ceiling=5.0),
+    )
+    import runner as _runner_mod
+    original_run = _runner_mod.run
+    _runner_mod.run = lambda graph, executor, state_ops=None: blocked_state
+    try:
+        with patch("adapters.cronos.adapter.CronosAdapter"):
+            await run_delivery_goal(
+                goal_id="goal-1", spec_path="workflow.yaml", store=store,
+                trace_store=ts, space_id="space", space_dir=tmp_path, run_dir=run_dir,
+            )
+    finally:
+        _runner_mod.run = original_run
+
+    store.finalize_run.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_run_delivery_goal_parks_on_runner_exception(tmp_path):
     """When runner.run raises, goal is parked to WAITING."""
     spec_file = tmp_path / "workflow.yaml"

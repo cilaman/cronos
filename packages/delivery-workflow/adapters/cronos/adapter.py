@@ -372,17 +372,26 @@ class CronosAdapter:
         loop-bound async lock would be touched from the wrong loop.  Fallbacks:
         schedule on a running loop if present, else ``asyncio.run``.
         """
-        if self._main_loop is not None:
+        try:
+            running = asyncio.get_running_loop()
+        except RuntimeError:
+            running = None
+
+        # Called from the runner worker thread (no running loop here, or a
+        # different loop) and we hold a handle to the Cronos main loop → bridge
+        # to it and block until it lands. Guard against running is main_loop,
+        # which would deadlock the loop on itself.
+        if self._main_loop is not None and running is not self._main_loop:
             fut = asyncio.run_coroutine_threadsafe(
                 self._escalate_async(node_id, reason), self._main_loop
             )
             fut.result()
             return
-        try:
-            loop = asyncio.get_running_loop()
-            # Inside async context — schedule; caller should prefer _escalate_async.
-            loop.create_task(self._escalate_async(node_id, reason))
-        except RuntimeError:
+
+        if running is not None:
+            # Inside the loop's own thread — schedule without blocking it.
+            running.create_task(self._escalate_async(node_id, reason))
+        else:
             asyncio.run(self._escalate_async(node_id, reason))
 
     async def _escalate_async(self, node_id: str, reason: str) -> None:

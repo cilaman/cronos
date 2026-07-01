@@ -220,13 +220,17 @@ async def test_run_goal_delivery_publishes_run_end_and_drains(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_run_goal_delivery_drains_even_on_driver_exception(tmp_path):
+async def test_run_goal_delivery_parks_waiting_on_driver_exception(tmp_path):
+    """Safety net: if the driver raises (or otherwise leaves the goal ACTIVE), the
+    goal is parked WAITING with the error surfaced — never left "ended in active
+    state" — and the stream is still drained."""
     goal = SimpleNamespace(
         id="goal-1", space_id="sp1", state=TaskState.ACTIVE, type="goal",
         title="Delivery Goal", brief="<!-- delivery-workflow: wf.yaml -->",
     )
     store = MagicMock()
     store.get = MagicMock(return_value=goal)
+    store.finalize_run = AsyncMock()
     ex, bus, worker = _make_executor(store)
     ex.space_store = SimpleNamespace(spaces_dir=tmp_path)
 
@@ -234,6 +238,13 @@ async def test_run_goal_delivery_drains_even_on_driver_exception(tmp_path):
     with patch("app.run_executor.run_delivery_goal", boom):
         await ex.run_goal("goal-1", user_message=None)  # must not raise
 
+    # Parked WAITING with the real error in the waiting_question.
+    store.finalize_run.assert_awaited_once()
+    kwargs = store.finalize_run.await_args.kwargs
+    assert kwargs["new_state"] == TaskState.WAITING
+    assert "driver blew up" in kwargs["waiting_question"]
+
+    # Stream still closed so the frontend leaves "Live".
     assert "run_end" in _published_types(worker, "goal-1")
     bus.drain_subscribers.assert_any_call("goal-1", {"type": "stream_end"})
 

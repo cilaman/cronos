@@ -125,57 +125,62 @@ async def run_delivery_goal(
 
     try:
         graph = compiler_a.compile(spec)
-    except ValueError as exc:
-        log.error("delivery_driver: compiler_a failed for %s: %s", goal_id, exc)
+    except Exception as exc:
+        # Catch *any* compiler failure (not just ValueError) so a malformed spec
+        # never leaves the goal stuck ACTIVE with an empty conversation.
+        log.exception("delivery_driver: compiler_a failed for %s", goal_id)
         await _park_goal_waiting(store, goal_id, f"Delivery spec compiler error: {exc}")
         return
 
-    budget_meta = graph.metadata.get("budget", {})
-    usd_ceiling = float(budget_meta.get("usd_ceiling", 0.0))
-
-    run_dir.mkdir(parents=True, exist_ok=True)
-
-    # Bridge the synchronous runner (which runs in a worker thread) back to the
-    # main event loop so it can create and execute child agent-tasks inline.
-    main_loop = asyncio.get_running_loop()
-
-    def run_child_sync(agent_ref: str, inputs: dict) -> Any:
-        """Called from the runner thread; runs one child on the main loop."""
-        if run_child is None:
-            return None
-        if cancel_event is not None and cancel_event.is_set():
-            return None
-        fut = asyncio.run_coroutine_threadsafe(
-            run_child(
-                goal_id,
-                agent_ref,
-                inputs,
-                cancel_event=cancel_event,
-                goal_context=goal_context,
-            ),
-            main_loop,
-        )
-        return fut.result()
-
-    adapter = CronosAdapter(
-        store=store,
-        trace_store=trace_store,
-        space_id=space_id,
-        run_dir=run_dir,
-        tracking_task_id=goal_id,
-        usd_ceiling=usd_ceiling,
-        run_child=run_child_sync,
-        main_loop=main_loop,
-    )
-
+    # Everything from here (setup, runner, finalization) is guarded so that ANY
+    # unexpected exception parks the goal WAITING with a diagnostic instead of
+    # bubbling out and leaving it ACTIVE forever.
     try:
+        budget_meta = graph.metadata.get("budget", {})
+        usd_ceiling = float(budget_meta.get("usd_ceiling", 0.0))
+
+        run_dir.mkdir(parents=True, exist_ok=True)
+
+        # Bridge the synchronous runner (which runs in a worker thread) back to
+        # the main event loop so it can create and execute child agent-tasks inline.
+        main_loop = asyncio.get_running_loop()
+
+        def run_child_sync(agent_ref: str, inputs: dict) -> Any:
+            """Called from the runner thread; runs one child on the main loop."""
+            if run_child is None:
+                return None
+            if cancel_event is not None and cancel_event.is_set():
+                return None
+            fut = asyncio.run_coroutine_threadsafe(
+                run_child(
+                    goal_id,
+                    agent_ref,
+                    inputs,
+                    cancel_event=cancel_event,
+                    goal_context=goal_context,
+                ),
+                main_loop,
+            )
+            return fut.result()
+
+        adapter = CronosAdapter(
+            store=store,
+            trace_store=trace_store,
+            space_id=space_id,
+            run_dir=run_dir,
+            tracking_task_id=goal_id,
+            usd_ceiling=usd_ceiling,
+            run_child=run_child_sync,
+            main_loop=main_loop,
+        )
+
         # Run the synchronous work-list walker off the event loop so its callbacks
         # into run_coroutine_threadsafe don't deadlock the loop they depend on.
         final_state = await asyncio.to_thread(
             workflow_runner.run, graph=graph, executor=adapter
         )
     except Exception as exc:
-        log.exception("delivery_driver: runner.run raised for goal %s", goal_id)
+        log.exception("delivery_driver: runner setup/run raised for goal %s", goal_id)
         await _park_goal_waiting(store, goal_id, f"Delivery runner error: {exc}")
         return
 
@@ -193,12 +198,18 @@ async def run_delivery_goal(
         await _park_goal_waiting(
             store, goal_id, "Delivery workflow failed — a node returned status=failed."
         )
-    elif final_state.status in ("blocked", "escalated"):
-        # The adapter's escalate() should have already parked the goal.
-        # Log for diagnostics; do not double-park.
+    else:
+        # blocked / escalated / any other non-terminal status. The adapter's
+        # escalate() normally parks the goal on a human/blocked node, but never
+        # leave it ACTIVE: park it WAITING if it isn't already in a resting state.
         log.info(
-            "delivery_driver: goal %s is %s — adapter should have already parked it.",
-            goal_id, final_state.status,
+            "delivery_driver: goal %s ended with runner status=%s", goal_id, final_state.status,
+        )
+        await _park_goal_waiting(
+            store,
+            goal_id,
+            f"Delivery workflow paused (runner status={final_state.status}).",
+            only_if_active=True,
         )
 
 
@@ -220,12 +231,23 @@ async def _finalize_goal_done(store: "TaskStore", goal_id: str) -> None:
         log.error("delivery_driver: failed to finalize goal %s to DONE: %s", goal_id, exc)
 
 
-async def _park_goal_waiting(store: "TaskStore", goal_id: str, reason: str) -> None:
-    """Park *goal_id* to WAITING with *reason* as the waiting_question."""
+async def _park_goal_waiting(
+    store: "TaskStore", goal_id: str, reason: str, *, only_if_active: bool = False
+) -> None:
+    """Park *goal_id* to WAITING with *reason* as the waiting_question.
+
+    When *only_if_active* is True, only park a goal that is still ACTIVE/BACKLOG —
+    used as a safety net that must NOT clobber a goal already parked WAITING by the
+    adapter's escalate() (e.g. a human-signoff node with its own question).
+    """
     from .models import TaskState
 
     try:
         task = store.get(goal_id)
+        if only_if_active and task is not None and task.state not in (
+            TaskState.ACTIVE, TaskState.BACKLOG
+        ):
+            return
         if task is not None and task.state != TaskState.WAITING:
             await store.finalize_run(
                 goal_id,

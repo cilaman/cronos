@@ -953,6 +953,7 @@ class RunExecutor:
             _space_dir = self.space_store.spaces_dir / _space_id
             _run_dir = _space_dir / CRONOS_SUBDIR / "delivery-runs" / goal_id
             _goal_context = f"# Goal: {goal.title}\n\n{goal.brief}"
+            _delivery_error: str | None = None
             try:
                 await run_delivery_goal(
                     goal_id=goal_id,
@@ -966,14 +967,35 @@ class RunExecutor:
                     cancel_event=cancel_event,
                     goal_context=_goal_context,
                 )
-            except Exception:
+            except Exception as _exc:
                 log.exception("Delivery goal %s failed in run_delivery_goal", goal_id)
+                _delivery_error = str(_exc) or _exc.__class__.__name__
             finally:
-                # Always close the goal's SSE stream so the frontend leaves the
-                # "Live" state, whatever the outcome (done / waiting / crash).
+                # Safety net: the delivery driver is responsible for finalizing the
+                # goal (DONE / WAITING).  If it left the goal ACTIVE/BACKLOG — e.g.
+                # it raised before finalizing — park it WAITING so the parent goal
+                # doesn't report "ended in active state" and the user sees the cause.
                 w._current_cancel = None
                 goal_after = self.store.get(goal_id)
                 goal_state = goal_after.state if goal_after is not None else TaskState.WAITING
+                if goal_state in (TaskState.ACTIVE, TaskState.BACKLOG):
+                    reason = (
+                        f"Delivery workflow error: {_delivery_error}"
+                        if _delivery_error
+                        else "Delivery workflow ended without finalizing the goal."
+                    )
+                    try:
+                        await self.store.finalize_run(
+                            goal_id,
+                            new_state=TaskState.WAITING,
+                            session_id=None,
+                            waiting_question=reason,
+                            history_entry=f"[delivery] {reason}",
+                        )
+                        goal_state = TaskState.WAITING
+                    except Exception:
+                        log.exception("Failed to park delivery goal %s WAITING", goal_id)
+                # Always close the goal's SSE stream so the frontend leaves "Live".
                 await self._publish(goal_id, {
                     "type": "run_end",
                     "task_id": goal_id,
