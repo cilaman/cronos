@@ -115,9 +115,8 @@ for lane in tasks.values():
 
 - **Goal brief**: motivation, background, list of sub-goal/task names.
 - **Task brief**: exact file paths, line numbers, code snippets for every change; Acceptance section with testable criteria. The executing agent must not need to do additional research.
-- **Pipeline task brief**: always include (1) scout report path, (2) agent contract file, (3) artifact output path, (4) `/pipeline-gate` at the end.
-- **Dependencies**: `"depends_on": ["<task-id>"]` — each pipeline phase depends on the prior phase. For sequential sub-goals, set `depends_on` on the **sub-goal itself** (not on its analyst) to enforce execution order via `_topo_children`.
-- **Model**: `"agent_model": "opus"` for architect and reviewer; `"haiku"` for scout and doc; `"sonnet"` for analyst, impl, test.
+- **Dependencies**: `"depends_on": ["<task-id>"]`. For sequential sub-goals, set `depends_on` on the **sub-goal itself** (not on its children) to enforce execution order via `_topo_children`.
+- **Model**: pick `"agent_model"` per task complexity — `"opus"` for heavy design/review work, `"haiku"` for light research/doc work, `"sonnet"` otherwise.
 
 ### Git workflow for development goals
 

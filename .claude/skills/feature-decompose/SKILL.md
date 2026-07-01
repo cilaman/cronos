@@ -19,7 +19,7 @@ Invoke this skill when:
 3. You need to translate that product scope into an actionable implementation goal.
 
 Do **NOT** invoke it for plain goals (type=goal) or tasks that already have a realizing
-goal. Do not invoke it to plan pipeline phases — for that use [[pipeline-scaffold]].
+goal.
 
 ## Inputs
 
