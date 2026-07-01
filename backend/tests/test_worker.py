@@ -917,6 +917,62 @@ async def test_run_goal_runs_children_in_order_and_marks_done(worker, task_store
     assert task_store.get(goal.id).state == TaskState.DONE
 
 
+async def test_bare_goal_child_emits_node_status_and_finalizes_done(
+    worker, task_store, monkeypatch
+):
+    """Bare mode acceptance: a goal WITHOUT the delivery-workflow sentinel and
+    WITHOUT any gate/report structure runs its single child through
+    ``_topo_children``.  The child's agent emits a plain ``node_status`` block —
+    no CC-v1 ``{phase}-report`` artifact — and ``parse_status`` reads it to DONE.
+    This proves a goal runs to completion without any pipeline."""
+    import app.worker as worker_module
+    from app.agent import parse_status
+    from app.delivery_driver import detect_delivery_workflow_spec
+
+    node_status_output = (
+        "All done.\n\n"
+        "```node_status\n"
+        '{"status": "done", "produces": "change", "fields": {}}\n'
+        "```\n"
+    )
+
+    async def fake_run_agent(
+        task, *, user_message, on_event, cancel_event=None,
+        space=None, goal_context=None, **kwargs,
+    ):
+        # Derive the result exactly as the real runner does — parse the agent's
+        # final text. No report artifact is written or read anywhere.
+        status, context = parse_status(node_status_output)
+        return _make_result(
+            exit_code=0, status=status, context=context,
+            final_text=node_status_output,
+        )
+
+    monkeypatch.setattr(worker_module, "run_agent", fake_run_agent)
+
+    goal = await task_store.create(
+        space_id=SPACE_ID, title="Bare Goal", brief="ship it", type="goal"
+    )
+    child = await task_store.create(
+        space_id=SPACE_ID, title="Child", brief="do the thing", parent_id=goal.id
+    )
+    await task_store.transition(
+        goal.id, TaskState.ACTIVE, allowed={(TaskState.BACKLOG, TaskState.ACTIVE)}
+    )
+
+    # Precondition: no delivery-workflow sentinel → the bare _topo_children path runs.
+    assert detect_delivery_workflow_spec(goal.brief or "") is None
+    # And the agent's node_status block parses to DONE via tier 1 (no report artifact).
+    # Compare by value (Status is a str-enum) to stay robust under pytest's dual
+    # module-import ordering, which can give the enum two class identities.
+    assert parse_status(node_status_output)[0] == Status.DONE
+
+    await worker._run_goal(goal.id, None)
+
+    assert task_store.get(child.id).state == TaskState.DONE
+    assert task_store.get(goal.id).state == TaskState.DONE
+
+
 async def test_run_goal_skips_done_children(worker, task_store, monkeypatch):
     """Children already DONE are skipped; goal still completes."""
     import app.worker as worker_module
