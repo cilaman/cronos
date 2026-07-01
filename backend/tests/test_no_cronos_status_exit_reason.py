@@ -3,6 +3,11 @@ from __future__ import annotations
 """Tests that NO_STATUS string literal has been renamed to NO_CRONOS_STATUS in worker.py."""
 
 import subprocess
+from pathlib import Path
+
+# Backend dir (where app/ lives) — derived from this file so the grep is
+# portable across machines/CI instead of pinned to one deployment's path.
+_BACKEND_DIR = str(Path(__file__).resolve().parents[1])
 
 
 def test_no_status_literal_absent_from_worker() -> None:
@@ -11,7 +16,7 @@ def test_no_status_literal_absent_from_worker() -> None:
         ["grep", "-c", r"\bNO_STATUS\b", "app/worker.py"],
         capture_output=True,
         text=True,
-        cwd="/data/spaces/cronos-development/backend",
+        cwd=_BACKEND_DIR,
     )
     count = int(result.stdout.strip()) if result.stdout.strip().isdigit() else 0
     assert count == 0, (
@@ -26,7 +31,7 @@ def test_no_cronos_status_literal_present_in_worker() -> None:
         ["grep", "-c", "NO_CRONOS_STATUS", "app/worker.py"],
         capture_output=True,
         text=True,
-        cwd="/data/spaces/cronos-development/backend",
+        cwd=_BACKEND_DIR,
     )
     count = int(result.stdout.strip()) if result.stdout.strip().isdigit() else 0
     assert count >= 3, (
@@ -40,7 +45,7 @@ def test_no_status_literal_absent_from_agent() -> None:
         ["grep", "-c", r"\bNO_STATUS\b", "app/agent.py"],
         capture_output=True,
         text=True,
-        cwd="/data/spaces/cronos-development/backend",
+        cwd=_BACKEND_DIR,
     )
     count = int(result.stdout.strip()) if result.stdout.strip().isdigit() else 0
     assert count == 0, (

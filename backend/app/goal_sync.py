@@ -40,8 +40,15 @@ async def propagate_to_parent(
     child_state = child.state
     parent_state = parent.state
 
-    if child_state == TaskState.ACTIVE and parent_state == TaskState.WAITING:
-        # Child resumed → surface the goal in the Active lane.
+    if child_state == TaskState.ACTIVE and parent_state in (
+        TaskState.WAITING,
+        TaskState.BACKLOG,
+    ):
+        # Child became active → surface the goal in the Active lane.  This covers
+        # a child resumed from WAITING *and* a nested subgoal started directly
+        # while its parent goal was still in BACKLOG (otherwise the parent would
+        # stay stuck in TODO while its subtree is clearly in progress).
+        # (BACKLOG, ACTIVE) is an allowed GOAL_SYNC transition.
         try:
             await store.transition(
                 child.parent_id, TaskState.ACTIVE, allowed=GOAL_SYNC_TRANSITIONS
@@ -51,6 +58,10 @@ async def propagate_to_parent(
             pass  # already transitioned concurrently — idempotent
         except Exception:
             log.exception("Failed to activate parent goal %s", child.parent_id)
+        else:
+            # Walk up the ancestor chain so the whole spine surfaces as ACTIVE,
+            # not just the immediate parent (nested subgoals go many levels deep).
+            await propagate_to_parent(child.parent_id, store, worker_pool)
 
     elif child_state in (TaskState.DONE, TaskState.ARCHIVED) and parent_state in (
         TaskState.WAITING,

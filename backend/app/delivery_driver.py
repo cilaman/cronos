@@ -140,13 +140,40 @@ async def run_delivery_goal(
         goal_id, final_state.status,
     )
 
-    if final_state.status in ("blocked", "escalated"):
+    if final_state.status == "done":
+        # Runner reached a terminal node with no more work — mark the goal DONE.
+        # (Without this the goal is left ACTIVE forever on a successful run.)
+        await _finalize_goal_done(store, goal_id)
+    elif final_state.status == "failed":
+        # A node failed and the runner halted — park for attention.
+        await _park_goal_waiting(
+            store, goal_id, "Delivery workflow failed — a node returned status=failed."
+        )
+    elif final_state.status in ("blocked", "escalated"):
         # The adapter's escalate() should have already parked the goal.
         # Log for diagnostics; do not double-park.
         log.info(
             "delivery_driver: goal %s is %s — adapter should have already parked it.",
             goal_id, final_state.status,
         )
+
+
+async def _finalize_goal_done(store: "TaskStore", goal_id: str) -> None:
+    """Finalize *goal_id* to DONE after a successful runner completion."""
+    from .models import TaskState
+
+    try:
+        task = store.get(goal_id)
+        if task is not None and task.state not in (TaskState.DONE, TaskState.ARCHIVED):
+            await store.finalize_run(
+                goal_id,
+                new_state=TaskState.DONE,
+                session_id=None,
+                waiting_question=None,
+                history_entry="[delivery_driver] Delivery workflow completed successfully.",
+            )
+    except Exception as exc:
+        log.error("delivery_driver: failed to finalize goal %s to DONE: %s", goal_id, exc)
 
 
 async def _park_goal_waiting(store: "TaskStore", goal_id: str, reason: str) -> None:

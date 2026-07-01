@@ -351,15 +351,33 @@ class HarnessExecutorAdapter:
         if final_state == TaskState.DONE:
             output = trace.final_text_snippet if trace else ""
             self.telemetry.emit(node_id, {"status": "done", "from_status": "in_progress"})
+            # P0-1: parse the agent's node_status/delivery_status envelope and
+            # surface its structured fields (verdict, finding_class, ...) so
+            # downstream edges keyed on ``{node}.fields.{k}`` can route.  Without
+            # this the verdict stays trapped as raw text in ``fields.output`` and
+            # every verdict-routed edge dead-ends.  Mirrors the BFS executor's
+            # _enrich_scope_from_delivery_status.  Node status stays "done" so
+            # runner/scope exposes the fields (it gates on status == "done").
+            fields: dict[str, Any] = {
+                "child_task_id": task_id,
+                "output": output,
+                "exit_reason": trace.exit_reason if trace else "",
+            }
+            from .executor import _parse_status_envelope  # noqa: PLC0415
+            envelope = _parse_status_envelope(output)
+            if envelope is not None:
+                env_status = envelope.get("status")
+                if isinstance(env_status, str) and env_status:
+                    fields["verdict"] = env_status
+                env_fields = envelope.get("fields")
+                if isinstance(env_fields, dict):
+                    for k, v in env_fields.items():
+                        fields[str(k)] = str(v)
             return AgentResult(
                 status="done",
                 artifact_paths=[],
                 produces=output,
-                fields={
-                    "child_task_id": task_id,
-                    "output": output,
-                    "exit_reason": trace.exit_reason if trace else "",
-                },
+                fields=fields,
                 open_questions=[],
                 telemetry=_zero_telemetry(),
             )

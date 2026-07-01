@@ -98,6 +98,41 @@ async def test_child_active_parent_waiting_activates_parent(task_store: TaskStor
     assert pool.enqueued == []  # no re-enqueue on mere activation
 
 
+async def test_child_active_parent_backlog_activates_parent(task_store: TaskStore) -> None:
+    # Starting a nested subgoal directly (child → ACTIVE) must surface a parent
+    # that is still in BACKLOG, otherwise the parent goal stays stuck in TODO
+    # while its subtree is clearly in progress.
+    goal_id = await _create_goal(task_store)
+    child_id = await _create_child(task_store, goal_id)
+
+    # goal_id stays BACKLOG (default); child becomes ACTIVE.
+    await _set_state(task_store, child_id, TaskState.ACTIVE)
+
+    pool = _RecordingPool()
+    await propagate_to_parent(child_id, task_store, pool)
+
+    assert task_store.get(goal_id).state == TaskState.ACTIVE
+    assert pool.enqueued == []  # activation only, no re-enqueue
+
+
+async def test_child_active_surfaces_whole_ancestor_chain(task_store: TaskStore) -> None:
+    # A deeply nested subgoal becoming ACTIVE should surface the entire ancestor
+    # spine (grandparent included), not just the immediate parent.
+    grandparent_id = await _create_goal(task_store, title="Grandparent")
+    parent_id = await _create_goal(task_store, title="Parent")
+    # Re-parent the parent goal under the grandparent.
+    await task_store.set_parent(parent_id, grandparent_id)
+    child_id = await _create_child(task_store, parent_id)
+
+    await _set_state(task_store, child_id, TaskState.ACTIVE)
+
+    pool = _RecordingPool()
+    await propagate_to_parent(child_id, task_store, pool)
+
+    assert task_store.get(parent_id).state == TaskState.ACTIVE
+    assert task_store.get(grandparent_id).state == TaskState.ACTIVE
+
+
 async def test_child_done_parent_waiting_activates_and_enqueues(task_store: TaskStore) -> None:
     goal_id = await _create_goal(task_store)
     child_id = await _create_child(task_store, goal_id)

@@ -36,12 +36,22 @@ export interface SystemEntry {
   text: string;
 }
 
+export interface GoalActivityEntry {
+  id: string;
+  kind: "goal_activity";
+  phase: "start" | "end" | "skipped";
+  title: string;
+  childId: string;
+  newState?: string;
+}
+
 export type StreamEntry =
   | AssistantTextEntry
   | ToolCallEntry
   | ToolResultEntry
   | ThinkingEntry
-  | SystemEntry;
+  | SystemEntry
+  | GoalActivityEntry;
 
 type RawEvent = Record<string, unknown> & { type?: string };
 
@@ -206,6 +216,36 @@ export function useLiveStream(taskId: string, enabled: boolean): LiveStream {
         const detail = extractSystemDetail(event);
         const text = [event.type, subtype, detail].filter(Boolean).join("/");
         next = [{ id: idBase, kind: "system", text }];
+      } else if (
+        event.type === "goal_child_start" ||
+        event.type === "goal_child_end" ||
+        event.type === "goal_child_skipped"
+      ) {
+        // A goal orchestrating children (or nested subgoals) emits these so
+        // its detail view shows activity even though the goal runs no agent
+        // of its own.
+        const phase =
+          event.type === "goal_child_start"
+            ? "start"
+            : event.type === "goal_child_end"
+            ? "end"
+            : "skipped";
+        const title =
+          typeof event.title === "string" ? event.title : "child task";
+        const childId =
+          typeof event.child_id === "string" ? event.child_id : "";
+        const newState =
+          typeof event.new_state === "string" ? event.new_state : undefined;
+        next = [
+          {
+            id: idBase,
+            kind: "goal_activity",
+            phase,
+            title,
+            childId,
+            newState,
+          },
+        ];
       }
 
       if (next.length) setEntries((prev) => [...prev, ...next]);

@@ -250,5 +250,9 @@ async def test_delivery_driver_e2e_needs_fix_loop(tmp_path):
     # Both implement and review should have been dispatched.
     assert "implement" in dispatch_log, f"implement not dispatched; log={dispatch_log}"
     assert "review" in dispatch_log, f"review not dispatched; log={dispatch_log}"
-    # finalize_run should NOT have been called (success path).
-    store.finalize_run.assert_not_called()
+    # On a successful runner completion the driver finalizes the goal to DONE
+    # (previously the goal was left ACTIVE forever — delivery_driver finalize gap).
+    from app.models import TaskState as _TS2
+
+    store.finalize_run.assert_called_once()
+    assert store.finalize_run.call_args.kwargs["new_state"] == _TS2.DONE

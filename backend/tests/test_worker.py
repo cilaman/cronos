@@ -861,8 +861,10 @@ async def test_topo_children_respects_sibling_deps(task_store):
 # ---------------------------------------------------------------------------
 
 
-async def test_run_goal_no_children_marks_done(worker, task_store):
-    """A goal with no children completes immediately as DONE."""
+async def test_run_goal_no_children_parks_waiting(worker, task_store):
+    """A goal with no child tasks is parked WAITING (needs decomposition), not
+    silently marked DONE — otherwise a childless goal (or an empty nested
+    subgoal) would cascade a whole tree to DONE without doing any work."""
     goal = await task_store.create(space_id=SPACE_ID, title="Empty goal", brief="g", type="goal")
     await task_store.transition(
         goal.id, TaskState.ACTIVE, allowed={(TaskState.BACKLOG, TaskState.ACTIVE)}
@@ -870,7 +872,7 @@ async def test_run_goal_no_children_marks_done(worker, task_store):
 
     await worker._run_goal(goal.id, None)
 
-    assert task_store.get(goal.id).state == TaskState.DONE
+    assert task_store.get(goal.id).state == TaskState.WAITING
 
 
 async def test_run_goal_skips_already_done_goal(worker, task_store):
