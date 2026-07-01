@@ -1,7 +1,7 @@
 """I3 — CronosAdapter.runGate tests (R4).
 
 Tests:
-- Delegates to app.pipeline.gate.runGate with gate_id + state_path
+- Delegates to lib.gate.runGate with gate_id + state_path
 - Maps proceed/needs_fix/fail/retry decisions to results.GateResult
 - Writes gate node into state.json on proceed
 - Writes gate node with "needs_fix" on non-proceed
@@ -35,7 +35,7 @@ def _make_cronos_gate_result(
     errors: list[str] | None = None,
     evidence: dict | None = None,
 ) -> MagicMock:
-    """Build a mock app.pipeline.gate.GateResult."""
+    """Build a mock lib.gate.GateResult."""
     r = MagicMock()
     r.decision = decision
     r.errors = errors or []
@@ -77,7 +77,7 @@ class TestRunGateProceed:
         gate = {"id": "g-scout", "checks": []}
 
         with patch(
-            "app.pipeline.gate.runGate",
+            "lib.gate.runGate",
             return_value=_make_cronos_gate_result("proceed"),
         ):
             result = adapter.runGate(gate, ["reports/scout.md"])
@@ -90,7 +90,7 @@ class TestRunGateProceed:
         gate = {"id": "g-scout", "checks": []}
 
         with patch(
-            "app.pipeline.gate.runGate",
+            "lib.gate.runGate",
             return_value=_make_cronos_gate_result("proceed"),
         ):
             adapter.runGate(gate, [])
@@ -112,7 +112,7 @@ class TestRunGateProceed:
             captured["space"] = space
             return _make_cronos_gate_result("proceed")
 
-        with patch("app.pipeline.gate.runGate", side_effect=_fake_run_gate):
+        with patch("lib.gate.runGate", side_effect=_fake_run_gate):
             adapter.runGate(gate, ["a.md", "b.md"])
 
         # Paths are resolved to absolute under the space dir so the gate's direct
@@ -133,7 +133,7 @@ class TestRunGateProceed:
             captured["checks"] = gate.get("checks")
             return _make_cronos_gate_result("proceed")
 
-        with patch("app.pipeline.gate.runGate", side_effect=_fake_run_gate):
+        with patch("lib.gate.runGate", side_effect=_fake_run_gate):
             adapter.runGate(gate, [".cronos/pipeline/my-goal/scout-report-my-goal.md"])
 
         schema_check = captured["checks"][0]
@@ -165,7 +165,7 @@ class TestRunGateNeedsFix:
         gate = {"id": "g-review", "checks": []}
 
         with patch(
-            "app.pipeline.gate.runGate",
+            "lib.gate.runGate",
             return_value=_make_cronos_gate_result(
                 "needs_fix",
                 errors=["schema check failed: missing required field 'traceability'"],
@@ -181,7 +181,7 @@ class TestRunGateNeedsFix:
         gate = {"id": "g-review", "checks": []}
 
         with patch(
-            "app.pipeline.gate.runGate",
+            "lib.gate.runGate",
             return_value=_make_cronos_gate_result("needs_fix"),
         ):
             adapter.runGate(gate, [])
@@ -196,7 +196,7 @@ class TestRunGateFail:
         gate = {"id": "g-tests", "checks": []}
 
         with patch(
-            "app.pipeline.gate.runGate",
+            "lib.gate.runGate",
             return_value=_make_cronos_gate_result(
                 "fail", errors=["tests failed: 3 tests failing"]
             ),
@@ -212,7 +212,7 @@ class TestRunGateFail:
         evidence = {"coverage": 72.5, "failing_tests": 3}
 
         with patch(
-            "app.pipeline.gate.runGate",
+            "lib.gate.runGate",
             return_value=_make_cronos_gate_result("fail", evidence=evidence),
         ):
             result = adapter.runGate(gate, [])
@@ -227,7 +227,7 @@ class TestRunGateNoId:
         gate = {"checks": []}
 
         with patch(
-            "app.pipeline.gate.runGate",
+            "lib.gate.runGate",
             return_value=_make_cronos_gate_result("proceed"),
         ):
             result = adapter.runGate(gate, [])

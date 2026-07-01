@@ -1,9 +1,9 @@
 """
-Smoke test: verifies the full app.pipeline.gate -> lib.verify call chain.
+Smoke test: verifies the full lib.gate -> lib.verify call chain.
 
 After SG7 I4, gate.py imports split_frontmatter and verify from lib.verify (not
 app.pipeline.verify). This smoke test confirms:
-1. app.pipeline.gate is importable (its lib.verify imports resolve correctly)
+1. lib.gate is importable (its lib.verify imports resolve correctly)
 2. runGate is callable and produces expected results with correct GateResult shape
 3. lib.verify.verify is the function actually used by gate.py internally
    (gate_mod._cc_verify is lib.verify.verify)
@@ -23,17 +23,17 @@ import pytest
 
 
 def test_gate_importable():
-    """app.pipeline.gate should be importable; this confirms lib.verify is on sys.path."""
-    import app.pipeline.gate  # noqa: F401
+    """lib.gate should be importable; this confirms lib.verify is on sys.path."""
+    import lib.gate  # noqa: F401
 
-    assert hasattr(app.pipeline.gate, "runGate")
-    assert callable(app.pipeline.gate.runGate)
+    assert hasattr(lib.gate, "runGate")
+    assert callable(lib.gate.runGate)
 
 
 def test_gate_imports_from_lib_verify():
     """gate.py's internal verify and split_frontmatter come from lib.verify after I4."""
     import lib.verify
-    import app.pipeline.gate as gate_mod
+    import lib.gate as gate_mod
 
     # After I4, gate.py imports:
     #   from lib.verify import split_frontmatter
@@ -53,8 +53,8 @@ def test_gate_imports_from_lib_verify():
 
 
 def test_rungate_importable_as_named_symbol():
-    """runGate should be importable by name from app.pipeline.gate."""
-    from app.pipeline.gate import runGate  # noqa: F401
+    """runGate should be importable by name from lib.gate."""
+    from lib.gate import runGate  # noqa: F401
 
     assert callable(runGate)
 
@@ -66,7 +66,7 @@ def test_rungate_importable_as_named_symbol():
 
 def test_rungate_empty_gate_returns_proceed():
     """runGate with zero checks should return decision='proceed'."""
-    from app.pipeline.gate import runGate, GateResult
+    from lib.gate import runGate, GateResult
 
     gate: dict = {"id": "smoke-empty", "checks": []}
     result = runGate(gate, [], space=None)
@@ -83,7 +83,7 @@ def test_rungate_empty_gate_returns_proceed():
 
 def test_rungate_traceability_no_required_ids(tmp_path: pathlib.Path):
     """runGate traceability check with no required_ids should return proceed."""
-    from app.pipeline.gate import runGate, GateResult
+    from lib.gate import runGate, GateResult
 
     # Create a minimal research-class artifact with YAML frontmatter
     artifact_content = textwrap.dedent("""\
@@ -147,7 +147,7 @@ def test_rungate_traceability_no_required_ids(tmp_path: pathlib.Path):
 
 def test_rungate_acceptance_no_traceability(tmp_path: pathlib.Path):
     """runGate acceptance check on artifact with no traceability[] returns proceed."""
-    from app.pipeline.gate import runGate, GateResult
+    from lib.gate import runGate, GateResult
 
     artifact_content = textwrap.dedent("""\
         ---
@@ -203,7 +203,7 @@ def test_rungate_acceptance_no_traceability(tmp_path: pathlib.Path):
 
 def test_gateresult_structure():
     """GateResult should have decision, errors, evidence and to_dict()."""
-    from app.pipeline.gate import GateResult
+    from lib.gate import GateResult
 
     r = GateResult(decision="proceed", errors=[], evidence={"foo": "bar"})
     assert r.decision == "proceed"
@@ -223,7 +223,7 @@ def test_gateresult_structure():
 
 def test_rungate_unknown_check_type_returns_fail():
     """runGate with an unknown check type should return decision='fail', not raise."""
-    from app.pipeline.gate import runGate, GateResult
+    from lib.gate import runGate, GateResult
 
     gate: dict = {
         "id": "smoke-unknown-check",

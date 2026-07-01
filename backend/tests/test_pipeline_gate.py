@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from app.pipeline.gate import (
+from lib.gate import (
     GateResult,
     CHECK_REGISTRY,
     runGate,

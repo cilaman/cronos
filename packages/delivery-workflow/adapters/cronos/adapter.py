@@ -13,7 +13,7 @@ Design decisions implemented here:
   DD-03  Dispatch flow: create_task → goal ACTIVE → poll → trace → AgentResult.
   DD-04  Telemetry: sum per-turn tokens; usd = tokens * token_cost_usd.
   DD-05  delivery_status parsed from final_text_snippet; fallback to artifact fence.
-  DD-06  runGate delegates to app.pipeline.gate.runGate.
+  DD-06  runGate delegates to lib.gate.runGate.
   DD-07  evalCondition delegates to lib.conditions.eval_condition.
   DD-08  state.write patches StateStore; node transitions appended to EventLog.
   DD-09  TelemetrySink wired to StateStore; BudgetExceededSignal → escalate.
@@ -318,13 +318,13 @@ class CronosAdapter:
     def runGate(
         self, gate: dict[str, Any], artifact_paths: list[str]
     ) -> GateResult:
-        """Delegate to app.pipeline.gate.runGate; map result to results.GateResult.
+        """Delegate to lib.gate.runGate; map result to results.GateResult.
 
-        The Cronos gate engine (app.pipeline.gate) handles all contract checks
+        The Cronos gate engine (lib.gate) handles all contract checks
         and outcome re-execution. This adapter only bridges the result type and
         writes the gate outcome into state.json (DD-06).
         """
-        from app.pipeline.gate import runGate as _runGate
+        from lib.gate import runGate as _runGate
 
         gate_id = gate.get("id", "")
         state_path = self._run_dir / "state.json"

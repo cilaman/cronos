@@ -167,7 +167,7 @@ async def _run_sdlc(run_dir: Path) -> dict:
     # -----------------------------------------------------------------------
     # g-scout gate
     # -----------------------------------------------------------------------
-    with patch("app.pipeline.gate.runGate",
+    with patch("lib.gate.runGate",
                return_value=_make_cronos_gate_result(_gate_for("g-scout"), "g-scout")):
         g_scout = adapter.runGate({"id": "g-scout", "checks": []}, scout_result.artifact_paths)
     assert g_scout.decision == "proceed"
@@ -189,7 +189,7 @@ async def _run_sdlc(run_dir: Path) -> dict:
     # -----------------------------------------------------------------------
     # g-analysis gate
     # -----------------------------------------------------------------------
-    with patch("app.pipeline.gate.runGate",
+    with patch("lib.gate.runGate",
                return_value=_make_cronos_gate_result(_gate_for("g-analysis"), "g-analysis")):
         g_analysis = adapter.runGate({"id": "g-analysis", "checks": []}, analyze_result.artifact_paths)
     assert g_analysis.decision == "proceed"
@@ -230,7 +230,7 @@ async def _run_sdlc(run_dir: Path) -> dict:
     # -----------------------------------------------------------------------
     # g-design gate
     # -----------------------------------------------------------------------
-    with patch("app.pipeline.gate.runGate",
+    with patch("lib.gate.runGate",
                return_value=_make_cronos_gate_result(_gate_for("g-design"), "g-design")):
         g_design = adapter.runGate({"id": "g-design", "checks": []}, arch_result.artifact_paths)
     assert g_design.decision == "proceed"
@@ -268,7 +268,7 @@ async def _run_sdlc(run_dir: Path) -> dict:
     executed_path.append("implement")
 
     # g-build (after implement attempt 1)
-    with patch("app.pipeline.gate.runGate",
+    with patch("lib.gate.runGate",
                return_value=_make_cronos_gate_result(_gate_for("g-build"), "g-build")):
         g_build = adapter.runGate({"id": "g-build", "checks": []}, impl1.artifact_paths)
     assert g_build.decision == "proceed"
@@ -312,7 +312,7 @@ async def _run_sdlc(run_dir: Path) -> dict:
     executed_path.append("implement-2")
 
     # g-build attempt 2
-    with patch("app.pipeline.gate.runGate",
+    with patch("lib.gate.runGate",
                return_value=_make_cronos_gate_result(_gate_for("g-build"), "g-build")):
         adapter.runGate({"id": "g-build", "checks": []}, impl2.artifact_paths)
     executed_path.append("g-build-2")
@@ -338,7 +338,7 @@ async def _run_sdlc(run_dir: Path) -> dict:
     assert routes_to_testrun is True
 
     # g-review
-    with patch("app.pipeline.gate.runGate",
+    with patch("lib.gate.runGate",
                return_value=_make_cronos_gate_result(_gate_for("g-review"), "g-review")):
         g_review = adapter.runGate({"id": "g-review", "checks": []}, review2.artifact_paths)
     assert g_review.decision == "proceed"
@@ -361,7 +361,7 @@ async def _run_sdlc(run_dir: Path) -> dict:
     # -----------------------------------------------------------------------
 
     # g-tests attempt 1: needs_fix
-    with patch("app.pipeline.gate.runGate",
+    with patch("lib.gate.runGate",
                return_value=_make_cronos_gate_result(_gate_for("g-tests_attempt1"), "g-tests")):
         g_tests1 = adapter.runGate({"id": "g-tests", "checks": []}, testrun.artifact_paths)
     assert g_tests1.decision == "needs_fix"
@@ -382,7 +382,7 @@ async def _run_sdlc(run_dir: Path) -> dict:
     executed_path.append("implement-3")
 
     # g-tests attempt 2: proceed
-    with patch("app.pipeline.gate.runGate",
+    with patch("lib.gate.runGate",
                return_value=_make_cronos_gate_result(_gate_for("g-tests_attempt2"), "g-tests")):
         g_tests2 = adapter.runGate({"id": "g-tests", "checks": []}, testrun.artifact_paths)
     assert g_tests2.decision == "proceed"
@@ -406,7 +406,7 @@ async def _run_sdlc(run_dir: Path) -> dict:
     executed_path.append("doc")
 
     # g-doc
-    with patch("app.pipeline.gate.runGate",
+    with patch("lib.gate.runGate",
                return_value=_make_cronos_gate_result(_gate_for("g-doc"), "g-doc")):
         g_doc = adapter.runGate({"id": "g-doc", "checks": []}, doc_result.artifact_paths)
     assert g_doc.decision == "proceed"

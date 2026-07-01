@@ -4,7 +4,7 @@ Tests one CronosAdapter instance exercising all six ops together:
 1. state.read + state.write
 2. telemetry.emit
 3. dispatchAgent (mocked store+trace_store)
-4. runGate (mocked app.pipeline.gate.runGate)
+4. runGate (mocked lib.gate.runGate)
 5. evalCondition
 6. escalate
 """
@@ -136,7 +136,7 @@ class TestAllSixOps:
 
         # --- R4: runGate ---
         with patch(
-            "app.pipeline.gate.runGate",
+            "lib.gate.runGate",
             return_value=_make_cronos_gate_result("proceed"),
         ):
             gate_result = adapter.runGate({"id": "g-scout", "checks": []}, ["scout-report.md"])
