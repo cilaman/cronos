@@ -168,10 +168,16 @@ class CronosAdapter:
         Budget ceiling in USD; 0.0 disables the ceiling (default).
     token_cost_usd:
         Per-token USD rate for telemetry accumulation; default 0.0.
+    run_child:
+        Synchronous callback ``run_child(agent_ref, inputs) -> RunTrace | None``
+        that creates and executes the child agent-task inline (on the Cronos main
+        event loop) and returns its loaded run trace.  Injected by the delivery
+        driver, which owns the thread↔loop bridge.  When None (unit tests /
+        NullRuntime), ``dispatchAgent`` returns a failed AgentResult.
     poll_interval:
-        Seconds between ``store.get`` polls in ``dispatchAgent``; default 2.0.
+        Deprecated; retained for construction-time backward compatibility.
     timeout:
-        Max seconds to wait for a dispatched child task; default 300.0.
+        Deprecated; retained for construction-time backward compatibility.
     """
 
     def __init__(
@@ -184,6 +190,8 @@ class CronosAdapter:
         tracking_task_id: str | None = None,
         usd_ceiling: float = 0.0,
         token_cost_usd: float = 0.0,
+        run_child: Any = None,
+        main_loop: Any = None,
         poll_interval: float = 2.0,
         timeout: float = 300.0,
     ) -> None:
@@ -193,6 +201,8 @@ class CronosAdapter:
         self._run_dir = run_dir
         self._tracking_task_id = tracking_task_id
         self._token_cost_usd = token_cost_usd
+        self._run_child = run_child
+        self._main_loop = main_loop
         self._poll_interval = poll_interval
         self._timeout = timeout
 
@@ -210,116 +220,50 @@ class CronosAdapter:
     # dispatchAgent (R1-R3, DD-02/DD-03/DD-04/DD-05)
     # ------------------------------------------------------------------
 
-    async def dispatchAgent(
+    def dispatchAgent(
         self, agent_ref: str, inputs: dict[str, Any]
     ) -> AgentResult:
-        """Scaffold a child agent-task, poll until terminal, return AgentResult.
+        """Execute a child agent-task inline and return an AgentResult.
 
-        dispatchAgent is async def so that the poll loop can use asyncio.sleep
-        (DD-02). The ExecutorInterface is @runtime_checkable so isinstance
-        only checks method presence — the async signature is still conformant.
+        dispatchAgent is a *synchronous* method (called from the delivery runner
+        thread).  Child creation, BACKLOG→ACTIVE transition, agent execution, and
+        SSE streaming all happen in the injected ``run_child`` callback, which runs
+        on the Cronos main event loop via ``run_coroutine_threadsafe`` (owned by
+        the delivery driver).  Here we only translate the child's run trace into an
+        AgentResult (DD-04/DD-05):
 
-        Flow (DD-03):
-        1. Create a child agent-task in TaskStore.
-           Brief begins ``# Agent: {agent_ref}`` and lists artifact paths.
-        2. Transition the parent goal to ACTIVE.
-        3. Poll store.get(child_id) every poll_interval seconds until
-           DONE, WAITING, or ARCHIVED (or timeout → escalate + TimeoutError).
-        4. On DONE: load trace, parse delivery_status, build AgentResult.
-           On WAITING: AgentResult(status="blocked", open_questions=[wq]).
+        1. Call ``run_child(agent_ref, inputs)`` → the child's loaded RunTrace.
+        2. Parse the delivery_status fence from ``trace.final_text_snippet`` (or
+           fall back to the newest artifact under run_dir).
+        3. Sum per-turn tokens into TelemetryData.
+
+        Returning a plain AgentResult (never a coroutine) keeps the sync runner's
+        dispatch path from calling ``run_until_complete`` on the running loop.
         """
-        from app.storage import WORKER_TRANSITIONS, TaskState
-        from app.delivery_driver import DELIVERY_NODE_SENTINEL
-
-        # 1. Build brief and create child task.
-        artifact_lines = "\n".join(
-            f"- {p}" for p in inputs.get("artifact_paths", [])
-        )
-        # Tag the brief with the delivery-node sentinel (R8 / DD-DRV-05) so the
-        # worker recognises this as a runner child task — that flips
-        # parse_status's ``is_runner_task`` so a ``needs_fix`` verdict resolves
-        # to DONE (routable) instead of parking the child WAITING and halting
-        # the whole run.
-        node_id = inputs.get("node_id", agent_ref)
-        sentinel = DELIVERY_NODE_SENTINEL.format(node_id=node_id)
-        brief = f"# Agent: {agent_ref}\n\n{artifact_lines}\n\n{sentinel}".strip()
-        depends_on = inputs.get("depends_on", [])
-
-        # The goal is the run's tracking task; the runner's inputs dict does not
-        # carry parent_id, so fall back to it (else children are orphaned and the
-        # goal is never surfaced/linked on the board).
-        goal_id = inputs.get("parent_id") or self._tracking_task_id
-
-        child_task = await self._store.create(
-            space_id=self._space_id,
-            title=f"[delivery] {agent_ref}",
-            brief=brief,
-            type="task",
-            parent_id=goal_id,
-            depends_on=list(depends_on) if depends_on else None,
-        )
-        child_id = child_task.id
-
-        # 2. Transition goal to ACTIVE (if provided and in BACKLOG).
-        if goal_id is not None:
-            goal = self._store.get(goal_id)
-            if goal is not None and goal.state == TaskState.BACKLOG:
-                try:
-                    await self._store.transition(
-                        goal_id,
-                        TaskState.ACTIVE,
-                        allowed=WORKER_TRANSITIONS,
-                    )
-                except Exception:
-                    log.debug(
-                        "dispatchAgent: goal %s already active or transition failed",
-                        goal_id,
-                    )
-
-        # 3. Poll until terminal state.
-        elapsed = 0.0
-        while elapsed < self._timeout:
-            await asyncio.sleep(self._poll_interval)
-            elapsed += self._poll_interval
-            task = self._store.get(child_id)
-            if task is None:
-                return AgentResult(
-                    status="failed",
-                    artifact_paths=[],
-                    produces="",
-                    fields={},
-                    open_questions=["Child task disappeared from store"],
-                    telemetry=TelemetryData(tokens=0, usd=0.0, seconds=elapsed),
-                )
-            if task.state == TaskState.WAITING:
-                return AgentResult(
-                    status="blocked",
-                    artifact_paths=[],
-                    produces="",
-                    fields={},
-                    open_questions=[task.waiting_question or "Human input required"],
-                    telemetry=TelemetryData(tokens=0, usd=0.0, seconds=elapsed),
-                )
-            if task.state in (TaskState.DONE, TaskState.ARCHIVED):
-                break
-        else:
-            # Timeout — escalate (await directly since we're in async context).
-            await self._escalate_async(child_id, f"dispatchAgent timeout after {self._timeout}s")
-            raise TimeoutError(
-                f"dispatchAgent: child task {child_id} did not complete within "
-                f"{self._timeout}s"
+        if self._run_child is None:
+            return AgentResult(
+                status="failed",
+                artifact_paths=[],
+                produces="",
+                fields={},
+                open_questions=["No run_child callback wired into CronosAdapter"],
+                telemetry=TelemetryData(tokens=0, usd=0.0, seconds=0.0),
             )
 
-        # 4. Load trace and parse delivery_status.
-        trace = await self._trace_store.load_latest(self._space_id, child_id)
+        # 1. Create + execute the child inline (blocks this runner thread until
+        #    the agent finishes on the main loop). Returns the child's RunTrace.
+        trace = self._run_child(agent_ref, inputs)
+
+        # 2. Telemetry from the trace.
         telem = (
             _telemetry_from_trace(trace, self._token_cost_usd)
             if trace is not None
-            else TelemetryData(tokens=0, usd=0.0, seconds=elapsed)
+            else TelemetryData(tokens=0, usd=0.0, seconds=0.0)
         )
 
+        # 3. Parse the delivery_status fence.
         ds = None
-        if trace is not None and trace.final_text_snippet:
+        if trace is not None and getattr(trace, "final_text_snippet", None):
             ds = parse_delivery_status(trace.final_text_snippet)
 
         # Fallback: scan the trailing delivery_status fence of the newest
@@ -421,11 +365,19 @@ class CronosAdapter:
         Idempotent: if the tracking task is already WAITING the call is a no-op.
         state.status is set to "blocked" (DD-10, R8).
 
-        Schedules `_escalate_async` via create_task when called from an async
-        context (e.g. during dispatchAgent timeout) or asyncio.run otherwise.
-        dispatchAgent's timeout path calls ``await self._escalate_async`` directly
-        so the state change is visible before TimeoutError is raised.
+        The runner drives ``escalate`` synchronously.  Under the delivery driver
+        the runner executes in a worker thread (no running loop here), so we bridge
+        the async escalate back to the Cronos main loop via
+        ``run_coroutine_threadsafe`` and block until it lands — otherwise the store's
+        loop-bound async lock would be touched from the wrong loop.  Fallbacks:
+        schedule on a running loop if present, else ``asyncio.run``.
         """
+        if self._main_loop is not None:
+            fut = asyncio.run_coroutine_threadsafe(
+                self._escalate_async(node_id, reason), self._main_loop
+            )
+            fut.result()
+            return
         try:
             loop = asyncio.get_running_loop()
             # Inside async context — schedule; caller should prefer _escalate_async.

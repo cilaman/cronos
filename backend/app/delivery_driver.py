@@ -18,10 +18,11 @@ Sentinel constants (must be byte-identical in driver, worker, and tests):
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 if TYPE_CHECKING:
     from .storage import TaskStore
@@ -69,6 +70,10 @@ async def run_delivery_goal(
     space_id: str,
     space_dir: Path,
     run_dir: Path,
+    *,
+    run_child: "Callable[..., Awaitable[Any]] | None" = None,
+    cancel_event: "asyncio.Event | None" = None,
+    goal_context: str = "",
 ) -> None:
     """Execute a delivery-workflow goal via the portable runner.
 
@@ -88,6 +93,17 @@ async def run_delivery_goal(
         Absolute path to the space root (for resolving spec_path).
     run_dir:
         Directory for run state persistence (state.json, events.jsonl).
+    run_child:
+        Coroutine ``run_child(goal_id, agent_ref, inputs, *, cancel_event,
+        goal_context) -> RunTrace | None`` that creates and executes one delivery
+        child task inline on the main event loop (``RunExecutor.run_delivery_child``).
+        The synchronous runner runs in a worker thread and calls back into this
+        coroutine via ``asyncio.run_coroutine_threadsafe``, dissolving the
+        single-worker-per-space deadlock and streaming child output live.
+    cancel_event:
+        The goal's cancellation event; checked before each child dispatch.
+    goal_context:
+        The composed goal brief handed to each child agent as context.
     """
     from adapters.cronos.adapter import CronosAdapter
     import compiler_a
@@ -119,6 +135,28 @@ async def run_delivery_goal(
 
     run_dir.mkdir(parents=True, exist_ok=True)
 
+    # Bridge the synchronous runner (which runs in a worker thread) back to the
+    # main event loop so it can create and execute child agent-tasks inline.
+    main_loop = asyncio.get_running_loop()
+
+    def run_child_sync(agent_ref: str, inputs: dict) -> Any:
+        """Called from the runner thread; runs one child on the main loop."""
+        if run_child is None:
+            return None
+        if cancel_event is not None and cancel_event.is_set():
+            return None
+        fut = asyncio.run_coroutine_threadsafe(
+            run_child(
+                goal_id,
+                agent_ref,
+                inputs,
+                cancel_event=cancel_event,
+                goal_context=goal_context,
+            ),
+            main_loop,
+        )
+        return fut.result()
+
     adapter = CronosAdapter(
         store=store,
         trace_store=trace_store,
@@ -126,10 +164,16 @@ async def run_delivery_goal(
         run_dir=run_dir,
         tracking_task_id=goal_id,
         usd_ceiling=usd_ceiling,
+        run_child=run_child_sync,
+        main_loop=main_loop,
     )
 
     try:
-        final_state = workflow_runner.run(graph=graph, executor=adapter)
+        # Run the synchronous work-list walker off the event loop so its callbacks
+        # into run_coroutine_threadsafe don't deadlock the loop they depend on.
+        final_state = await asyncio.to_thread(
+            workflow_runner.run, graph=graph, executor=adapter
+        )
     except Exception as exc:
         log.exception("delivery_driver: runner.run raised for goal %s", goal_id)
         await _park_goal_waiting(store, goal_id, f"Delivery runner error: {exc}")

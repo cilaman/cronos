@@ -127,6 +127,8 @@ async def _run_sdlc(run_dir: Path) -> dict:
     # create always returns a DONE task; execution is driven by scripted traces.
     store.create = AsyncMock(side_effect=lambda **kw: _make_task("DONE", _make_task_id()))
 
+    # run_child returns the currently-scripted trace (each phase reassigns
+    # trace_store.load_latest with the next node's trace, mirroring the old flow).
     adapter = CronosAdapter(
         store=store,
         trace_store=trace_store,
@@ -135,8 +137,7 @@ async def _run_sdlc(run_dir: Path) -> dict:
         tracking_task_id="delivery-tracking-001",
         usd_ceiling=float(fixture["usd_ceiling"]),
         token_cost_usd=float(fixture["token_cost_usd"]),
-        poll_interval=0.001,  # instant in tests
-        timeout=10.0,
+        run_child=lambda ref, inp: trace_store.load_latest.return_value,
     )
 
     nodes = fixture["nodes"]
@@ -154,7 +155,7 @@ async def _run_sdlc(run_dir: Path) -> dict:
     trace_store.load_latest = AsyncMock(
         return_value=_make_trace(_ds_for("scout"), tokens=500)
     )
-    scout_result = await adapter.dispatchAgent(
+    scout_result = adapter.dispatchAgent(
         "pipeline-scout", {"artifact_paths": []}
     )
     assert scout_result.status == "done"
@@ -178,7 +179,7 @@ async def _run_sdlc(run_dir: Path) -> dict:
     trace_store.load_latest = AsyncMock(
         return_value=_make_trace(_ds_for("analyze"), tokens=800)
     )
-    analyze_result = await adapter.dispatchAgent("pipeline-analyst", {"artifact_paths": []})
+    analyze_result = adapter.dispatchAgent("pipeline-analyst", {"artifact_paths": []})
     assert analyze_result.status == "done"
     adapter.state.write({"nodes": {"analyze": {"status": "done",
         "artifact_paths": analyze_result.artifact_paths}}})
@@ -209,7 +210,7 @@ async def _run_sdlc(run_dir: Path) -> dict:
     trace_store.load_latest = AsyncMock(
         return_value=_make_trace(_ds_for("signoff-scope"), tokens=100)
     )
-    signoff_scope = await adapter.dispatchAgent("pipeline-signoff", {"artifact_paths": []})
+    signoff_scope = adapter.dispatchAgent("pipeline-signoff", {"artifact_paths": []})
     adapter.state.write({"nodes": {"signoff-scope": {"status": "done"}}})
     executed_path.append("signoff-scope")
 
@@ -219,7 +220,7 @@ async def _run_sdlc(run_dir: Path) -> dict:
     trace_store.load_latest = AsyncMock(
         return_value=_make_trace(_ds_for("architect"), tokens=1200)
     )
-    arch_result = await adapter.dispatchAgent("pipeline-architect", {"artifact_paths": []})
+    arch_result = adapter.dispatchAgent("pipeline-architect", {"artifact_paths": []})
     assert arch_result.status == "done"
     adapter.state.write({"nodes": {"architect": {"status": "done",
         "artifact_paths": arch_result.artifact_paths}}})
@@ -239,7 +240,7 @@ async def _run_sdlc(run_dir: Path) -> dict:
     trace_store.load_latest = AsyncMock(
         return_value=_make_trace(_ds_for("signoff-design"), tokens=100)
     )
-    await adapter.dispatchAgent("pipeline-signoff", {"artifact_paths": []})
+    adapter.dispatchAgent("pipeline-signoff", {"artifact_paths": []})
     adapter.state.write({"nodes": {"signoff-design": {"status": "done"}}})
     executed_path.append("signoff-design")
 
@@ -247,7 +248,7 @@ async def _run_sdlc(run_dir: Path) -> dict:
     trace_store.load_latest = AsyncMock(
         return_value=_make_trace(_ds_for("testarch"), tokens=600)
     )
-    testarch_result = await adapter.dispatchAgent("pipeline-test-architect", {"artifact_paths": []})
+    testarch_result = adapter.dispatchAgent("pipeline-test-architect", {"artifact_paths": []})
     adapter.state.write({"nodes": {"testarch": {"status": "done"}}})
     adapter.telemetry.emit("testarch", {"tokens": 600, "usd": 0.0006, "seconds": 10})
     executed_path.append("testarch")
@@ -259,7 +260,7 @@ async def _run_sdlc(run_dir: Path) -> dict:
     trace_store.load_latest = AsyncMock(
         return_value=_make_trace(_ds_for("implement_attempt1"), tokens=1000)
     )
-    impl1 = await adapter.dispatchAgent("pipeline-implementor", {"artifact_paths": []})
+    impl1 = adapter.dispatchAgent("pipeline-implementor", {"artifact_paths": []})
     assert impl1.status == "needs_fix"
     adapter.state.write({"nodes": {"implement": {"status": "needs_fix",
         "artifact_paths": impl1.artifact_paths, "attempt": 1}}})
@@ -277,7 +278,7 @@ async def _run_sdlc(run_dir: Path) -> dict:
     trace_store.load_latest = AsyncMock(
         return_value=_make_trace(_ds_for("review_attempt1"), tokens=700)
     )
-    review1 = await adapter.dispatchAgent("pipeline-reviewer", {"artifact_paths": []})
+    review1 = adapter.dispatchAgent("pipeline-reviewer", {"artifact_paths": []})
     assert review1.status == "needs_fix"
     assert review1.fields.get("verdict") == "needs_fix"
     assert review1.fields.get("category") == "local"
@@ -303,7 +304,7 @@ async def _run_sdlc(run_dir: Path) -> dict:
     trace_store.load_latest = AsyncMock(
         return_value=_make_trace(_ds_for("implement_attempt2"), tokens=1000)
     )
-    impl2 = await adapter.dispatchAgent("pipeline-implementor", {"artifact_paths": []})
+    impl2 = adapter.dispatchAgent("pipeline-implementor", {"artifact_paths": []})
     assert impl2.status == "done"
     adapter.state.write({"nodes": {"implement": {"status": "done",
         "artifact_paths": impl2.artifact_paths, "attempt": 2}}})
@@ -320,7 +321,7 @@ async def _run_sdlc(run_dir: Path) -> dict:
     trace_store.load_latest = AsyncMock(
         return_value=_make_trace(_ds_for("review_attempt2"), tokens=700)
     )
-    review2 = await adapter.dispatchAgent("pipeline-reviewer", {"artifact_paths": []})
+    review2 = adapter.dispatchAgent("pipeline-reviewer", {"artifact_paths": []})
     assert review2.status == "done"
     assert review2.fields.get("verdict") == "pass"
     adapter.state.write({"nodes": {"review-2": {"status": "done"}}})
@@ -349,7 +350,7 @@ async def _run_sdlc(run_dir: Path) -> dict:
     trace_store.load_latest = AsyncMock(
         return_value=_make_trace(_ds_for("testrun"), tokens=500)
     )
-    testrun = await adapter.dispatchAgent("pipeline-tester", {"artifact_paths": []})
+    testrun = adapter.dispatchAgent("pipeline-tester", {"artifact_paths": []})
     assert testrun.status == "done"
     adapter.state.write({"nodes": {"testrun": {"status": "done"}}})
     adapter.telemetry.emit("testrun", {"tokens": 500, "usd": 0.0005, "seconds": 8})
@@ -375,7 +376,7 @@ async def _run_sdlc(run_dir: Path) -> dict:
     trace_store.load_latest = AsyncMock(
         return_value=_make_trace(_ds_for("implement_attempt2"), tokens=1000)
     )
-    impl3 = await adapter.dispatchAgent("pipeline-implementor", {"artifact_paths": []})
+    impl3 = adapter.dispatchAgent("pipeline-implementor", {"artifact_paths": []})
     adapter.state.write({"nodes": {"implement-3": {"status": "done"}}})
     adapter.telemetry.emit("implement-3", {"tokens": 1000, "usd": 0.001, "seconds": 20})
     executed_path.append("implement-3")
@@ -398,7 +399,7 @@ async def _run_sdlc(run_dir: Path) -> dict:
     trace_store.load_latest = AsyncMock(
         return_value=_make_trace(_ds_for("doc"), tokens=400)
     )
-    doc_result = await adapter.dispatchAgent("pipeline-doc-sync", {"artifact_paths": []})
+    doc_result = adapter.dispatchAgent("pipeline-doc-sync", {"artifact_paths": []})
     assert doc_result.status == "done"
     adapter.state.write({"nodes": {"doc": {"status": "done"}}})
     adapter.telemetry.emit("doc", {"tokens": 400, "usd": 0.0004, "seconds": 6})
@@ -417,7 +418,7 @@ async def _run_sdlc(run_dir: Path) -> dict:
     trace_store.load_latest = AsyncMock(
         return_value=_make_trace(_ds_for("release"), tokens=300)
     )
-    release_result = await adapter.dispatchAgent("pipeline-release", {"artifact_paths": []})
+    release_result = adapter.dispatchAgent("pipeline-release", {"artifact_paths": []})
     assert release_result.status == "done"
     adapter.state.write({"nodes": {"release": {"status": "done"}}, "status": "done"})
     adapter.telemetry.emit("release", {"tokens": 300, "usd": 0.0003, "seconds": 5})

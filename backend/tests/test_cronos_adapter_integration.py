@@ -108,7 +108,7 @@ class TestAllSixOps:
             tracking_task_id="tracking-001",
             usd_ceiling=5.0,
             token_cost_usd=0.001,
-            poll_interval=0.01,
+            run_child=lambda ref, inp: trace,
         )
 
         # --- R9: Protocol conformance ---
@@ -129,9 +129,7 @@ class TestAllSixOps:
         assert ws.budget.usd_spent == pytest.approx(0.003)
 
         # --- R1/R2/R3: dispatchAgent ---
-        result = asyncio.run(
-            adapter.dispatchAgent("pipeline-scout", {"artifact_paths": ["spec.md"]})
-        )
+        result = adapter.dispatchAgent("pipeline-scout", {"artifact_paths": ["spec.md"]})
         assert isinstance(result, AgentResult)
         assert result.status == "done"
         assert result.telemetry.tokens > 0

@@ -952,15 +952,35 @@ class RunExecutor:
             _space_id = goal.space_id
             _space_dir = self.space_store.spaces_dir / _space_id
             _run_dir = _space_dir / CRONOS_SUBDIR / "delivery-runs" / goal_id
-            await run_delivery_goal(
-                goal_id=goal_id,
-                spec_path=_spec_path,
-                store=self.store,
-                trace_store=w.trace_store,
-                space_id=_space_id,
-                space_dir=_space_dir,
-                run_dir=_run_dir,
-            )
+            _goal_context = f"# Goal: {goal.title}\n\n{goal.brief}"
+            try:
+                await run_delivery_goal(
+                    goal_id=goal_id,
+                    spec_path=_spec_path,
+                    store=self.store,
+                    trace_store=w.trace_store,
+                    space_id=_space_id,
+                    space_dir=_space_dir,
+                    run_dir=_run_dir,
+                    run_child=self.run_delivery_child,
+                    cancel_event=cancel_event,
+                    goal_context=_goal_context,
+                )
+            except Exception:
+                log.exception("Delivery goal %s failed in run_delivery_goal", goal_id)
+            finally:
+                # Always close the goal's SSE stream so the frontend leaves the
+                # "Live" state, whatever the outcome (done / waiting / crash).
+                w._current_cancel = None
+                goal_after = self.store.get(goal_id)
+                goal_state = goal_after.state if goal_after is not None else TaskState.WAITING
+                await self._publish(goal_id, {
+                    "type": "run_end",
+                    "task_id": goal_id,
+                    "status": "DONE" if goal_state == TaskState.DONE else None,
+                    "new_state": goal_state.value,
+                })
+                self._bus.drain_subscribers(goal_id, self._done_sentinel)
             return
         # ---------------------------------------------------------------
 
@@ -1295,3 +1315,152 @@ class RunExecutor:
             "new_state": goal_new_state.value,
         })
         self._bus.drain_subscribers(goal_id, self._done_sentinel)
+
+    # ---- delivery-workflow child execution ----
+
+    async def run_delivery_child(
+        self,
+        goal_id: str,
+        agent_ref: str,
+        inputs: dict[str, Any],
+        *,
+        cancel_event: asyncio.Event,
+        goal_context: str,
+    ) -> Any:
+        """Create and execute one delivery-workflow child task inline.
+
+        This is the delivery-workflow analogue of ``run_goal``'s leaf-child path
+        (create → ACTIVE → run agent → finalize).  Unlike the deprecated
+        create-and-poll adapter flow, the agent runs *on the current event loop*
+        via ``_run_agent_fn``, streaming its output to both the child's and the
+        goal's SSE streams.  It is invoked from the delivery runner thread via
+        ``asyncio.run_coroutine_threadsafe`` (see ``delivery_driver``), so it is a
+        normal coroutine that returns the child's loaded ``RunTrace`` (or ``None``)
+        for the adapter to parse the delivery_status fence from.
+        """
+        from .delivery_driver import DELIVERY_NODE_SENTINEL
+        from .worker import _memory_injected_for_workspace
+
+        w = self._worker
+
+        # 1. Build the brief (mirrors the former adapter flow, R8 sentinel) and
+        #    create the child task.
+        artifact_lines = "\n".join(
+            f"- {p}" for p in inputs.get("artifact_paths", [])
+        )
+        node_id = inputs.get("node_id", agent_ref)
+        sentinel = DELIVERY_NODE_SENTINEL.format(node_id=node_id)
+        brief = f"# Agent: {agent_ref}\n\n{artifact_lines}\n\n{sentinel}".strip()
+        depends_on = inputs.get("depends_on") or None
+
+        goal = self.store.get(goal_id)
+        if goal is None:
+            log.error("run_delivery_child: goal %s not found; cannot create child", goal_id)
+            return None
+        space_id = goal.space_id
+
+        child = await self.store.create(
+            space_id=space_id,
+            title=f"[delivery] {agent_ref}",
+            brief=brief,
+            type="task",
+            parent_id=goal_id,
+            depends_on=list(depends_on) if depends_on else None,
+        )
+        child_id = child.id
+
+        await self._publish(goal_id, {
+            "type": "goal_child_start",
+            "child_id": child_id,
+            "title": child.title,
+        })
+
+        # 2. Transition the child BACKLOG → ACTIVE (no-op if already active).
+        try:
+            await self.store.transition(child_id, TaskState.ACTIVE, allowed=USER_TRANSITIONS)
+        except InvalidTransition:
+            log.debug("run_delivery_child: child %s already active or non-startable", child_id)
+
+        child = self.store.get(child_id)
+        if child is None:
+            await self._publish(goal_id, {
+                "type": "goal_child_end",
+                "child_id": child_id,
+                "title": f"[delivery] {agent_ref}",
+                "new_state": TaskState.WAITING.value,
+            })
+            return None
+
+        w._current_child_id = child_id
+        self._bus.clear_buffer(child_id)
+        await self._publish(child_id, {"type": "run_start", "task_id": child_id})
+
+        async def on_child_event(event: dict, _cid: str = child_id) -> None:
+            await self._publish(_cid, event)
+            await self._publish(goal_id, event)
+
+        space = self.space_store.get(child.space_id) if self.space_store else None
+        child_result: AgentResult | None = None
+        run_exception: str | None = None
+        child_started_at = datetime.now(tz=UTC)
+        child_memory_injected = _memory_injected_for_workspace(
+            self._data_dir() / child.space_id / CRONOS_SUBDIR / "workspaces" / child_id
+        )
+        child_memory = None
+        if self.memory_store is not None:
+            try:
+                child_memory = await self._memory_retrieval.retrieve(
+                    child, child.space_id, self.memory_store
+                ) or None
+            except Exception:
+                log.exception("Failed to retrieve memory for delivery child %s", child_id)
+
+        # 3. Run the agent (unless already cancelled).
+        if cancel_event.is_set():
+            run_exception = "cancelled before start"
+        else:
+            try:
+                child_result = await self._run_agent_fn()(
+                    child,
+                    user_message=None,
+                    on_event=on_child_event,
+                    cancel_event=cancel_event,
+                    space=space,
+                    goal_context=goal_context,
+                    memory_items=child_memory,
+                )
+            except Exception as e:
+                run_exception = str(e)
+                log.exception("Agent error on delivery child %s", child_id)
+
+        w._current_child_id = None
+        self._finalizer.space_store = self.space_store
+        self._finalizer.pool = w._pool
+        child_new_state = await self._finalizer.finalize_child(
+            child_id, child_result, run_exception, started_at=child_started_at,
+            memory_injected=child_memory_injected,
+        )
+
+        await self._publish(child_id, {
+            "type": "run_end",
+            "task_id": child_id,
+            "status": child_result.status.value if child_result and child_result.status else None,
+            "new_state": child_new_state.value,
+        })
+        self._bus.drain_subscribers(child_id, self._done_sentinel)
+
+        await self._publish(goal_id, {
+            "type": "goal_child_end",
+            "child_id": child_id,
+            "title": child.title,
+            "new_state": child_new_state.value,
+        })
+
+        # 4. Load the child's trace so the adapter can parse the delivery_status.
+        if w.trace_store is None:
+            return None
+        try:
+            return await w.trace_store.load_latest(child.space_id, child_id)
+        except Exception:
+            log.exception("Failed to load trace for delivery child %s", child_id)
+            return None
