@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { ReactNode } from "react";
 import type { FeatureRead, FeatureState, Task } from "../../types";
 import { STATE_BADGE } from "../../state-badges";
@@ -73,6 +74,7 @@ export function DetailShell({
   headerActions,
   footer,
 }: DetailShellProps) {
+  const [detailsCollapsed, setDetailsCollapsed] = useState(false);
   const maxWidthCls = variant === "task" ? "max-w-6xl" : "max-w-3xl";
   const heightCls = variant === "task" ? "min-h-[60svh]" : "";
 
@@ -151,17 +153,37 @@ export function DetailShell({
                   {entity.title}
                 </h2>
 
-                {headerActions && <div className="mt-3">{headerActions}</div>}
+                {headerActions && (
+                  <div className={`mt-3 ${detailsCollapsed ? "hidden md:block" : "block"}`}>
+                    {headerActions}
+                  </div>
+                )}
               </div>
 
-              <button
-                type="button"
-                onClick={onClose}
-                aria-label="Close"
-                className="rounded p-1 text-ink-muted transition hover:bg-surface-2 hover:text-ink"
-              >
-                ✕
-              </button>
+              <div className="flex items-start gap-1">
+                <button
+                  type="button"
+                  onClick={() => setDetailsCollapsed((v) => !v)}
+                  aria-expanded={!detailsCollapsed}
+                  aria-label={detailsCollapsed ? "Expand header" : "Collapse header"}
+                  className="rounded p-1 text-ink-muted transition hover:bg-surface-2 hover:text-ink md:hidden"
+                >
+                  <span
+                    aria-hidden
+                    className={`inline-block transition-transform ${detailsCollapsed ? "" : "rotate-90"}`}
+                  >
+                    ▸
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  aria-label="Close"
+                  className="rounded p-1 text-ink-muted transition hover:bg-surface-2 hover:text-ink"
+                >
+                  ✕
+                </button>
+              </div>
             </header>
 
             <div className="flex flex-1 min-h-0 flex-col overflow-hidden">

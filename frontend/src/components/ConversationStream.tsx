@@ -376,14 +376,18 @@ export function ConversationStream({ task }: Props) {
         <div ref={endRef} aria-hidden className="h-px w-full" />
       </div>
 
-      {hasNewBelow && (
+      {!atBottom && (
         <div className="sticky bottom-2 z-10 mt-2 flex justify-center">
           <button
             type="button"
             onClick={scrollToBottom}
-            className="inline-flex items-center gap-1.5 rounded-full border border-accent/40 bg-canvas px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.22em] text-accent-bright shadow-accent-glow transition hover:bg-surface-2"
+            className={`inline-flex items-center gap-1.5 rounded-full border bg-canvas px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.22em] transition hover:bg-surface-2 ${
+              hasNewBelow
+                ? "border-accent/40 text-accent-bright shadow-accent-glow"
+                : "border-hairline-strong text-ink-muted"
+            }`}
           >
-            ↓ new activity
+            {hasNewBelow ? "↓ new activity" : "↓ jump to latest"}
           </button>
         </div>
       )}

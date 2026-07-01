@@ -809,7 +809,7 @@ export function Detail({ taskId, onClose }: Props) {
   );
   const [editing, setEditing] = useState(false);
   const [activeTab, setActiveTab] = useState<"details" | "stats" | "trace" | "files">("details");
-  const [mobilePaneTab, setMobilePaneTab] = useState<"context" | "conversation">("context");
+  const [mobilePaneTab, setMobilePaneTab] = useState<"context" | "conversation">("conversation");
   const [routeToast, setRouteToast] = useState<string | null>(null);
 
   const { entries: liveEntries } = useLiveStream(taskId, task?.state === "active");

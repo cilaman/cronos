@@ -463,17 +463,19 @@ describe("Detail — two-pane layout (I4)", () => {
     expect(screen.getByRole("button", { name: /^conversation$/i })).toBeInTheDocument();
   });
 
-  it("conversation pane wrapper has hidden class by default (mobile context tab active)", () => {
+  it("context pane has hidden class by default (mobile conversation tab active)", () => {
     renderDetail();
-    const convWrapper = screen.getByTestId("conversation-pane").parentElement;
-    expect(convWrapper).toHaveClass("hidden");
+    // Mobile default sub-tab is "conversation", so the context pane is hidden
+    // and the conversation pane (with the prompt input) is visible.
+    expect(screen.getByTestId("context-pane")).toHaveClass("hidden");
+    expect(screen.getByTestId("conversation-pane").parentElement).not.toHaveClass("hidden");
   });
 
-  it("clicking Conversation sub-tab removes hidden class from conversation pane wrapper", async () => {
+  it("clicking Context sub-tab removes hidden class from context pane", async () => {
     renderDetail();
-    await userEvent.click(screen.getByRole("button", { name: /^conversation$/i }));
-    const convWrapper = screen.getByTestId("conversation-pane").parentElement;
-    expect(convWrapper).not.toHaveClass("hidden");
+    await userEvent.click(screen.getByRole("button", { name: /^context$/i }));
+    expect(screen.getByTestId("context-pane")).not.toHaveClass("hidden");
+    expect(screen.getByTestId("conversation-pane").parentElement).toHaveClass("hidden");
   });
 });
 
