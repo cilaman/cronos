@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 import json as _json
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 
 from .agent import AgentResult, CRONOS_SUBDIR
@@ -45,85 +45,6 @@ log = logging.getLogger("cronos.worker")
 
 _EXECUTOR_VARIANT_KEY = "executor_variant"
 _DEFAULT_EXECUTOR_VARIANT = "bfs"
-
-# Runner delivery_status values (mirrors lib.delivery_status.DeliveryStatus).
-_DELIVERY_STATUSES = ("done", "blocked", "needs_fix", "failed")
-
-
-def _parse_frontmatter(text: str) -> dict | None:
-    """Return the YAML frontmatter dict of a CC-v1 artifact, or None.
-
-    A CC-v1 report starts with a ``---`` fenced YAML block. Kept dependency-light
-    (no lib import) so it works wherever run_executor is loaded.
-    """
-    import yaml
-
-    if not text.startswith("---"):
-        return None
-    parts = text.split("---", 2)
-    if len(parts) < 3:
-        return None
-    try:
-        header = yaml.safe_load(parts[1])
-    except Exception:
-        return None
-    return header if isinstance(header, dict) else None
-
-
-def _cc_delivery_from_report(pipeline_root: Path, since: datetime, produces) -> dict | None:
-    """Bridge the newest CC-v1 report under *pipeline_root* into a delivery dict.
-
-    Cronos pipeline agents write ``{phase}-report-{slug}.md`` with a YAML
-    frontmatter header (``status``, ``outputs_produced``, and phase-specific
-    routing fields like ``has_ui`` / ``verdict`` / ``finding_class``). The runner
-    routes on ``<node>.fields.<key>`` and gates on ``artifact_paths`` — so map:
-      status          <- header['status']  (done/blocked/needs_fix/failed)
-      artifact_paths  <- header['outputs_produced'] (fallback: the report path)
-      produces        <- node's produces class
-      fields          <- the whole header (so fields.has_ui / fields.verdict work)
-
-    Because the runner dispatches agents sequentially (one at a time via the
-    blocking bridge), the newest report modified at/after *since* is this child's.
-    Returns None when no fresh report is found (→ adapter falls back to the
-    delivery_status fence).
-    """
-    if not pipeline_root.is_dir():
-        return None
-    reports = list(pipeline_root.rglob("*.md"))
-    if not reports:
-        return None
-    newest = max(reports, key=lambda p: p.stat().st_mtime)
-    # Guard against picking a stale report from an earlier phase/run. Allow a
-    # small clock skew margin.
-    mtime = datetime.fromtimestamp(newest.stat().st_mtime, tz=UTC)
-    if mtime < since - timedelta(seconds=5):
-        return None
-
-    header = _parse_frontmatter(newest.read_text(encoding="utf-8", errors="replace"))
-    if header is None:
-        return None
-
-    status = header.get("status")
-    if status not in _DELIVERY_STATUSES:
-        status = "done"  # a valid report with an odd/blank status → treat as done
-
-    outputs = header.get("outputs_produced") or []
-    if not isinstance(outputs, list) or not outputs:
-        outputs = [str(newest)]
-
-    produces_class = ""
-    if isinstance(produces, dict):
-        produces_class = str(produces.get("class", ""))
-    elif produces:
-        produces_class = str(produces)
-
-    return {
-        "status": status,
-        "artifact_paths": [str(p) for p in outputs],
-        "produces": produces_class,
-        "fields": {k: v for k, v in header.items()},
-        "open_questions": list(header.get("blockers") or []),
-    }
 
 
 def _read_executor_variant(run_state_path: Path) -> str:
@@ -1557,12 +1478,10 @@ class RunExecutor:
             "new_state": child_new_state.value,
         })
 
-        # 4. Load the child's trace (telemetry) and derive the node result.
-        #    Cronos CC-v1 agents emit a YAML-frontmatter report artifact (status,
-        #    outputs_produced, has_ui/verdict/… fields) — NOT a delivery_status
-        #    JSON fence.  Bridge that frontmatter into the runner's expected shape
-        #    here; the adapter falls back to delivery_status-fence parsing when no
-        #    CC-v1 report is found (non-CC-v1 agents).
+        # 4. Load the child's trace (telemetry).  The node outcome is read from
+        #    the agent's node_status/delivery_status fence by the adapter
+        #    (CronosAdapter.dispatchAgent → parse_status_envelope); the runner
+        #    does not derive it from a report artifact.
         trace = None
         if w.trace_store is not None:
             try:
@@ -1570,29 +1489,4 @@ class RunExecutor:
             except Exception:
                 log.exception("Failed to load trace for delivery child %s", child_id)
 
-        delivery = None
-        try:
-            _spaces_dir = getattr(self.space_store, "spaces_dir", None)
-            if _spaces_dir is not None:
-                # CC-v1 agents may write to either .cronos/pipeline/ (classic path)
-                # or .cronos/delivery/ (delivery-workflow context). Try both.
-                #
-                # For .cronos/pipeline/ the staleness guard (mtime >= child_started_at)
-                # is appropriate because that dir holds reports from many pipeline runs.
-                #
-                # For .cronos/delivery/ the dir is per-slug (not per-run), so a valid
-                # report written by any previous run of the same goal is usable — pass
-                # epoch as 'since' to bypass the staleness guard.
-                pipeline_root = Path(_spaces_dir) / child.space_id / CRONOS_SUBDIR / "pipeline"
-                delivery = _cc_delivery_from_report(
-                    pipeline_root, child_started_at, inputs.get("produces")
-                )
-                if delivery is None:
-                    delivery_root = Path(_spaces_dir) / child.space_id / CRONOS_SUBDIR / "delivery"
-                    delivery = _cc_delivery_from_report(
-                        delivery_root, datetime.fromtimestamp(0, tz=UTC), inputs.get("produces")
-                    )
-        except Exception:
-            log.exception("Failed to derive CC-v1 delivery result for child %s", child_id)
-
-        return {"trace": trace, "delivery": delivery}
+        return {"trace": trace, "delivery": None}
