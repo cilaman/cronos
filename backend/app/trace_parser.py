@@ -373,7 +373,7 @@ def extract_run_trace(
         exploration_ratio=exploration_ratio,
         error_recovery_count=recovery_count,
         backtrack_count=backtrack_count,
-        final_text_snippet=_truncate(final_text, 500),
+        final_text_snippet=_truncate(final_text, 2000),
         had_crash=had_crash,
         memory_injected=memory_injected or [],
         memory_used=mem_used,

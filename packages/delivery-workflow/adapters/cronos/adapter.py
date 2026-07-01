@@ -509,18 +509,38 @@ def _class_and_slug_from_artifact(
 
 
 def _fallback_delivery_status(run_dir: Path):  # type: ignore[return]
-    """Scan the newest *.md file in run_dir for a trailing delivery_status fence.
+    """Scan markdown files for a trailing delivery_status fence.
 
-    CC-v1 pipeline reports end with a ```delivery_status block; this fallback
-    catches cases where the 500-char final_text_snippet was clipped.
+    Searches two locations (newest file wins, first match returned):
+    1. run_dir/*.md — state files written by the executor
+    2. run_dir.parent.parent/delivery/**/*.md — CC-v1 pipeline artifacts
+       (e.g. .cronos/delivery/<slug>/scout-report.md)
+
     Returns None if no fence is found.
     """
-    try:
-        md_files = sorted(run_dir.glob("*.md"))
-        if not md_files:
-            return None
-        newest = md_files[-1]
-        text = newest.read_text(encoding="utf-8", errors="replace")
-        return parse_delivery_status(text)
-    except Exception:
+    def _scan_files(md_files: list) -> object:
+        for md in reversed(sorted(md_files)):
+            try:
+                text = Path(md).read_text(encoding="utf-8", errors="replace")
+                result = parse_delivery_status(text)
+                if result is not None:
+                    return result
+            except Exception:
+                continue
         return None
+
+    try:
+        result = _scan_files(list(run_dir.glob("*.md")))
+        if result is not None:
+            return result
+
+        # .cronos/delivery/ sibling tree (run_dir = .cronos/delivery-runs/<id>)
+        delivery_dir = run_dir.parent.parent / "delivery"
+        if delivery_dir.is_dir():
+            result = _scan_files(list(delivery_dir.rglob("*.md")))
+            if result is not None:
+                return result
+    except Exception:
+        pass
+
+    return None
