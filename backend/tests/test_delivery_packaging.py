@@ -35,6 +35,43 @@ def test_compose_backend_builds_from_repo_root():
     assert build["dockerfile"] == "backend/Dockerfile"
 
 
+def _dep_names(dep_list):
+    """Extract PyPI package names (lowercased) from a PEP 508 dependency list."""
+    import re
+    names = set()
+    for spec in dep_list:
+        m = re.match(r"^\s*([A-Za-z0-9._-]+)", spec)
+        if m:
+            names.add(m.group(1).lower().replace("_", "-"))
+    return names
+
+
+def test_backend_deps_cover_delivery_workflow_runtime_deps():
+    """The delivery-workflow package is shipped on PYTHONPATH, NOT pip-installed, so
+    its runtime deps must be covered by the backend's own dependencies — else the
+    container fails with e.g. 'No module named jsonschema'."""
+    backend = yaml_or_toml_deps(_REPO / "backend" / "pyproject.toml")
+    pkg = yaml_or_toml_deps(_REPO / "packages" / "delivery-workflow" / "pyproject.toml")
+    missing = _dep_names(pkg) - _dep_names(backend)
+    assert not missing, (
+        f"backend/pyproject.toml must list delivery-workflow runtime deps; missing: {missing}"
+    )
+
+
+def yaml_or_toml_deps(pyproject_path: Path):
+    """Return [project].dependencies from a pyproject.toml."""
+    try:
+        import tomllib  # py3.11+
+    except ModuleNotFoundError:  # pragma: no cover
+        import tomli as tomllib  # type: ignore
+    data = tomllib.loads(pyproject_path.read_text())
+    return data.get("project", {}).get("dependencies", [])
+
+
+def test_jsonschema_importable():
+    import jsonschema  # noqa: F401
+
+
 def test_delivery_driver_bootstraps_package_onto_syspath():
     import sys
     import app.delivery_driver  # noqa: F401 — import runs the bootstrap
