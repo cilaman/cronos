@@ -10,7 +10,11 @@
 services:
   backend:
     build:
-      context: ./backend
+      # Context is the repo root (not ./backend) so the image can also include
+      # the sibling packages/delivery-workflow package the delivery/v2 runner
+      # imports. See backend/Dockerfile (COPY sources are repo-root-relative).
+      context: .
+      dockerfile: backend/Dockerfile
       args:
         BUILD_COMMIT: ${BUILD_COMMIT:-}
         BUILD_TIME: ${BUILD_TIME:-}

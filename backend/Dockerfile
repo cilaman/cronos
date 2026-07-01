@@ -33,12 +33,25 @@ ENV HOME=/home/cronos
 
 WORKDIR /app
 
+# NOTE: the build context is the repo root (see docker-compose.yml) so we can
+# also ship the sibling packages/delivery-workflow package below. All COPY
+# sources are therefore repo-root-relative (backend/…, packages/…).
+
 # Python deps (copy pyproject first for layer cache)
-COPY pyproject.toml ./
+COPY backend/pyproject.toml ./
 RUN pip install --upgrade pip && pip install .
 
 # App source
-COPY app ./app
+COPY backend/app ./app
+
+# Portable delivery-workflow package (lib/runner/adapters + top-level modules
+# compiler_a, spec_loader, ir, …). It is NOT pip-installed (the wheel omits the
+# top-level modules the runner imports), so we ship the source tree and add it
+# to PYTHONPATH. This makes the delivery/v2 runner and the app.pipeline gate
+# importable at runtime — without it, delivery goals fail with
+# "No module named 'adapters'".
+COPY packages/delivery-workflow ./packages/delivery-workflow
+ENV PYTHONPATH=/app/packages/delivery-workflow
 
 # Ensure /app and /data are owned by cronos so the non-root process can
 # write there. /data is a bind-mount at runtime; the entrypoint re-chowns
@@ -46,7 +59,7 @@ COPY app ./app
 RUN mkdir -p /data && chown -R cronos:cronos /app /data
 
 # Restore /home/cronos/.claude.json from backup on start (see script).
-COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+COPY backend/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 8000

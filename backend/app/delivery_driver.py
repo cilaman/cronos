@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
@@ -28,6 +29,23 @@ if TYPE_CHECKING:
     from .storage import TaskStore
 
 log = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# sys.path bootstrap — make the portable delivery-workflow package importable
+# (adapters, runner, compiler_a, spec_loader, ir, lib, ...). The package lives
+# outside the backend tree; its location differs between the repo checkout and
+# the container image, so probe known candidates and add the first that exists.
+# In the container PYTHONPATH also covers this (see backend/Dockerfile), but the
+# probe keeps local dev / tests working without any env setup.
+# ---------------------------------------------------------------------------
+_here = Path(__file__).resolve()
+for _cand in (
+    _here.parents[2] / "packages" / "delivery-workflow",  # repo: backend/app/.. -> root
+    Path("/app/packages/delivery-workflow"),              # container image layout
+):
+    _c = str(_cand)
+    if _cand.is_dir() and _c not in sys.path:
+        sys.path.insert(0, _c)
 
 # ---------------------------------------------------------------------------
 # Sentinel constants — must be byte-identical in delivery_driver.py, I7 worker

@@ -1,0 +1,16 @@
+# Root build context is the repo (backend + frontend both build from here).
+# Exclude heavy/irrelevant paths so the context stays small. Do NOT exclude
+# backend/, frontend/, packages/, or Caddyfile.dev — the images need them.
+.git
+.github
+data/
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/.coverage
+**/node_modules
+backend/.venv
+frontend/dist
+**/.DS_Store
