@@ -1574,10 +1574,24 @@ class RunExecutor:
         try:
             _spaces_dir = getattr(self.space_store, "spaces_dir", None)
             if _spaces_dir is not None:
+                # CC-v1 agents may write to either .cronos/pipeline/ (classic path)
+                # or .cronos/delivery/ (delivery-workflow context). Try both.
+                #
+                # For .cronos/pipeline/ the staleness guard (mtime >= child_started_at)
+                # is appropriate because that dir holds reports from many pipeline runs.
+                #
+                # For .cronos/delivery/ the dir is per-slug (not per-run), so a valid
+                # report written by any previous run of the same goal is usable — pass
+                # epoch as 'since' to bypass the staleness guard.
                 pipeline_root = Path(_spaces_dir) / child.space_id / CRONOS_SUBDIR / "pipeline"
                 delivery = _cc_delivery_from_report(
                     pipeline_root, child_started_at, inputs.get("produces")
                 )
+                if delivery is None:
+                    delivery_root = Path(_spaces_dir) / child.space_id / CRONOS_SUBDIR / "delivery"
+                    delivery = _cc_delivery_from_report(
+                        delivery_root, datetime.fromtimestamp(0, tz=UTC), inputs.get("produces")
+                    )
         except Exception:
             log.exception("Failed to derive CC-v1 delivery result for child %s", child_id)
 
