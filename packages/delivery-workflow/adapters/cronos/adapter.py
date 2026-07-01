@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from interface import ExecutorInterface, StateOps, TelemetryOps
-from lib.delivery_status import parse_delivery_status
+from lib.status_envelope import parse_status_envelope
 from lib.state.events import EventLog
 from lib.state.store import StateStore
 from lib.telemetry.sink import BudgetExceededSignal, TelemetrySink
@@ -288,7 +288,7 @@ class CronosAdapter:
         #     the newest artifact under run_dir (non-CC-v1 agents).
         ds = None
         if trace is not None and getattr(trace, "final_text_snippet", None):
-            ds = parse_delivery_status(trace.final_text_snippet)
+            ds = parse_status_envelope(trace.final_text_snippet)
         if ds is None:
             ds = _fallback_delivery_status(self._run_dir)
 
@@ -298,7 +298,7 @@ class CronosAdapter:
                 artifact_paths=[],
                 produces="",
                 fields={},
-                open_questions=["No delivery_status fence or CC-v1 report found in agent output"],
+                open_questions=["No node_status/delivery_status fence or CC-v1 report found in agent output"],
                 telemetry=telem,
             )
 
@@ -522,7 +522,7 @@ def _fallback_delivery_status(run_dir: Path):  # type: ignore[return]
         for md in reversed(sorted(md_files)):
             try:
                 text = Path(md).read_text(encoding="utf-8", errors="replace")
-                result = parse_delivery_status(text)
+                result = parse_status_envelope(text)
                 if result is not None:
                     return result
             except Exception:
