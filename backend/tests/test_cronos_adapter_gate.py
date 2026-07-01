@@ -109,13 +109,54 @@ class TestRunGateProceed:
         def _fake_run_gate(gate, paths, *, space, gate_id, state_path):
             captured["paths"] = paths
             captured["gate_id"] = gate_id
+            captured["space"] = space
             return _make_cronos_gate_result("proceed")
 
         with patch("app.pipeline.gate.runGate", side_effect=_fake_run_gate):
             adapter.runGate(gate, ["a.md", "b.md"])
 
-        assert captured["paths"] == ["a.md", "b.md"]
+        # Paths are resolved to absolute under the space dir so the gate's direct
+        # artifact reads (acceptance/traceability) find them, and space is passed.
+        assert all(p.endswith("a.md") or p.endswith("b.md") for p in captured["paths"])
+        assert all(str(adapter._space_dir) in p for p in captured["paths"])
+        assert captured["space"] == adapter._space_dir
         assert captured["gate_id"] == "g-scout"
+
+    def test_injects_class_and_slug_into_schema_check(self, tmp_path: Path) -> None:
+        """A bare {type: schema} check gets agent(class)+slug injected from the
+        upstream CC-v1 artifact filename, so the gate can locate/verify it."""
+        adapter = _adapter(tmp_path)
+        gate = {"id": "g-scout", "checks": [{"type": "schema"}]}
+        captured: dict = {}
+
+        def _fake_run_gate(gate, paths, *, space, gate_id, state_path):
+            captured["checks"] = gate.get("checks")
+            return _make_cronos_gate_result("proceed")
+
+        with patch("app.pipeline.gate.runGate", side_effect=_fake_run_gate):
+            adapter.runGate(gate, [".cronos/pipeline/my-goal/scout-report-my-goal.md"])
+
+        schema_check = captured["checks"][0]
+        assert schema_check["agent"] == "research"  # scout-report → research class
+        assert schema_check["slug"] == "my-goal"
+
+
+def test_class_and_slug_from_artifact():
+    import sys as _sys
+    from pathlib import Path as _P
+    _bundle = _P(__file__).parent.parent.parent / "packages" / "delivery-workflow"
+    if str(_bundle) not in _sys.path:
+        _sys.path.insert(0, str(_bundle))
+    from adapters.cronos.adapter import _class_and_slug_from_artifact
+
+    assert _class_and_slug_from_artifact(
+        [".cronos/pipeline/g/analysis-report-g.md"]
+    ) == ("analysis", "g")
+    assert _class_and_slug_from_artifact(
+        ["review-report-my--i2.md"]
+    ) == ("review", "my--i2")
+    assert _class_and_slug_from_artifact([]) == (None, None)
+    assert _class_and_slug_from_artifact(["random.md"]) == (None, None)
 
 
 class TestRunGateNeedsFix:

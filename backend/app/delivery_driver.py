@@ -190,6 +190,7 @@ async def run_delivery_goal(
             usd_ceiling=usd_ceiling,
             run_child=run_child_sync,
             main_loop=main_loop,
+            space_dir=space_dir,
         )
 
         # Run the synchronous work-list walker off the event loop so its callbacks

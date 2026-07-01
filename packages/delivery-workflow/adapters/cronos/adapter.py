@@ -192,6 +192,7 @@ class CronosAdapter:
         token_cost_usd: float = 0.0,
         run_child: Any = None,
         main_loop: Any = None,
+        space_dir: Any = None,
         poll_interval: float = 2.0,
         timeout: float = 300.0,
     ) -> None:
@@ -203,8 +204,10 @@ class CronosAdapter:
         self._token_cost_usd = token_cost_usd
         self._run_child = run_child
         self._main_loop = main_loop
-        self._poll_interval = poll_interval
-        self._timeout = timeout
+        # Space root (dir holding .cronos/); required by the CC-v1 gate to locate
+        # and schema-verify artifacts. Falls back to deriving it from run_dir
+        # (space/.cronos/delivery-runs/<goal_id>) when not provided.
+        self._space_dir = Path(space_dir) if space_dir is not None else run_dir.parent.parent.parent
 
         _state_store = StateStore(run_dir)
         _event_log = EventLog(run_dir)
@@ -251,8 +254,17 @@ class CronosAdapter:
             )
 
         # 1. Create + execute the child inline (blocks this runner thread until
-        #    the agent finishes on the main loop). Returns the child's RunTrace.
-        trace = self._run_child(agent_ref, inputs)
+        #    the agent finishes on the main loop). run_child returns either a
+        #    {"trace", "delivery"} dict (Cronos CC-v1 path — the report frontmatter
+        #    already mapped to status/artifact_paths/fields) or a bare RunTrace
+        #    (legacy / tests → parse a delivery_status fence below).
+        res = self._run_child(agent_ref, inputs)
+        if isinstance(res, dict):
+            trace = res.get("trace")
+            delivery = res.get("delivery")
+        else:
+            trace = res
+            delivery = None
 
         # 2. Telemetry from the trace.
         telem = (
@@ -261,13 +273,22 @@ class CronosAdapter:
             else TelemetryData(tokens=0, usd=0.0, seconds=0.0)
         )
 
-        # 3. Parse the delivery_status fence.
+        # 3a. Preferred: CC-v1 report frontmatter (already parsed by run_child).
+        if delivery is not None:
+            return AgentResult(
+                status=delivery.get("status", "failed"),
+                artifact_paths=list(delivery.get("artifact_paths", [])),
+                produces=str(delivery.get("produces", "")),
+                fields=dict(delivery.get("fields", {})),
+                open_questions=list(delivery.get("open_questions", [])),
+                telemetry=telem,
+            )
+
+        # 3b. Fallback: delivery_status JSON fence in the agent's final text, then
+        #     the newest artifact under run_dir (non-CC-v1 agents).
         ds = None
         if trace is not None and getattr(trace, "final_text_snippet", None):
             ds = parse_delivery_status(trace.final_text_snippet)
-
-        # Fallback: scan the trailing delivery_status fence of the newest
-        # pipeline artifact under run_dir (CC-v1 reports end with that fence).
         if ds is None:
             ds = _fallback_delivery_status(self._run_dir)
 
@@ -277,7 +298,7 @@ class CronosAdapter:
                 artifact_paths=[],
                 produces="",
                 fields={},
-                open_questions=["No delivery_status fence found in agent output"],
+                open_questions=["No delivery_status fence or CC-v1 report found in agent output"],
                 telemetry=telem,
             )
 
@@ -308,10 +329,32 @@ class CronosAdapter:
         gate_id = gate.get("id", "")
         state_path = self._run_dir / "state.json"
 
+        # The portable spec's gate checks are bare (e.g. {type: schema}); the
+        # CC-v1 gate engine needs the artifact class + slug + space to locate and
+        # verify the report. Derive class/slug from the upstream artifact path and
+        # inject them; resolve artifact paths to absolute so the acceptance /
+        # traceability checks (which read artifact_paths[0] directly) find them.
+        klass, slug = _class_and_slug_from_artifact(artifact_paths)
+        abs_paths = [
+            str(p) if Path(p).is_absolute() else str(self._space_dir / p)
+            for p in artifact_paths
+        ]
+        enriched = dict(gate)
+        checks = []
+        for c in gate.get("checks", []) or []:
+            c = dict(c)
+            if c.get("type") == "schema":
+                if klass and not c.get("agent"):
+                    c["agent"] = klass
+                if slug and not c.get("slug"):
+                    c["slug"] = slug
+            checks.append(c)
+        enriched["checks"] = checks
+
         cronos_result = _runGate(
-            gate,
-            artifact_paths,
-            space=None,
+            enriched,
+            abs_paths,
+            space=self._space_dir,
             gate_id=gate_id,
             state_path=state_path if state_path.exists() else None,
         )
@@ -433,6 +476,37 @@ assert isinstance(CronosAdapter.__new__(CronosAdapter), ExecutorInterface) is Fa
 # ---------------------------------------------------------------------------
 # Fallback delivery_status scanner (DD-05)
 # ---------------------------------------------------------------------------
+
+def _class_and_slug_from_artifact(
+    artifact_paths: list[str],
+) -> tuple[str | None, str | None]:
+    """Derive (class, slug) from a CC-v1 artifact filename for gate schema checks.
+
+    Artifacts are named ``{filename_prefix}-{slug}.md`` (e.g.
+    ``scout-report-my-goal.md`` → class=research, slug=my-goal). The prefix→class
+    map is CLASS_CONFIG in lib.verify. Returns (None, None) when nothing matches.
+    """
+    if not artifact_paths:
+        return None, None
+    try:
+        from lib.verify import CLASS_CONFIG
+    except Exception:
+        return None, None
+
+    name = Path(artifact_paths[0]).name
+    if name.endswith(".md"):
+        name = name[:-3]
+    # Longest prefix first so e.g. 'scout-report' wins over any shorter overlap.
+    for klass, cfg in sorted(
+        CLASS_CONFIG.items(),
+        key=lambda kv: len(kv[1].get("filename_prefix", "")),
+        reverse=True,
+    ):
+        prefix = cfg.get("filename_prefix", "")
+        if prefix and name.startswith(prefix + "-"):
+            return klass, name[len(prefix) + 1:]
+    return None, None
+
 
 def _fallback_delivery_status(run_dir: Path):  # type: ignore[return]
     """Scan the newest *.md file in run_dir for a trailing delivery_status fence.
