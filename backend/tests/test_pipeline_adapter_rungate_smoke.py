@@ -1,8 +1,8 @@
 """
 Smoke test: verifies the full lib.gate -> lib.verify call chain.
 
-After SG7 I4, gate.py imports split_frontmatter and verify from lib.verify (not
-app.pipeline.verify). This smoke test confirms:
+gate.py imports split_frontmatter and verify from lib.verify. This smoke test
+confirms:
 1. lib.gate is importable (its lib.verify imports resolve correctly)
 2. runGate is callable and produces expected results with correct GateResult shape
 3. lib.verify.verify is the function actually used by gate.py internally

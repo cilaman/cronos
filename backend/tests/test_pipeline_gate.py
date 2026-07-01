@@ -1,4 +1,4 @@
-"""Tests for backend/app/pipeline/gate.py — runGate engine and all check types."""
+"""Tests for packages/delivery-workflow/lib/gate.py — runGate engine and all check types."""
 from __future__ import annotations
 
 import json

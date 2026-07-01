@@ -11,7 +11,7 @@ Creates a single delivery goal on the Cronos board by POSTing to the backend API
 ## When to use
 
 Use this skill when:
-- You are creating a goal that should be driven by the delivery-workflow runner (e.g. a CC-v1 pipeline for a feature or fix).
+- You are creating a goal that should be driven by the delivery-workflow runner (e.g. a multi-phase delivery pipeline for a feature or fix).
 - The workflow spec exists at a known path (default: `packages/delivery-workflow/delivery.workflow.yaml`).
 
 Use `/create-goal` instead for:

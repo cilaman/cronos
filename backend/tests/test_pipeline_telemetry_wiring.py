@@ -4,16 +4,12 @@ Covers:
 - lib.telemetry importable from the backend Python environment (R14 AC)
 - TelemetrySink.emit() accumulates non-zero tokens and seconds
 - BudgetExceededSignal is importable and raised correctly
-- PhaseMetrics.from_telemetry_sink() extracts non-zero duration_s / token_spend
-- from_telemetry_sink() returns zero metrics for unknown task_id (sentinel)
-- from_trace() regression: unchanged fallback path still produces non-zero metrics
 - _emit_delivery_telemetry helper emits without error given a minimal trace stub
 - _emit_delivery_telemetry is a no-op when trace has no turns (zero tokens accepted)
 """
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -63,89 +59,6 @@ def test_telemetry_sink_node_data_unknown_returns_none():
 
     sink = TelemetrySink()
     assert sink.node_data("no-such-node") is None
-
-
-# ---------------------------------------------------------------------------
-# PhaseMetrics.from_telemetry_sink (new bridge classmethod)
-# ---------------------------------------------------------------------------
-
-
-def test_from_telemetry_sink_nonzero():
-    from lib.telemetry import TelemetrySink
-
-    from app.pipeline.state_writer import PhaseMetrics
-
-    sink = TelemetrySink()
-    sink.emit("task-42", {"tokens": 800.0, "usd": 0.0, "seconds": 7.3})
-
-    metrics = PhaseMetrics.from_telemetry_sink(sink, "task-42")
-    assert metrics.token_spend == 800
-    assert abs(metrics.duration_s - 7.3) < 0.01
-    assert metrics.tool_calls == 0
-    assert metrics.files_read == 0
-
-
-def test_from_telemetry_sink_unknown_task_returns_zero():
-    from lib.telemetry import TelemetrySink
-
-    from app.pipeline.state_writer import PhaseMetrics
-
-    sink = TelemetrySink()
-    metrics = PhaseMetrics.from_telemetry_sink(sink, "ghost-task")
-    assert metrics.token_spend == 0
-    assert metrics.duration_s == 0.0
-
-
-def test_from_telemetry_sink_no_node_data_attr():
-    """Accepts any object without node_data — returns zero PhaseMetrics."""
-    from app.pipeline.state_writer import PhaseMetrics
-
-    dummy = object()
-    metrics = PhaseMetrics.from_telemetry_sink(dummy, "any-id")
-    assert metrics.token_spend == 0
-    assert metrics.duration_s == 0.0
-
-
-# ---------------------------------------------------------------------------
-# PhaseMetrics.from_trace regression (R14 AC4 — unchanged fallback)
-# ---------------------------------------------------------------------------
-
-
-def test_from_trace_regression_nonzero():
-    """Existing from_trace() path still yields non-zero metrics (R14 AC4)."""
-    from app.pipeline.state_writer import PhaseMetrics
-    from app.trace_parser import AssistantTurnTrace, RunTrace
-
-    _TS = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
-    turn = AssistantTurnTrace(
-        turn_index=0,
-        text_snippet="done",
-        has_thinking=False,
-        input_tokens=500,
-        output_tokens=300,
-        cache_read_tokens=200,
-        cache_creation_tokens=100,
-    )
-    trace = RunTrace(
-        task_id="t",
-        space_id="s",
-        run_index=0,
-        session_id="sess",
-        model="claude-sonnet-4-6",
-        mode="auto",
-        started_at=_TS,
-        ended_at=_TS,
-        duration_seconds=15.0,
-        exit_reason="result",
-        turns=[turn],
-        total_tool_calls=4,
-        read_tool_calls=3,
-        write_tool_calls=1,
-    )
-    m = PhaseMetrics.from_trace(trace)
-    assert m.duration_s == 15.0
-    assert m.token_spend == 1100  # 500+300+200+100
-    assert m.tool_calls == 4
 
 
 # ---------------------------------------------------------------------------

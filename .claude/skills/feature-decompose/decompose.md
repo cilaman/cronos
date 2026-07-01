@@ -78,8 +78,8 @@ For simple features (single-file changes, one clear unit of work):
 For features requiring multiple layers (backend + API + tests):
 - One root goal, tasks ordered backend to API to tests (each depends_on prior).
 
-For features matching the CC-v1 pipeline structure (significant new functionality):
-- Consider using [[create-goal]] feature-goal structure (one shared scout + sub-goals per slice).
+For significant new functionality spanning multiple slices:
+- Consider using [[create-goal]] feature-goal structure (sub-goals per slice).
 - But keep it simple unless the feature genuinely needs multiple sub-goals.
 
 **If the brief is too vague to decompose** (no clear outcome, no scope, conflicting
