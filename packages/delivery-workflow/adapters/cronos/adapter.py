@@ -33,7 +33,7 @@ from lib.state.events import EventLog
 from lib.state.store import StateStore
 from lib.telemetry.sink import BudgetExceededSignal, TelemetrySink
 from results import AgentResult, GateResult, TelemetryData
-from state_types import NodeState, WorkflowState
+from state_types import BudgetState, NodeState, WorkflowState
 
 log = logging.getLogger(__name__)
 
@@ -53,9 +53,42 @@ class CronosStateOps:
     def read(self) -> WorkflowState:
         return self._store.read()
 
+    def bootstrap_if_absent(
+        self, *, spec: str, run_id: str, usd_ceiling: float
+    ) -> None:
+        """Seed an initial ``state.json`` when the run directory has none (B1).
+
+        The runner's resume path calls ``state_ops.read()`` unconditionally
+        (``runner/core.py``), which requires ``state.json`` to already exist —
+        and ``StateStore.read()`` raises ``FileNotFoundError`` otherwise.  A
+        *fresh* run must therefore seed the file once; a *resumed* run (state.json
+        present) is left untouched so already-``done`` nodes are skipped rather
+        than re-dispatched.  Idempotent by design.
+        """
+        if self._store.exists():
+            return
+        self._store.write(
+            WorkflowState(
+                spec=spec,
+                run_id=run_id,
+                status="running",
+                budget=BudgetState(usd_ceiling=usd_ceiling),
+            )
+        )
+
     def write(self, patch: dict[str, Any]) -> None:
         """Read-modify-write; appends node_transition events for status changes."""
-        state = self._store.read()
+        try:
+            state = self._store.read()
+        except FileNotFoundError:
+            # Defensive: state.json should have been bootstrapped before the run
+            # (see bootstrap_if_absent).  If a write races ahead of bootstrap,
+            # start from a minimal running state rather than crashing the caller
+            # (e.g. runGate's outcome write).
+            state = WorkflowState(
+                spec="", run_id="", status="running",
+                budget=BudgetState(usd_ceiling=0.0),
+            )
 
         # Top-level status update.
         if "status" in patch:
@@ -174,6 +207,10 @@ class CronosAdapter:
         event loop) and returns its loaded run trace.  Injected by the delivery
         driver, which owns the thread↔loop bridge.  When None (unit tests /
         NullRuntime), ``dispatchAgent`` returns a failed AgentResult.
+    goal_slug:
+        The delivery goal's slug (``slugify(goal.title)``).  Used to scope the
+        fallback ``.cronos/delivery/`` report scan to this goal's subtree so a
+        sibling goal's newer report can never satisfy this node (B2).
     poll_interval:
         Deprecated; retained for construction-time backward compatibility.
     timeout:
@@ -193,6 +230,7 @@ class CronosAdapter:
         run_child: Any = None,
         main_loop: Any = None,
         space_dir: Any = None,
+        goal_slug: str | None = None,
         poll_interval: float = 2.0,
         timeout: float = 300.0,
     ) -> None:
@@ -204,6 +242,9 @@ class CronosAdapter:
         self._token_cost_usd = token_cost_usd
         self._run_child = run_child
         self._main_loop = main_loop
+        # Goal slug (== slugify(goal.title)); scopes the fallback report scan to
+        # this goal's .cronos/delivery/<slug>/ subtree (B2).
+        self._goal_slug = goal_slug
         # Space root (dir holding .cronos/); required by the CC-v1 gate to locate
         # and schema-verify artifacts. Falls back to deriving it from run_dir
         # (space/.cronos/delivery-runs/<goal_id>) when not provided.
@@ -290,7 +331,7 @@ class CronosAdapter:
         if trace is not None and getattr(trace, "final_text_snippet", None):
             ds = parse_status_envelope(trace.final_text_snippet)
         if ds is None:
-            ds = _fallback_delivery_status(self._run_dir)
+            ds = _fallback_delivery_status(self._run_dir, slug=self._goal_slug)
 
         if ds is None:
             return AgentResult(
@@ -482,9 +523,17 @@ def _class_and_slug_from_artifact(
 ) -> tuple[str | None, str | None]:
     """Derive (class, slug) from a CC-v1 artifact filename for gate schema checks.
 
-    Artifacts are named ``{filename_prefix}-{slug}.md`` (e.g.
-    ``scout-report-my-goal.md`` → class=research, slug=my-goal). The prefix→class
-    map is CLASS_CONFIG in lib.verify. Returns (None, None) when nothing matches.
+    Two artifact-naming conventions are supported (B3):
+
+    * ``.cronos/pipeline/`` — ``{filename_prefix}-{slug}.md`` (e.g.
+      ``scout-report-my-goal.md`` → class=research, slug=my-goal). Slug from the
+      filename suffix.
+    * ``.cronos/delivery/`` — ``<slug>/{filename_prefix}.md`` (bare filename, no
+      slug suffix; e.g. ``.cronos/delivery/my-goal/scout-report.md`` →
+      class=research, slug=my-goal). Slug from the *parent directory* name.
+
+    The prefix→class map is CLASS_CONFIG in lib.verify. Returns (None, None) when
+    nothing matches.
     """
     if not artifact_paths:
         return None, None
@@ -493,9 +542,11 @@ def _class_and_slug_from_artifact(
     except Exception:
         return None, None
 
-    name = Path(artifact_paths[0]).name
+    first = Path(artifact_paths[0])
+    name = first.name
     if name.endswith(".md"):
         name = name[:-3]
+    parent_name = first.parent.name
     # Longest prefix first so e.g. 'scout-report' wins over any shorter overlap.
     for klass, cfg in sorted(
         CLASS_CONFIG.items(),
@@ -503,23 +554,42 @@ def _class_and_slug_from_artifact(
         reverse=True,
     ):
         prefix = cfg.get("filename_prefix", "")
-        if prefix and name.startswith(prefix + "-"):
+        if not prefix:
+            continue
+        # .cronos/pipeline/ convention: slug is the filename suffix.
+        if name.startswith(prefix + "-"):
             return klass, name[len(prefix) + 1:]
+        # .cronos/delivery/ convention: bare filename, slug from parent dir.
+        if name == prefix and parent_name:
+            return klass, parent_name
     return None, None
 
 
-def _fallback_delivery_status(run_dir: Path):  # type: ignore[return]
+def _fallback_delivery_status(run_dir: Path, slug: str | None = None):  # type: ignore[return]
     """Scan markdown files for a trailing delivery_status fence.
 
-    Searches two locations (newest file wins, first match returned):
+    Searches two locations (newest file by mtime wins, first match returned):
     1. run_dir/*.md — state files written by the executor
-    2. run_dir.parent.parent/delivery/**/*.md — CC-v1 pipeline artifacts
+    2. the .cronos/delivery/ sibling tree — CC-v1 pipeline artifacts
        (e.g. .cronos/delivery/<slug>/scout-report.md)
+
+    When ``slug`` is given, the delivery-tree scan is scoped to
+    ``.cronos/delivery/<slug>/`` so a *sibling goal's* newer report can never
+    satisfy this node (B2).  It falls back to the whole delivery tree only when
+    that scoped directory does not exist (e.g. an agent wrote under a different
+    slug).  Ordering is by mtime (newest first), matching the docstring — the
+    previous ``reversed(sorted(...))`` ordered lexicographically by path.
 
     Returns None if no fence is found.
     """
     def _scan_files(md_files: list) -> object:
-        for md in reversed(sorted(md_files)):
+        def _mtime(p: object) -> float:
+            try:
+                return Path(p).stat().st_mtime
+            except OSError:
+                return 0.0
+
+        for md in sorted(md_files, key=_mtime, reverse=True):
             try:
                 text = Path(md).read_text(encoding="utf-8", errors="replace")
                 result = parse_status_envelope(text)
@@ -536,8 +606,12 @@ def _fallback_delivery_status(run_dir: Path):  # type: ignore[return]
 
         # .cronos/delivery/ sibling tree (run_dir = .cronos/delivery-runs/<id>)
         delivery_dir = run_dir.parent.parent / "delivery"
-        if delivery_dir.is_dir():
-            result = _scan_files(list(delivery_dir.rglob("*.md")))
+        # Scope to this goal's slug subtree when available (B2); otherwise fall
+        # back to the whole tree (agent may have written under a different slug).
+        scoped = delivery_dir / slug if slug else None
+        search_root = scoped if (scoped is not None and scoped.is_dir()) else delivery_dir
+        if search_root.is_dir():
+            result = _scan_files(list(search_root.rglob("*.md")))
             if result is not None:
                 return result
     except Exception:

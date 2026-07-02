@@ -282,3 +282,57 @@ class TestProtocolConformance:
 
     def test_telemetry_emit_present(self, adapter: CronosAdapter) -> None:
         assert hasattr(adapter.telemetry, "emit")
+
+
+# ---------------------------------------------------------------------------
+# B1 — state.json bootstrap + write guard (resume enablement)
+# ---------------------------------------------------------------------------
+
+
+class TestBootstrapAndWriteGuard:
+    def test_bootstrap_seeds_state_when_absent(self, tmp_path: Path) -> None:
+        run_dir = tmp_path / "run"
+        run_dir.mkdir(parents=True)
+        store = StateStore(run_dir)
+        ops = CronosStateOps(store, EventLog(run_dir))
+        assert not store.exists()
+
+        ops.bootstrap_if_absent(spec="delivery-ping", run_id="goal-1", usd_ceiling=5.0)
+
+        assert store.exists()
+        ws = store.read()
+        assert ws.spec == "delivery-ping"
+        assert ws.run_id == "goal-1"
+        assert ws.status == "running"
+        assert ws.budget.usd_ceiling == 5.0
+
+    def test_bootstrap_is_idempotent_preserves_existing_state(
+        self, tmp_path: Path
+    ) -> None:
+        run_dir = tmp_path / "run"
+        run_dir.mkdir(parents=True)
+        store = StateStore(run_dir)
+        ops = CronosStateOps(store, EventLog(run_dir))
+        # Simulate a prior run that completed the scout node.
+        ops.bootstrap_if_absent(spec="s", run_id="goal-1", usd_ceiling=1.0)
+        ops.write({"nodes": {"scout": {"status": "done"}}})
+
+        # A resumed run must NOT clobber the existing state.
+        ops.bootstrap_if_absent(spec="s", run_id="goal-1", usd_ceiling=1.0)
+
+        ws = store.read()
+        assert "scout" in ws.nodes
+        assert ws.nodes["scout"].status == "done"
+
+    def test_write_does_not_crash_when_state_missing(self, tmp_path: Path) -> None:
+        """Defensive: a gate outcome write before bootstrap must not raise."""
+        run_dir = tmp_path / "run"
+        run_dir.mkdir(parents=True)
+        ops = CronosStateOps(StateStore(run_dir), EventLog(run_dir))
+        assert not (run_dir / "state.json").exists()
+
+        # Should not raise FileNotFoundError.
+        ops.write({"nodes": {"g-scout": {"status": "done"}}})
+
+        ws = ops.read()
+        assert ws.nodes["g-scout"].status == "done"

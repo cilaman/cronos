@@ -144,7 +144,11 @@ async def test_run_delivery_child_streams_and_finalizes():
     # Child created + transitioned to ACTIVE.
     store.create.assert_awaited_once()
     assert store.create.await_args.kwargs["parent_id"] == "goal-1"
-    assert "<!-- delivery-node: scout -->" in store.create.await_args.kwargs["brief"]
+    _brief = store.create.await_args.kwargs["brief"]
+    assert "<!-- delivery-node: scout -->" in _brief
+    # B4 — the goal slug (slugify("G") == "g") is threaded into the brief so the
+    # CC-v1 agent uses it verbatim instead of inventing one per retry.
+    assert "slug: g" in _brief
     store.transition.assert_awaited_once()
     assert store.transition.await_args.args[1] == TaskState.ACTIVE
 

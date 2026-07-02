@@ -1361,25 +1361,34 @@ class RunExecutor:
         for the adapter to parse the delivery_status fence from.
         """
         from .delivery_driver import DELIVERY_NODE_SENTINEL
+        from .storage import slugify
         from .worker import _memory_injected_for_workspace
 
         w = self._worker
-
-        # 1. Build the brief (mirrors the former adapter flow, R8 sentinel) and
-        #    create the child task.
-        artifact_lines = "\n".join(
-            f"- {p}" for p in inputs.get("artifact_paths", [])
-        )
-        node_id = inputs.get("node_id", agent_ref)
-        sentinel = DELIVERY_NODE_SENTINEL.format(node_id=node_id)
-        brief = f"# Agent: {agent_ref}\n\n{artifact_lines}\n\n{sentinel}".strip()
-        depends_on = inputs.get("depends_on") or None
 
         goal = self.store.get(goal_id)
         if goal is None:
             log.error("run_delivery_child: goal %s not found; cannot create child", goal_id)
             return None
         space_id = goal.space_id
+
+        # 1. Build the brief (mirrors the former adapter flow, R8 sentinel) and
+        #    create the child task.  CC-v1 agents are forbidden from inventing a
+        #    slug (they must use it verbatim), so hand them the goal slug (B4) —
+        #    the same value the fallback report scan is scoped to (B2).
+        goal_slug = slugify(goal.title)
+        artifact_lines = "\n".join(
+            f"- {p}" for p in inputs.get("artifact_paths", [])
+        )
+        node_id = inputs.get("node_id", agent_ref)
+        sentinel = DELIVERY_NODE_SENTINEL.format(node_id=node_id)
+        brief = (
+            f"# Agent: {agent_ref}\n\n"
+            f"slug: {goal_slug}\n\n"
+            f"{artifact_lines}\n\n"
+            f"{sentinel}"
+        ).strip()
+        depends_on = inputs.get("depends_on") or None
 
         child = await self.store.create(
             space_id=space_id,

@@ -141,6 +141,7 @@ async def test_run_delivery_goal_loads_spec_and_runs(tmp_path):
     def fake_run(graph, executor, state_ops=None):
         called_with["graph"] = graph
         called_with["executor"] = executor
+        called_with["state_ops"] = state_ops
         return mock_state
 
     # Patch runner.run where it's imported inside the driver function.
@@ -170,6 +171,15 @@ async def test_run_delivery_goal_loads_spec_and_runs(tmp_path):
     # Graph should have been compiled with the spec.
     assert "graph" in called_with
     assert called_with["graph"].metadata.get("name") == "test-workflow"
+
+    # B1 — state_ops is passed to the runner (enables persistence + resume) and
+    # state.json is bootstrapped before the run.
+    assert called_with["state_ops"] is MockAdapter.return_value.state
+    MockAdapter.return_value.state.bootstrap_if_absent.assert_called_once()
+    _bs_kwargs = MockAdapter.return_value.state.bootstrap_if_absent.call_args.kwargs
+    assert _bs_kwargs["run_id"] == "goal-1"
+    # B2/B4 — the goal slug (slugify("Test Goal")) is handed to the adapter.
+    assert MockAdapter.call_args.kwargs["goal_slug"] == "test-goal"
 
 
 @pytest.mark.asyncio

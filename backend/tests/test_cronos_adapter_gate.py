@@ -149,6 +149,7 @@ def test_class_and_slug_from_artifact():
         _sys.path.insert(0, str(_bundle))
     from adapters.cronos.adapter import _class_and_slug_from_artifact
 
+    # .cronos/pipeline/ convention: slug in the filename suffix.
     assert _class_and_slug_from_artifact(
         [".cronos/pipeline/g/analysis-report-g.md"]
     ) == ("analysis", "g")
@@ -157,6 +158,17 @@ def test_class_and_slug_from_artifact():
     ) == ("review", "my--i2")
     assert _class_and_slug_from_artifact([]) == (None, None)
     assert _class_and_slug_from_artifact(["random.md"]) == (None, None)
+
+    # B3 — .cronos/delivery/ convention: bare {prefix}.md, slug from parent dir.
+    assert _class_and_slug_from_artifact(
+        [".cronos/delivery/sg1-fix-create-goal-skills/scout-report.md"]
+    ) == ("research", "sg1-fix-create-goal-skills")
+    assert _class_and_slug_from_artifact(
+        ["/abs/space/.cronos/delivery/my-goal/analysis-report.md"]
+    ) == ("analysis", "my-goal")
+    # A bare prefix with no parent directory context yields no match (no slug
+    # can be recovered — the parent-dir branch requires a real directory name).
+    assert _class_and_slug_from_artifact(["scout-report.md"]) == (None, None)
 
 
 class TestRunGateNeedsFix:

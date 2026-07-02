@@ -117,10 +117,16 @@ def run(
                 if src_pos < tgt_pos:  # only forward edges counted in in_degree
                     in_degree[edge.target] = max(0, in_degree[edge.target] - 1)
 
-    # Seed entry nodes not yet dispatched.
-    for entry_id in graph.entry_nodes:
-        if entry_id not in dispatched and in_degree.get(entry_id, 0) == 0:
-            work_list.append(entry_id)
+    # Seed every ready node (forward in_degree 0) that is not already dispatched.
+    # On a fresh run this is exactly graph.entry_nodes (both derive from the same
+    # forward-edge in_degree).  On resume it ALSO includes nodes whose
+    # predecessors are already `done` — their in_degree was decremented above —
+    # so the run progresses past the resumed frontier instead of finishing early
+    # with an empty work-list (B1 resume fix).
+    for node in graph.nodes:
+        nid = node.id
+        if nid not in dispatched and in_degree.get(nid, 0) == 0:
+            work_list.append(nid)
 
     global_iterations = 0
 

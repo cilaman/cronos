@@ -181,6 +181,14 @@ async def run_delivery_goal(
             )
             return fut.result()
 
+        # Slug this goal's artifacts are keyed by (== slugify(goal.title), which
+        # is also the goal_id minus its date-time prefix). Threaded into the
+        # adapter (B2 fallback-scan scoping) and into each child brief (B4).
+        from .storage import slugify
+
+        _goal = store.get(goal_id)
+        goal_slug = slugify(_goal.title) if _goal is not None else None
+
         adapter = CronosAdapter(
             store=store,
             trace_store=trace_store,
@@ -191,12 +199,30 @@ async def run_delivery_goal(
             run_child=run_child_sync,
             main_loop=main_loop,
             space_dir=space_dir,
+            goal_slug=goal_slug,
         )
+
+        # Seed state.json before the run so the runner's resume path can read it
+        # and skip already-`done` nodes instead of re-dispatching them (B1).
+        # Idempotent: a resumed run leaves the existing state untouched.
+        # bootstrap_if_absent is a CronosStateOps concern (not part of the StateOps
+        # protocol); test/synthetic adapters manage their own state, so guard it.
+        _bootstrap = getattr(adapter.state, "bootstrap_if_absent", None)
+        if callable(_bootstrap):
+            _bootstrap(
+                spec=graph.metadata.get("name", ""),
+                run_id=goal_id,
+                usd_ceiling=usd_ceiling,
+            )
 
         # Run the synchronous work-list walker off the event loop so its callbacks
         # into run_coroutine_threadsafe don't deadlock the loop they depend on.
+        # Passing state_ops enables persistence + resume + cancel-race detection.
         final_state = await asyncio.to_thread(
-            workflow_runner.run, graph=graph, executor=adapter
+            workflow_runner.run,
+            graph=graph,
+            executor=adapter,
+            state_ops=adapter.state,
         )
     except Exception as exc:
         log.exception("delivery_driver: runner setup/run raised for goal %s", goal_id)

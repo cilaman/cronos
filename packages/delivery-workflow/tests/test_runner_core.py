@@ -314,3 +314,53 @@ class TestSelfLoopCapFires:
         # Escalated with a message about max iterations.
         reason = rt.escalated[0][1]
         assert "max" in reason.lower() or "iterations" in reason.lower() or "Loop" in reason
+
+
+# ---------------------------------------------------------------------------
+# Resume — a `done` node is skipped when state_ops is provided (B1)
+# ---------------------------------------------------------------------------
+
+
+class _MemStateOps:
+    """Minimal in-memory StateOps for resume tests."""
+
+    def __init__(self, state: WorkflowState) -> None:
+        self._state = state
+
+    def read(self) -> WorkflowState:
+        return self._state
+
+    def write(self, patch: dict) -> None:
+        if "status" in patch:
+            self._state.status = patch["status"]
+        for nid, ns in patch.get("nodes", {}).items():
+            node = self._state.nodes.get(nid) or NodeState(status=ns.get("status", "pending"))
+            if "status" in ns:
+                node.status = ns["status"]
+            self._state.nodes[nid] = node
+
+
+class TestResume:
+    def test_resume_skips_done_node(self):
+        g = _simple_graph(2)  # n0 -> n1
+        seeded = WorkflowState(
+            spec="s", run_id="r", status="running",
+            budget=BudgetState(usd_ceiling=0.0),
+            nodes={"n0": NodeState(status="done")},
+        )
+        rt = _RecordingRuntime()
+        state = run(g, rt, state_ops=_MemStateOps(seeded))
+
+        dispatched_ids = [inputs.get("node_id", ref) for ref, inputs in rt.dispatched]
+        assert "n0" not in dispatched_ids  # skipped — already done
+        assert "n1" in dispatched_ids      # downstream still runs
+        assert state.status == "done"
+
+    def test_no_state_ops_reruns_all_nodes(self):
+        """Without state_ops (the old delivery_driver behaviour) every node is
+        re-dispatched cold — this is the bug B1 fixes at the driver seam."""
+        g = _simple_graph(2)
+        rt = _RecordingRuntime()
+        run(g, rt)  # no state_ops
+        dispatched_ids = [inputs.get("node_id", ref) for ref, inputs in rt.dispatched]
+        assert "n0" in dispatched_ids and "n1" in dispatched_ids
