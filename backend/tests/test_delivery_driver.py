@@ -15,6 +15,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "packages" / "deliv
 from app.delivery_driver import (
     DELIVERY_NODE_SENTINEL,
     DELIVERY_WORKFLOW_SENTINEL_PATTERN,
+    _resume_from_blocked,
+    _stalled_gate_ids,
     detect_delivery_workflow_spec,
     run_delivery_goal,
 )
@@ -328,6 +330,165 @@ async def test_run_delivery_goal_blocked_does_not_clobber_waiting(tmp_path):
         _runner_mod.run = original_run
 
     store.finalize_run.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# _resume_from_blocked — clear a blocked run so it continues past a sign-off
+# ---------------------------------------------------------------------------
+
+class _FakeStateOps:
+    """Records write() patches; read() returns a pre-seeded WorkflowState."""
+
+    def __init__(self, state):
+        self._state = state
+        self.writes: list[dict] = []
+
+    def read(self):
+        return self._state
+
+    def write(self, patch: dict) -> None:
+        self.writes.append(patch)
+        if "status" in patch:
+            self._state.status = patch["status"]
+        for nid, np in patch.get("nodes", {}).items():
+            if nid in self._state.nodes and "status" in np:
+                self._state.nodes[nid].status = np["status"]
+
+
+def _graph_with_human():
+    from ir import IREdge, IRGraph, IRNode
+    return IRGraph(
+        nodes=[
+            IRNode(id="scout", kind="agent"),
+            IRNode(id="signoff-scope", kind="human", data={"prompt": "ok?"}),
+            IRNode(id="frontend", kind="agent"),
+        ],
+        edges=[IREdge(source="signoff-scope", target="frontend")],
+    )
+
+
+def test_resume_from_blocked_approves_human_node_and_clears_status():
+    from state_types import BudgetState, NodeState, WorkflowState
+
+    state = WorkflowState(
+        spec="w", run_id="goal-1", status="blocked",
+        budget=BudgetState(usd_ceiling=5.0),
+        nodes={
+            "scout": NodeState(status="done"),
+            "signoff-scope": NodeState(status="blocked"),
+        },
+    )
+    ops = _FakeStateOps(state)
+    adapter = SimpleNamespace(state=ops)
+
+    _resume_from_blocked(adapter, _graph_with_human(), "goal-1")
+
+    # Status reset to running so the runner's cancel-race guard won't halt.
+    assert state.status == "running"
+    # The blocked human node is marked done → runner routes to its successors.
+    assert state.nodes["signoff-scope"].status == "done"
+    assert ops.writes and ops.writes[0]["status"] == "running"
+    assert ops.writes[0]["nodes"]["signoff-scope"]["status"] == "done"
+
+
+def test_resume_from_blocked_noop_when_running():
+    from state_types import BudgetState, NodeState, WorkflowState
+
+    state = WorkflowState(
+        spec="w", run_id="g", status="running",
+        budget=BudgetState(usd_ceiling=5.0),
+        nodes={"scout": NodeState(status="done")},
+    )
+    ops = _FakeStateOps(state)
+    _resume_from_blocked(SimpleNamespace(state=ops), _graph_with_human(), "g")
+    # Fresh (non-blocked) run must not be patched.
+    assert ops.writes == []
+
+
+def test_resume_from_blocked_does_not_touch_non_human_blocked_node():
+    """A blocked node that is NOT a human/wait node is left blocked (only status cleared)."""
+    from state_types import BudgetState, NodeState, WorkflowState
+
+    state = WorkflowState(
+        spec="w", run_id="g", status="blocked",
+        budget=BudgetState(usd_ceiling=5.0),
+        nodes={"scout": NodeState(status="blocked")},  # scout is an agent, not human
+    )
+    ops = _FakeStateOps(state)
+    _resume_from_blocked(SimpleNamespace(state=ops), _graph_with_human(), "g")
+    assert state.status == "running"
+    assert state.nodes["scout"].status == "blocked"  # not auto-approved
+    assert "nodes" not in ops.writes[0]
+
+
+# ---------------------------------------------------------------------------
+# _stalled_gate_ids — detect a dead-end gate reported as "done"
+# ---------------------------------------------------------------------------
+
+def test_stalled_gate_ids_flags_non_proceed_gate():
+    from state_types import BudgetState, NodeState, WorkflowState
+
+    state = WorkflowState(
+        spec="w", run_id="g", status="done",
+        budget=BudgetState(usd_ceiling=5.0),
+        nodes={
+            "scout": NodeState(status="done"),
+            "g-scout": NodeState(status="done", gate={"decision": "needs_fix"}),
+        },
+    )
+    assert _stalled_gate_ids(state) == ["g-scout"]
+
+
+def test_stalled_gate_ids_empty_when_all_proceed():
+    from state_types import BudgetState, NodeState, WorkflowState
+
+    state = WorkflowState(
+        spec="w", run_id="g", status="done",
+        budget=BudgetState(usd_ceiling=5.0),
+        nodes={
+            "g-scout": NodeState(status="done", gate={"decision": "proceed"}),
+            "analyze": NodeState(status="done"),
+        },
+    )
+    assert _stalled_gate_ids(state) == []
+
+
+@pytest.mark.asyncio
+async def test_run_delivery_goal_done_with_stalled_gate_parks_waiting(tmp_path):
+    """Runner returns done but a gate ended needs_fix → park WAITING, not DONE."""
+    spec_file = tmp_path / "workflow.yaml"
+    spec_file.write_text(MINIMAL_SPEC_YAML)
+    run_dir = tmp_path / "runs" / "goal-1"
+
+    from app.models import TaskState as _TS
+    from state_types import BudgetState, NodeState, WorkflowState
+    store = _make_store()
+    store.get.return_value = SimpleNamespace(
+        id="goal-1", state=_TS.ACTIVE, title="T", brief="...", waiting_question=None,
+    )
+    ts = _make_trace_store()
+
+    done_but_stalled = WorkflowState(
+        spec="test-workflow", run_id="goal-1", status="done",
+        budget=BudgetState(usd_ceiling=5.0),
+        nodes={"g-scout": NodeState(status="done", gate={"decision": "needs_fix"})},
+    )
+    import runner as _runner_mod
+    original_run = _runner_mod.run
+    _runner_mod.run = lambda graph, executor, state_ops=None: done_but_stalled
+    try:
+        with patch("adapters.cronos.adapter.CronosAdapter"):
+            await run_delivery_goal(
+                goal_id="goal-1", spec_path="workflow.yaml", store=store,
+                trace_store=ts, space_id="space", space_dir=tmp_path, run_dir=run_dir,
+            )
+    finally:
+        _runner_mod.run = original_run
+
+    store.finalize_run.assert_called_once()
+    kwargs = store.finalize_run.call_args.kwargs
+    assert kwargs["new_state"] == _TS.WAITING
+    assert "stalled" in kwargs["waiting_question"].lower()
 
 
 @pytest.mark.asyncio

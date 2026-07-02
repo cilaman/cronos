@@ -215,6 +215,22 @@ async def run_delivery_goal(
                 usd_ceiling=usd_ceiling,
             )
 
+        # Resume past a human sign-off (blocked run).
+        #
+        # A human/wait node parks the run with state.status="blocked" and its own
+        # node status="blocked" (CronosAdapter.escalate + runner dispatch), and the
+        # goal is parked WAITING with the sign-off question.  Answering the question
+        # is the *only* way a parked delivery goal returns to ACTIVE and re-enters
+        # this function.  But the runner reads the persisted "blocked" status on its
+        # first tick (cancel-race guard) and halts before dispatching anything, so
+        # without this the run can never progress past the sign-off — it just
+        # re-parks WAITING ("Please continue" loops forever).
+        #
+        # Treat re-entry on a blocked run as "human approved": mark the blocked
+        # human/wait node(s) done and reset the run status to running so the runner
+        # routes to their successors.
+        _resume_from_blocked(adapter, graph, goal_id)
+
         # Run the synchronous work-list walker off the event loop so its callbacks
         # into run_coroutine_threadsafe don't deadlock the loop they depend on.
         # Passing state_ops enables persistence + resume + cancel-race detection.
@@ -235,9 +251,25 @@ async def run_delivery_goal(
     )
 
     if final_state.status == "done":
-        # Runner reached a terminal node with no more work — mark the goal DONE.
-        # (Without this the goal is left ACTIVE forever on a successful run.)
-        await _finalize_goal_done(store, goal_id)
+        # A "done" run is only a real success when it drained its work-list by
+        # reaching terminal nodes — not when it dead-ended.  A gate whose only
+        # outgoing edge requires ``decision == 'proceed'`` routes nowhere on a
+        # ``needs_fix``/``fail`` decision; the runner then empties its work-list
+        # and reports "done", which would silently mark the goal DONE even though
+        # the gate blocked progress.  Detect that and park WAITING instead.
+        stalled = _stalled_gate_ids(final_state)
+        if stalled:
+            await _park_goal_waiting(
+                store,
+                goal_id,
+                "Delivery workflow stalled at gate(s) "
+                f"{', '.join(stalled)} (decision != 'proceed'). Fix the upstream "
+                "artifact and re-run, or adjust the gate routing.",
+            )
+        else:
+            # Runner reached a terminal node with no more work — mark the goal DONE.
+            # (Without this the goal is left ACTIVE forever on a successful run.)
+            await _finalize_goal_done(store, goal_id)
     elif final_state.status == "failed":
         # A node failed and the runner halted — park for attention.
         await _park_goal_waiting(
@@ -256,6 +288,78 @@ async def run_delivery_goal(
             f"Delivery workflow paused (runner status={final_state.status}).",
             only_if_active=True,
         )
+
+
+def _resume_from_blocked(adapter: Any, graph: Any, goal_id: str) -> None:
+    """Clear a persisted ``blocked`` run so it resumes past a human sign-off.
+
+    Reads the persisted WorkflowState via ``adapter.state``.  When the run is
+    ``blocked`` (parked on a human/wait node awaiting sign-off), mark the blocked
+    human/wait node(s) ``done`` (the user answered → approved) and reset the run
+    status to ``running`` so the runner's cancel-race guard does not halt on the
+    first tick and instead routes to the approved node's successors.
+
+    A no-op on a fresh run (status ``running``) or when the adapter's state is a
+    test double whose ``read()`` does not yield a real WorkflowState.
+    """
+    state_ops = getattr(adapter, "state", None)
+    if state_ops is None or not hasattr(state_ops, "read"):
+        return
+    try:
+        persisted = state_ops.read()
+    except Exception:
+        return
+    if getattr(persisted, "status", None) != "blocked":
+        return
+
+    # Only human / human-mode wait nodes legitimately park a run "blocked".
+    human_ids = {
+        n.id
+        for n in getattr(graph, "nodes", [])
+        if getattr(n, "kind", None) == "human"
+        or (
+            getattr(n, "kind", None) == "wait"
+            and (getattr(n, "data", None) or {}).get("mode", "human") == "human"
+        )
+    }
+    approved = {
+        nid: {"status": "done"}
+        for nid, ns in getattr(persisted, "nodes", {}).items()
+        if getattr(ns, "status", None) == "blocked" and nid in human_ids
+    }
+
+    patch: dict[str, Any] = {"status": "running"}
+    if approved:
+        patch["nodes"] = approved
+    try:
+        state_ops.write(patch)
+    except Exception:
+        log.exception("delivery_driver: failed to clear blocked state for %s", goal_id)
+        return
+    log.info(
+        "delivery_driver: goal %s resuming from blocked; approved human node(s)=%s",
+        goal_id, sorted(approved) or "(none)",
+    )
+
+
+def _stalled_gate_ids(final_state: Any) -> list[str]:
+    """Return gate node ids that ended on a non-'proceed' decision (dead-end).
+
+    A gate whose only outgoing edge requires ``decision == 'proceed'`` routes
+    nowhere when the decision is ``needs_fix``/``fail``; the runner then empties
+    its work-list and reports ``status='done'``.  These ids let the driver park
+    the goal WAITING with a diagnostic rather than marking it DONE.  Gates that
+    proceeded (including loop-backs that eventually resolved to ``proceed``) are
+    not flagged, so a genuinely-complete run reports no stall.
+    """
+    stalled: list[str] = []
+    for nid, ns in getattr(final_state, "nodes", {}).items():
+        gate = getattr(ns, "gate", None)
+        if isinstance(gate, dict):
+            decision = gate.get("decision")
+            if decision is not None and decision != "proceed":
+                stalled.append(nid)
+    return stalled
 
 
 async def _finalize_goal_done(store: "TaskStore", goal_id: str) -> None:
