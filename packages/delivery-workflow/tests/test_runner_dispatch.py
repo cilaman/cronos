@@ -183,6 +183,44 @@ class TestDispatchGate:
         gate_config, _ = rt.gate_calls[0]
         assert gate_config["id"] == "g-review"
 
+    def test_gate_reads_predecessor_artifact_paths(self):
+        """Regression: a gate must be handed its DONE predecessor's artifact_paths
+        (a gate produces none of its own).  Reading the gate's own paths always
+        yielded [], leaving schema checks unable to derive agent/slug."""
+        rt = _MockRuntime()
+        state = _empty_state()
+        state.nodes["scout"] = NodeState(
+            status="done",
+            artifact_paths=[".cronos/pipeline/my-goal/scout-report-my-goal.md"],
+        )
+        node = IRNode(id="g-scout", kind="gate", data={"checks": [{"type": "schema"}]})
+        dispatch_node(node, {}, rt, state, incoming={"g-scout": ["scout"]})
+        _, artifact_paths = rt.gate_calls[0]
+        assert artifact_paths == [
+            ".cronos/pipeline/my-goal/scout-report-my-goal.md"
+        ]
+
+    def test_gate_ignores_pending_predecessor_paths(self):
+        """Only DONE predecessors contribute artifact_paths."""
+        rt = _MockRuntime()
+        state = _empty_state()
+        state.nodes["scout"] = NodeState(status="pending", artifact_paths=["x.md"])
+        node = IRNode(id="g-scout", kind="gate", data={})
+        dispatch_node(node, {}, rt, state, incoming={"g-scout": ["scout"]})
+        _, artifact_paths = rt.gate_calls[0]
+        assert artifact_paths == []
+
+    def test_gate_falls_back_to_own_paths_when_no_incoming(self):
+        """Backward-compat: a gate node carrying its own paths (test doubles)
+        still works when no incoming map is supplied."""
+        rt = _MockRuntime()
+        state = _empty_state()
+        state.nodes["g"] = NodeState(status="running", artifact_paths=["own.md"])
+        node = IRNode(id="g", kind="gate", data={})
+        dispatch_node(node, {}, rt, state)  # no incoming
+        _, artifact_paths = rt.gate_calls[0]
+        assert artifact_paths == ["own.md"]
+
 
 # ---------------------------------------------------------------------------
 # Human node

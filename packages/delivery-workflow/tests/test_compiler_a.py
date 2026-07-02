@@ -249,3 +249,28 @@ class TestFixtureFile:
         assert "review" in node_ids
         # Budget should be present.
         assert "budget" in graph.metadata
+
+    def test_simple_gates_have_bounded_fix_loops(self):
+        """§P4: each simple gate carries a loop block AND a non-proceed fix edge
+        routing back to its producing agent (so a failure doesn't hard-stall)."""
+        prod_yaml = Path(__file__).parent.parent / "delivery.workflow.yaml"
+        graph = compiler_a.compile(load_spec(prod_yaml))
+        by_id = {n.id: n for n in graph.nodes}
+        # gate id → producing agent it should route back to on non-proceed.
+        gate_to_producer = {
+            "g-scout": "scout",
+            "g-analysis": "analyze",
+            "g-design": "architect",
+            "g-build": "implement",
+            "g-doc": "doc",
+            "g-retro": "retro",
+        }
+        for gate_id, producer in gate_to_producer.items():
+            assert by_id[gate_id].loop is not None, f"{gate_id} missing loop block"
+            assert by_id[gate_id].loop.max >= 1
+            fix_edges = [
+                e
+                for e in graph.edges
+                if e.source == gate_id and e.target == producer and "!= 'proceed'" in (e.when or "")
+            ]
+            assert fix_edges, f"{gate_id} missing '!= proceed' fix edge to {producer}"

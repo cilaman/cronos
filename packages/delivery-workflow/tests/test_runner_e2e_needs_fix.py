@@ -231,6 +231,99 @@ class TestNeedsFixLoopBack:
         )
 
 
+def _make_gate_fix_loop_graph(max_iter: int = 3) -> IRGraph:
+    """producer(agent) → gate(loop, max=max_iter) → sink(agent).
+
+    Edges:
+      producer → gate  (unconditional)
+      gate     → sink  (when gate.decision == 'proceed')
+      gate     → producer (when gate.decision != 'proceed')  # bounded fix-loop
+
+    Mirrors the six "simple" delivery gates (g-scout etc.): a gate carrying a
+    loop block whose non-proceed decision routes back to its producing agent,
+    bounded by loop.max via the runner's gate-loop handling.
+    """
+    nodes = [
+        IRNode(id="producer", kind="agent", data={"agent": "scout"}),
+        IRNode(
+            id="gate",
+            kind="gate",
+            loop=LoopPolicy(until="gate.decision == 'proceed'", max=max_iter),
+        ),
+        IRNode(id="sink", kind="agent", data={"agent": "analyst"}),
+    ]
+    edges = [
+        IREdge(source="producer", target="gate"),
+        IREdge(source="gate", target="sink", when="gate.decision == 'proceed'"),
+        IREdge(source="gate", target="producer", when="gate.decision != 'proceed'"),
+    ]
+    return IRGraph(nodes=nodes, edges=edges)
+
+
+class TestGateFixLoop:
+    """§P4: a gate's loop bounds a fix back-edge to its producer (does NOT self-retry)."""
+
+    def test_non_proceed_routes_to_producer_then_proceeds(self):
+        graph = _make_gate_fix_loop_graph(max_iter=3)
+        rt = _SequencedRuntime(
+            agent_sequence=[],  # all agents default to done
+            gate_sequence=[
+                GateResult(decision="needs_fix", errors=["fix me"]),  # attempt 1
+                GateResult(decision="proceed", errors=[]),            # attempt 2
+            ],
+        )
+        state = run(graph, rt)
+
+        assert state.status == "done"
+        producer_calls = [nid for nid, _ in rt.dispatch_log if nid == "producer"]
+        assert len(producer_calls) == 2, f"producer dispatched {len(producer_calls)}×"
+        assert any(nid == "sink" for nid, _ in rt.dispatch_log), "sink never ran"
+        # The gate must NOT escalate — the fix edge does the work.
+        assert rt.escalated == []
+
+    def test_fail_decision_also_routes_to_producer(self):
+        """The '!= proceed' guard catches a hard 'fail' (the schema-gate case),
+        not just 'needs_fix'."""
+        graph = _make_gate_fix_loop_graph(max_iter=3)
+        rt = _SequencedRuntime(
+            agent_sequence=[],
+            gate_sequence=[
+                GateResult(decision="fail", errors=["schema violation"]),  # attempt 1
+                GateResult(decision="proceed", errors=[]),                 # attempt 2
+            ],
+        )
+        state = run(graph, rt)
+
+        assert state.status == "done"
+        producer_calls = [nid for nid, _ in rt.dispatch_log if nid == "producer"]
+        assert len(producer_calls) == 2
+        assert any(nid == "sink" for nid, _ in rt.dispatch_log)
+        assert rt.escalated == []
+
+    def test_bounded_and_dead_ends_without_escalate(self):
+        """A gate that never proceeds is capped at loop.max evaluations, then the
+        run drains to 'done' with the non-proceed decision persisted (the driver
+        parks WAITING off that) — and the gate does NOT escalate."""
+        graph = _make_gate_fix_loop_graph(max_iter=3)
+        rt = _SequencedRuntime(
+            agent_sequence=[],
+            gate_sequence=[GateResult(decision="needs_fix", errors=["still bad"]) for _ in range(10)],
+        )
+        state = run(graph, rt)
+
+        assert state.status == "done"
+        gate_evals = [g for g in rt.gate_log if g == "gate"]
+        assert len(gate_evals) == 3, f"gate evaluated {len(gate_evals)}× (expected max=3)"
+        producer_calls = [nid for nid, _ in rt.dispatch_log if nid == "producer"]
+        assert len(producer_calls) == 3, f"producer dispatched {len(producer_calls)}×"
+        # sink is never reached (gate never proceeds).
+        assert not any(nid == "sink" for nid, _ in rt.dispatch_log)
+        # The gate's non-proceed decision is persisted for the driver's stall detector.
+        assert state.nodes["gate"].gate["decision"] == "needs_fix"
+        # No generic escalate — the actionable WAITING park happens in the driver.
+        assert rt.escalated == []
+
+
 class TestImportBoundary:
     """Grep-based import boundary test (R9).
 

@@ -50,19 +50,37 @@ def dispatch_node(
     scope: dict[str, str],
     executor: "ExecutorInterface",
     state: WorkflowState,
+    incoming: dict[str, list[str]] | None = None,
 ) -> NodeOutcome:
     """Dispatch *node* against *executor*; return a NodeOutcome.
 
     Reads current attempt count from *state* (for loop tracking) and
     delegates to the appropriate per-kind handler.
+
+    *incoming* maps node_id → predecessor node ids (from the graph's edges).
+    Only the gate handler needs it (to read its upstream producer's
+    artifact_paths); the other kinds ignore it.
     """
     current_ns = state.nodes.get(node.id)
     attempt = (current_ns.attempt if current_ns else 0) + 1
 
     kind = node.kind
+
+    # Gate is the only kind that needs predecessor context (a gate produces no
+    # artifacts of its own — it verifies the upstream node's).  Dispatch it
+    # explicitly so the other handlers keep their uniform signature.
+    if kind == "gate":
+        return _dispatch_gate(
+            node=node,
+            scope=scope,
+            executor=executor,
+            state=state,
+            attempt=attempt,
+            incoming=incoming,
+        )
+
     handlers = {
         "agent": _dispatch_agent,
-        "gate": _dispatch_gate,
         "exec": _dispatch_exec,
         "human": _dispatch_human,
         "decision": _dispatch_decision,
@@ -142,16 +160,28 @@ def _dispatch_gate(
     executor: "ExecutorInterface",
     state: WorkflowState,
     attempt: int,
+    incoming: dict[str, list[str]] | None = None,
 ) -> NodeOutcome:
     """Dispatch a gate node via executor.runGate."""
     gate_config: dict[str, Any] = dict(node.data)
     gate_config["id"] = node.id
 
-    # Collect artifact_paths from predecessor nodes referenced in scope.
+    # A gate produces no artifacts of its own — it verifies its upstream
+    # producer's.  Collect artifact_paths from the (done) predecessor nodes so
+    # the executor can derive the artifact class/slug and locate the report.
+    # (Reading the gate node's own paths — as this used to — always yielded []
+    # and left schema checks unable to route: "requires 'agent' and 'slug'".)
     artifact_paths: list[str] = []
-    current_ns = state.nodes.get(node.id)
-    if current_ns:
-        artifact_paths = list(current_ns.artifact_paths)
+    for src in (incoming or {}).get(node.id, []):
+        pred = state.nodes.get(src)
+        if pred is not None and pred.status == "done":
+            artifact_paths.extend(pred.artifact_paths)
+    if not artifact_paths:
+        # Backward-compat fallback: a gate node that carries its own paths
+        # (e.g. hand-seeded in tests).
+        current_ns = state.nodes.get(node.id)
+        if current_ns:
+            artifact_paths = list(current_ns.artifact_paths)
 
     try:
         result = executor.runGate(gate_config, artifact_paths)

@@ -16,8 +16,10 @@ from app.delivery_driver import (
     DELIVERY_NODE_SENTINEL,
     DELIVERY_WORKFLOW_SENTINEL_PATTERN,
     _MAX_FAILED_RESUMES,
+    _MAX_STALLED_GATE_RESUMES,
     _resume_from_blocked,
     _resume_from_failed,
+    _resume_from_stalled_gate,
     _stalled_gate_ids,
     _stalled_gate_reason,
     detect_delivery_workflow_spec,
@@ -467,6 +469,74 @@ def test_resume_from_failed_noop_when_no_failed_nodes(tmp_path):
     )
     adapter = SimpleNamespace(state=_FakeStateOps(state))
     assert _resume_from_failed(adapter, "g", tmp_path) is None
+
+
+# ---------------------------------------------------------------------------
+# _resume_from_stalled_gate — reset a dead-ended gate so a resume re-runs it
+# ---------------------------------------------------------------------------
+
+
+def _stalled_state(gate_decisions: dict, status="done"):
+    """WorkflowState with the given gate nodes carrying a decision."""
+    from state_types import BudgetState, NodeState, WorkflowState
+
+    return WorkflowState(
+        spec="w", run_id="goal-1", status=status,
+        budget=BudgetState(usd_ceiling=5.0),
+        nodes={
+            gid: NodeState(status="done", attempt=1, gate={"decision": dec, "errors": [f"{gid} bad"]})
+            for gid, dec in gate_decisions.items()
+        },
+    )
+
+
+def test_resume_from_stalled_gate_resets_and_continues(tmp_path):
+    state = _stalled_state({"g-scout": "fail"})
+    ops = _FakeStateOps(state)
+    adapter = SimpleNamespace(state=ops)
+
+    result = _resume_from_stalled_gate(adapter, "goal-1", tmp_path)
+
+    # Returns None (let the runner re-run), resets the gate + run status.
+    assert result is None
+    assert state.status == "running"
+    assert state.nodes["g-scout"].status == "pending"
+    # The write patch clears the gate outcome and resets the attempt counter.
+    patch = ops.writes[0]
+    assert patch["status"] == "running"
+    assert patch["nodes"]["g-scout"] == {"status": "pending", "gate": None, "attempt": 0}
+    # Counter sidecar is persisted so the cap survives restarts.
+    assert (tmp_path / "stalled_gate_resumes.json").exists()
+
+
+def test_resume_from_stalled_gate_bounds_resumes(tmp_path):
+    adapter = SimpleNamespace(state=_FakeStateOps(_stalled_state({"g-build": "needs_fix"})))
+    # The first _MAX_STALLED_GATE_RESUMES re-entries reset and return None...
+    for _ in range(_MAX_STALLED_GATE_RESUMES):
+        # Re-mark the gate stalled each round (a fresh state read would show the
+        # re-run failed again); simulate by resetting the decision.
+        adapter.state._state.nodes["g-build"].status = "done"
+        adapter.state._state.status = "done"
+        assert _resume_from_stalled_gate(adapter, "goal-1", tmp_path) is None
+    # ...then the next exceeds the cap → actionable park reason, runner skipped.
+    adapter.state._state.nodes["g-build"].status = "done"
+    adapter.state._state.status = "done"
+    reason = _resume_from_stalled_gate(adapter, "goal-1", tmp_path)
+    assert reason is not None
+    assert "g-build" in reason
+    assert "stalled" in reason.lower()
+
+
+def test_resume_from_stalled_gate_noop_when_not_done(tmp_path):
+    adapter = SimpleNamespace(state=_FakeStateOps(_stalled_state({"g-scout": "fail"}, status="running")))
+    assert _resume_from_stalled_gate(adapter, "g", tmp_path) is None
+    assert adapter.state.writes == []
+
+
+def test_resume_from_stalled_gate_noop_when_all_proceed(tmp_path):
+    adapter = SimpleNamespace(state=_FakeStateOps(_stalled_state({"g-scout": "proceed"})))
+    assert _resume_from_stalled_gate(adapter, "g", tmp_path) is None
+    assert adapter.state.writes == []
 
 
 # ---------------------------------------------------------------------------

@@ -78,12 +78,17 @@ def run(
 
     # Successors: node_id → list of IREdge (outgoing)
     outgoing: dict[str, list[IREdge]] = {n.id: [] for n in graph.nodes}
+    # Predecessors: node_id → list of source node ids (incoming), in edge-
+    # declaration order.  Used to hand a gate node its upstream producer's
+    # artifact_paths (a gate produces none of its own).
+    incoming: dict[str, list[str]] = {n.id: [] for n in graph.nodes}
     # Forward-edge in_degree only (back-edges excluded to avoid deadlock in
     # cyclic graphs).  A back-edge is one where the source position >= target
     # position in the nodes list (i.e. it points "backwards").
     in_degree: dict[str, int] = {n.id: 0 for n in graph.nodes}
     for edge in graph.edges:
         outgoing[edge.source].append(edge)
+        incoming.setdefault(edge.target, []).append(edge.source)
         # Only count forward edges in initial in_degree.
         src_pos = node_pos.get(edge.source, 0)
         tgt_pos = node_pos.get(edge.target, len(graph.nodes))
@@ -179,6 +184,7 @@ def run(
             scope=scope,
             executor=executor,
             state=state,
+            incoming=incoming,
         )
 
         # ----------------------------------------------------------------
@@ -232,14 +238,42 @@ def run(
         # Check loop-back (LoopPolicy) — may reset and re-enqueue.
         # ----------------------------------------------------------------
         if node.loop is not None:
-            # Rebuild scope with this node's just-written outcome.
-            updated_scope = build_scope(state, scope_base=dict(graph.variables))
-            loop_back = should_loop_back(node, state, updated_scope, executor)
-            if loop_back:
-                # Back-edge: re-enqueue this node; dispatched flag cleared.
-                dispatched.discard(node_id)
-                work_list.insert(0, node_id)
-                continue
+            if node.kind == "gate":
+                # Gate fix-loop: the loop BOUNDS the fix back-edge; it does NOT
+                # self-retry the gate (that would only re-check unchanged
+                # upstream output → same decision → burn the whole budget, and
+                # `continue`ing here would skip _enqueue_successors so the
+                # non-proceed fix edge to the producer never fires).  Instead we
+                # fall through to _enqueue_successors so a non-proceed decision
+                # routes back to the producing agent (a forward edge to an
+                # already-dispatched producer is handled as a back-edge there),
+                # and cap the number of gate evaluations by loop.max via the
+                # gate's attempt counter.
+                decision = (ns.gate or {}).get("decision")
+                if decision != "proceed" and ns.attempt >= node.loop.max:
+                    # Fix-loop exhausted.  Dead-end (skip _enqueue_successors) so
+                    # the run drains to status="done" with the gate's non-proceed
+                    # decision persisted, and the driver parks the goal WAITING
+                    # with the actionable _stalled_gate_reason.  We deliberately
+                    # do NOT executor.escalate() — that parks a generic message
+                    # and blocks the actionable one.
+                    log.info(
+                        "Runner: gate %r fix-loop exhausted (attempt %d >= max %d, "
+                        "decision=%s) — dead-ending for WAITING park.",
+                        node_id, ns.attempt, node.loop.max, decision,
+                    )
+                    continue
+                # else: fall through to _enqueue_successors (routes fix edge on
+                # non-proceed, forward edge on proceed).
+            else:
+                # Rebuild scope with this node's just-written outcome.
+                updated_scope = build_scope(state, scope_base=dict(graph.variables))
+                loop_back = should_loop_back(node, state, updated_scope, executor)
+                if loop_back:
+                    # Back-edge: re-enqueue this node; dispatched flag cleared.
+                    dispatched.discard(node_id)
+                    work_list.insert(0, node_id)
+                    continue
 
         # ----------------------------------------------------------------
         # Evaluate outgoing edges and enqueue ready successors.

@@ -56,6 +56,96 @@ edges:
 """
 
 
+# A spec with a gate fix-loop: g-build routes back to implement on a non-proceed
+# decision, bounded by the gate's loop.max (mirrors the six simple delivery gates).
+GATE_FIX_LOOP_SPEC_YAML = """\
+apiVersion: delivery/v1
+metadata:
+  name: gate-fix-loop-e2e
+defaults:
+  models:
+    build: sonnet
+  budget:
+    usd_ceiling: 1.0
+    on_exceed: escalate
+nodes:
+  - id: implement
+    kind: agent
+    agent: implementor
+    model: {use: build}
+    produces: {class: implementation}
+  - id: g-build
+    kind: gate
+    checks: [{type: build}]
+    loop: {until: "g-build.decision == 'proceed'", max: 3, on_exhaust: escalate}
+  - id: review
+    kind: agent
+    agent: reviewer
+    model: {use: build}
+    produces: {class: review}
+edges:
+  - {from: implement, to: g-build}
+  - {from: g-build, to: review, when: "g-build.decision == 'proceed'"}
+  - {from: g-build, to: implement, when: "g-build.decision != 'proceed'"}
+"""
+
+
+def _make_gate_loop_adapter(gate_decisions: list[str], dispatch_log: list[str]):
+    """Synthetic ExecutorInterface: records agent dispatches; runGate returns the
+    next decision from *gate_decisions* (last value repeats once exhausted)."""
+    from results import AgentResult, GateResult, TelemetryData
+    from state_types import BudgetState, NodeState, WorkflowState
+
+    decisions = list(gate_decisions)
+
+    class _SyntheticAdapter:
+        def __init__(self):
+            self._state = WorkflowState(
+                spec="gate-fix-loop-e2e", run_id="goal-1", status="running",
+                budget=BudgetState(usd_ceiling=1.0),
+            )
+
+            class _StateOps:
+                def __init__(self, s): self._s = s
+                def read(self): return self._s
+                def write(self, p):
+                    if "status" in p:
+                        self._s.status = p["status"]
+                    for nid, np in p.get("nodes", {}).items():
+                        if nid not in self._s.nodes:
+                            self._s.nodes[nid] = NodeState(status=np.get("status", "pending"))
+                        else:
+                            for k, v in np.items():
+                                setattr(self._s.nodes[nid], k, v)
+
+            class _Telemetry:
+                def emit(self, nid, d): pass
+
+            self.state = _StateOps(self._state)
+            self.telemetry = _Telemetry()
+
+        def dispatchAgent(self, agent_ref: str, inputs: dict) -> AgentResult:
+            dispatch_log.append(inputs.get("node_id", agent_ref))
+            return AgentResult(
+                status="done", artifact_paths=[], produces="", fields={},
+                open_questions=[], telemetry=TelemetryData(0, 0.0, 0.0),
+            )
+
+        def runGate(self, gate, paths):
+            dec = decisions.pop(0) if len(decisions) > 1 else decisions[0]
+            errors = [] if dec == "proceed" else [f"{gate.get('id')} build failed"]
+            return GateResult(decision=dec, errors=errors)
+
+        def evalCondition(self, expr: str, scope: dict) -> bool:
+            from lib.conditions import eval_condition
+            return eval_condition(expr, scope)
+
+        def escalate(self, node_id: str, reason: str) -> None:
+            pass
+
+    return _SyntheticAdapter()
+
+
 def _make_goal_task(brief: str = DELIVERY_SENTINEL_BRIEF):
     from app.models import TaskState
 
@@ -256,3 +346,73 @@ async def test_delivery_driver_e2e_needs_fix_loop(tmp_path):
 
     store.finalize_run.assert_called_once()
     assert store.finalize_run.call_args.kwargs["new_state"] == _TS2.DONE
+
+
+@pytest.mark.asyncio
+async def test_gate_fix_loop_routes_to_producer_then_proceeds(tmp_path):
+    """§P4 e2e: a gate that first fails routes back to its producer, then proceeds
+    on the retry — the whole chain re-runs and the goal reaches DONE."""
+    from app.models import TaskState as _TS
+
+    spec_file = tmp_path / "delivery.workflow.yaml"
+    spec_file.write_text(GATE_FIX_LOOP_SPEC_YAML)
+
+    store = MagicMock()
+    store.finalize_run = AsyncMock()
+    store.get = MagicMock(return_value=SimpleNamespace(
+        id="goal-1", state=_TS.ACTIVE, title="T", brief="...", waiting_question=None,
+    ))
+
+    dispatch_log: list[str] = []
+    synth = _make_gate_loop_adapter(["needs_fix", "proceed"], dispatch_log)
+
+    with patch("adapters.cronos.adapter.CronosAdapter", return_value=synth):
+        from app.delivery_driver import run_delivery_goal
+        await run_delivery_goal(
+            goal_id="goal-1", spec_path="delivery.workflow.yaml", store=store,
+            trace_store=MagicMock(), space_id="test-space", space_dir=tmp_path,
+            run_dir=tmp_path / "runs",
+        )
+
+    # implement re-ran after the gate's non-proceed decision; review then ran.
+    assert dispatch_log.count("implement") == 2, f"log={dispatch_log}"
+    assert "review" in dispatch_log
+    store.finalize_run.assert_called_once()
+    assert store.finalize_run.call_args.kwargs["new_state"] == _TS.DONE
+
+
+@pytest.mark.asyncio
+async def test_gate_fix_loop_exhaustion_parks_waiting(tmp_path):
+    """§P4 e2e: a gate that never proceeds is bounded at loop.max, then the goal
+    parks WAITING with the actionable stalled-gate reason (not an opaque hang)."""
+    from app.models import TaskState as _TS
+
+    spec_file = tmp_path / "delivery.workflow.yaml"
+    spec_file.write_text(GATE_FIX_LOOP_SPEC_YAML)
+
+    store = MagicMock()
+    store.finalize_run = AsyncMock()
+    store.get = MagicMock(return_value=SimpleNamespace(
+        id="goal-1", state=_TS.ACTIVE, title="T", brief="...", waiting_question=None,
+    ))
+
+    dispatch_log: list[str] = []
+    synth = _make_gate_loop_adapter(["needs_fix"], dispatch_log)  # always fails
+
+    with patch("adapters.cronos.adapter.CronosAdapter", return_value=synth):
+        from app.delivery_driver import run_delivery_goal
+        await run_delivery_goal(
+            goal_id="goal-1", spec_path="delivery.workflow.yaml", store=store,
+            trace_store=MagicMock(), space_id="test-space", space_dir=tmp_path,
+            run_dir=tmp_path / "runs",
+        )
+
+    # Bounded at loop.max=3 gate evaluations → implement dispatched exactly 3×.
+    assert dispatch_log.count("implement") == 3, f"log={dispatch_log}"
+    # review is never reached (gate never proceeds).
+    assert "review" not in dispatch_log
+    store.finalize_run.assert_called_once()
+    kwargs = store.finalize_run.call_args.kwargs
+    assert kwargs["new_state"] == _TS.WAITING
+    assert "g-build" in kwargs["waiting_question"]
+    assert "stalled" in kwargs["waiting_question"].lower()

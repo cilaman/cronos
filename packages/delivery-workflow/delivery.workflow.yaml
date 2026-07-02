@@ -22,6 +22,11 @@ nodes:
     kind: gate
     checks:
       - {type: schema}
+    # Fix-loop: a non-proceed decision routes back to `scout` (edge below) for up
+    # to `max` gate evaluations, then parks WAITING with the stalled-gate reason.
+    # For gate nodes `until`/`on_exhaust` are advisory — the runner bounds on
+    # `max` via the attempt counter (see runner/core.py loop-back block).
+    loop: {until: "g-scout.decision == 'proceed'", max: 2, on_exhaust: escalate}
 
   - id: analyze
     kind: agent
@@ -36,6 +41,7 @@ nodes:
       - {type: schema}
       - {type: traceability, of: REQ}
       - {type: acceptance}
+    loop: {until: "g-analysis.decision == 'proceed'", max: 3, on_exhaust: escalate}
 
   - id: signoff-scope
     kind: human
@@ -61,6 +67,7 @@ nodes:
     checks:
       - {type: schema}
       - {type: traceability, of: DD}
+    loop: {until: "g-design.decision == 'proceed'", max: 3, on_exhaust: escalate}
 
   - id: signoff-design
     kind: human
@@ -88,6 +95,7 @@ nodes:
       - {type: build}
       - {type: lint}
       - {type: types}
+    loop: {until: "g-build.decision == 'proceed'", max: 3, on_exhaust: escalate}
 
   - id: review
     kind: agent
@@ -167,6 +175,7 @@ nodes:
     kind: gate
     checks:
       - {type: schema}
+    loop: {until: "g-doc.decision == 'proceed'", max: 2, on_exhaust: escalate}
 
   - id: release
     kind: human
@@ -182,6 +191,7 @@ nodes:
     kind: gate
     checks:
       - {type: schema}
+    loop: {until: "g-retro.decision == 'proceed'", max: 2, on_exhaust: escalate}
 
   - id: improve
     kind: agent
@@ -193,17 +203,23 @@ nodes:
 edges:
   - {from: scout,        to: g-scout}
   - {from: g-scout,      to: analyze,       when: "g-scout.decision == 'proceed'"}
+  # Fix-loop back-edge: any non-proceed decision (fail/needs_fix/retry) re-runs the
+  # producer. Bounded by the gate's loop.max (runner/core.py).
+  - {from: g-scout,      to: scout,         when: "g-scout.decision != 'proceed'"}
   - {from: analyze,      to: g-analysis}
   - {from: g-analysis,   to: signoff-scope,  when: "g-analysis.decision == 'proceed'"}
+  - {from: g-analysis,   to: analyze,       when: "g-analysis.decision != 'proceed'"}
   - {from: signoff-scope, to: frontend,      when: "analyze.fields.has_ui == true"}
   - {from: signoff-scope, to: architect,     when: "analyze.fields.has_ui == false"}
   - {from: frontend,     to: architect}
   - {from: architect,    to: g-design}
   - {from: g-design,     to: signoff-design, when: "g-design.decision == 'proceed'"}
+  - {from: g-design,     to: architect,     when: "g-design.decision != 'proceed'"}
   - {from: signoff-design, to: testarch}
   - {from: signoff-design, to: implement}
   - {from: implement,    to: g-build}
   - {from: g-build,      to: review,         when: "g-build.decision == 'proceed'"}
+  - {from: g-build,      to: implement,      when: "g-build.decision != 'proceed'"}
   - {from: review,       to: g-review}
   - {from: g-review,     to: security,       when: "review.fields.verdict == 'pass'"}
   - {from: g-review,     to: implement,      when: "review.fields.verdict == 'needs_fix' && review.fields.finding_class == 'local'"}
@@ -215,9 +231,11 @@ edges:
   - {from: g-security,   to: architect,      when: "g-security.decision == 'needs_fix' && security.fields.finding_class == 'design'"}
   - {from: testrun,      to: g-tests}
   - {from: g-tests,      to: doc,            when: "g-tests.decision == 'proceed'"}
-  - {from: g-tests,      to: implement,      when: "g-tests.decision == 'needs_fix'"}
+  - {from: g-tests,      to: implement,      when: "g-tests.decision != 'proceed'"}
   - {from: doc,          to: g-doc}
   - {from: g-doc,        to: release,        when: "g-doc.decision == 'proceed'"}
+  - {from: g-doc,        to: doc,            when: "g-doc.decision != 'proceed'"}
   - {from: release,      to: retro}
   - {from: retro,        to: g-retro}
   - {from: g-retro,      to: improve,        when: "g-retro.decision == 'proceed'"}
+  - {from: g-retro,      to: retro,          when: "g-retro.decision != 'proceed'"}

@@ -245,6 +245,19 @@ async def run_delivery_goal(
             await _park_goal_waiting(store, goal_id, _failed_park)
             return
 
+        # Re-run a gate that dead-ended on a non-proceed decision.  A stalled gate
+        # persists status="done" (the runner reports done once its work-list
+        # drains), so the resume seeding would mark it dispatched and SKIP it —
+        # the stall would re-detect and re-park WAITING forever.  Reset the
+        # stalled gate node(s) to `pending` so the runner re-dispatches them
+        # (now with the upstream artifact threaded in) and can proceed once the
+        # underlying artifact/check is fixed.  Bounded so a genuinely-broken
+        # artifact can't loop reset→fail→WAITING indefinitely.
+        _stalled_park = _resume_from_stalled_gate(adapter, goal_id, run_dir)
+        if _stalled_park is not None:
+            await _park_goal_waiting(store, goal_id, _stalled_park)
+            return
+
         # Run the synchronous work-list walker off the event loop so its callbacks
         # into run_coroutine_threadsafe don't deadlock the loop they depend on.
         # Passing state_ops enables persistence + resume + cancel-race detection.
@@ -422,6 +435,94 @@ def _resume_from_failed(adapter: Any, goal_id: str, run_dir: Path) -> str | None
     log.info(
         "delivery_driver: goal %s retrying failed node(s) %s (attempts=%s)",
         goal_id, sorted(failed), counts,
+    )
+    return None
+
+
+# Max times a stalled gate may be reset+re-dispatched across resumes before the
+# driver stops looping and parks the goal WAITING for manual intervention.
+_MAX_STALLED_GATE_RESUMES = 2
+
+
+def _resume_from_stalled_gate(adapter: Any, goal_id: str, run_dir: Path) -> str | None:
+    """Reset gate node(s) that dead-ended on a non-proceed decision so a resume
+    re-runs them, bounded across resumes.
+
+    A gate always persists ``status="done"`` (its decision travels out-of-band in
+    ``NodeState.gate["decision"]``), so on re-activation the runner's resume
+    seeding marks it dispatched and skips it — a stalled gate would re-detect and
+    re-park WAITING forever.  When the persisted run is ``done`` and has stalled
+    gate(s) (``_stalled_gate_ids``), reset each stalled gate to ``pending`` (clear
+    its ``gate`` outcome and ``attempt``) and set the run status back to
+    ``running`` so the runner re-dispatches it.  With the upstream artifact now
+    threaded into the gate (dispatch fix), a valid artifact proceeds.
+
+    Returns a park reason (the caller parks the goal WAITING and skips the runner)
+    once any stalled gate exceeds ``_MAX_STALLED_GATE_RESUMES``; otherwise
+    ``None``.  Best-effort and exception-tolerant — a bookkeeping error never
+    blocks a run.
+    """
+    state_ops = getattr(adapter, "state", None)
+    if state_ops is None or not hasattr(state_ops, "read") or not hasattr(state_ops, "write"):
+        return None
+    try:
+        persisted = state_ops.read()
+    except Exception:
+        return None
+    if getattr(persisted, "status", None) != "done":
+        return None
+    stalled = _stalled_gate_ids(persisted)
+    if not stalled:
+        return None
+
+    counter_path = Path(run_dir) / "stalled_gate_resumes.json"
+    try:
+        raw = json.loads(counter_path.read_text())
+        prev = raw if isinstance(raw, dict) else {}
+    except (FileNotFoundError, OSError, ValueError):
+        prev = {}
+
+    # Keep only currently-stalled gates and increment their resume count.
+    counts = {gid: int(prev.get(gid, 0)) + 1 for gid in stalled}
+    exhausted = sorted(gid for gid, c in counts.items() if c > _MAX_STALLED_GATE_RESUMES)
+
+    try:
+        tmp = counter_path.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(counts))
+        os.replace(tmp, counter_path)
+    except OSError:
+        log.warning(
+            "delivery_driver: could not persist stalled-gate-resume counter for %s",
+            goal_id,
+        )
+
+    if exhausted:
+        # Compose an actionable reason (gate id + decision + first error) and note
+        # the exhausted retry budget so the operator fixes the root cause.
+        reason = _stalled_gate_reason(persisted, exhausted)
+        return (
+            reason
+            + f" (auto-retried {_MAX_STALLED_GATE_RESUMES + 1}× without progress — "
+            "halting to avoid a resume loop; fix the artifact/check before re-running)."
+        )
+
+    # Reset the stalled gate node(s) so the runner re-dispatches them.
+    patch: dict[str, Any] = {
+        "status": "running",
+        "nodes": {
+            gid: {"status": "pending", "gate": None, "attempt": 0} for gid in stalled
+        },
+    }
+    try:
+        state_ops.write(patch)
+    except Exception:
+        log.exception(
+            "delivery_driver: failed to reset stalled gate(s) for %s", goal_id
+        )
+        return None
+    log.info(
+        "delivery_driver: goal %s resuming from stalled gate(s) %s (resumes=%s)",
+        goal_id, sorted(stalled), counts,
     )
     return None
 
