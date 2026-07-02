@@ -48,9 +48,37 @@ sudo ufw --force enable
 # 2.5 — Unattended security upgrades
 sudo apt-get install -y unattended-upgrades
 sudo dpkg-reconfigure -plow unattended-upgrades
+
+# 2.6 — Memory & swap (see the "Memory & swap" note below)
+free -h                                  # check current RAM/swap
+sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile \
+  && sudo mkswap /swapfile && sudo swapon /swapfile \
+  && echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 ```
 
 Log out of root and back in as `cronos` for everything below.
+
+### Memory & swap
+
+Agent runs spawn the Claude CLI (Opus reasoning + bundled Node). Under memory
+pressure with **no swap and no container limit**, the kernel OOM-killer reaps a
+process — the agent sees **exit code -9 (SIGKILL)** and delivery gates stall
+(the goal parks WAITING with "stalled at gate(s) …"). Provision for it:
+
+- **Minimum 4 GB RAM**, plus the 4 GB swapfile from step 2.6 (8 GB RAM
+  recommended if you run delivery pipelines).
+- The prod overlay caps the backend container via
+  `mem_limit` / `memswap_limit` (defaults `3g` / `4g`). Tune per-VPS in `.env`:
+  ```bash
+  CRONOS_BACKEND_MEM_LIMIT=3g
+  CRONOS_BACKEND_MEMSWAP_LIMIT=4g   # must be >= mem_limit; difference = swap
+  ```
+  A cgroup limit plus `restart: unless-stopped` keeps a runaway run contained
+  and self-healing instead of taking down the whole box.
+- If an agent dies with -9, confirm the OOM-killer fired:
+  ```bash
+  journalctl -k | grep -i -E "oom|killed process" | tail
+  ```
 
 ---
 
@@ -100,6 +128,30 @@ loads whether you bring the stack up via systemd, as `cronos`, or as
 `root` — earlier versions silently dropped the token when invoked as root,
 producing mysterious "Not logged in" errors. If your operator account
 isn't `cronos`, edit the path in `docker-compose.prod.yml`.
+
+### Workspace trust
+
+The CLI ignores a workspace's `.claude/settings.json` `permissions.allow`
+unless that workspace is a **trusted project** in `/home/cronos/.claude.json`
+(log line: *"this workspace has not been trusted"*). Cronos now seeds this
+automatically — the backend marks every space workspace + adopted-tool dir as
+trusted before each agent spawn (`_ensure_workspace_trusted` in
+`backend/app/agent.py`). If you ever need to trust one by hand (e.g. an older
+build), inside the backend container as `cronos`:
+
+```bash
+docker compose exec -u cronos backend python3 - <<'PY'
+import json, time, os
+p = "/home/cronos/.claude.json"
+d = json.load(open(p))
+d.setdefault("projects", {}).setdefault(
+    "/data/spaces/<space-id>", {})["hasTrustDialogAccepted"] = True
+json.dump(d, open(p, "w"), indent=2)
+os.makedirs("/home/cronos/.claude/backups", exist_ok=True)
+json.dump(d, open(f"/home/cronos/.claude/backups/.claude.json.backup.{int(time.time())}", "w"), indent=2)
+print("trusted:", list(d["projects"]))
+PY
+```
 
 ---
 

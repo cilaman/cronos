@@ -339,6 +339,52 @@ def _write_workspace_settings(workspace: Path, settings: dict) -> None:
     )
 
 
+def _claude_json_path() -> Path:
+    """Location of the Claude CLI global config (holds auth + per-project trust)."""
+    home = os.environ.get("HOME") or "/home/cronos"
+    return Path(home) / ".claude.json"
+
+
+def _ensure_workspace_trusted(claude_json_path: Path, dirs: list[Path]) -> None:
+    """Mark each dir as a trusted project in the Claude CLI global config.
+
+    Without this the CLI logs "this workspace has not been trusted" and silently
+    ignores the workspace's .claude/settings.json permissions.allow entries — which
+    starves agents of tools and stalls delivery gates. Idempotent and best-effort:
+    only writes when a trust flag is missing/false, tolerates a missing/corrupt
+    config, and swallows I/O errors so trust-seeding never blocks a run.
+    """
+    try:
+        try:
+            data = json.loads(claude_json_path.read_bytes())
+        except FileNotFoundError:
+            data = {}
+        except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+            return
+        if not isinstance(data, dict):
+            return
+        projects = data.setdefault("projects", {})
+        if not isinstance(projects, dict):
+            return
+        changed = False
+        for d in dirs:
+            key = str(d)
+            entry = projects.get(key)
+            if not isinstance(entry, dict):
+                entry = {}
+                projects[key] = entry
+            if entry.get("hasTrustDialogAccepted") is not True:
+                entry["hasTrustDialogAccepted"] = True
+                changed = True
+        if not changed:
+            return
+        tmp = claude_json_path.with_suffix(claude_json_path.suffix + ".tmp")
+        tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        os.replace(tmp, claude_json_path)
+    except OSError as exc:
+        log.warning("could not seed workspace trust in %s: %s", claude_json_path, exc)
+
+
 PERMISSION_MODE: dict[str, str] = {
     "plan": "acceptEdits",  # "plan" would inject ExitPlanMode instructions that can't be fulfilled
     "auto": "acceptEdits",
@@ -474,6 +520,10 @@ async def _run_agent_body(
     if hook_settings:
         ws_settings = _read_workspace_settings(workspace)
         _write_workspace_settings(workspace, _merge_hook_settings(hook_settings, ws_settings))
+
+    # Trust the workspace + every --add-dir so the CLI honours their
+    # .claude/settings.json permissions.allow instead of silently dropping them.
+    _ensure_workspace_trusted(_claude_json_path(), [workspace, *adopted_dirs])
 
     cmd = [
         "claude",

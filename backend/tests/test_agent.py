@@ -12,6 +12,7 @@ from app.agent import (
     STATUS_CONTRACT,
     Status,
     _MODEL_CLI_NAMES,
+    _ensure_workspace_trusted,
     _extract_assistant_text,
     _load_adopted_dirs,
     _merge_hook_settings,
@@ -1068,6 +1069,67 @@ def test_write_workspace_settings_creates_claude_dir(tmp_path):
     ws.mkdir()
     _write_workspace_settings(ws, {"hooks": {}})
     assert (ws / ".claude" / "settings.json").is_file()
+
+
+# ---------------------------------------------------------------------------
+# _ensure_workspace_trusted: seed CLI project trust
+# ---------------------------------------------------------------------------
+
+
+def test_ensure_workspace_trusted_adds_entry(tmp_path):
+    """Trust flag is written for the workspace and every add-dir."""
+    cfg = tmp_path / ".claude.json"
+    cfg.write_text(json.dumps({"oauthAccount": {"emailAddress": "x@y.z"}}))
+    ws = tmp_path / "spaces" / "cronos-development"
+    tool = tmp_path / "tools" / "my-skill"
+    _ensure_workspace_trusted(cfg, [ws, tool])
+    data = json.loads(cfg.read_text())
+    # Existing auth content is preserved (read-modify-write, not clobbered).
+    assert data["oauthAccount"] == {"emailAddress": "x@y.z"}
+    assert data["projects"][str(ws)]["hasTrustDialogAccepted"] is True
+    assert data["projects"][str(tool)]["hasTrustDialogAccepted"] is True
+
+
+def test_ensure_workspace_trusted_creates_missing_config(tmp_path):
+    """A missing .claude.json is created with the trust entry."""
+    cfg = tmp_path / ".claude.json"
+    ws = tmp_path / "workspace"
+    _ensure_workspace_trusted(cfg, [ws])
+    data = json.loads(cfg.read_text())
+    assert data["projects"][str(ws)]["hasTrustDialogAccepted"] is True
+
+
+def test_ensure_workspace_trusted_idempotent_no_rewrite(tmp_path):
+    """When already trusted, the file is not rewritten (mtime unchanged)."""
+    cfg = tmp_path / ".claude.json"
+    ws = tmp_path / "workspace"
+    cfg.write_text(json.dumps({"projects": {str(ws): {"hasTrustDialogAccepted": True}}}))
+    before = cfg.stat().st_mtime_ns
+    _ensure_workspace_trusted(cfg, [ws])
+    assert cfg.stat().st_mtime_ns == before
+
+
+def test_ensure_workspace_trusted_preserves_other_project_fields(tmp_path):
+    """Sibling fields on an existing project entry survive the trust update."""
+    cfg = tmp_path / ".claude.json"
+    ws = tmp_path / "workspace"
+    cfg.write_text(
+        json.dumps(
+            {"projects": {str(ws): {"hasTrustDialogAccepted": False, "history": ["a"]}}}
+        )
+    )
+    _ensure_workspace_trusted(cfg, [ws])
+    entry = json.loads(cfg.read_text())["projects"][str(ws)]
+    assert entry["hasTrustDialogAccepted"] is True
+    assert entry["history"] == ["a"]
+
+
+def test_ensure_workspace_trusted_tolerates_corrupt_config(tmp_path):
+    """A corrupt config is left untouched and does not raise."""
+    cfg = tmp_path / ".claude.json"
+    cfg.write_text("{not json")
+    _ensure_workspace_trusted(cfg, [tmp_path / "workspace"])
+    assert cfg.read_text() == "{not json"
 
 
 # ---------------------------------------------------------------------------

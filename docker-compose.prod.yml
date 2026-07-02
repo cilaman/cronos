@@ -41,6 +41,15 @@ services:
         BUILD_COMMIT: ${BUILD_COMMIT:-}
         BUILD_TIME: ${BUILD_TIME:-}
         BUILD_REPO_URL: ${BUILD_REPO_URL:-}
+    # Memory guardrails. Without a limit an agent run (Opus + bundled Node) can
+    # exhaust host RAM and the kernel OOM-killer reaps an arbitrary process
+    # (seen as agent exit code -9 / SIGKILL, which stalls delivery gates). A
+    # cgroup limit + restart:unless-stopped (inherited from the base file) keeps
+    # a runaway run contained and self-healing. Tune per-VPS via .env; ensure
+    # memswap_limit >= mem_limit (the difference is the allowed swap). See
+    # deploy/VPS_SETUP.md §"Memory & swap".
+    mem_limit: ${CRONOS_BACKEND_MEM_LIMIT:-3g}
+    memswap_limit: ${CRONOS_BACKEND_MEMSWAP_LIMIT:-4g}
     environment:
       # URL the agent calls to trigger a host-side upgrade.
       # Set in .env: UPGRADE_WEBHOOK_URL=http://172.18.0.1:9137/upgrade
