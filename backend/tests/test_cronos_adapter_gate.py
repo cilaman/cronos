@@ -106,7 +106,7 @@ class TestRunGateProceed:
         gate = {"id": "g-scout", "checks": []}
         captured: dict = {}
 
-        def _fake_run_gate(gate, paths, *, space, gate_id, state_path):
+        def _fake_run_gate(gate, paths, *, space, gate_id, state_path=None):
             captured["paths"] = paths
             captured["gate_id"] = gate_id
             captured["space"] = space
@@ -129,7 +129,7 @@ class TestRunGateProceed:
         gate = {"id": "g-scout", "checks": [{"type": "schema"}]}
         captured: dict = {}
 
-        def _fake_run_gate(gate, paths, *, space, gate_id, state_path):
+        def _fake_run_gate(gate, paths, *, space, gate_id, state_path=None):
             captured["checks"] = gate.get("checks")
             return _make_cronos_gate_result("proceed")
 
@@ -169,6 +169,42 @@ def test_class_and_slug_from_artifact():
     # A bare prefix with no parent directory context yields no match (no slug
     # can be recovered — the parent-dir branch requires a real directory name).
     assert _class_and_slug_from_artifact(["scout-report.md"]) == (None, None)
+
+
+class TestRunGateStateWriteRegression:
+    """Regression: gate must not leave a statusless node that a later
+    StateStore.read() trips over (KeyError: 'status') — the delivery runner
+    'status' error."""
+
+    def test_run_gate_does_not_raise_key_error_status(self, tmp_path: Path) -> None:
+        # Real lib.gate.runGate (NOT mocked) with an empty check list → proceed.
+        # Exercises the full adapter→lib.gate→state path on a bootstrapped state.
+        adapter = _adapter(tmp_path)
+        result = adapter.runGate({"id": "g-scout", "checks": []}, [])
+
+        assert result.decision == "proceed"
+        # The subsequent read (also done inside runGate via self.state.write) and a
+        # fresh read here must both succeed and carry a real status.
+        ws = StateStore(tmp_path / "run").read()
+        assert ws.nodes["g-scout"].status == "done"
+        assert ws.nodes["g-scout"].gate is not None
+
+    def test_run_gate_does_not_write_statusless_node_via_state_path(
+        self, tmp_path: Path
+    ) -> None:
+        """The adapter no longer passes state_path to lib.gate, so lib.gate's
+        _write_gate_result never runs — the only writer is self.state.write."""
+        captured: dict = {}
+
+        def _fake_run_gate(gate, paths, *, space, gate_id, state_path=None):
+            captured["state_path"] = state_path
+            return _make_cronos_gate_result("proceed")
+
+        adapter = _adapter(tmp_path)
+        with patch("lib.gate.runGate", side_effect=_fake_run_gate):
+            adapter.runGate({"id": "g-scout", "checks": []}, [])
+
+        assert captured["state_path"] is None
 
 
 class TestRunGateNeedsFix:

@@ -17,8 +17,13 @@ def _deserialize(data: dict[str, Any]) -> WorkflowState:
     )
     nodes: dict[str, NodeState] = {}
     for node_id, ns in data.get("nodes", {}).items():
+        # `status` defaults to "pending" rather than being required: lib.gate's
+        # standalone `_write_gate_result` writes a partial node entry
+        # ({"gate": {...}} with no status) directly into state.json, and a
+        # subsequent StateStore.read() must not KeyError on it. The status is
+        # then set by the caller's read-modify-write (e.g. CronosStateOps.write).
         nodes[node_id] = NodeState(
-            status=ns["status"],
+            status=ns.get("status", "pending"),
             attempt=int(ns.get("attempt", 0)),
             gate=ns.get("gate"),
             artifact_paths=list(ns.get("artifact_paths", [])),

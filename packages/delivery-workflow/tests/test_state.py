@@ -262,3 +262,54 @@ def test_state_and_events_coexist(tmp_path: Path) -> None:
     events = log.read_all()
     assert len(events) == 2
     assert events[1]["type"] == "run_complete"
+
+
+# ---------------------------------------------------------------------------
+# Partial-node tolerance — lib.gate writes statusless node entries directly
+# into state.json; StateStore.read() must not KeyError on them.
+# ---------------------------------------------------------------------------
+
+
+def test_read_tolerates_node_missing_status(tmp_path: Path) -> None:
+    """A node written by lib.gate._write_gate_result has only a `gate` key (no
+    `status`). StateStore.read() must default it to 'pending', not raise
+    KeyError('status')."""
+    state_path = tmp_path / "state.json"
+    state_path.write_text(json.dumps({
+        "spec": "wf", "run_id": "goal-1", "status": "running",
+        "budget": {"usd_ceiling": 0.0, "usd_spent": 0.0},
+        "nodes": {
+            "scout": {"status": "done", "attempt": 0, "artifact_paths": []},
+            # gate node as lib.gate would write it — no status key:
+            "g-scout": {"gate": {"decision": "proceed", "errors": []}},
+        },
+    }))
+
+    recovered = StateStore(tmp_path).read()  # must not raise
+    assert recovered.nodes["g-scout"].status == "pending"
+    assert recovered.nodes["g-scout"].gate == {"decision": "proceed", "errors": []}
+    assert recovered.nodes["scout"].status == "done"
+
+
+def test_gate_write_then_read_does_not_raise(tmp_path: Path) -> None:
+    """End-to-end regression: lib.gate.runGate persists a gate result into a
+    bootstrapped state.json (creating a statusless node), and a subsequent
+    StateStore.read() succeeds — the KeyError('status') path from the delivery
+    runner."""
+    from lib.gate import runGate
+
+    # Bootstrap a valid state.json (as the delivery driver now does).
+    _make_state(tmp_path, status="running")
+
+    # A gate with no checks → proceed; writes nodes.g-scout.gate (no status).
+    runGate(
+        {"id": "g-scout", "checks": []},
+        [],
+        space=tmp_path,
+        gate_id="g-scout",
+        state_path=tmp_path / "state.json",
+    )
+
+    recovered = StateStore(tmp_path).read()  # previously KeyError('status')
+    assert recovered.nodes["g-scout"].gate is not None
+    assert recovered.nodes["g-scout"].status == "pending"

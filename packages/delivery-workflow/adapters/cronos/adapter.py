@@ -368,7 +368,6 @@ class CronosAdapter:
         from lib.gate import runGate as _runGate
 
         gate_id = gate.get("id", "")
-        state_path = self._run_dir / "state.json"
 
         # The portable spec's gate checks are bare (e.g. {type: schema}); the
         # CC-v1 gate engine needs the artifact class + slug + space to locate and
@@ -392,12 +391,18 @@ class CronosAdapter:
             checks.append(c)
         enriched["checks"] = checks
 
+        # NOTE: state_path is intentionally NOT passed. lib.gate's
+        # _write_gate_result writes a partial node entry ({"gate": {...}} with no
+        # status) directly into state.json; this adapter persists the gate outcome
+        # itself below via self.state.write (with a status), which is the single
+        # writer for the Cronos runner path. Passing state_path here caused a
+        # redundant statusless write that a subsequent StateStore.read() then
+        # tripped over (KeyError: 'status').
         cronos_result = _runGate(
             enriched,
             abs_paths,
             space=self._space_dir,
             gate_id=gate_id,
-            state_path=state_path if state_path.exists() else None,
         )
 
         result = GateResult(
