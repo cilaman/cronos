@@ -49,17 +49,20 @@ class IRNode:
     id:
         Unique node identifier (matches the spec ``id:`` field).
     kind:
-        One of the 7 supported node kinds.
+        One of the 8 supported node kinds.
     data:
         Raw node configuration dict from the spec (e.g. agent, checks,
-        prompt, mode, etc.).  The runner dispatches on ``kind`` and reads
-        ``data`` for kind-specific parameters.
+        prompt, mode, command, etc.).  The runner dispatches on ``kind`` and
+        reads ``data`` for kind-specific parameters (an ``exec`` node reads
+        ``command``/``timeout``/``produces``).
     loop:
         Optional loop policy; None for nodes without a ``loop:`` stanza.
     """
 
     id: str
-    kind: Literal["agent", "gate", "human", "decision", "wait", "aggregator", "trigger"]
+    kind: Literal[
+        "agent", "gate", "human", "decision", "wait", "aggregator", "trigger", "exec"
+    ]
     data: dict = field(default_factory=dict)
     loop: LoopPolicy | None = None
 

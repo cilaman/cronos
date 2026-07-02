@@ -30,7 +30,7 @@ def test_canonical_example_validates_clean():
 def test_canonical_example_has_all_node_kinds():
     spec = spec_loader.load_spec(SPEC_PATH)
     kinds = {n["kind"] for n in spec["nodes"]}
-    assert kinds == {"agent", "gate", "human"}
+    assert kinds == {"agent", "gate", "human", "exec"}
 
 
 def test_canonical_example_has_expected_node_ids():

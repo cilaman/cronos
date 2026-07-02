@@ -25,6 +25,7 @@ import yaml
 from lib.verify import split_frontmatter
 from lib.verify import verify as _cc_verify
 from lib.security import evaluate_security as _evaluate_security
+from lib.security import build_subprocess_env
 
 
 GATE_DECISIONS = frozenset({"proceed", "needs_fix", "fail", "retry"})
@@ -99,6 +100,7 @@ def _run_command(cmd: str, cwd: str | Path, timeout: int = 300) -> CommandResult
             capture_output=True,
             text=True,
             timeout=timeout,
+            env=build_subprocess_env(),
         )
         return CommandResult(
             exit_code=proc.returncode,

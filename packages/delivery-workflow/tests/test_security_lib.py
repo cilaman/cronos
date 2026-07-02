@@ -104,6 +104,34 @@ def test_missing_scanner_with_skip_policy_does_not_force_needs_fix():
     assert evidence["security"]["scanner_results"]["sast"]["status"] == "missing"
 
 
+def test_missing_scanner_defaults_to_skip_when_policy_omitted():
+    """P3: with no on_missing_scanner set, an un-shipped scanner is skipped, not
+    failed — a not-installed scanner must not hard-fail an otherwise-green pipeline."""
+    check = {
+        "type": "security",
+        "scanners": {"sast": "cronos-no-such-scanner-xyz --json ."},
+        "fail_on": ["critical", "high"],
+        # on_missing_scanner intentionally omitted → default 'skip'.
+    }
+    decision, errors, evidence = evaluate_security(check, [], FIXTURES)
+
+    assert decision == "proceed", f"Expected proceed by default, got {decision!r}"
+    assert evidence["security"]["has_missing_fail"] is False
+
+
+def test_build_subprocess_env_puts_interpreter_bin_on_path():
+    """P3: gate/security subprocesses get the running interpreter's bin on PATH so
+    pytest/scanners resolve the same way they do for the interactive agent shell."""
+    import os
+    import sys
+
+    from lib.security import build_subprocess_env
+
+    env = build_subprocess_env()
+    bindir = os.path.dirname(sys.executable)
+    assert env["PATH"].split(os.pathsep)[0] == bindir
+
+
 # ---------------------------------------------------------------------------
 # Infrastructure crash → retry
 # ---------------------------------------------------------------------------

@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import re
+import signal
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from enum import Enum
@@ -43,6 +44,19 @@ _NODE_MAX_OLD_SPACE_MB = os.environ.get("CRONOS_NODE_MAX_OLD_SPACE_MB", "2048")
 
 STATUS_CONTRACT = """You are an autonomous task executor. The user is not watching in real time.
 
+## One-shot turn — no background work, no scheduled wakeups
+
+Each turn runs as a single one-shot process. When the turn ends the process exits;
+there is NO mechanism to wake you when a background job finishes. Therefore:
+
+- Run tests, builds, and servers **synchronously in the foreground** and wait for them.
+- **Never** use Bash `run_in_background` (or `&` / `nohup` / `disown` / `setsid`) for
+  work whose result you need, and then end the turn — the child is orphaned, nothing
+  reaps it, and the task hangs in WAITING forever waiting on a process nobody watches.
+- Long suites are fine in the foreground (the Bash timeout is raised for this). If a
+  job is genuinely too long for one turn, finish what you can and emit a `WAIT` status
+  block describing the remaining step — do NOT background it and exit.
+
 ## How to finish a task
 
 When all work is complete, invoke the **task-finalize** skill as your last action:
@@ -79,6 +93,9 @@ Rules:
 - The `cronos_status` block must appear after all tool calls are done.
 - Emit it only once per response.
 - Do NOT wrap it in additional markdown formatting.
+- **Always end a turn with a status block — even on partial completion.** If work
+  remains, emit `WAIT` summarizing what is done and what is left; never end silently
+  (a turn with no marker parks the task and, absent a human, wastes a resume cycle).
 - Turn limit approaching: emit STATUS WAIT block describing what's done and what remains.
 - Plan mode: emit WAIT block and ask "Shall I implement this plan?"
 
@@ -104,6 +121,27 @@ class Status(str, Enum):
     DONE = "DONE"
     WAIT = "WAIT"
     BLOCKED = "BLOCKED"
+
+
+def _killpg(proc: "asyncio.subprocess.Process", sig: int) -> None:
+    """Signal the child's whole process group, reaping backgrounded grandchildren.
+
+    The claude CLI is spawned with ``start_new_session=True`` so it leads its own
+    process group. A plain ``proc.kill()`` targets only the claude PID, leaving any
+    process it backgrounded (pytest, a dev server) orphaned and holding the stdout
+    pipe open. Killing the group reaps those too. All lookups are best-effort — a
+    race where the process already exited is not an error.
+    """
+    try:
+        pgid = os.getpgid(proc.pid)
+    except Exception:
+        # Best-effort: process already gone (ProcessLookupError/OSError), or a
+        # test double whose .pid isn't a real int (TypeError). Never raise.
+        return
+    try:
+        os.killpg(pgid, sig)
+    except Exception:
+        pass
 
 
 _STATUS_LINE = re.compile(r"^\s*\*{0,3}STATUS:\s*(DONE|WAIT|BLOCKED)\*{0,3}\s*$")
@@ -602,6 +640,10 @@ async def _run_agent_body(
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             limit=10 * 1024 * 1024,  # 10 MB — large file reads produce >64 KB JSON lines
+            # New session/process group so any job the agent backgrounds (pytest, a
+            # dev server) can be reaped as a group on kill/turn-end instead of being
+            # orphaned to init and stranding the run (see _killpg).
+            start_new_session=True,
         )
     except BaseException:
         _AGENT_SLOTS.release()
@@ -638,12 +680,12 @@ async def _run_agent_body(
         stopped = True
         log.info("Cancellation requested for task %s; terminating claude", task.id)
         try:
-            proc.terminate()
+            _killpg(proc, signal.SIGTERM)
             try:
                 await asyncio.wait_for(proc.wait(), timeout=2.0)
             except asyncio.TimeoutError:
                 log.warning("claude did not exit on SIGTERM for %s; killing", task.id)
-                proc.kill()
+                _killpg(proc, signal.SIGKILL)
         except ProcessLookupError:
             pass
 
@@ -724,21 +766,19 @@ async def _run_agent_body(
     except Exception as exc:
         read_error = exc
         log.error("Error reading claude stdout for task %s: %s", task.id, exc)
-        try:
-            proc.kill()
-        except ProcessLookupError:
-            pass
+        _killpg(proc, signal.SIGKILL)
     finally:
         if not exited.done():
             try:
                 await asyncio.wait_for(asyncio.shield(exited), timeout=10)
             except asyncio.TimeoutError:
                 log.warning("claude did not exit after run for %s; killing", task.id)
-                try:
-                    proc.kill()
-                except ProcessLookupError:
-                    pass
+                _killpg(proc, signal.SIGKILL)
         exit_code = await exited
+        # The claude PID has exited; sweep the process group once more to reap any
+        # job it backgrounded (pytest, a dev server) that outlived it and would
+        # otherwise linger holding the pipes open (see _killpg / start_new_session).
+        _killpg(proc, signal.SIGKILL)
         cancel_task.cancel()
         try:
             await cancel_task

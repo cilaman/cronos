@@ -330,12 +330,16 @@ class Finalizer:
                 log_id=task_id,
             )
 
-        # Auto-resume logic.
+        # Auto-resume logic. Fires for a clean exit that produced no STATUS marker —
+        # whether the turn hit the max-turns limit (result_subtype == "error_max_turns")
+        # or ended cleanly after handing work off (e.g. a backgrounded job, P1). Both
+        # would otherwise park WAITING forever with no human to answer. `status is None`
+        # guards a genuine WAIT/BLOCKED enum from ever being auto-resumed. Bounded by
+        # _MAX_AUTO_RESUMES so it converges or eventually parks WAITING with a real reason.
         _MAX_AUTO_RESUMES = 3
         if (
             result.exit_code == 0
             and result.status is None
-            and result.result_subtype == "error_max_turns"
             and not result.stopped
             and self._auto_resume_counts.get(task_id, 0) < _MAX_AUTO_RESUMES
         ):
@@ -345,9 +349,13 @@ class Finalizer:
                 self.store.upsert_auto_resume_count(task_id, new_count)
             except Exception:
                 log.exception("Failed to persist auto_resume_count for %s", task_id)
+            reason = (
+                "max-turns exit" if result.result_subtype == "error_max_turns"
+                else "no-status exit"
+            )
             log.info(
-                "Auto-resuming %s after max-turns exit (attempt %d/%d)",
-                task_id, new_count, _MAX_AUTO_RESUMES,
+                "Auto-resuming %s after %s (attempt %d/%d)",
+                task_id, reason, new_count, _MAX_AUTO_RESUMES,
             )
             try:
                 await self.store.resume_with_message(task_id)

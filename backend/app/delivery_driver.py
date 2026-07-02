@@ -276,9 +276,7 @@ async def run_delivery_goal(
             await _park_goal_waiting(
                 store,
                 goal_id,
-                "Delivery workflow stalled at gate(s) "
-                f"{', '.join(stalled)} (decision != 'proceed'). Fix the upstream "
-                "artifact and re-run, or adjust the gate routing.",
+                _stalled_gate_reason(final_state, stalled),
             )
         else:
             # Runner reached a terminal node with no more work — mark the goal DONE.
@@ -446,6 +444,36 @@ def _stalled_gate_ids(final_state: Any) -> list[str]:
             if decision is not None and decision != "proceed":
                 stalled.append(nid)
     return stalled
+
+
+def _stalled_gate_reason(final_state: Any, stalled: list[str]) -> str:
+    """Compose an actionable WAITING reason naming each stalled gate's decision and
+    the first failing check/artifact, so a human can act in one step (P4).
+
+    Falls back to just the gate id + decision when the gate carried no error detail.
+    """
+    nodes = getattr(final_state, "nodes", {}) or {}
+    segments: list[str] = []
+    for nid in stalled:
+        ns = nodes.get(nid)
+        gate = getattr(ns, "gate", None) if ns is not None else None
+        decision = ""
+        first_error = ""
+        if isinstance(gate, dict):
+            decision = str(gate.get("decision") or "")
+            errors = gate.get("errors") or []
+            if errors:
+                first_error = str(errors[0])
+        seg = f"{nid} ({decision or 'non-proceed'}"
+        if first_error:
+            seg += f": {first_error}"
+        seg += ")"
+        segments.append(seg)
+    return (
+        "Delivery workflow stalled at gate(s) "
+        + "; ".join(segments)
+        + ". Fix the named check/artifact and re-run, or adjust the gate routing."
+    )
 
 
 async def _finalize_goal_done(store: "TaskStore", goal_id: str) -> None:

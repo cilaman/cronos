@@ -19,6 +19,7 @@ from app.delivery_driver import (
     _resume_from_blocked,
     _resume_from_failed,
     _stalled_gate_ids,
+    _stalled_gate_reason,
     detect_delivery_workflow_spec,
     run_delivery_goal,
 )
@@ -498,6 +499,39 @@ def test_stalled_gate_ids_empty_when_all_proceed():
         },
     )
     assert _stalled_gate_ids(state) == []
+
+
+def test_stalled_gate_reason_names_gate_decision_and_error():
+    """P4: the WAITING reason names the gate, its decision, and the first error."""
+    from state_types import BudgetState, NodeState, WorkflowState
+
+    state = WorkflowState(
+        spec="w", run_id="g", status="done",
+        budget=BudgetState(usd_ceiling=5.0),
+        nodes={
+            "g-build": NodeState(
+                status="done",
+                gate={"decision": "needs_fix", "errors": ["impl-report failed schema check"]},
+            ),
+        },
+    )
+    reason = _stalled_gate_reason(state, ["g-build"])
+    assert "g-build" in reason
+    assert "needs_fix" in reason
+    assert "impl-report failed schema check" in reason
+
+
+def test_stalled_gate_reason_without_errors_still_names_gate():
+    from state_types import BudgetState, NodeState, WorkflowState
+
+    state = WorkflowState(
+        spec="w", run_id="g", status="done",
+        budget=BudgetState(usd_ceiling=5.0),
+        nodes={"g-scout": NodeState(status="done", gate={"decision": "fail"})},
+    )
+    reason = _stalled_gate_reason(state, ["g-scout"])
+    assert "g-scout" in reason
+    assert "fail" in reason
 
 
 @pytest.mark.asyncio

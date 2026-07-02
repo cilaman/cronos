@@ -1,4 +1,4 @@
-"""Tests for runner/dispatch.py — all 7 node-kind dispatch handlers (I4)."""
+"""Tests for runner/dispatch.py — all 8 node-kind dispatch handlers (I4)."""
 from __future__ import annotations
 
 import sys
@@ -7,7 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ir import IRNode
-from results import AgentResult, GateResult, TelemetryData
+from results import AgentResult, ExecResult, GateResult, TelemetryData
 from runner.dispatch import NodeOutcome, dispatch_node
 from state_types import BudgetState, NodeState, WorkflowState
 
@@ -48,6 +48,17 @@ class _MockRuntime:
         if self._gate_result:
             return self._gate_result
         return GateResult(decision="proceed", errors=[])
+
+    def set_exec_result(self, r: ExecResult) -> None:
+        self._exec_result = r
+
+    def runExec(self, node_id: str, command: str, inputs: dict) -> ExecResult:
+        if not hasattr(self, "exec_calls"):
+            self.exec_calls = []
+        self.exec_calls.append((node_id, command, inputs))
+        if getattr(self, "_exec_result", None):
+            return self._exec_result
+        return ExecResult(status="done", exit_code=0, artifact_path="out/testrun-output.md")
 
     def evalCondition(self, expr: str, scope: dict) -> bool:
         return False
@@ -318,3 +329,49 @@ class TestDispatchUnknownKind:
         object.__setattr__(node, "kind", "totally-unknown")
         outcome = dispatch_node(node, {}, rt, _empty_state())
         assert outcome.status == "failed"
+
+
+# ---------------------------------------------------------------------------
+# Exec node (P1 Embodiment A)
+# ---------------------------------------------------------------------------
+
+class TestDispatchExec:
+    def test_exec_done_returns_done_with_artifact(self):
+        rt = _MockRuntime()
+        node = IRNode(
+            id="testrun", kind="exec",
+            data={"command": "python -m pytest", "produces": {"class": "test"}},
+        )
+        outcome = dispatch_node(node, {}, rt, _empty_state())
+        assert outcome.status == "done"
+        assert outcome.artifact_paths == ["out/testrun-output.md"]
+        # The command and node id are forwarded to runExec.
+        node_id, command, inputs = rt.exec_calls[0]
+        assert node_id == "testrun"
+        assert command == "python -m pytest"
+        assert inputs["fail_on_nonzero"] is True
+
+    def test_exec_failed_status_maps_to_failed(self):
+        rt = _MockRuntime()
+        rt.set_exec_result(ExecResult(status="failed", exit_code=1, artifact_path="out/o.md"))
+        node = IRNode(id="build", kind="exec", data={"command": "make"})
+        outcome = dispatch_node(node, {}, rt, _empty_state())
+        assert outcome.status == "failed"
+        assert outcome.fields == {"exit_code": 1}
+
+    def test_exec_missing_command_fails_without_dispatch(self):
+        rt = _MockRuntime()
+        node = IRNode(id="n", kind="exec", data={})
+        outcome = dispatch_node(node, {}, rt, _empty_state())
+        assert outcome.status == "failed"
+        assert not hasattr(rt, "exec_calls")
+
+    def test_exec_fail_on_nonzero_flag_forwarded(self):
+        rt = _MockRuntime()
+        node = IRNode(
+            id="testrun", kind="exec",
+            data={"command": "pytest", "fail_on_nonzero": False},
+        )
+        dispatch_node(node, {}, rt, _empty_state())
+        _, _, inputs = rt.exec_calls[0]
+        assert inputs["fail_on_nonzero"] is False

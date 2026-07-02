@@ -32,7 +32,7 @@ from lib.status_envelope import parse_status_envelope
 from lib.state.events import EventLog
 from lib.state.store import StateStore
 from lib.telemetry.sink import BudgetExceededSignal, TelemetrySink
-from results import AgentResult, GateResult, TelemetryData
+from results import AgentResult, ExecResult, GateResult, TelemetryData
 from state_types import BudgetState, NodeState, WorkflowState
 
 log = logging.getLogger(__name__)
@@ -331,7 +331,16 @@ class CronosAdapter:
         if trace is not None and getattr(trace, "final_text_snippet", None):
             ds = parse_status_envelope(trace.final_text_snippet)
         if ds is None:
-            ds = _fallback_delivery_status(self._run_dir, slug=self._goal_slug)
+            # Scope the artifact scan to this node's expected class (produces.class)
+            # so a sibling's newer report can never be mis-credited to this node (P2).
+            prod = inputs.get("produces")
+            expected_class = (
+                prod.get("class") if isinstance(prod, dict)
+                else (prod if isinstance(prod, str) else None)
+            )
+            ds = _fallback_delivery_status(
+                self._run_dir, slug=self._goal_slug, expected_class=expected_class
+            )
 
         if ds is None:
             return AgentResult(
@@ -427,6 +436,92 @@ class CronosAdapter:
             )
 
         return result
+
+    # ------------------------------------------------------------------
+    # runExec — shell command to completion, no LLM (P1 Embodiment A)
+    # ------------------------------------------------------------------
+
+    def runExec(
+        self, node_id: str, command: str, inputs: dict[str, Any]
+    ) -> ExecResult:
+        """Run *command* to completion in the space dir and capture its output.
+
+        An ``exec`` node has no LLM turn: the runner blocks on this synchronously, so
+        a long command (a test suite) runs in-foreground with nothing to background —
+        removing the orphan-and-hang trap that stranded the LLM tester agent (P1).
+
+        Status: exit 0 → ``done``. A non-zero exit → ``failed`` (halts the DAG) UNLESS
+        the node sets ``fail_on_nonzero: false`` — used by ``testrun`` so a test
+        failure does not halt the runner but is instead routed by the downstream
+        ``g-tests`` gate (proceed / needs_fix → implement). Output is written as the
+        node's artifact so the credited artifact is always the node's own (P2).
+        """
+        import subprocess
+
+        from lib.security import build_subprocess_env
+
+        prod = inputs.get("produces")
+        produces = prod.get("class") if isinstance(prod, dict) else prod
+
+        fail_on_nonzero = inputs.get("fail_on_nonzero", True)
+        exec_timeout = 900
+        raw_timeout = inputs.get("timeout")
+        if raw_timeout is not None:
+            try:
+                exec_timeout = int(raw_timeout)
+            except (TypeError, ValueError):
+                pass
+
+        try:
+            proc = subprocess.run(
+                command,
+                shell=True,
+                cwd=str(self._space_dir),
+                capture_output=True,
+                text=True,
+                timeout=exec_timeout,
+                env=build_subprocess_env(),
+            )
+            exit_code = proc.returncode
+            output = (proc.stdout or "")
+            if proc.stderr:
+                output += "\n[stderr]\n" + proc.stderr
+        except subprocess.TimeoutExpired:
+            exit_code = -1
+            output = f"Command timed out after {exec_timeout}s"
+
+        # Write captured output as the node's own artifact.
+        artifact_path: str | None = None
+        try:
+            self._run_dir.mkdir(parents=True, exist_ok=True)
+            art = self._run_dir / f"{node_id}-output.md"
+            art.write_text(output, encoding="utf-8")
+            artifact_path = str(art)
+        except Exception:
+            log.exception("runExec: failed to write artifact for node %r", node_id)
+
+        status = "done" if (exit_code == 0 or not fail_on_nonzero) else "failed"
+
+        if node_id:
+            self.state.write(
+                {
+                    "nodes": {
+                        node_id: {
+                            "status": status,
+                            "artifact_paths": [artifact_path] if artifact_path else [],
+                            "fields": {"exit_code": exit_code},
+                        }
+                    }
+                }
+            )
+
+        return ExecResult(
+            status=status,
+            exit_code=exit_code,
+            stdout_tail=output[-2000:],
+            artifact_path=artifact_path,
+            produces=produces,
+        )
 
     # ------------------------------------------------------------------
     # evalCondition (R5, DD-07)
@@ -570,7 +665,9 @@ def _class_and_slug_from_artifact(
     return None, None
 
 
-def _fallback_delivery_status(run_dir: Path, slug: str | None = None):  # type: ignore[return]
+def _fallback_delivery_status(
+    run_dir: Path, slug: str | None = None, expected_class: str | None = None
+):  # type: ignore[return]
     """Scan markdown files for a trailing delivery_status fence.
 
     Searches two locations (newest file by mtime wins, first match returned):
@@ -585,8 +682,20 @@ def _fallback_delivery_status(run_dir: Path, slug: str | None = None):  # type: 
     slug).  Ordering is by mtime (newest first), matching the docstring — the
     previous ``reversed(sorted(...))`` ordered lexicographically by path.
 
+    When ``expected_class`` is given (the node's ``produces.class``), only files
+    whose filename maps to that class are considered — so e.g. a ``test`` node can
+    never be credited with ``security-report.md`` just because it has a newer mtime
+    (P2).  If nothing of the expected class is found the caller marks the node
+    failed rather than crediting a sibling's artifact.
+
     Returns None if no fence is found.
     """
+    def _matches_class(md: object) -> bool:
+        if expected_class is None:
+            return True
+        klass, _ = _class_and_slug_from_artifact([str(md)])
+        return klass == expected_class
+
     def _scan_files(md_files: list) -> object:
         def _mtime(p: object) -> float:
             try:
@@ -595,6 +704,8 @@ def _fallback_delivery_status(run_dir: Path, slug: str | None = None):  # type: 
                 return 0.0
 
         for md in sorted(md_files, key=_mtime, reverse=True):
+            if not _matches_class(md):
+                continue
             try:
                 text = Path(md).read_text(encoding="utf-8", errors="replace")
                 result = parse_status_envelope(text)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from results import AgentResult, GateResult
+from results import AgentResult, ExecResult, GateResult
 from state_types import WorkflowState
 
 
@@ -30,6 +30,9 @@ class NullRuntime:
         raise NotImplementedError
 
     def runGate(self, gate: dict[str, Any], artifact_paths: list[str]) -> GateResult:
+        raise NotImplementedError
+
+    def runExec(self, node_id: str, command: str, inputs: dict[str, Any]) -> ExecResult:
         raise NotImplementedError
 
     def evalCondition(self, expr: str, scope: dict[str, Any]) -> bool:

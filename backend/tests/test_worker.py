@@ -128,28 +128,37 @@ async def test_finalize_nonzero_exit_no_status_marks_waiting_with_crash_message(
     assert "exit code 1" in task.waiting_question
 
 
-async def test_finalize_zero_exit_no_status_uses_new_resume_message(
+async def test_finalize_zero_exit_no_status_auto_resumes_then_parks(
     worker, task_store
 ):
-    """exit_code=0 + status=None → WAITING with the new resume guidance.
+    """exit_code=0 + status=None now self-heals: bounded auto-resume, then parks.
 
-    The new message instructs the agent to reply 'done' if complete, otherwise
-    continue. Old text 'did not finish cleanly' must NOT appear.
+    A clean exit with no STATUS marker (e.g. the agent handed work to a backgrounded
+    job and ended the turn, P1) would otherwise hang WAITING forever. The finalizer
+    re-enqueues it up to a small cap, then parks WAITING with the resume guidance so
+    a human can act. Old text 'did not finish cleanly' must NOT appear.
     """
     task_id = await _active_task(task_store)
-    result = _make_result(exit_code=0, status=None)
 
-    await worker._finalize(task_id, result)
+    # First _MAX_AUTO_RESUMES clean no-status exits auto-resume: the task is forced
+    # back to ACTIVE (waiting_question cleared) and a follow-up turn is enqueued.
+    for _ in range(3):
+        await worker._finalize(task_id, _make_result(exit_code=0, status=None))
+        task = task_store.get(task_id)
+        assert task.state == TaskState.ACTIVE
+        assert task.waiting_question is None
+        assert not worker._queue.empty()
+        worker._queue.get_nowait()  # drain the enqueued follow-up
 
+    # Cap reached → next clean no-status exit parks WAITING with the guidance.
+    await worker._finalize(task_id, _make_result(exit_code=0, status=None))
     task = task_store.get(task_id)
     assert task.state == TaskState.WAITING
-    assert task.waiting_question is not None
     q = task.waiting_question
-    # New phrasing must be present.
+    assert q is not None
     assert "STATUS marker" in q
     assert "reply with just 'done'" in q
     assert "continue where you left off" in q.lower()
-    # Old phrasing must not be present.
     assert "did not finish cleanly" not in q
 
 

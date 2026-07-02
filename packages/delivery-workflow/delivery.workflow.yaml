@@ -136,12 +136,14 @@ nodes:
         on_missing_scanner: fail
         reconcile: true
 
+  # Deterministic test run — no LLM. The runner blocks on this synchronously, so
+  # there is nothing to background and no orphan-and-hang dead-end (P1). A non-zero
+  # pytest exit does NOT halt the DAG (fail_on_nonzero: false); the g-tests gate below
+  # re-checks and routes needs_fix → implement for the auto-fix loop.
   - id: testrun
-    kind: agent
-    agent: tester
-    model: {use: build}
-    tools: [Read, Bash]
-    inputs: {from: [testarch]}
+    kind: exec
+    command: "python -m pytest tests/ --cov=app --cov-report=term-missing"
+    fail_on_nonzero: false
     produces: {class: test}
 
   - id: g-tests

@@ -1,10 +1,11 @@
 """
 runner/dispatch.py — Per-node dispatch logic for the cyclic work-list runner.
 
-Harvests all 7 node-kind dispatch patterns from HarnessExecutor:
+Harvests all 8 node-kind dispatch patterns from HarnessExecutor:
   agent      → executor.dispatchAgent (async in real adapter; sync call here
                using asyncio.run when called from synchronous runner)
   gate       → executor.runGate → GateResult
+  exec       → executor.runExec → ExecResult (shell command to completion, no LLM)
   human      → executor.escalate + park (blocked)
   decision   → edge-routing only; no external dispatch; always "done"
   wait(human)→ executor.escalate + park (blocked)
@@ -62,6 +63,7 @@ def dispatch_node(
     handlers = {
         "agent": _dispatch_agent,
         "gate": _dispatch_gate,
+        "exec": _dispatch_exec,
         "human": _dispatch_human,
         "decision": _dispatch_decision,
         "wait": _dispatch_wait,
@@ -174,6 +176,57 @@ def _dispatch_gate(
         attempt=attempt,
         gate=gate_dict,
         fields={"decision": result.decision},
+    )
+
+
+def _dispatch_exec(
+    node: IRNode,
+    scope: dict[str, str],
+    executor: "ExecutorInterface",
+    state: WorkflowState,
+    attempt: int,
+) -> NodeOutcome:
+    """Dispatch an exec node — run a shell command to completion via executor.runExec.
+
+    Unlike an agent node this spawns no LLM: the runner blocks synchronously on the
+    command, so there is nothing to background and no scheduled-wakeup dead-end (P1).
+    Exit 0 → done; any other exit → failed. The captured output is written as the
+    node's artifact so a downstream gate can read a real result.
+    """
+    command = node.data.get("command")
+    if not command:
+        log.error("dispatch_exec: node %r has no 'command'", node.id)
+        return NodeOutcome(status="failed", attempt=attempt)
+
+    inputs: dict[str, Any] = {
+        "scope": scope,
+        "node_id": node.id,
+        "attempt": attempt,
+        "produces": node.data.get("produces"),
+        "timeout": node.data.get("timeout"),
+        "fail_on_nonzero": node.data.get("fail_on_nonzero", True),
+    }
+
+    try:
+        result = executor.runExec(node.id, command, inputs)
+        if asyncio.iscoroutine(result):
+            result = asyncio.get_event_loop().run_until_complete(result)
+    except Exception as exc:
+        log.error("dispatch_exec: node %r raised %s", node.id, exc)
+        return NodeOutcome(status="failed", attempt=attempt)
+
+    from results import ExecResult
+
+    if not isinstance(result, ExecResult):
+        log.error("dispatch_exec: expected ExecResult, got %r", type(result))
+        return NodeOutcome(status="failed", attempt=attempt)
+
+    artifact_paths = [result.artifact_path] if result.artifact_path else []
+    return NodeOutcome(
+        status="done" if result.status == "done" else "failed",
+        attempt=attempt,
+        artifact_paths=artifact_paths,
+        fields={"exit_code": result.exit_code},
     )
 
 

@@ -56,6 +56,7 @@ properties:
       oneOf:
         - $ref: "#/definitions/AgentNode"
         - $ref: "#/definitions/GateNode"
+        - $ref: "#/definitions/ExecNode"
         - $ref: "#/definitions/HumanNode"
   edges:
     type: array
@@ -183,6 +184,37 @@ definitions:
         enum:
           - block
           - retry_upstream
+      loop:
+        $ref: "#/definitions/LoopConfig"
+    additionalProperties: false
+
+  ExecNode:
+    type: object
+    required:
+      - id
+      - kind
+      - command
+    properties:
+      id:
+        type: string
+      kind:
+        type: string
+        const: exec
+      command:
+        type: string
+      timeout:
+        type: integer
+        minimum: 1
+      fail_on_nonzero:
+        type: boolean
+      produces:
+        type: object
+        required:
+          - class
+        properties:
+          class:
+            type: string
+        additionalProperties: false
       loop:
         $ref: "#/definitions/LoopConfig"
     additionalProperties: false

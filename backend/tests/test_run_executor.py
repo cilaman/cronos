@@ -6,9 +6,38 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.run_executor import RunExecutor, _topo_children_local
-from app.agent import Status
+from app.run_executor import RunExecutor, _is_clean_no_status, _topo_children_local
+from app.agent import AgentResult, Status
 from app.models import TaskState
+
+
+def _result(**kw) -> AgentResult:
+    base = dict(
+        exit_code=0, session_id="s", final_text="", stderr_tail="",
+        status=None, context=None, raw_events=[], stopped=False, result_subtype=None,
+    )
+    base.update(kw)
+    return AgentResult(**base)
+
+
+class TestIsCleanNoStatus:
+    def test_clean_no_status_matches(self):
+        assert _is_clean_no_status(_result(exit_code=0, status=None)) is True
+
+    def test_none_result_does_not_match(self):
+        assert _is_clean_no_status(None) is False
+
+    def test_crash_does_not_match(self):
+        assert _is_clean_no_status(_result(exit_code=1, status=None)) is False
+
+    def test_stopped_does_not_match(self):
+        assert _is_clean_no_status(_result(stopped=True)) is False
+
+    def test_genuine_wait_does_not_match(self):
+        assert _is_clean_no_status(_result(status=Status.WAIT)) is False
+
+    def test_genuine_done_does_not_match(self):
+        assert _is_clean_no_status(_result(status=Status.DONE)) is False
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────

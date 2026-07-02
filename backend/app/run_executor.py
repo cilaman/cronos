@@ -46,6 +46,26 @@ log = logging.getLogger("cronos.worker")
 _EXECUTOR_VARIANT_KEY = "executor_variant"
 _DEFAULT_EXECUTOR_VARIANT = "bfs"
 
+# Bounded auto-resume for a child that exits cleanly with no STATUS marker (e.g.
+# it handed work to a backgrounded job and ended the turn, P1/P5). Mirrors the
+# task-path cap in finalizer.py so a clean-no-status child can't silently halt the
+# whole goal — it resumes its conversation a few times, then parks WAITING.
+_MAX_CHILD_AUTO_RESUMES = 3
+
+
+def _is_clean_no_status(result: "AgentResult | None") -> bool:
+    """True when a run exited cleanly but emitted no STATUS marker.
+
+    A genuine WAIT/BLOCKED (``status`` set), a crash (``exit_code != 0``) or a
+    user stop never matches — those must park, not auto-resume.
+    """
+    return (
+        result is not None
+        and not result.stopped
+        and result.exit_code == 0
+        and result.status is None
+    )
+
 
 def _read_executor_variant(run_state_path: Path) -> str:
     """Read the executor variant from the run-state JSON file.
@@ -1167,28 +1187,56 @@ class RunExecutor:
                     except Exception:
                         log.exception("Failed to retrieve memory for child %s", child_id)
 
-                try:
-                    child_result = await self._run_agent_fn()(
-                        child,
-                        user_message=None,
-                        on_event=on_child_event,
-                        cancel_event=cancel_event,
-                        space=space,
-                        goal_context=goal_context,
-                        memory_items=child_memory,
-                    )
-                except Exception as e:
-                    run_exception = str(e)
-                    log.exception("Agent error on child %s", child_id)
+                _child_resumes = 0
+                while True:
+                    child_result = None
+                    run_exception = None
+                    try:
+                        child_result = await self._run_agent_fn()(
+                            child,
+                            user_message=None,
+                            on_event=on_child_event,
+                            cancel_event=cancel_event,
+                            space=space,
+                            goal_context=goal_context,
+                            memory_items=child_memory,
+                        )
+                    except Exception as e:
+                        run_exception = str(e)
+                        log.exception("Agent error on child %s", child_id)
 
-                w._current_child_id = None
-                # Sync space_store/pool from Worker to Finalizer (may be patched in tests).
-                self._finalizer.space_store = self.space_store
-                self._finalizer.pool = w._pool
-                child_new_state = await self._finalizer.finalize_child(
-                    child_id, child_result, run_exception, started_at=child_started_at,
-                    memory_injected=child_memory_injected,
-                )
+                    w._current_child_id = None
+                    # Sync space_store/pool from Worker to Finalizer (may be patched in tests).
+                    self._finalizer.space_store = self.space_store
+                    self._finalizer.pool = w._pool
+                    child_new_state = await self._finalizer.finalize_child(
+                        child_id, child_result, run_exception, started_at=child_started_at,
+                        memory_injected=child_memory_injected,
+                    )
+
+                    # Bounded auto-resume: a child that exits cleanly with no STATUS
+                    # marker would otherwise halt the whole goal (a non-DONE child breaks
+                    # the loop below). Resume its conversation a few times before giving
+                    # up; a genuine WAIT/BLOCKED or crash never matches (_is_clean_no_status).
+                    if (
+                        child_new_state == TaskState.WAITING
+                        and _is_clean_no_status(child_result)
+                        and not cancel_event.is_set()
+                        and _child_resumes < _MAX_CHILD_AUTO_RESUMES
+                    ):
+                        _child_resumes += 1
+                        log.info(
+                            "Auto-resuming child %s after no-status exit (attempt %d/%d)",
+                            child_id, _child_resumes, _MAX_CHILD_AUTO_RESUMES,
+                        )
+                        try:
+                            await self.store.resume_with_message(child_id)
+                        except Exception:
+                            log.exception("Failed to auto-resume child %s", child_id)
+                            break
+                        w._current_child_id = child_id
+                        continue
+                    break
 
                 await self._publish(child_id, {
                     "type": "run_end",

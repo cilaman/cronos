@@ -17,11 +17,34 @@ the delivery/v2 security review.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+
+# ---------------------------------------------------------------------------
+# Shared subprocess environment
+# ---------------------------------------------------------------------------
+
+
+def build_subprocess_env() -> dict[str, str]:
+    """Environment for gate/security subprocesses.
+
+    A bare ``subprocess.run(..., shell=True)`` inherits this process's environment,
+    but a non-login ``/bin/sh -c`` may not have the venv ``bin`` on ``PATH`` that the
+    interactive agent shell has — so ``pytest``/scanners resolve for the agent but
+    exit 127 for the gate. Prepend the running interpreter's directory so the same
+    tools resolve here. Prefer ``python -m <tool>`` in commands where possible.
+    """
+    env = os.environ.copy()
+    bindir = os.path.dirname(sys.executable)
+    if bindir:
+        env["PATH"] = bindir + os.pathsep + env.get("PATH", "")
+    return env
 
 
 # ---------------------------------------------------------------------------
@@ -42,6 +65,7 @@ def _run_security_cmd(cmd: str, cwd: Path, timeout: int = 300) -> tuple[int, str
             capture_output=True,
             text=True,
             timeout=timeout,
+            env=build_subprocess_env(),
         )
         stderr_tail = proc.stderr[-2000:] if proc.stderr else ""
         return proc.returncode, proc.stdout or "", stderr_tail, False
@@ -115,7 +139,10 @@ def evaluate_security(
     Returns (decision, errors, evidence) where decision ∈ {proceed, needs_fix, fail, retry}.
     """
     fail_on: list[str] = [s.lower() for s in (check.get("fail_on") or [])]
-    on_missing: str = check.get("on_missing_scanner", "fail")
+    # Default to 'skip': a scanner that isn't installed in the image (semgrep,
+    # gitleaks, pip-audit are not shipped) should not hard-fail an otherwise-green
+    # pipeline. Set on_missing_scanner: fail per-check for scanners the image guarantees.
+    on_missing: str = check.get("on_missing_scanner", "skip")
     scanners: dict[str, str] = check.get("scanners") or {}
     cwd = space if space is not None else Path(".")
 

@@ -103,3 +103,49 @@ def test_falls_back_to_whole_tree_when_scoped_dir_absent(tmp_path: Path) -> None
 def test_returns_none_when_no_reports(tmp_path: Path) -> None:
     run_dir = _layout(tmp_path)
     assert _fallback_delivery_status(run_dir, slug="my-goal") is None
+
+
+# ---------------------------------------------------------------------------
+# P2 — class-scoped fallback: a node is only credited with its expected class.
+# ---------------------------------------------------------------------------
+
+
+def test_class_scoping_picks_expected_class_over_newer_sibling(tmp_path: Path) -> None:
+    run_dir = _layout(tmp_path)
+    # A newer review-class report and an older test-class report side by side.
+    _write(run_dir / "review-report.md", _report("review"), mtime=9000.0)
+    _write(run_dir / "test-report.md", _report("test"), mtime=1000.0)
+
+    ds = _fallback_delivery_status(run_dir, slug="my-goal", expected_class="test")
+    assert ds is not None
+    assert ds.produces == "test"  # matched class, not the newer review report
+
+
+def test_class_scoping_returns_none_when_no_class_match(tmp_path: Path) -> None:
+    """Honest: if nothing of the expected class exists, credit nothing (the caller
+    then marks the node failed) rather than a sibling's newer artifact."""
+    run_dir = _layout(tmp_path)
+    _write(run_dir / "review-report.md", _report("review"), mtime=9000.0)
+
+    ds = _fallback_delivery_status(run_dir, slug="my-goal", expected_class="test")
+    assert ds is None
+
+
+def test_testrun_never_credited_with_security_report(tmp_path: Path) -> None:
+    """Regression: a test node must never be credited with security-report.md."""
+    run_dir = _layout(tmp_path)
+    _write(run_dir / "security-report.md", _report("security"), mtime=9000.0)
+
+    ds = _fallback_delivery_status(run_dir, slug="my-goal", expected_class="test")
+    assert ds is None
+
+
+def test_no_expected_class_preserves_newest_mtime(tmp_path: Path) -> None:
+    """expected_class=None keeps the prior behaviour (newest mtime, any class)."""
+    run_dir = _layout(tmp_path)
+    _write(run_dir / "review-report.md", _report("review"), mtime=9000.0)
+    _write(run_dir / "test-report.md", _report("test"), mtime=1000.0)
+
+    ds = _fallback_delivery_status(run_dir, slug="my-goal")
+    assert ds is not None
+    assert ds.produces == "review"  # newest, unscoped by class
