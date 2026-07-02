@@ -60,18 +60,24 @@ Log out of root and back in as `cronos` for everything below.
 
 ### Memory & swap
 
-Agent runs spawn the Claude CLI (Opus reasoning + bundled Node). Under memory
-pressure with **no swap and no container limit**, the kernel OOM-killer reaps a
-process — the agent sees **exit code -9 (SIGKILL)** and delivery gates stall
-(the goal parks WAITING with "stalled at gate(s) …"). Provision for it:
+Agent runs spawn the Claude CLI (Opus reasoning + bundled Node). The `tester`
+node additionally runs the **full pytest suite with coverage** in the same
+container, so a single run can need several GB. Under memory pressure the kernel
+(or the cgroup) OOM-killer reaps a process — the agent sees **exit code -9
+(SIGKILL)** and delivery gates stall (the goal parks WAITING). Note a cgroup
+`mem_limit` set *too low* will itself manufacture the -9. Provision for it:
 
-- **Minimum 4 GB RAM**, plus the 4 GB swapfile from step 2.6 (8 GB RAM
-  recommended if you run delivery pipelines).
+- **Minimum 4 GB RAM**, plus the 4 GB swapfile from step 2.6 (**8 GB RAM
+  recommended** if you run delivery pipelines).
 - The prod overlay caps the backend container via
-  `mem_limit` / `memswap_limit` (defaults `3g` / `4g`). Tune per-VPS in `.env`:
+  `mem_limit` / `memswap_limit` (defaults `6g` / `8g`) and bounds how many agent
+  processes run at once via `CRONOS_MAX_CONCURRENT_AGENTS` (default `2`). Size the
+  ceiling to fit the concurrency — rule of thumb
+  `mem_limit >= CRONOS_MAX_CONCURRENT_AGENTS × per-run budget`. Tune per-VPS in `.env`:
   ```bash
-  CRONOS_BACKEND_MEM_LIMIT=3g
-  CRONOS_BACKEND_MEMSWAP_LIMIT=4g   # must be >= mem_limit; difference = swap
+  CRONOS_BACKEND_MEM_LIMIT=6g
+  CRONOS_BACKEND_MEMSWAP_LIMIT=8g    # must be >= mem_limit; difference = swap
+  CRONOS_MAX_CONCURRENT_AGENTS=2     # concurrent claude subprocesses across spaces
   ```
   A cgroup limit plus `restart: unless-stopped` keeps a runaway run contained
   and self-healing instead of taking down the whole box.
@@ -79,6 +85,9 @@ process — the agent sees **exit code -9 (SIGKILL)** and delivery gates stall
   ```bash
   journalctl -k | grep -i -E "oom|killed process" | tail
   ```
+  Then either lower `CRONOS_MAX_CONCURRENT_AGENTS` or raise `mem_limit`/swap. A
+  delivery node that keeps OOMing is retried a bounded number of times and then
+  parks WAITING with a diagnostic instead of looping forever.
 
 ---
 

@@ -370,3 +370,45 @@ async def test_finalize_child_swallows_finalize_run_exception():
     # Returns DONE despite the exception because we swallow errors in finalize_run.
     # (The state is determined before finalize_run is called.)
     assert isinstance(state, TaskState)
+
+
+# ── OOM-specific crash message (exit -9) ───────────────────────────────────────
+
+def test_crash_waiting_question_oom_specific():
+    from app.finalizer import _crash_waiting_question
+
+    oom = _crash_waiting_question(-9)
+    assert "-9" in oom
+    assert "out of memory" in oom.lower()
+
+    generic = _crash_waiting_question(1)
+    assert "exit code 1" in generic
+    assert "out of memory" not in generic.lower()
+
+
+@pytest.mark.asyncio
+async def test_finalize_sigkill_uses_oom_message():
+    task = _make_task()
+    fn, store, bus = _make_finalizer(task)
+    result = _make_result(status=None, exit_code=-9)
+    with patch("app.finalizer.goal_sync.propagate_to_parent", new=AsyncMock()), \
+         patch("app.finalizer.feature_sync.propagate_to_feature", new=AsyncMock()):
+        await fn.finalize("t1", result, started_at=datetime.now(tz=UTC))
+    call_kwargs = store.finalize_run.call_args.kwargs
+    assert call_kwargs["new_state"] == TaskState.WAITING
+    assert "out of memory" in (call_kwargs["waiting_question"] or "").lower()
+
+
+@pytest.mark.asyncio
+async def test_finalize_child_sigkill_uses_oom_message():
+    task = _make_task()
+    fn, store, bus = _make_finalizer(task)
+    result = _make_result(status=None, exit_code=-9)
+    with patch("app.finalizer.goal_sync.propagate_to_parent", new=AsyncMock()), \
+         patch("app.finalizer.feature_sync.propagate_to_feature", new=AsyncMock()):
+        await fn.finalize_child(
+            "t1", result, None, started_at=datetime.now(tz=UTC)
+        )
+    call_kwargs = store.finalize_run.call_args.kwargs
+    assert call_kwargs["new_state"] == TaskState.WAITING
+    assert "out of memory" in (call_kwargs["waiting_question"] or "").lower()

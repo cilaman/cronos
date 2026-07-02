@@ -1376,3 +1376,119 @@ def test_build_prompt_memory_empty_body_no_trailing_colon():
     assert "**Simple fact** (fact)" in prompt
     # No stray ": " after the closing paren when body is absent
     assert "**Simple fact** (fact):" not in prompt
+
+
+# ---------------------------------------------------------------------------
+# run_agent: space-root trust seeding, NODE_OPTIONS heap cap, concurrency slot
+# ---------------------------------------------------------------------------
+
+
+def test_ensure_workspace_trusted_seeds_space_root_and_subdir(tmp_path):
+    """Both the space root and a nested workspace subdir get trusted."""
+    cfg = tmp_path / ".claude.json"
+    space_root = tmp_path / "spaces" / "cronos-development"
+    ws_subdir = space_root / ".cronos" / "workspaces" / "t1"
+    _ensure_workspace_trusted(cfg, [space_root, ws_subdir])
+    data = json.loads(cfg.read_text())
+    assert data["projects"][str(space_root)]["hasTrustDialogAccepted"] is True
+    assert data["projects"][str(ws_subdir)]["hasTrustDialogAccepted"] is True
+
+
+async def test_run_agent_seeds_space_root_trust(tmp_path, monkeypatch):
+    """run_agent must trust the SPACE ROOT (the key the CLI validates), not just
+    the per-task workspace subdir — otherwise permissions.allow is dropped."""
+    import app.agent as agent_module
+
+    (tmp_path / "spaces" / "space-xyz").mkdir(parents=True)
+    monkeypatch.setattr(agent_module, "DATA_DIR", tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    async def fake_exec(*args, **kwargs):
+        return _FakeProc([], exit_code=0)
+
+    async def on_event(e):
+        pass
+
+    with patch("app.agent.asyncio.create_subprocess_exec", side_effect=fake_exec):
+        await run_agent(_make_task(), user_message=None, on_event=on_event)
+
+    data = json.loads((tmp_path / ".claude.json").read_text())
+    space_root = str(tmp_path / "spaces" / "space-xyz")
+    assert data["projects"][space_root]["hasTrustDialogAccepted"] is True
+
+
+async def test_run_agent_sets_node_options_heap_cap(tmp_path, monkeypatch):
+    """The bundled Node CLI is spawned with a --max-old-space-size heap ceiling."""
+    import app.agent as agent_module
+
+    (tmp_path / "spaces" / "space-xyz").mkdir(parents=True)
+    monkeypatch.setattr(agent_module, "DATA_DIR", tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    captured: dict = {}
+
+    async def fake_exec(*args, **kwargs):
+        captured.update(kwargs)
+        return _FakeProc([], exit_code=0)
+
+    async def on_event(e):
+        pass
+
+    with patch("app.agent.asyncio.create_subprocess_exec", side_effect=fake_exec):
+        await run_agent(_make_task(), user_message=None, on_event=on_event)
+
+    assert "--max-old-space-size" in captured["env"]["NODE_OPTIONS"]
+
+
+async def test_agent_slots_serialize_concurrent_runs(tmp_path, monkeypatch):
+    """With one concurrency slot, a second run cannot spawn until the first
+    process exits and releases the slot."""
+    import app.agent as agent_module
+
+    (tmp_path / "spaces" / "space-xyz").mkdir(parents=True)
+    monkeypatch.setattr(agent_module, "DATA_DIR", tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    # Force a single slot regardless of the process-wide default.
+    monkeypatch.setattr(agent_module, "_AGENT_SLOTS", asyncio.Semaphore(1))
+
+    gate = asyncio.Event()
+    spawns: list[int] = []
+
+    class _BlockingProc:
+        def __init__(self) -> None:
+            self.stdout = _FakeStream([])
+            self.stderr = _FakeStream([])
+            self.returncode = 0
+
+        async def wait(self) -> int:
+            await gate.wait()
+            return 0
+
+        def terminate(self) -> None:
+            pass
+
+        def kill(self) -> None:
+            pass
+
+    async def fake_exec(*args, **kwargs):
+        spawns.append(1)
+        return _BlockingProc()
+
+    async def on_event(e):
+        pass
+
+    with patch("app.agent.asyncio.create_subprocess_exec", side_effect=fake_exec):
+        t1 = asyncio.create_task(
+            run_agent(_make_task(), user_message=None, on_event=on_event)
+        )
+        t2 = asyncio.create_task(
+            run_agent(_make_task(), user_message=None, on_event=on_event)
+        )
+        await asyncio.sleep(0.05)
+        # Only the first run holds the single slot; the second is blocked.
+        assert len(spawns) == 1
+        # Release the first process so it exits and frees the slot.
+        gate.set()
+        await asyncio.wait_for(asyncio.gather(t1, t2), timeout=5)
+
+    assert len(spawns) == 2

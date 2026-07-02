@@ -41,21 +41,28 @@ services:
         BUILD_COMMIT: ${BUILD_COMMIT:-}
         BUILD_TIME: ${BUILD_TIME:-}
         BUILD_REPO_URL: ${BUILD_REPO_URL:-}
-    # Memory guardrails. Without a limit an agent run (Opus + bundled Node) can
-    # exhaust host RAM and the kernel OOM-killer reaps an arbitrary process
-    # (seen as agent exit code -9 / SIGKILL, which stalls delivery gates). A
-    # cgroup limit + restart:unless-stopped (inherited from the base file) keeps
-    # a runaway run contained and self-healing. Tune per-VPS via .env; ensure
-    # memswap_limit >= mem_limit (the difference is the allowed swap). See
+    # Memory guardrails. Without a limit an agent run (Opus + bundled Node + any
+    # test subprocess) can exhaust host RAM and the kernel OOM-killer reaps a
+    # process (seen as agent exit code -9 / SIGKILL, which stalls delivery
+    # gates). A cgroup limit + restart:unless-stopped (inherited from the base
+    # file) keeps a runaway run contained and self-healing. The tester node runs
+    # the full pytest suite with coverage alongside the CLI, so the ceiling must
+    # fit CRONOS_MAX_CONCURRENT_AGENTS concurrent runs — sizing rule of thumb:
+    # mem_limit >= max_concurrent_agents * per_run_budget. Tune per-VPS via .env;
+    # ensure memswap_limit >= mem_limit (the difference is the allowed swap). See
     # deploy/VPS_SETUP.md §"Memory & swap".
-    mem_limit: ${CRONOS_BACKEND_MEM_LIMIT:-3g}
-    memswap_limit: ${CRONOS_BACKEND_MEMSWAP_LIMIT:-4g}
+    mem_limit: ${CRONOS_BACKEND_MEM_LIMIT:-6g}
+    memswap_limit: ${CRONOS_BACKEND_MEMSWAP_LIMIT:-8g}
     environment:
       # URL the agent calls to trigger a host-side upgrade.
       # Set in .env: UPGRADE_WEBHOOK_URL=http://172.18.0.1:9137/upgrade
       # Leave blank to disable (agent will report it can't upgrade).
       UPGRADE_WEBHOOK_URL: ${UPGRADE_WEBHOOK_URL:-}
       UPGRADE_WEBHOOK_SECRET: ${UPGRADE_WEBHOOK_SECRET:-}
+      # Cap on concurrent claude CLI subprocesses across all space workers. Keep
+      # this in line with mem_limit (see the sizing note above) to avoid the
+      # cgroup OOM-killer. Default 2.
+      CRONOS_MAX_CONCURRENT_AGENTS: ${CRONOS_MAX_CONCURRENT_AGENTS:-2}
     env_file:
       # chmod-600 file containing CLAUDE_CODE_OAUTH_TOKEN=...
       # Created on the VPS by the operator; see deploy/VPS_SETUP.md §4.

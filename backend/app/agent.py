@@ -26,6 +26,21 @@ CRONOS_SUBDIR = ".cronos"
 
 UPGRADE_WEBHOOK_URL = os.environ.get("UPGRADE_WEBHOOK_URL", "")
 
+# Global cap on concurrent claude CLI subprocesses across every space worker.
+# Each run (Opus + bundled Node + any test subprocess it spawns) is memory-heavy;
+# without a ceiling, N active spaces stack N processes against the container's
+# cgroup memory limit and trip the OOM-killer (agent exit -9 / SIGKILL). All
+# workers share one backend process/event loop, so a module-level semaphore is
+# shared across them. Tune per-VPS via CRONOS_MAX_CONCURRENT_AGENTS.
+_MAX_CONCURRENT_AGENTS = max(1, int(os.environ.get("CRONOS_MAX_CONCURRENT_AGENTS", "2")))
+_AGENT_SLOTS = asyncio.Semaphore(_MAX_CONCURRENT_AGENTS)
+
+# V8 old-space heap ceiling (MB) for the bundled Node CLI. Defense-in-depth only:
+# a cgroup OOM is driven by total RSS (much of it off-heap, plus the separate
+# pytest process), so this guards against unbounded heap growth but does NOT by
+# itself prevent a -9. Keep it generous; never set it aggressively low.
+_NODE_MAX_OLD_SPACE_MB = os.environ.get("CRONOS_NODE_MAX_OLD_SPACE_MB", "2048")
+
 STATUS_CONTRACT = """You are an autonomous task executor. The user is not watching in real time.
 
 ## How to finish a task
@@ -521,9 +536,15 @@ async def _run_agent_body(
         ws_settings = _read_workspace_settings(workspace)
         _write_workspace_settings(workspace, _merge_hook_settings(hook_settings, ws_settings))
 
-    # Trust the workspace + every --add-dir so the CLI honours their
-    # .claude/settings.json permissions.allow instead of silently dropping them.
-    _ensure_workspace_trusted(_claude_json_path(), [workspace, *adopted_dirs])
+    # Trust the space root (it owns .claude/settings.json — the project key the
+    # CLI actually validates against) plus the workspace and every --add-dir, so
+    # the CLI honours their permissions.allow instead of silently dropping them.
+    # The workspace/worktree always nests inside the space root, so the root key
+    # is the one that matters; the extra entries are harmless (helper dedupes).
+    _ensure_workspace_trusted(
+        _claude_json_path(),
+        [space_dir_for(task.space_id), workspace, *adopted_dirs],
+    )
 
     cmd = [
         "claude",
@@ -558,13 +579,33 @@ async def _run_agent_body(
         task.id, bool(task.claude_session_id), task.agent_mode, task.agent_model,
     )
 
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        cwd=workspace,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        limit=10 * 1024 * 1024,  # 10 MB — large file reads produce >64 KB JSON lines
-    )
+    # Cap the bundled Node CLI's V8 heap (defense-in-depth; see _NODE_MAX_OLD_SPACE_MB).
+    # Preserve any operator-supplied NODE_OPTIONS and only add the flag if absent.
+    child_env = {**os.environ}
+    node_opts = child_env.get("NODE_OPTIONS", "")
+    if "--max-old-space-size" not in node_opts:
+        child_env["NODE_OPTIONS"] = (
+            f"{node_opts} --max-old-space-size={_NODE_MAX_OLD_SPACE_MB}".strip()
+        )
+
+    # Bound how many claude subprocesses run at once across all space workers so
+    # concurrent runs can't stack RSS into the cgroup OOM-killer (exit -9). The
+    # slot is released in the read-loop's finally once the process has exited and
+    # its pipes are drained (the memory-heavy window). Guard the spawn itself so a
+    # failure to launch never leaks a slot.
+    await _AGENT_SLOTS.acquire()
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            cwd=workspace,
+            env=child_env,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            limit=10 * 1024 * 1024,  # 10 MB — large file reads produce >64 KB JSON lines
+        )
+    except BaseException:
+        _AGENT_SLOTS.release()
+        raise
 
     session_id: str | None = None
     result_subtype: str | None = None
@@ -713,6 +754,9 @@ async def _run_agent_body(
                 await stderr_task
             except (asyncio.CancelledError, Exception):
                 pass
+        # Process has exited and its pipes are drained — release the concurrency
+        # slot so a queued run can spawn. Runs exactly once (single try/finally).
+        _AGENT_SLOTS.release()
 
     if read_error is not None:
         raise read_error

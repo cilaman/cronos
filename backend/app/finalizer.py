@@ -31,6 +31,22 @@ if TYPE_CHECKING:
 log = logging.getLogger("cronos.worker")
 
 
+def _crash_waiting_question(exit_code: int) -> str:
+    """Human-facing WAITING reason for a crashed run.
+
+    A ``-9`` (SIGKILL) is almost always the container/cgroup OOM-killer reaping
+    the run (Opus + bundled Node + any test subprocess), so surface an
+    actionable OOM-specific message instead of the generic crash text.
+    """
+    if exit_code == -9:
+        return (
+            "Agent was killed (SIGKILL / exit -9) — almost certainly out of "
+            "memory. Lower CRONOS_MAX_CONCURRENT_AGENTS or raise the container "
+            "mem_limit/swap, then resume."
+        )
+    return f"Agent crashed with exit code {exit_code}."
+
+
 def _parse_merge_meta(brief: str) -> dict | None:
     """Extract merge metadata from a task brief (re-import from worker to avoid circular)."""
     import re
@@ -161,7 +177,7 @@ class Finalizer:
             waiting_question = None
         elif result.exit_code != 0:
             new_state = TaskState.WAITING
-            waiting_question = f"Agent crashed with exit code {result.exit_code}."
+            waiting_question = _crash_waiting_question(result.exit_code)
         elif result.status == Status.WAIT:
             new_state = TaskState.WAITING
             waiting_question = result.context or "(agent asked to wait but gave no question)"
@@ -409,7 +425,7 @@ class Finalizer:
                 waiting_question = None
             elif result.exit_code != 0:
                 new_state = TaskState.WAITING
-                waiting_question = f"Agent crashed (exit code {result.exit_code})."
+                waiting_question = _crash_waiting_question(result.exit_code)
             elif result.status == Status.WAIT:
                 new_state = TaskState.WAITING
                 waiting_question = result.context or "(agent waiting)"

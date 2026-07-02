@@ -19,7 +19,9 @@ Sentinel constants (must be byte-identical in driver, worker, and tests):
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import os
 import re
 import sys
 from pathlib import Path
@@ -231,6 +233,18 @@ async def run_delivery_goal(
         # routes to their successors.
         _resume_from_blocked(adapter, graph, goal_id)
 
+        # Bound re-dispatch of a persisted `failed` node.  A crash produces no
+        # artifact fence → node status="failed" → runner halts → goal parked
+        # WAITING; on the next re-activation the runner's resume seeding
+        # re-dispatches the same failed node with no ceiling, so a persistent
+        # failure (classically an OOM: exit -9) loops OOM→WAITING→resume→OOM.
+        # Count re-dispatch attempts and, past the cap, park the goal WAITING
+        # with a diagnostic and skip the runner entirely instead of looping.
+        _failed_park = _resume_from_failed(adapter, goal_id, run_dir)
+        if _failed_park is not None:
+            await _park_goal_waiting(store, goal_id, _failed_park)
+            return
+
         # Run the synchronous work-list walker off the event loop so its callbacks
         # into run_coroutine_threadsafe don't deadlock the loop they depend on.
         # Passing state_ops enables persistence + resume + cancel-race detection.
@@ -340,6 +354,78 @@ def _resume_from_blocked(adapter: Any, graph: Any, goal_id: str) -> None:
         "delivery_driver: goal %s resuming from blocked; approved human node(s)=%s",
         goal_id, sorted(approved) or "(none)",
     )
+
+
+# Max times a persisted `failed` node may be re-dispatched across resumes before
+# the driver stops looping and parks the goal WAITING for manual intervention.
+_MAX_FAILED_RESUMES = 2
+
+
+def _resume_from_failed(adapter: Any, goal_id: str, run_dir: Path) -> str | None:
+    """Bound re-dispatch of a persisted ``failed`` node across resumes.
+
+    The runner re-dispatches any non-``done`` node on resume with no attempt
+    ceiling, so a node that keeps failing (classically an OOM: exit -9) loops
+    OOM→WAITING→resume→OOM.  Since ``CronosStateOps.write`` does not persist node
+    ``fields`` and the runner overwrites node ``attempt`` on each dispatch, the
+    attempt count is kept in a sidecar file in ``run_dir``.
+
+    Returns a park reason (the caller parks the goal WAITING and skips the runner)
+    once a failed node exceeds ``_MAX_FAILED_RESUMES``; otherwise ``None`` (let the
+    runner retry).  Best-effort and exception-tolerant — a bookkeeping error never
+    blocks a run.
+    """
+    state_ops = getattr(adapter, "state", None)
+    if state_ops is None or not hasattr(state_ops, "read"):
+        return None
+    try:
+        persisted = state_ops.read()
+    except Exception:
+        return None
+    if getattr(persisted, "status", None) != "failed":
+        return None
+    failed = [
+        nid
+        for nid, ns in getattr(persisted, "nodes", {}).items()
+        if getattr(ns, "status", None) == "failed"
+    ]
+    if not failed:
+        return None
+
+    counter_path = Path(run_dir) / "failed_resumes.json"
+    try:
+        raw = json.loads(counter_path.read_text())
+        prev = raw if isinstance(raw, dict) else {}
+    except (FileNotFoundError, OSError, ValueError):
+        prev = {}
+
+    # Keep only currently-failed nodes (prune stale entries for nodes that have
+    # since progressed) and increment their attempt count.
+    counts = {nid: int(prev.get(nid, 0)) + 1 for nid in failed}
+    exhausted = sorted(nid for nid, c in counts.items() if c > _MAX_FAILED_RESUMES)
+
+    try:
+        tmp = counter_path.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(counts))
+        os.replace(tmp, counter_path)
+    except OSError:
+        log.warning(
+            "delivery_driver: could not persist failed-resume counter for %s", goal_id
+        )
+
+    if exhausted:
+        return (
+            f"Delivery node(s) {', '.join(exhausted)} failed on "
+            f"{_MAX_FAILED_RESUMES + 1} consecutive attempts — halting to avoid a "
+            "crash loop. Fix the root cause (if the agent exited -9 it was killed "
+            "out of memory: lower CRONOS_MAX_CONCURRENT_AGENTS or raise the "
+            "container mem_limit/swap) before resuming."
+        )
+    log.info(
+        "delivery_driver: goal %s retrying failed node(s) %s (attempts=%s)",
+        goal_id, sorted(failed), counts,
+    )
+    return None
 
 
 def _stalled_gate_ids(final_state: Any) -> list[str]:

@@ -15,7 +15,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "packages" / "deliv
 from app.delivery_driver import (
     DELIVERY_NODE_SENTINEL,
     DELIVERY_WORKFLOW_SENTINEL_PATTERN,
+    _MAX_FAILED_RESUMES,
     _resume_from_blocked,
+    _resume_from_failed,
     _stalled_gate_ids,
     detect_delivery_workflow_spec,
     run_delivery_goal,
@@ -419,6 +421,51 @@ def test_resume_from_blocked_does_not_touch_non_human_blocked_node():
     assert state.status == "running"
     assert state.nodes["scout"].status == "blocked"  # not auto-approved
     assert "nodes" not in ops.writes[0]
+
+
+# ---------------------------------------------------------------------------
+# _resume_from_failed — bound re-dispatch of a persistently-failing node
+# ---------------------------------------------------------------------------
+
+
+def _failed_state(node_ids, status="failed"):
+    from state_types import BudgetState, NodeState, WorkflowState
+
+    return WorkflowState(
+        spec="w", run_id="goal-1", status=status,
+        budget=BudgetState(usd_ceiling=5.0),
+        nodes={nid: NodeState(status="failed") for nid in node_ids},
+    )
+
+
+def test_resume_from_failed_bounds_retries(tmp_path):
+    adapter = SimpleNamespace(state=_FakeStateOps(_failed_state(["testrun"])))
+    # The first _MAX_FAILED_RESUMES re-entries allow a retry (return None).
+    for _ in range(_MAX_FAILED_RESUMES):
+        assert _resume_from_failed(adapter, "goal-1", tmp_path) is None
+    # The next re-entry exceeds the cap → park reason returned, runner skipped.
+    reason = _resume_from_failed(adapter, "goal-1", tmp_path)
+    assert reason is not None
+    assert "testrun" in reason
+    # Counter is persisted in a sidecar so the cap survives process restarts.
+    assert (tmp_path / "failed_resumes.json").exists()
+
+
+def test_resume_from_failed_noop_when_not_failed(tmp_path):
+    adapter = SimpleNamespace(state=_FakeStateOps(_failed_state([], status="running")))
+    assert _resume_from_failed(adapter, "g", tmp_path) is None
+
+
+def test_resume_from_failed_noop_when_no_failed_nodes(tmp_path):
+    from state_types import BudgetState, NodeState, WorkflowState
+
+    state = WorkflowState(
+        spec="w", run_id="g", status="failed",
+        budget=BudgetState(usd_ceiling=5.0),
+        nodes={"a": NodeState(status="done")},
+    )
+    adapter = SimpleNamespace(state=_FakeStateOps(state))
+    assert _resume_from_failed(adapter, "g", tmp_path) is None
 
 
 # ---------------------------------------------------------------------------
