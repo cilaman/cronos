@@ -286,7 +286,8 @@ def load_schema(class_name: str) -> dict[str, Any]:
 
 
 def canonical_artifact_relpath(class_name: str, slug: str) -> str:
-    """Workspace-relative path to the artifact for ``class_name`` + ``slug``.
+    """Workspace-relative path to the artifact for ``class_name`` + ``slug``
+    under the CC-v1 ``.cronos/pipeline/`` convention.
 
     Fan-out / iteration slugs use ``--`` to split a parent goal slug from a
     sub-component (e.g. ``pipeline-foundation--i2``). The directory uses the
@@ -296,6 +297,37 @@ def canonical_artifact_relpath(class_name: str, slug: str) -> str:
     parent_slug = slug.split("--", 1)[0] if "--" in slug else slug
     filename = f"{cfg['filename_prefix']}-{slug}.md"
     return f".cronos/pipeline/{parent_slug}/{filename}"
+
+
+def delivery_artifact_relpath(class_name: str, slug: str) -> str:
+    """Workspace-relative path to the artifact for ``class_name`` + ``slug``
+    under the delivery-workflow ``.cronos/delivery/`` convention: a bare
+    ``{filename_prefix}.md`` inside the goal's slug directory. No ``--``
+    fan-out splitting — delivery-workflow goals are not CC-v1 fan-out
+    iterations. Coexists with :func:`canonical_artifact_relpath`'s
+    ``.cronos/pipeline/`` convention (B3); :func:`locate_artifact` tries both.
+    """
+    cfg = CLASS_CONFIG[class_name]
+    return f".cronos/delivery/{slug}/{cfg['filename_prefix']}.md"
+
+
+def locate_artifact(class_name: str, slug: str, space: Path) -> str:
+    """Return the workspace-relative artifact path for ``class_name`` +
+    ``slug``, trying the CC-v1 pipeline convention then the delivery-workflow
+    convention (whichever exists on disk).
+
+    Used only when the caller has no other way to know where the artifact
+    lives (e.g. the CLI, or a gate check invoked with no resolved
+    artifact_paths). Falls back to the pipeline-convention path (even if
+    absent) so a "not found" error names the primary/most common location.
+    """
+    pipeline_rel = canonical_artifact_relpath(class_name, slug)
+    if (space / pipeline_rel).exists():
+        return pipeline_rel
+    delivery_rel = delivery_artifact_relpath(class_name, slug)
+    if (space / delivery_rel).exists():
+        return delivery_rel
+    return pipeline_rel
 
 
 def split_frontmatter(text: str) -> tuple[dict[str, Any] | None, str]:
@@ -1193,8 +1225,23 @@ def _check_retro(result: VerifyResult, header: dict[str, Any]) -> None:
 # ---------------------------------------------------------------------------
 
 
-def verify(agent: str, slug: str, space: Path) -> VerifyResult:
-    """Verify the artifact for ``agent`` (class) + ``slug`` under ``space``."""
+def verify(
+    agent: str,
+    slug: str,
+    space: Path,
+    artifact_path: str | Path | None = None,
+) -> VerifyResult:
+    """Verify the artifact for ``agent`` (class) + ``slug`` under ``space``.
+
+    ``artifact_path``, when given, is the artifact's actual location
+    (absolute, or relative to ``space``) and is used as-is — callers that
+    already resolved the real path (e.g. a gate check, which derives it from
+    the producing node's own output) should pass it so verification isn't
+    tied to guessing a naming convention. When omitted (e.g. the CLI, which
+    has no such context), the artifact is located via :func:`locate_artifact`
+    (tries the CC-v1 pipeline convention, then the delivery-workflow
+    convention).
+    """
     if agent not in CLASS_CONFIG:
         result = VerifyResult(agent=agent, slug=slug, artifact_path="<unknown>")
         result.fail(
@@ -1203,21 +1250,33 @@ def verify(agent: str, slug: str, space: Path) -> VerifyResult:
         )
         return result
 
-    artifact_rel = canonical_artifact_relpath(agent, slug)
-    artifact_path = space / artifact_rel
+    if artifact_path is not None:
+        abs_path = Path(artifact_path)
+        if not abs_path.is_absolute():
+            abs_path = space / abs_path
+        try:
+            artifact_rel = str(abs_path.relative_to(space))
+        except ValueError:
+            # Not actually under space (e.g. a test fixture passed by absolute
+            # path with no space ancestry) — display as given.
+            artifact_rel = str(abs_path)
+    else:
+        artifact_rel = locate_artifact(agent, slug, space)
+        abs_path = space / artifact_rel
+
     result = VerifyResult(agent=agent, slug=slug, artifact_path=artifact_rel)
 
     # 1. Artifact existence
-    if not artifact_path.exists():
+    if not abs_path.exists():
         result.retry(f"artifact not found at expected path: {artifact_rel}")
         return result
-    if not artifact_path.is_file():
+    if not abs_path.is_file():
         result.retry(f"artifact path is not a file: {artifact_rel}")
         return result
 
     # 2. Read + parse YAML frontmatter
     try:
-        text = artifact_path.read_text(encoding="utf-8")
+        text = abs_path.read_text(encoding="utf-8")
     except OSError as exc:
         result.retry(f"cannot read artifact: {exc}")
         return result

@@ -162,7 +162,15 @@ def _check_schema(
     artifact_paths: list[str],
     space: Path | None,
 ) -> tuple[str, list[str], dict[str, Any]]:
-    """R3: Delegate to verify.verify(), wrap VerifyResult into evidence['schema']."""
+    """R3: Delegate to verify.verify(), wrap VerifyResult into evidence['schema'].
+
+    Resolves the actual artifact path via _resolve_artifact_path (the same
+    helper every other check type uses) and passes it through to verify() so
+    schema validation checks the real file the producing node wrote — not a
+    path reconstructed from class+slug alone, which only matches the CC-v1
+    .cronos/pipeline/ convention and silently misses the delivery-workflow
+    .cronos/delivery/ convention (B3).
+    """
     agent_class = check.get("agent")
     slug = check.get("slug")
     if not agent_class or not slug:
@@ -170,7 +178,8 @@ def _check_schema(
     if space is None:
         return "fail", ["schema check requires a space path"], {}
 
-    result = _cc_verify(agent_class, slug, space)
+    artifact_path = _resolve_artifact_path(check, artifact_paths)
+    result = _cc_verify(agent_class, slug, space, artifact_path=artifact_path)
     evidence: dict[str, Any] = {
         "schema": {
             "passed": result.passed,

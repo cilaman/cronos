@@ -22,10 +22,10 @@ FIXTURE_PATH = PACKAGE_ROOT / "tests" / "fixtures" / "forbidden_import_sample.py
 # invokes the --normalize CLI flag (lib/verify.py) which requires a backend context.
 # Follow-up SG: lift normalize.py to lib/ to remove this residual entirely.
 KNOWN_DEFERRED_RESIDUALS: set[tuple[str, int]] = {
-    # lib/verify.py:1350 — `from app.pipeline.normalize import normalize` is deferred
+    # lib/verify.py:1409 — `from app.pipeline.normalize import normalize` is deferred
     # inside `if args.normalize:` (CLI-only branch). At normal import time lib.verify
     # does NOT load any app.* module (verified by test_lib_verify_portability.py).
-    ("lib/verify.py", 1350),
+    ("lib/verify.py", 1409),
 }
 
 

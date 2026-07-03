@@ -330,6 +330,119 @@ class TestSchema:
         assert result.decision == "fail"
         assert len(result.evidence["schema"]["errors"]) > 0
 
+    def _research_report_content(self, slug: str, outputs_produced: str) -> str:
+        return textwrap.dedent(f"""\
+            ---
+            cc_version: '1.0'
+            agent: scout
+            slug: {slug}
+            phase: scout
+            status: done
+            confidence: 0.9
+            inputs_used:
+            - backend/app/main.py
+            outputs_produced:
+            - {outputs_produced}
+            blockers: []
+            next_consumer: analysis
+            coverage_summary:
+              searched:
+              - backend/app/main.py
+              excluded:
+              - frontend/
+              strategies:
+              - read_targeted
+            metrics:
+              tool_calls: 3
+              files_read: 1
+              memory_hits: 0
+            ---
+
+            ## Summary
+
+            Scout report for gate-engine testing.
+
+            ## Coverage
+
+            Searched backend/app/main.py; excluded frontend/.
+
+            ## Findings
+
+            - Nothing notable.
+
+            ## Assumptions
+
+            None.
+
+            ## Open questions
+
+            None.
+
+            ## Next consumer brief
+
+            Proceed to analysis.
+        """)
+
+    def test_delivery_convention_artifact_proceeds(self, tmp_path):
+        """Regression: a scout report written under the delivery-workflow
+        .cronos/delivery/<slug>/scout-report.md convention (not the CC-v1
+        .cronos/pipeline/ convention) must still pass the schema check when its
+        real path is threaded through via artifact_paths — this is the exact
+        bug reported in production: the gate looked for the artifact at the
+        wrong (pipeline-convention) path and failed with a 'not found' retry
+        even though a valid report existed at the delivery-convention path."""
+        delivery_dir = tmp_path / ".cronos" / "delivery" / "my-goal"
+        delivery_dir.mkdir(parents=True)
+        artifact_path = delivery_dir / "scout-report.md"
+        artifact_path.write_text(
+            self._research_report_content(
+                "my-goal", ".cronos/delivery/my-goal/scout-report.md"
+            )
+        )
+        gate = {"checks": [{"type": "schema", "agent": "research", "slug": "my-goal"}]}
+        # Non-empty artifact_paths — mirrors what adapters/cronos/adapter.py's
+        # runGate resolves from the producing node's real output.
+        result = runGate(gate, [str(artifact_path)], space=tmp_path)
+        assert result.decision == "proceed", (
+            f"Expected proceed, got {result.decision!r}. "
+            f"Errors: {result.evidence.get('schema', {}).get('errors')}"
+        )
+
+    def test_pipeline_convention_artifact_with_explicit_paths_proceeds(self, tmp_path):
+        """A pipeline-convention artifact passed via non-empty artifact_paths
+        (not just discovered via the empty-list fallback guess) must also
+        proceed — confirms the explicit-path branch works for both
+        conventions, not only the one under test above."""
+        pipeline_dir = tmp_path / ".cronos" / "pipeline" / "my-goal"
+        pipeline_dir.mkdir(parents=True)
+        artifact_path = pipeline_dir / "scout-report-my-goal.md"
+        artifact_path.write_text(
+            self._research_report_content(
+                "my-goal", ".cronos/pipeline/my-goal/scout-report-my-goal.md"
+            )
+        )
+        gate = {"checks": [{"type": "schema", "agent": "research", "slug": "my-goal"}]}
+        result = runGate(gate, [str(artifact_path)], space=tmp_path)
+        assert result.decision == "proceed", (
+            f"Expected proceed, got {result.decision!r}. "
+            f"Errors: {result.evidence.get('schema', {}).get('errors')}"
+        )
+
+    def test_delivery_convention_missing_artifact_still_retries_named_path(self, tmp_path):
+        """When artifact_paths correctly names a delivery-convention path that
+        doesn't exist, the retry message names THAT real path — not a
+        fictitious pipeline-convention guess (no silent re-guessing across
+        conventions once a real path is known; see B2 cross-goal leakage
+        guard in adapters/cronos/adapter.py)."""
+        missing_path = tmp_path / ".cronos" / "delivery" / "my-goal" / "scout-report.md"
+        gate = {"checks": [{"type": "schema", "agent": "research", "slug": "my-goal"}]}
+        result = runGate(gate, [str(missing_path)], space=tmp_path)
+        assert result.decision == "retry"
+        assert any(
+            ".cronos/delivery/my-goal/scout-report.md" in e
+            for e in result.evidence["schema"]["errors"]
+        ), result.evidence["schema"]["errors"]
+
 
 class TestAcceptance:
     def test_good_report_proceeds(self, tmp_path):
