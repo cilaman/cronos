@@ -27,10 +27,19 @@ from state_types import NodeState, WorkflowState
 _SCALAR_TYPES = (bool, int, float, str)
 
 
+#: Node statuses that contribute to the scope.  ``done`` is the normal
+#: terminal; ``needs_fix`` is a gate's non-proceed terminal (R9/D11 — the
+#: runner writes it as the REAL node status) whose ``{gate}.decision`` must
+#: stay routable, or the spec's fix edges (``g-x.decision != 'proceed'``)
+#: could never fire.
+_SCOPED_STATUSES = ("done", "needs_fix")
+
+
 def build_scope(state: WorkflowState, scope_base: dict[str, Any] | None = None) -> dict[str, Any]:
     """Build a flat scope dict from completed nodes in *state*.
 
-    Only nodes whose status == 'done' contribute to the scope.  Nodes with
+    Only nodes with a terminal, routable status ('done', or 'needs_fix' for a
+    gate's non-proceed decision — R9) contribute to the scope.  Nodes with
     other statuses (pending, running, failed, etc.) are ignored.
 
     Parameters
@@ -51,7 +60,7 @@ def build_scope(state: WorkflowState, scope_base: dict[str, Any] | None = None) 
     scope: dict[str, Any] = dict(scope_base or {})
 
     for node_id, ns in state.nodes.items():
-        if ns.status != "done":
+        if ns.status not in _SCOPED_STATUSES:
             continue
         _emit_node_scope(node_id, ns, scope)
 
@@ -59,7 +68,7 @@ def build_scope(state: WorkflowState, scope_base: dict[str, Any] | None = None) 
 
 
 def _emit_node_scope(node_id: str, ns: NodeState, scope: dict[str, Any]) -> None:
-    """Write a single done node's state into *scope* in-place."""
+    """Write a single terminal (done/needs_fix) node's state into *scope* in-place."""
     scope[f"{node_id}.status"] = ns.status
 
     # Gate outcome (stored in ns.gate dict under "decision" key).

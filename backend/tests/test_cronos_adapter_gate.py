@@ -1,10 +1,11 @@
-"""I3 — CronosAdapter.runGate tests (R4).
+"""I3 — CronosAdapter.runGate tests (R4, R9).
 
 Tests:
-- Delegates to lib.gate.runGate with gate_id + state_path
+- Delegates to lib.gate.runGate with gate_id + space (never state_path)
 - Maps proceed/needs_fix/fail/retry decisions to results.GateResult
-- Writes gate node into state.json on proceed
-- Writes gate node with "needs_fix" on non-proceed
+- R9 (kills D11): returns the GateResult ONLY — zero StateOps writes.  The
+  runner is the single writer of node status/gate detail; it persists a
+  non-proceed decision once as node status 'needs_fix'
 - Returns GateResult(decision="fail") with errors on failure gate
 """
 from __future__ import annotations
@@ -85,7 +86,11 @@ class TestRunGateProceed:
         assert isinstance(result, GateResult)
         assert result.decision == "proceed"
 
-    def test_writes_done_node_on_proceed(self, tmp_path: Path) -> None:
+    def test_does_not_write_state_on_proceed(self, tmp_path: Path) -> None:
+        """R9 (kills D11): runGate returns the GateResult ONLY.  The runner
+        persists the gate node (status 'done' on proceed) — the adapter's
+        historical out-of-band write here was the double-writer half of the
+        phantom needs_fix→done event-log transition."""
         adapter = _adapter(tmp_path)
         gate = {"id": "g-scout", "checks": []}
 
@@ -96,10 +101,10 @@ class TestRunGateProceed:
             adapter.runGate(gate, [])
 
         ws = StateStore(tmp_path / "run").read()
-        assert "g-scout" in ws.nodes
-        assert ws.nodes["g-scout"].status == "done"
-        assert ws.nodes["g-scout"].gate is not None
-        assert ws.nodes["g-scout"].gate["decision"] == "proceed"
+        assert ws.nodes == {}, (
+            f"runGate wrote node state out-of-band: {ws.nodes!r} — the runner "
+            "is the single writer of node fields (R9)"
+        )
 
     def test_passes_artifact_paths(self, tmp_path: Path) -> None:
         adapter = _adapter(tmp_path)
@@ -171,29 +176,33 @@ def test_class_and_slug_from_artifact():
     assert _class_and_slug_from_artifact(["scout-report.md"]) == (None, None)
 
 
-class TestRunGateStateWriteRegression:
-    """Regression: gate must not leave a statusless node that a later
-    StateStore.read() trips over (KeyError: 'status') — the delivery runner
-    'status' error."""
+class TestRunGateSingleWriter:
+    """R9 (kills D11): the adapter never writes node state; lib.gate's
+    standalone _write_gate_result never runs under the runner (state_path is
+    not passed — its partial, statusless node entry would corrupt a
+    StateStore state.json AND make it a second writer)."""
 
-    def test_run_gate_does_not_raise_key_error_status(self, tmp_path: Path) -> None:
+    def test_run_gate_leaves_state_json_untouched(self, tmp_path: Path) -> None:
         # Real lib.gate.runGate (NOT mocked) with an empty check list → proceed.
-        # Exercises the full adapter→lib.gate→state path on a bootstrapped state.
+        # Exercises the full adapter→lib.gate path on a bootstrapped state.
         adapter = _adapter(tmp_path)
+        before = (tmp_path / "run" / "state.json").read_text()
+
         result = adapter.runGate({"id": "g-scout", "checks": []}, [])
 
         assert result.decision == "proceed"
-        # The subsequent read (also done inside runGate via self.state.write) and a
-        # fresh read here must both succeed and carry a real status.
+        after = (tmp_path / "run" / "state.json").read_text()
+        assert after == before, "runGate modified state.json (R9 single writer)"
+        # And a fresh read still succeeds (no statusless node corruption).
         ws = StateStore(tmp_path / "run").read()
-        assert ws.nodes["g-scout"].status == "done"
-        assert ws.nodes["g-scout"].gate is not None
+        assert ws.status == "running"
+        assert ws.nodes == {}
 
     def test_run_gate_does_not_write_statusless_node_via_state_path(
         self, tmp_path: Path
     ) -> None:
-        """The adapter no longer passes state_path to lib.gate, so lib.gate's
-        _write_gate_result never runs — the only writer is self.state.write."""
+        """The adapter does not pass state_path to lib.gate, so lib.gate's
+        _write_gate_result (CLI-standalone only) never runs."""
         captured: dict = {}
 
         def _fake_run_gate(gate, paths, *, space, gate_id, state_path=None):
@@ -224,7 +233,9 @@ class TestRunGateNeedsFix:
         assert result.decision == "needs_fix"
         assert result.errors
 
-    def test_writes_needs_fix_node(self, tmp_path: Path) -> None:
+    def test_does_not_write_needs_fix_node(self, tmp_path: Path) -> None:
+        """R9: the non-proceed decision travels back on the GateResult only;
+        the runner writes it once as the REAL node status 'needs_fix'."""
         adapter = _adapter(tmp_path)
         gate = {"id": "g-review", "checks": []}
 
@@ -235,7 +246,10 @@ class TestRunGateNeedsFix:
             adapter.runGate(gate, [])
 
         ws = StateStore(tmp_path / "run").read()
-        assert ws.nodes["g-review"].status == "needs_fix"
+        assert "g-review" not in ws.nodes, (
+            "runGate wrote the needs_fix node out-of-band — that write was "
+            "half of the D11 double-writer (runner then overwrote with done)"
+        )
 
 
 class TestRunGateFail:
@@ -269,8 +283,9 @@ class TestRunGateFail:
 
 
 class TestRunGateNoId:
-    def test_no_gate_id_skips_state_write(self, tmp_path: Path) -> None:
-        """Gate with no 'id' key should not write to state.json."""
+    def test_no_gate_id_still_returns_result_without_writes(self, tmp_path: Path) -> None:
+        """Gate with no 'id' key returns a result; nothing is written (R9 —
+        nothing is written for ANY gate)."""
         adapter = _adapter(tmp_path)
         gate = {"checks": []}
 

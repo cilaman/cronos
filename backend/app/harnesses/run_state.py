@@ -129,6 +129,17 @@ class RunState:
     on the BFS path; legacy JSON files without this key load as ``{}``.
     """
 
+    stall: dict | None = None
+    """
+    The delivery-workflow runner's RUN-LEVEL stall detail (R6, 01-state-model.md
+    §5.2): ``{"kind": "starved_nodes"|"gate_exhausted", "nodes": [...],
+    "reason": str[, "dead_ends": [...]]}``.  A runner-path workflow that
+    terminates ``stalled`` maps to harness run status ``failed`` (there is no
+    'stalled' in the RunState vocabulary — the full shared-outcome table is
+    R10); the detail is preserved here so the reason is not lost.  ``None`` on
+    the BFS path and on legacy JSON files without the key.
+    """
+
     # ------------------------------------------------------------------
     # Serialisation helpers
     # ------------------------------------------------------------------
@@ -165,6 +176,7 @@ class RunState:
             waiting_node_id=data.get("waiting_node_id"),
             status=data.get("status", "running"),
             edges_evaluated=data.get("edges_evaluated", {}),
+            stall=data.get("stall"),
         )
 
 

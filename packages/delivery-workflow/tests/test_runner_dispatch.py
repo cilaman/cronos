@@ -167,14 +167,29 @@ class TestDispatchGate:
         assert outcome.gate["decision"] == "proceed"
         assert outcome.fields == {"decision": "proceed"}
 
-    def test_gate_needs_fix_still_done(self):
-        """Gate node returns status=done regardless of gate decision."""
+    def test_gate_needs_fix_returns_needs_fix(self):
+        """R9 (kills D11): a gate's non-proceed decision IS the node status —
+        written once, by the runner, with the decision detail in `gate`.  The
+        pre-R9 shape (status=done regardless of decision) forced the adapter
+        to write needs_fix out-of-band, creating the phantom needs_fix→done
+        event-log transition."""
         rt = _MockRuntime()
         rt.set_gate_result(GateResult(decision="needs_fix", errors=["fail"]))
         node = IRNode(id="g", kind="gate")
         outcome = dispatch_node(node, {}, rt, _empty_state())
-        assert outcome.status == "done"
+        assert outcome.status == "needs_fix"
         assert outcome.gate["decision"] == "needs_fix"
+        assert outcome.fields == {"decision": "needs_fix"}
+
+    def test_gate_fail_decision_returns_needs_fix(self):
+        """Any non-proceed decision (fail, retry, needs_fix) persists as the
+        needs_fix node status; the exact decision stays in the gate dict."""
+        rt = _MockRuntime()
+        rt.set_gate_result(GateResult(decision="fail", errors=["schema violation"]))
+        node = IRNode(id="g", kind="gate")
+        outcome = dispatch_node(node, {}, rt, _empty_state())
+        assert outcome.status == "needs_fix"
+        assert outcome.gate["decision"] == "fail"
 
     def test_gate_id_passed(self):
         rt = _MockRuntime()

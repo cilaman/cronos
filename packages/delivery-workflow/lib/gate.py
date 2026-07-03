@@ -679,7 +679,16 @@ def _write_gate_result(
     gate_id: str,
     state_path: Path,
 ) -> None:
-    """Atomically write GateResult into state.json under nodes.<gate_id>.gate."""
+    """Atomically write GateResult into state.json under nodes.<gate_id>.gate.
+
+    STANDALONE/CLI USE ONLY (R9, 01-state-model.md §5.8): this writer exists
+    for bare ``lib.gate`` invocations against their own state file.  It must
+    NEVER be combined with a runner-managed state.json — under the runner the
+    single writer of node fields is ``runner/core.py`` through StateOps, and
+    the Cronos adapter deliberately does not pass ``state_path`` (the partial,
+    statusless node entry written here would corrupt a StateStore state.json:
+    KeyError 'status' on the next read, and a second writer for D11).
+    """
     state: dict[str, Any] = {}
     if state_path.exists():
         try:

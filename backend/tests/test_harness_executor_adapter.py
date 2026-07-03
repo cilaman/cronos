@@ -322,7 +322,6 @@ class TestEscalateDiscriminator:
         adapter.escalate("wait-node-1", "[wait/human] wait-node-1: Waiting for human input.")
         ws = adapter.state.read()
         assert ws.status == "blocked"
-        assert ws.nodes.get("wait-node-1", WfNodeState(status="pending")).status == "blocked"
 
     def test_human_prefix_sets_blocked(self) -> None:
         adapter = _make_adapter()
@@ -364,13 +363,18 @@ class TestEscalateDiscriminator:
         assert _is_human_wait("global_iteration_cap_exceeded") is False
         assert _is_human_wait("recurring_findings") is False
 
-    def test_human_wait_node_state_in_workflow_state(self) -> None:
-        """After human-wait escalate, the node appears as 'blocked' in WorkflowState."""
+    def test_human_wait_escalate_is_node_write_free(self) -> None:
+        """R9 single-writer (§5.8): escalate writes RUN status only — the node
+        'blocked' status is written once, by the runner, from the dispatch
+        handler's returned NodeOutcome.  A node sub-patch here would be a
+        second out-of-band writer (the D11 double-write class)."""
         adapter = _make_adapter()
+        before = {nid: ns.status for nid, ns in adapter.state.read().nodes.items()}
         adapter.escalate("wait-1", "[wait/human] wait-1: Please review.")
         ws = adapter.state.read()
-        assert "wait-1" in ws.nodes
-        assert ws.nodes["wait-1"].status == "blocked"
+        assert ws.status == "blocked"
+        assert "wait-1" not in ws.nodes, "escalate must not create node state"
+        assert {nid: ns.status for nid, ns in ws.nodes.items()} == before
 
 
 # ---------------------------------------------------------------------------

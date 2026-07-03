@@ -15,9 +15,16 @@ Design decisions implemented here:
   DD-05  (R1) node outcome read from the structured ``trace.node_status``
          envelope (parsed backend-side from the FULL final text); closed
          vocabulary at this boundary; mtime fallback scan demoted to log-only.
-  DD-06  runGate delegates to lib.gate.runGate.
+  DD-06  runGate delegates to lib.gate.runGate and returns the GateResult
+         ONLY — the runner is the single writer of node state (R9/D11).
   DD-07  evalCondition delegates to lib.conditions.eval_condition.
   DD-08  state.write patches StateStore; node transitions appended to EventLog.
+         Node status/attempt/artifact_paths/gate/fields are written ONLY by
+         the runner through this StateOps (01-state-model.md §5.8): runGate
+         and runExec perform no state writes of their own — the historical
+         out-of-band writes here double-wrote every gate/exec node (D11: the
+         adapter wrote needs_fix, the runner overwrote done, and the event
+         log carried a phantom needs_fix→done transition).
   DD-09  TelemetrySink wired to StateStore; BudgetExceededSignal → escalate.
   DD-10  escalate parks tracking task → WAITING + waiting_question; idempotent.
   DD-11  G6.2 e2e: monkeypatched store + trace_store; sequential dispatch.
@@ -107,6 +114,12 @@ class CronosStateOps:
         # with each update — full replacement, round-trips identically.
         if "edges_evaluated" in patch:
             state.edges_evaluated = dict(patch["edges_evaluated"] or {})
+
+        # Run-level stall detail (R6/D5): written together with
+        # status="stalled"; a later {"stall": None} clears it (resumed run
+        # that completed).  Full replacement, round-trips identically.
+        if "stall" in patch:
+            state.stall = patch["stall"]
 
         # Node-level patches.
         nodes_patch: dict[str, Any] = patch.get("nodes", {})
@@ -455,9 +468,11 @@ class CronosAdapter:
     ) -> GateResult:
         """Delegate to lib.gate.runGate; map result to results.GateResult.
 
-        The Cronos gate engine (lib.gate) handles all contract checks
-        and outcome re-execution. This adapter only bridges the result type and
-        writes the gate outcome into state.json (DD-06).
+        The Cronos gate engine (lib.gate) handles all contract checks and
+        outcome re-execution.  This adapter ONLY bridges the result type
+        (DD-06): it performs no state writes — the runner is the single
+        writer of the gate node's status/gate detail (R9/D11, §5.8), and it
+        persists a non-proceed decision once, as node status ``needs_fix``.
         """
         from lib.gate import runGate as _runGate
 
@@ -485,13 +500,14 @@ class CronosAdapter:
             checks.append(c)
         enriched["checks"] = checks
 
-        # NOTE: state_path is intentionally NOT passed. lib.gate's
-        # _write_gate_result writes a partial node entry ({"gate": {...}} with no
-        # status) directly into state.json; this adapter persists the gate outcome
-        # itself below via self.state.write (with a status), which is the single
-        # writer for the Cronos runner path. Passing state_path here caused a
-        # redundant statusless write that a subsequent StateStore.read() then
-        # tripped over (KeyError: 'status').
+        # NOTE: state_path is intentionally NOT passed. lib.gate's standalone
+        # _write_gate_result exists for CLI use only (a bare `python -m
+        # lib.gate` run against its own state file); it writes a partial node
+        # entry ({"gate": {...}} with no status) and must NEVER be combined
+        # with a runner-managed state.json — historically that redundant
+        # statusless write made a subsequent StateStore.read() trip over
+        # KeyError: 'status'.  Under the runner the SINGLE writer of the gate
+        # node (status + gate detail) is runner/core.py via StateOps (R9).
         cronos_result = _runGate(
             enriched,
             abs_paths,
@@ -499,28 +515,14 @@ class CronosAdapter:
             gate_id=gate_id,
         )
 
-        result = GateResult(
+        # Return the result ONLY — no state write here (R9/D11).  The runner
+        # persists the outcome exactly once: status "done" on proceed,
+        # "needs_fix" otherwise, decision detail in the node's gate dict.
+        return GateResult(
             decision=cronos_result.decision,
             errors=list(cronos_result.errors),
             evidence=dict(cronos_result.evidence),
         )
-
-        # Write gate outcome into workflow state.
-        if gate_id:
-            self.state.write(
-                {
-                    "nodes": {
-                        gate_id: {
-                            "status": (
-                                "done" if cronos_result.decision == "proceed" else "needs_fix"
-                            ),
-                            "gate": cronos_result.to_dict(),
-                        }
-                    }
-                }
-            )
-
-        return result
 
     # ------------------------------------------------------------------
     # runExec — shell command to completion, no LLM (P1 Embodiment A)
@@ -587,19 +589,9 @@ class CronosAdapter:
 
         status = "done" if (exit_code == 0 or not fail_on_nonzero) else "failed"
 
-        if node_id:
-            self.state.write(
-                {
-                    "nodes": {
-                        node_id: {
-                            "status": status,
-                            "artifact_paths": [artifact_path] if artifact_path else [],
-                            "fields": {"exit_code": exit_code},
-                        }
-                    }
-                }
-            )
-
+        # Return the result ONLY — no state write here (R9/D11, §5.8).  The
+        # runner persists the exec node's status/artifact_paths/exit_code
+        # exactly once from this ExecResult (runner/dispatch.py).
         return ExecResult(
             status=status,
             exit_code=exit_code,

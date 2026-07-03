@@ -16,12 +16,9 @@ from app.delivery_driver import (
     DELIVERY_NODE_SENTINEL,
     DELIVERY_WORKFLOW_SENTINEL_PATTERN,
     _MAX_FAILED_RESUMES,
-    _MAX_STALLED_GATE_RESUMES,
     _resume_from_blocked,
     _resume_from_failed,
-    _resume_from_stalled_gate,
-    _stalled_gate_ids,
-    _stalled_gate_reason,
+    _stall_reason,
     detect_delivery_workflow_spec,
     run_delivery_goal,
 )
@@ -472,161 +469,93 @@ def test_resume_from_failed_noop_when_no_failed_nodes(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# _resume_from_stalled_gate — reset a dead-ended gate so a resume re-runs it
+# _stall_reason — render the runner's RUN-LEVEL stall detail (R6).
+# The pre-R6 node-archaeology heuristics (_stalled_gate_ids,
+# _stalled_gate_reason, _resume_from_stalled_gate + the stalled_gate_resumes.json
+# sidecar) are DELETED: the runner now proves completeness itself and reports
+# 'stalled' with machine-readable detail at run level.
 # ---------------------------------------------------------------------------
 
 
-def _stalled_state(gate_decisions: dict, status="done"):
-    """WorkflowState with the given gate nodes carrying a decision."""
-    from state_types import BudgetState, NodeState, WorkflowState
+def _stalled_wf_state(stall: dict | None):
+    from state_types import BudgetState, WorkflowState
 
     return WorkflowState(
-        spec="w", run_id="goal-1", status=status,
+        spec="w", run_id="goal-1", status="stalled",
         budget=BudgetState(usd_ceiling=5.0),
-        nodes={
-            gid: NodeState(status="done", attempt=1, gate={"decision": dec, "errors": [f"{gid} bad"]})
-            for gid, dec in gate_decisions.items()
-        },
+        stall=stall,
     )
 
 
-def test_resume_from_stalled_gate_resets_and_continues(tmp_path):
-    state = _stalled_state({"g-scout": "fail"})
-    ops = _FakeStateOps(state)
-    adapter = SimpleNamespace(state=ops)
-
-    result = _resume_from_stalled_gate(adapter, "goal-1", tmp_path)
-
-    # Returns None (let the runner re-run), resets the gate + run status.
-    assert result is None
-    assert state.status == "running"
-    assert state.nodes["g-scout"].status == "pending"
-    # The write patch clears the gate outcome and resets the attempt counter.
-    patch = ops.writes[0]
-    assert patch["status"] == "running"
-    assert patch["nodes"]["g-scout"] == {"status": "pending", "gate": None, "attempt": 0}
-    # Counter sidecar is persisted so the cap survives restarts.
-    assert (tmp_path / "stalled_gate_resumes.json").exists()
+def test_stall_reason_renders_starved_nodes_detail():
+    reason = _stall_reason(_stalled_wf_state({
+        "kind": "starved_nodes",
+        "nodes": ["frontend"],
+        "reason": "dead-end node(s) signoff-scope completed but no outgoing "
+                  "edge condition matched",
+        "dead_ends": ["signoff-scope"],
+    }))
+    assert "frontend" in reason
+    assert "signoff-scope" in reason
+    assert "never reached" in reason
 
 
-def test_resume_from_stalled_gate_bounds_resumes(tmp_path):
-    adapter = SimpleNamespace(state=_FakeStateOps(_stalled_state({"g-build": "needs_fix"})))
-    # The first _MAX_STALLED_GATE_RESUMES re-entries reset and return None...
-    for _ in range(_MAX_STALLED_GATE_RESUMES):
-        # Re-mark the gate stalled each round (a fresh state read would show the
-        # re-run failed again); simulate by resetting the decision.
-        adapter.state._state.nodes["g-build"].status = "done"
-        adapter.state._state.status = "done"
-        assert _resume_from_stalled_gate(adapter, "goal-1", tmp_path) is None
-    # ...then the next exceeds the cap → actionable park reason, runner skipped.
-    adapter.state._state.nodes["g-build"].status = "done"
-    adapter.state._state.status = "done"
-    reason = _resume_from_stalled_gate(adapter, "goal-1", tmp_path)
-    assert reason is not None
+def test_stall_reason_renders_gate_exhausted_detail():
+    reason = _stall_reason(_stalled_wf_state({
+        "kind": "gate_exhausted",
+        "nodes": ["g-build"],
+        "reason": "gate 'g-build' fix-loop exhausted after 3 evaluation(s) "
+                  "(max=3, decision=needs_fix: impl-report failed schema check)",
+    }))
     assert "g-build" in reason
-    assert "stalled" in reason.lower()
-
-
-def test_resume_from_stalled_gate_noop_when_not_done(tmp_path):
-    adapter = SimpleNamespace(state=_FakeStateOps(_stalled_state({"g-scout": "fail"}, status="running")))
-    assert _resume_from_stalled_gate(adapter, "g", tmp_path) is None
-    assert adapter.state.writes == []
-
-
-def test_resume_from_stalled_gate_noop_when_all_proceed(tmp_path):
-    adapter = SimpleNamespace(state=_FakeStateOps(_stalled_state({"g-scout": "proceed"})))
-    assert _resume_from_stalled_gate(adapter, "g", tmp_path) is None
-    assert adapter.state.writes == []
-
-
-# ---------------------------------------------------------------------------
-# _stalled_gate_ids — detect a dead-end gate reported as "done"
-# ---------------------------------------------------------------------------
-
-def test_stalled_gate_ids_flags_non_proceed_gate():
-    from state_types import BudgetState, NodeState, WorkflowState
-
-    state = WorkflowState(
-        spec="w", run_id="g", status="done",
-        budget=BudgetState(usd_ceiling=5.0),
-        nodes={
-            "scout": NodeState(status="done"),
-            "g-scout": NodeState(status="done", gate={"decision": "needs_fix"}),
-        },
-    )
-    assert _stalled_gate_ids(state) == ["g-scout"]
-
-
-def test_stalled_gate_ids_empty_when_all_proceed():
-    from state_types import BudgetState, NodeState, WorkflowState
-
-    state = WorkflowState(
-        spec="w", run_id="g", status="done",
-        budget=BudgetState(usd_ceiling=5.0),
-        nodes={
-            "g-scout": NodeState(status="done", gate={"decision": "proceed"}),
-            "analyze": NodeState(status="done"),
-        },
-    )
-    assert _stalled_gate_ids(state) == []
-
-
-def test_stalled_gate_reason_names_gate_decision_and_error():
-    """P4: the WAITING reason names the gate, its decision, and the first error."""
-    from state_types import BudgetState, NodeState, WorkflowState
-
-    state = WorkflowState(
-        spec="w", run_id="g", status="done",
-        budget=BudgetState(usd_ceiling=5.0),
-        nodes={
-            "g-build": NodeState(
-                status="done",
-                gate={"decision": "needs_fix", "errors": ["impl-report failed schema check"]},
-            ),
-        },
-    )
-    reason = _stalled_gate_reason(state, ["g-build"])
-    assert "g-build" in reason
-    assert "needs_fix" in reason
+    assert "fix-loop" in reason
     assert "impl-report failed schema check" in reason
 
 
-def test_stalled_gate_reason_without_errors_still_names_gate():
-    from state_types import BudgetState, NodeState, WorkflowState
+def test_stall_reason_without_detail_is_generic_but_honest():
+    reason = _stall_reason(_stalled_wf_state(None))
+    assert "stalled" in reason.lower()
 
-    state = WorkflowState(
-        spec="w", run_id="g", status="done",
-        budget=BudgetState(usd_ceiling=5.0),
-        nodes={"g-scout": NodeState(status="done", gate={"decision": "fail"})},
-    )
-    reason = _stalled_gate_reason(state, ["g-scout"])
-    assert "g-scout" in reason
-    assert "fail" in reason
+
+def test_stall_reason_never_reads_workflow_nodes():
+    """The driver must render the park message from the run-level record only —
+    a state whose ``nodes`` access explodes must still render fine."""
+
+    class _NoNodes:
+        stall = {"kind": "starved_nodes", "nodes": ["b"], "reason": "a dead-ended"}
+
+        @property
+        def nodes(self):  # pragma: no cover - the assertion is that it's unused
+            raise AssertionError("_stall_reason must not read WorkflowState.nodes")
+
+    reason = _stall_reason(_NoNodes())
+    assert "b" in reason
 
 
 @pytest.mark.asyncio
-async def test_run_delivery_goal_done_with_stalled_gate_parks_waiting(tmp_path):
-    """Runner returns done but a gate ended needs_fix → park WAITING, not DONE."""
+async def test_run_delivery_goal_stalled_parks_waiting_with_detail(tmp_path):
+    """Runner returns 'stalled' (R6) → goal parks WAITING with the actionable
+    message rendered from the run-level stall detail."""
     spec_file = tmp_path / "workflow.yaml"
     spec_file.write_text(MINIMAL_SPEC_YAML)
     run_dir = tmp_path / "runs" / "goal-1"
 
     from app.models import TaskState as _TS
-    from state_types import BudgetState, NodeState, WorkflowState
     store = _make_store()
     store.get.return_value = SimpleNamespace(
         id="goal-1", state=_TS.ACTIVE, title="T", brief="...", waiting_question=None,
     )
     ts = _make_trace_store()
 
-    done_but_stalled = WorkflowState(
-        spec="test-workflow", run_id="goal-1", status="done",
-        budget=BudgetState(usd_ceiling=5.0),
-        nodes={"g-scout": NodeState(status="done", gate={"decision": "needs_fix"})},
-    )
+    stalled_state = _stalled_wf_state({
+        "kind": "gate_exhausted",
+        "nodes": ["g-build"],
+        "reason": "gate 'g-build' fix-loop exhausted after 3 evaluation(s) "
+                  "(max=3, decision=needs_fix)",
+    })
     import runner as _runner_mod
     original_run = _runner_mod.run
-    _runner_mod.run = lambda graph, executor, state_ops=None: done_but_stalled
+    _runner_mod.run = lambda graph, executor, state_ops=None: stalled_state
     try:
         with patch("adapters.cronos.adapter.CronosAdapter"):
             await run_delivery_goal(
@@ -640,6 +569,56 @@ async def test_run_delivery_goal_done_with_stalled_gate_parks_waiting(tmp_path):
     kwargs = store.finalize_run.call_args.kwargs
     assert kwargs["new_state"] == _TS.WAITING
     assert "stalled" in kwargs["waiting_question"].lower()
+    assert "g-build" in kwargs["waiting_question"]
+
+
+@pytest.mark.asyncio
+async def test_run_delivery_goal_done_with_non_proceed_gate_finalizes_done(tmp_path):
+    """The D12 false positive is gone: a run the runner reports 'done' (its
+    completeness invariant held — e.g. a verdict-routed run past a needs_fix
+    g-review decision) finalizes the goal DONE.  No node archaeology, no
+    spurious WAITING at completion."""
+    spec_file = tmp_path / "workflow.yaml"
+    spec_file.write_text(MINIMAL_SPEC_YAML)
+    run_dir = tmp_path / "runs" / "goal-1"
+
+    from app.models import TaskState as _TS
+    from state_types import BudgetState, NodeState, WorkflowState
+    store = _make_store()
+    store.get.return_value = SimpleNamespace(
+        id="goal-1", state=_TS.ACTIVE, title="T", brief="...", waiting_question=None,
+    )
+    ts = _make_trace_store()
+
+    verdict_routed_done = WorkflowState(
+        spec="test-workflow", run_id="goal-1", status="done",
+        budget=BudgetState(usd_ceiling=5.0),
+        nodes={
+            "review": NodeState(status="done", fields={"verdict": "pass"}),
+            # The gate's own decision is needs_fix, but the run routed past it
+            # on the review verdict — the runner proved completeness → done.
+            "g-review": NodeState(status="done", gate={"decision": "needs_fix"}),
+            "security": NodeState(status="done"),
+        },
+    )
+    import runner as _runner_mod
+    original_run = _runner_mod.run
+    _runner_mod.run = lambda graph, executor, state_ops=None: verdict_routed_done
+    try:
+        with patch("adapters.cronos.adapter.CronosAdapter"):
+            await run_delivery_goal(
+                goal_id="goal-1", spec_path="workflow.yaml", store=store,
+                trace_store=ts, space_id="space", space_dir=tmp_path, run_dir=run_dir,
+            )
+    finally:
+        _runner_mod.run = original_run
+
+    store.finalize_run.assert_called_once()
+    kwargs = store.finalize_run.call_args.kwargs
+    assert kwargs["new_state"] == _TS.DONE, (
+        "a runner-proven 'done' with a non-proceed gate decision must finalize "
+        "DONE — the WAITING park here was the D12 false positive"
+    )
 
 
 @pytest.mark.asyncio

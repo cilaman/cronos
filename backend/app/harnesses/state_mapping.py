@@ -32,6 +32,12 @@ Reverse mapping  (runner → harness):
     'failed'     → 'failed'
     'blocked'    → 'pending'
     'escalated'  → 'failed'  (loop exhausted is a hard failure for RunState)
+    'needs_fix'  → 'failed'  (R9: a gate's non-proceed terminal.  The harness
+                              compiler emits no gate nodes, so this is
+                              defensive only — mapping it to a terminal keeps
+                              an unexpected needs_fix from defaulting to
+                              'pending' and silently re-running the node.
+                              The full shared-outcome table is R10.)
 
 Run-level status mapping
 ------------------------
@@ -47,6 +53,12 @@ Reverse (WorkflowState.status → RunState.status):
     'failed'    → 'failed'
     'blocked'   → 'running'  (parked waiting, harness is still running)
     'escalated' → 'failed'
+    'stalled'   → 'failed'   (R6: the runner proved the run incomplete — starved
+                              nodes or exhausted gate fix-loop.  RunState has no
+                              'stalled' value; 'failed' is the safe terminal, and
+                              the machine-readable detail is preserved verbatim
+                              on ``RunState.stall`` so the reason is not lost.
+                              The full shared-outcome table is R10 territory.)
 
 Loop bookkeeping
 ----------------
@@ -69,7 +81,8 @@ Round-trip contract
 -------------------
 runstate_to_workflowstate(rs, hid) followed by workflowstate_to_runstate(ws, rs)
 must produce a RunState equal to the original for all fields in NodeState,
-including ``fields`` extras and the run-level ``edges_evaluated`` record.
+including ``fields`` extras and the run-level ``edges_evaluated`` and ``stall``
+records.
 """
 from __future__ import annotations
 
@@ -109,6 +122,9 @@ _WF_TO_HARNESS_NODE: dict[str, str] = {
     "failed": "failed",
     "blocked": "pending",
     "escalated": "failed",
+    # R9 defensive entry: gate-only status; unreachable via the harness
+    # compiler (no gate kind) but must never default to 'pending' (re-run).
+    "needs_fix": "failed",
 }
 
 _HARNESS_TO_WF_RUN: dict[str, str] = {
@@ -124,6 +140,10 @@ _WF_TO_HARNESS_RUN: dict[str, str] = {
     "failed": "failed",
     "blocked": "running",
     "escalated": "failed",
+    # R6: a 'stalled' workflow (completeness invariant unmet / gate fix-loop
+    # exhausted) is a hard terminal for the harness run; the stall detail
+    # round-trips via RunState.stall (see workflowstate_to_runstate).
+    "stalled": "failed",
 }
 
 # Sentinel budget used when constructing a WorkflowState from a RunState that
@@ -210,6 +230,8 @@ def runstate_to_workflowstate(run_state: RunState, harness_id: str) -> WorkflowS
         budget=_ZERO_BUDGET,
         nodes=nodes,
         edges_evaluated=dict(run_state.edges_evaluated),
+        # R6 stall detail round-trips verbatim (run level, like edges_evaluated).
+        stall=run_state.stall,
     )
 
 
@@ -279,4 +301,7 @@ def workflowstate_to_runstate(
         status=run_status,
         waiting_node_id=base_run_state.waiting_node_id,
         edges_evaluated=dict(workflow_state.edges_evaluated),
+        # R6: preserve the runner's run-level stall detail ('stalled' itself
+        # maps to 'failed' — no such RunState value — but the reason survives).
+        stall=workflow_state.stall,
     )

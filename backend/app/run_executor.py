@@ -761,6 +761,33 @@ class RunExecutor:
                 )
             except Exception:
                 log.exception("Failed to finalize harness run %s to WAITING (runner)", task_id)
+        elif wf_status == "stalled":
+            # R6: the runner proved the run incomplete (starved nodes or an
+            # exhausted gate fix-loop) and put the machine-readable detail at
+            # run level (workflow_state.stall → RunState.stall via
+            # state_mapping, harness run status 'failed').  The task still
+            # finalizes DONE here — the harness path's terminal collapse
+            # (failed/escalated → DONE, D16) is R10's shared-outcome-table fix
+            # — but the stall reason is surfaced in the history entry instead
+            # of being silently swallowed as a plain completion.
+            stall = getattr(workflow_state, "stall", None) or {}
+            detail = stall.get("reason") or "run drained without completing all nodes"
+            log.warning(
+                "Harness run %r stalled (runner path): %s", task_id, detail,
+            )
+            history_entry = (
+                f"```\n{timestamp} [harness]\nHarness run stalled: {detail}\n```"
+            )
+            try:
+                await self.store.finalize_run(
+                    task_id,
+                    new_state=TaskState.DONE,
+                    session_id=None,
+                    waiting_question=None,
+                    history_entry=history_entry,
+                )
+            except Exception:
+                log.exception("Failed to finalize stalled harness run %s (runner)", task_id)
         else:
             log.info("Harness run %r completed with status=%r (runner path).", task_id, wf_status)
             history_entry = f"```\n{timestamp} [harness]\nHarness run completed.\n```"

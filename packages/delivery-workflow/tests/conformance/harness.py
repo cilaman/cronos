@@ -331,6 +331,10 @@ def assert_state_roundtrip(state_ops: "StateOps", final: WorkflowState) -> None:
         f"{final.edges_evaluated!r}, disk {persisted.edges_evaluated!r} "
         "(R5 — resume edge replay would not be idempotent)"
     )
+    assert persisted.stall == final.stall, (
+        f"stall round-trip: in-memory {final.stall!r}, disk {persisted.stall!r} "
+        "(R6 — the host could not render an actionable park message)"
+    )
     assert set(persisted.nodes) == set(final.nodes), (
         f"node-set round-trip: in-memory {sorted(final.nodes)}, "
         f"disk {sorted(persisted.nodes)}"

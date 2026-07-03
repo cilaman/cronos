@@ -383,8 +383,10 @@ async def test_gate_fix_loop_routes_to_producer_then_proceeds(tmp_path):
 
 @pytest.mark.asyncio
 async def test_gate_fix_loop_exhaustion_parks_waiting(tmp_path):
-    """§P4 e2e: a gate that never proceeds is bounded at loop.max, then the goal
-    parks WAITING with the actionable stalled-gate reason (not an opaque hang)."""
+    """§P4 e2e (same defect scenario, R6 mechanism): a gate that never proceeds
+    is bounded at loop.max; the runner terminates the run 'stalled' with
+    kind=gate_exhausted at run level, and the driver renders that detail into
+    the actionable WAITING park (not an opaque hang, no node archaeology)."""
     from app.models import TaskState as _TS
 
     spec_file = tmp_path / "delivery.workflow.yaml"
@@ -411,6 +413,10 @@ async def test_gate_fix_loop_exhaustion_parks_waiting(tmp_path):
     assert dispatch_log.count("implement") == 3, f"log={dispatch_log}"
     # review is never reached (gate never proceeds).
     assert "review" not in dispatch_log
+    # The runner terminated 'stalled' with run-level gate detail (R6/OD-3).
+    assert synth.state.read().status == "stalled"
+    assert synth.state.read().stall["kind"] == "gate_exhausted"
+    assert synth.state.read().stall["nodes"] == ["g-build"]
     store.finalize_run.assert_called_once()
     kwargs = store.finalize_run.call_args.kwargs
     assert kwargs["new_state"] == _TS.WAITING

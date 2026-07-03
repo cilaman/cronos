@@ -90,6 +90,8 @@ class MemStateOps:
     def write(self, patch):
         if "status" in patch:
             self._state.status = patch["status"]
+        if "stall" in patch:  # R6 run-level stall detail (mirrors CronosStateOps)
+            self._state.stall = patch["stall"]
         for nid, ns_patch in patch.get("nodes", {}).items():
             node = self._state.nodes.setdefault(nid, NodeState(status="pending"))
             if "status" in ns_patch:
@@ -246,9 +248,15 @@ print(f"--> agent 'WAIT' classified as workflow success (or marker missing): {ok
       f"{'DEFECT CONFIRMED' if ok else 'not reproduced'}")
 
 # ===========================================================================
-# D5 — No completeness invariant: starved node, run still 'done'
+# D5 — No completeness invariant: starved node, run still 'done'.
+# R6 mechanism change: at work-list drain the runner PROVES completeness —
+# every node executed or excluded-with-proof (an evaluated-false edge counts
+# only if its source routed somewhere) — else it terminates 'stalled' with
+# machine-readable run-level detail in state.stall ({kind, nodes, reason}).
+# Same defect scenario: a's only edge condition is false, a routed nowhere,
+# b is starved.  DEFECT CONFIRMED = the partial run still reports 'done'.
 # ===========================================================================
-hr("D5  Condition-starved node -> run 'done' (runner/core.py:292-298)")
+hr("D5  Condition-starved node -> completeness invariant at drain (runner/core.py)")
 g5 = IRGraph(
     nodes=[node("a"), node("b")],
     edges=[IREdge(source="a", target="b", when="a.fields.go == 'yes'", port=None)],
@@ -259,6 +267,7 @@ ex5 = RecordingExecutor(agent_results={"a": AgentResult(
 s5 = workflow_runner.run(graph=g5, executor=ex5, state_ops=None)
 print(f"dispatched={ex5.dispatched}; 'b' never ran; run status={s5.status!r}; "
       f"'b' in state.nodes: {'b' in s5.nodes}")
+print(f"run-level stall detail: {getattr(s5, 'stall', None)!r}")
 ok = s5.status == "done" and "b" not in ex5.dispatched
 print(f"--> partial execution reported as success: {ok}  "
       f"{'DEFECT CONFIRMED' if ok else 'not reproduced'}")

@@ -231,6 +231,9 @@ def test_forward_all_node_fields_preserved() -> None:
         ("failed", "failed"),
         ("blocked", "pending"),
         ("escalated", "failed"),
+        # R9: gate-only non-proceed terminal — defensive (the harness compiler
+        # emits no gate nodes); must map to a terminal, never to 'pending'.
+        ("needs_fix", "failed"),
     ],
 )
 def test_reverse_node_status(wf_status: str, expected_harness_status: str) -> None:
@@ -260,6 +263,10 @@ def test_reverse_node_status(wf_status: str, expected_harness_status: str) -> No
         ("failed", "failed"),
         ("blocked", "running"),
         ("escalated", "failed"),
+        # R6: 'stalled' (completeness invariant unmet / gate fix-loop exhausted)
+        # is a hard terminal for the harness run; the detail rides on
+        # RunState.stall (see test_reverse_run_stall_detail_preserved).
+        ("stalled", "failed"),
     ],
 )
 def test_reverse_run_status(wf_run_status: str, expected_harness_status: str) -> None:
@@ -272,6 +279,27 @@ def test_reverse_run_status(wf_run_status: str, expected_harness_status: str) ->
     base = _make_run_state()
     rs = workflowstate_to_runstate(ws, base)
     assert rs.status == expected_harness_status
+
+
+def test_reverse_run_stall_detail_preserved() -> None:
+    """R6: a 'stalled' workflow maps to harness run 'failed', and the
+    machine-readable run-level stall detail survives the mapping verbatim so
+    the reason is not lost (full shared-outcome table is R10)."""
+    stall = {"kind": "starved_nodes", "nodes": ["b"], "reason": "a dead-ended"}
+    ws = WorkflowState(
+        spec="h",
+        run_id="run-1",
+        status="stalled",
+        budget=BudgetState(usd_ceiling=0.0),
+        stall=stall,
+    )
+    base = _make_run_state()
+    rs = workflowstate_to_runstate(ws, base)
+    assert rs.status == "failed"
+    assert rs.stall == stall
+    # And the forward mapping carries it back (round-trip contract).
+    ws2 = runstate_to_workflowstate(rs, "h")
+    assert ws2.stall == stall
 
 
 # ---------------------------------------------------------------------------

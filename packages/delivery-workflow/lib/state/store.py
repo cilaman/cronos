@@ -41,6 +41,10 @@ def _deserialize(data: dict[str, Any]) -> WorkflowState:
         # to re-evaluate conditions (correct but the record must survive when
         # written — everything the runner writes reads back identically).
         edges_evaluated=dict(data.get("edges_evaluated", {})),
+        # Round-trip law (R6/D5): the run-level stall detail — hosts read it
+        # instead of digging through nodes.  Pre-R6 state.json has no key →
+        # None (never crash on legacy files).
+        stall=data.get("stall"),
     )
 
 
@@ -75,6 +79,10 @@ def _serialize(state: WorkflowState) -> dict[str, Any]:
     # Round-trip law (R5/D1): persist the edge-evaluation record when present.
     if state.edges_evaluated:
         data["edges_evaluated"] = state.edges_evaluated
+    # Round-trip law (R6/D5): persist the run-level stall detail when present
+    # (omitted when None, so a completed run's state.json carries no key).
+    if state.stall is not None:
+        data["stall"] = state.stall
     return data
 
 

@@ -245,19 +245,6 @@ async def run_delivery_goal(
             await _park_goal_waiting(store, goal_id, _failed_park)
             return
 
-        # Re-run a gate that dead-ended on a non-proceed decision.  A stalled gate
-        # persists status="done" (the runner reports done once its work-list
-        # drains), so the resume seeding would mark it dispatched and SKIP it —
-        # the stall would re-detect and re-park WAITING forever.  Reset the
-        # stalled gate node(s) to `pending` so the runner re-dispatches them
-        # (now with the upstream artifact threaded in) and can proceed once the
-        # underlying artifact/check is fixed.  Bounded so a genuinely-broken
-        # artifact can't loop reset→fail→WAITING indefinitely.
-        _stalled_park = _resume_from_stalled_gate(adapter, goal_id, run_dir)
-        if _stalled_park is not None:
-            await _park_goal_waiting(store, goal_id, _stalled_park)
-            return
-
         # Run the synchronous work-list walker off the event loop so its callbacks
         # into run_coroutine_threadsafe don't deadlock the loop they depend on.
         # Passing state_ops enables persistence + resume + cancel-race detection.
@@ -278,23 +265,19 @@ async def run_delivery_goal(
     )
 
     if final_state.status == "done":
-        # A "done" run is only a real success when it drained its work-list by
-        # reaching terminal nodes — not when it dead-ended.  A gate whose only
-        # outgoing edge requires ``decision == 'proceed'`` routes nowhere on a
-        # ``needs_fix``/``fail`` decision; the runner then empties its work-list
-        # and reports "done", which would silently mark the goal DONE even though
-        # the gate blocked progress.  Detect that and park WAITING instead.
-        stalled = _stalled_gate_ids(final_state)
-        if stalled:
-            await _park_goal_waiting(
-                store,
-                goal_id,
-                _stalled_gate_reason(final_state, stalled),
-            )
-        else:
-            # Runner reached a terminal node with no more work — mark the goal DONE.
-            # (Without this the goal is left ACTIVE forever on a successful run.)
-            await _finalize_goal_done(store, goal_id)
+        # R6: "done" now carries the runner's completeness proof — every node
+        # either executed to a terminal status or excluded with proof — so the
+        # driver trusts it outright.  The old post-hoc gate inspection
+        # (_stalled_gate_ids) and its D12 false positive (a verdict-routed run
+        # past a needs_fix gate decision parked WAITING at completion) are gone:
+        # dead-ended runs no longer reach this branch, they arrive as "stalled".
+        await _finalize_goal_done(store, goal_id)
+    elif final_state.status == "stalled":
+        # The runner proved the run incomplete (starved nodes or an exhausted
+        # gate fix-loop) and put the machine-readable detail at RUN level
+        # (final_state.stall).  Render it into an actionable WAITING message —
+        # the driver never digs through WorkflowState.nodes for this.
+        await _park_goal_waiting(store, goal_id, _stall_reason(final_state))
     elif final_state.status == "failed":
         # A node failed and the runner halted — park for attention.
         await _park_goal_waiting(
@@ -440,142 +423,54 @@ def _resume_from_failed(adapter: Any, goal_id: str, run_dir: Path) -> str | None
     return None
 
 
-# Max times a stalled gate may be reset+re-dispatched across resumes before the
-# driver stops looping and parks the goal WAITING for manual intervention.
-_MAX_STALLED_GATE_RESUMES = 2
+def _stall_reason(final_state: Any) -> str:
+    """Render the runner's RUN-LEVEL stall detail into an actionable WAITING
+    reason (R6).
 
-
-def _resume_from_stalled_gate(adapter: Any, goal_id: str, run_dir: Path) -> str | None:
-    """Reset gate node(s) that dead-ended on a non-proceed decision so a resume
-    re-runs them, bounded across resumes.
-
-    A gate always persists ``status="done"`` (its decision travels out-of-band in
-    ``NodeState.gate["decision"]``), so on re-activation the runner's resume
-    seeding marks it dispatched and skips it — a stalled gate would re-detect and
-    re-park WAITING forever.  When the persisted run is ``done`` and has stalled
-    gate(s) (``_stalled_gate_ids``), reset each stalled gate to ``pending`` (clear
-    its ``gate`` outcome and ``attempt``) and set the run status back to
-    ``running`` so the runner re-dispatches it.  With the upstream artifact now
-    threaded into the gate (dispatch fix), a valid artifact proceeds.
-
-    Returns a park reason (the caller parks the goal WAITING and skips the runner)
-    once any stalled gate exceeds ``_MAX_STALLED_GATE_RESUMES``; otherwise
-    ``None``.  Best-effort and exception-tolerant — a bookkeeping error never
-    blocks a run.
+    Reads ONLY ``final_state.stall`` — the machine-readable record the runner
+    writes with ``status="stalled"`` (``{"kind": "starved_nodes" |
+    "gate_exhausted", "nodes": [...], "reason": str[, "dead_ends": [...]]}``).
+    The driver never digs through ``WorkflowState.nodes`` to explain a stall;
+    if the record is missing (defensive), a generic-but-honest message is
+    produced.
     """
-    state_ops = getattr(adapter, "state", None)
-    if state_ops is None or not hasattr(state_ops, "read") or not hasattr(state_ops, "write"):
-        return None
-    try:
-        persisted = state_ops.read()
-    except Exception:
-        return None
-    if getattr(persisted, "status", None) != "done":
-        return None
-    stalled = _stalled_gate_ids(persisted)
-    if not stalled:
-        return None
-
-    counter_path = Path(run_dir) / "stalled_gate_resumes.json"
-    try:
-        raw = json.loads(counter_path.read_text())
-        prev = raw if isinstance(raw, dict) else {}
-    except (FileNotFoundError, OSError, ValueError):
-        prev = {}
-
-    # Keep only currently-stalled gates and increment their resume count.
-    counts = {gid: int(prev.get(gid, 0)) + 1 for gid in stalled}
-    exhausted = sorted(gid for gid, c in counts.items() if c > _MAX_STALLED_GATE_RESUMES)
-
-    try:
-        tmp = counter_path.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(counts))
-        os.replace(tmp, counter_path)
-    except OSError:
-        log.warning(
-            "delivery_driver: could not persist stalled-gate-resume counter for %s",
-            goal_id,
-        )
-
-    if exhausted:
-        # Compose an actionable reason (gate id + decision + first error) and note
-        # the exhausted retry budget so the operator fixes the root cause.
-        reason = _stalled_gate_reason(persisted, exhausted)
+    stall = getattr(final_state, "stall", None)
+    if not isinstance(stall, dict) or not stall:
         return (
-            reason
-            + f" (auto-retried {_MAX_STALLED_GATE_RESUMES + 1}× without progress — "
-            "halting to avoid a resume loop; fix the artifact/check before re-running)."
+            "Delivery workflow stalled — the run drained without completing "
+            "all nodes (no stall detail available). Inspect the run state and "
+            "re-run, or adjust the workflow edges."
         )
-
-    # Reset the stalled gate node(s) so the runner re-dispatches them.
-    patch: dict[str, Any] = {
-        "status": "running",
-        "nodes": {
-            gid: {"status": "pending", "gate": None, "attempt": 0} for gid in stalled
-        },
-    }
-    try:
-        state_ops.write(patch)
-    except Exception:
-        log.exception(
-            "delivery_driver: failed to reset stalled gate(s) for %s", goal_id
+    kind = str(stall.get("kind") or "")
+    nodes = ", ".join(str(n) for n in (stall.get("nodes") or [])) or "?"
+    reason = str(stall.get("reason") or "")
+    # Honest interim guidance: until R7 (resume as package API) lands, a
+    # re-run cannot retry an exhausted gate — resume seeding treats the
+    # persisted needs_fix gate as settled and never re-dispatches it, so a
+    # "fix the artifact and re-run" promise would loop the park forever.
+    if kind == "gate_exhausted":
+        msg = f"Delivery workflow stalled: gate {nodes} exhausted its fix-loop"
+        tail = (
+            " Re-running cannot yet retry an exhausted gate (resume support "
+            "lands with R7) — adjust the gate routing or its loop max in the "
+            "workflow spec, or start a fresh run after fixing the named "
+            "check/artifact."
         )
-        return None
-    log.info(
-        "delivery_driver: goal %s resuming from stalled gate(s) %s (resumes=%s)",
-        goal_id, sorted(stalled), counts,
-    )
-    return None
-
-
-def _stalled_gate_ids(final_state: Any) -> list[str]:
-    """Return gate node ids that ended on a non-'proceed' decision (dead-end).
-
-    A gate whose only outgoing edge requires ``decision == 'proceed'`` routes
-    nowhere when the decision is ``needs_fix``/``fail``; the runner then empties
-    its work-list and reports ``status='done'``.  These ids let the driver park
-    the goal WAITING with a diagnostic rather than marking it DONE.  Gates that
-    proceeded (including loop-backs that eventually resolved to ``proceed``) are
-    not flagged, so a genuinely-complete run reports no stall.
-    """
-    stalled: list[str] = []
-    for nid, ns in getattr(final_state, "nodes", {}).items():
-        gate = getattr(ns, "gate", None)
-        if isinstance(gate, dict):
-            decision = gate.get("decision")
-            if decision is not None and decision != "proceed":
-                stalled.append(nid)
-    return stalled
-
-
-def _stalled_gate_reason(final_state: Any, stalled: list[str]) -> str:
-    """Compose an actionable WAITING reason naming each stalled gate's decision and
-    the first failing check/artifact, so a human can act in one step (P4).
-
-    Falls back to just the gate id + decision when the gate carried no error detail.
-    """
-    nodes = getattr(final_state, "nodes", {}) or {}
-    segments: list[str] = []
-    for nid in stalled:
-        ns = nodes.get(nid)
-        gate = getattr(ns, "gate", None) if ns is not None else None
-        decision = ""
-        first_error = ""
-        if isinstance(gate, dict):
-            decision = str(gate.get("decision") or "")
-            errors = gate.get("errors") or []
-            if errors:
-                first_error = str(errors[0])
-        seg = f"{nid} ({decision or 'non-proceed'}"
-        if first_error:
-            seg += f": {first_error}"
-        seg += ")"
-        segments.append(seg)
-    return (
-        "Delivery workflow stalled at gate(s) "
-        + "; ".join(segments)
-        + ". Fix the named check/artifact and re-run, or adjust the gate routing."
-    )
+    else:
+        msg = (
+            f"Delivery workflow stalled: node(s) {nodes} were never reached"
+        )
+        tail = (
+            " Fix the upstream routing fields/conditions and re-run, or "
+            "adjust the workflow edges. (If this follows an exhausted gate "
+            "fix-loop, re-running cannot yet retry the gate — resume support "
+            "lands with R7.)"
+        )
+    if reason:
+        msg += f" — {reason}."
+    else:
+        msg += "."
+    return msg + tail
 
 
 async def _finalize_goal_done(store: "TaskStore", goal_id: str) -> None:

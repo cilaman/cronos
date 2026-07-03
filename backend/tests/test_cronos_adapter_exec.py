@@ -5,7 +5,8 @@ captured output as the node's own artifact, and maps the exit code to node statu
 - exit 0 → done
 - non-zero → failed, unless fail_on_nonzero=False (then done; g-tests routes)
 - a written artifact path is always returned on success
-- the node's state row is persisted with status + artifact + exit_code
+- R9 (kills D11): runExec returns the ExecResult ONLY — the runner is the
+  single writer of the exec node's state row (status + artifact + exit_code)
 """
 from __future__ import annotations
 
@@ -74,15 +75,22 @@ def test_exec_nonzero_exit_is_done_when_fail_on_nonzero_false(tmp_path):
     assert result.exit_code == 1
 
 
-def test_exec_persists_node_state(tmp_path):
+def test_exec_does_not_write_node_state(tmp_path):
+    """R9 (kills D11): runExec returns the ExecResult ONLY.  The runner
+    persists the exec node's status/artifact_paths/exit_code exactly once
+    from that result (runner/dispatch.py) — the adapter's historical
+    out-of-band write here was a second writer of the same node fields."""
     adapter = _adapter(tmp_path)
     result = adapter.runExec("testrun", "echo ok", {})
-    # exit_code is carried on the ExecResult (StateStore does not round-trip fields).
+    # Everything the runner needs is carried on the ExecResult.
     assert result.exit_code == 0
+    assert result.status == "done"
+    assert result.artifact_path and result.artifact_path.endswith("testrun-output.md")
     state = StateStore(adapter._run_dir).read()
-    ns = state.nodes["testrun"]
-    assert ns.status == "done"
-    assert ns.artifact_paths and ns.artifact_paths[0].endswith("testrun-output.md")
+    assert "testrun" not in state.nodes, (
+        f"runExec wrote node state out-of-band: {state.nodes!r} — the runner "
+        "is the single writer of node fields (R9)"
+    )
 
 
 def test_exec_runs_in_space_dir(tmp_path):

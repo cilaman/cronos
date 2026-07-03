@@ -25,6 +25,13 @@ is GREEN and live-evaluates the shipped spec's typed-boolean edges
 (signoff-scope→frontend/architect on ``analyze.fields.has_ui``) across the
 park→resume cycle — it is the composition-level typed-condition guard (an R3
 revert fails it, in addition to tests/regression/test_typed_conditions_r3.py).
+
+Since R6 (completeness invariant + ``stalled``), ``test_conformance_starved_tail``
+is GREEN: a drained work-list only reports ``done`` when every node is executed
+or excluded-with-proof, else ``stalled`` with the run-level ``state.stall``
+detail.  ``test_conformance_verdict_routed_gate`` guards the D12 inverse: a
+run that verdict-routed past a ``needs_fix`` gate decision IS complete.
+Remaining xfail: ``test_conformance_escalated_resume`` (R7).
 """
 from __future__ import annotations
 
@@ -42,6 +49,7 @@ from tests.conformance.harness import (
     AGENT_NODES,
     ScriptedExecutor,
     agent_done,
+    gate_decision,
     assert_state_roundtrip,
     drive_with_host_resumes,
     host_resume_from_blocked,
@@ -171,23 +179,19 @@ def test_conformance_signoff_branch(tmp_path: Path, graph) -> None:
 # ===========================================================================
 # (c) STARVED TAIL (D5) — a mid-pipeline routing field is missing post-resume:
 #     `analyze` emits no `has_ui` at all, so BOTH signoff-scope branch
-#     conditions are False after the resume.  The run must NOT report `done`
-#     with the tail unexecuted; the expected terminal is the future `stalled`
-#     (01-state-model.md §5.2) carrying the starved nodes.
+#     conditions are False after the resume: signoff-scope completed but
+#     routed NOWHERE — a dead-end, not a legitimate exclusion.
 #
-# Today the run reports success anyway: the D1 blanket seeding fires both
-# branches regardless, and even once R5 stops that, the runner has no
-# completeness invariant — a drained work-list is unconditionally `done`
-# (runner/core.py work-list exit), silently swallowing the unexecuted tail.
+# GREEN since R6: the completeness invariant at work-list drain proves every
+# node either executed or excluded-with-proof; a false edge from a dead-end
+# source proves nothing, so the run terminates `stalled` carrying the
+# actionable frontier at run level (state.stall) instead of a silent partial
+# `done`.  Contrast test_conformance_signoff_branch above: there the
+# architect edge FIRED, so signoff-scope routed and the false frontend edge
+# IS proven exclusion — that run must keep completing `done`.
 # ===========================================================================
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="R6 completeness invariant + stalled outcome (D5; needs R5 first): "
-    "work-list drain reports done even when the pipeline tail was starved by "
-    "unmet edge conditions — 'stalled' does not exist yet",
-)
 def test_conformance_starved_tail(tmp_path: Path, graph) -> None:
     executor, state_ops = _make_run(tmp_path, graph, {
         "analyze": agent_done(),  # contract violation: has_ui missing entirely
@@ -197,19 +201,68 @@ def test_conformance_starved_tail(tmp_path: Path, graph) -> None:
 
     outcome = drive_with_host_resumes(graph, executor, state_ops)
 
-    # (a) exact executed-node set: the pre-park prefix only.  frontend is
-    # legitimately excluded (its one in-edge evaluated false), but architect
-    # has an in-edge that was never evaluated (frontend→architect), so the
-    # tail from architect onward is starved, not excluded.
+    # (a) exact executed-node set: the pre-park prefix only — the tail past
+    # signoff-scope must not execute when has_ui is missing.
     assert executor.executed_nodes() == {
         "scout", "g-scout", "analyze", "g-analysis", "signoff-scope",
     }, "the tail past signoff-scope must not execute when has_ui is missing"
 
-    # (b) terminal status: the future R6 outcome — not a false `done`.
+    # (b) terminal status: 'stalled', not a false `done` (D5).
     assert outcome.final.status == "stalled", (
         f"run reported {outcome.final.status!r} with the pipeline tail "
         "unexecuted — silent partial success (D5)"
     )
+
+    # (b') run-level stall detail — the host renders its WAITING message from
+    # this record alone, no node archaeology.  The minimal actionable frontier
+    # is `frontend` (first unreached node adjacent to the executed region);
+    # the transitively-starved tail behind it is implied.  The dead-end is the
+    # sign-off that routed nowhere.
+    stall = outcome.final.stall
+    assert stall is not None, "stalled run must carry run-level stall detail"
+    assert stall["kind"] == "starved_nodes"
+    assert stall["nodes"] == ["frontend"]
+    assert stall.get("dead_ends") == ["signoff-scope"]
+    assert "signoff-scope" in stall["reason"]
+
+    # (c) round-trip law.
+    assert_state_roundtrip(state_ops, outcome.final)
+
+
+# ===========================================================================
+# (c') VERDICT-ROUTED GATE (D12) — g-review's own decision is `needs_fix`, but
+#      its outgoing edges route on `review.fields.verdict`, not on the gate
+#      decision.  With verdict='pass' the security edge FIRES: the gate routed
+#      somewhere, so the run IS complete — terminal `done`, never `stalled`.
+#
+# GREEN since R6.  This is the false positive the driver's deleted
+# `_stalled_gate_ids` heuristic produced (any final non-proceed gate decision
+# parked the goal WAITING at completion); under the completeness invariant a
+# routed gate's non-proceed decision is just detail in `gate`, not a stall.
+# ===========================================================================
+
+
+def test_conformance_verdict_routed_gate(tmp_path: Path, graph) -> None:
+    executor, state_ops = _make_run(tmp_path, graph, {
+        "analyze": agent_done(has_ui=True),
+        "review": agent_done(verdict="pass", finding_class="none"),
+        "security": agent_done(verdict="pass", finding_class="none"),
+        # The gate itself reports needs_fix (e.g. a strict schema check), but
+        # g-review has no loop and routes on the review verdict.
+        "g-review": gate_decision("needs_fix", ["review.md missing header"]),
+    })
+
+    outcome = drive_with_host_resumes(graph, executor, state_ops)
+
+    # (a) the verdict edge carried the flow past the gate: full pipeline.
+    assert executor.executed_nodes() == set(ALL_NODES)
+    assert dict(executor.calls) == {nid: 1 for nid in ALL_NODES - HUMAN_NODES}
+
+    # (b) terminal: done — the non-proceed decision on a ROUTED gate is not a
+    # stall (D12), and no stall detail is carried.
+    assert outcome.final.status == "done"
+    assert outcome.final.stall is None
+    assert outcome.final.nodes["g-review"].gate["decision"] == "needs_fix"
 
     # (c) round-trip law.
     assert_state_roundtrip(state_ops, outcome.final)
@@ -284,6 +337,14 @@ def test_conformance_escalated_resume(tmp_path: Path, graph) -> None:
 # GREEN since R8: dispatch is the sole attempt owner (the loop-back second
 # increment — D8, which made max=5 yield only 3 executions with the counter
 # overshooting to 5 — is deleted from runner/loop.py).
+#
+# Exhaust-terminal note (R6 investigation): this exhaustion is NOT
+# gate-flavored — it is the `review` agent node's own LoopPolicy with
+# on_exhaust=escalate (runner/loop.py: executor.escalate → the adapter parks
+# the run 'blocked'/'escalated' before any drain).  The R6
+# stalled(gate_exhausted) terminal applies only to GATE fix-loops
+# (runner/core.py gate block); pinning this scenario's terminal is therefore
+# R7's problem (escalated resume semantics) and deliberately not asserted here.
 # ===========================================================================
 
 
@@ -360,6 +421,58 @@ def test_conformance_fix_loop_pass(tmp_path: Path, graph) -> None:
 
     # (b) terminal status.
     assert outcome.final.status == "done"
+
+    # (c) round-trip law.
+    assert_state_roundtrip(state_ops, outcome.final)
+
+
+# ===========================================================================
+# (e'') GATE FIX ITERATION + DOWNSTREAM SIGN-OFF PARK — g-analysis returns
+#       needs_fix once (one fix iteration through the g-analysis→analyze back
+#       edge), then proceeds; the run parks at signoff-scope; the host
+#       approves; the run MUST complete `done`.
+#
+# Regression guard for the stale-exclusion resume trap: during the needs_fix
+# pass the false proceed edge transitively records signoff-scope's out-edges
+# excluded at generation 0.  The fix-loop back-edge reset must PURGE those
+# records (runner/core.py _purge_reset_edge_records) — otherwise the resume
+# seeding after the sign-off approval trusts the stale gen-0 exclusion
+# (`(edge_idx, gen) in excluded_edges → continue`), the entire post-sign-off
+# tail starves, and every subsequent user answer re-derives the identical
+# stall with a misleading dead_ends=['signoff-scope'] attribution — an
+# unrecoverable WAITING loop.  Any needs_fix iteration on any loop-bearing
+# gate upstream of a mandatory sign-off triggers it.
+# ===========================================================================
+
+
+def test_conformance_gate_fix_iteration_then_signoff_park(tmp_path: Path, graph) -> None:
+    executor, state_ops = _make_run(tmp_path, graph, {
+        "analyze": agent_done(has_ui=True),
+        "review": agent_done(verdict="pass", finding_class="none"),
+        "security": agent_done(verdict="pass", finding_class="none"),
+        # One fix iteration: analysis artifact fails once, passes on re-check.
+        "g-analysis": [
+            gate_decision("needs_fix", ["analysis.md failed schema check"]),
+            gate_decision("proceed"),
+        ],
+    })
+
+    outcome = drive_with_host_resumes(graph, executor, state_ops)
+
+    # (a) exact executed-node set and counts: full pipeline; the fix loop ran
+    # analyze and g-analysis twice each.
+    assert executor.executed_nodes() == set(ALL_NODES)
+    expected_counts = {nid: 1 for nid in ALL_NODES - HUMAN_NODES}
+    expected_counts["analyze"] = 2
+    expected_counts["g-analysis"] = 2
+    assert dict(executor.calls) == expected_counts
+    assert outcome.resumes == [
+        ["signoff-scope"], ["signoff-design"], ["release"],
+    ], "each approve must progress the run — never re-derive the same stall"
+
+    # (b) terminal status: done, no stall detail.
+    assert outcome.final.status == "done"
+    assert outcome.final.stall is None
 
     # (c) round-trip law.
     assert_state_roundtrip(state_ops, outcome.final)

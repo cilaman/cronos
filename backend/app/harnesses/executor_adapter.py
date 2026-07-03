@@ -23,8 +23,9 @@ escalate() discriminator
 by the runner:
 
 1. **Human-wait park** — reason starts with ``"[wait/human]"`` or ``"[human]"``.
-   The adapter sets ``waiting_node_id`` on the in-memory WorkflowState AND
-   updates the RunState so the BFS executor's resume path picks it up.
+   The adapter marks the WorkflowState RUN status ``"blocked"`` (run level
+   only — the node status is written by the runner from the returned
+   NodeOutcome; R9 single-writer, §5.8) so runner.core.run() halts.
 
 2. **Loop exhaust / global cap** — any other reason.
    The adapter marks the WorkflowState status as ``"escalated"`` (which causes
@@ -102,6 +103,8 @@ class _StateOps:
       - ``"status"`` → ``state.status``
       - ``"edges_evaluated"`` → full replacement of ``state.edges_evaluated``
         (R5 edge-evaluation record; the runner always writes the full snapshot)
+      - ``"stall"`` → full replacement of ``state.stall`` (R6 run-level stall
+        detail; ``None`` clears it)
       - ``"nodes"`` → merges each node sub-dict into ``state.nodes``
     """
 
@@ -116,6 +119,8 @@ class _StateOps:
             self._state.status = patch["status"]  # type: ignore[assignment]
         if "edges_evaluated" in patch:
             self._state.edges_evaluated = dict(patch["edges_evaluated"] or {})
+        if "stall" in patch:
+            self._state.stall = patch["stall"]
         if "nodes" in patch:
             for node_id, node_dict in patch["nodes"].items():
                 existing = self._state.nodes.get(node_id)
@@ -432,9 +437,14 @@ class HarnessExecutorAdapter:
 
         Human-wait park (reason starts with '[wait/human]', '[human]', or 'wait:')
         --------------------------------------------------------------------------
-        Sets ``state.nodes[node_id].status = 'blocked'`` (human-wait) and
-        marks the WorkflowState status as ``'blocked'`` so the runner halts.
-        The caller (run_executor.py) is responsible for setting
+        Marks the WorkflowState RUN status as ``'blocked'`` so the runner
+        halts (the cancel-race guard needs the run-level write).  The NODE
+        status is deliberately NOT written here (R9 single-writer, target
+        §5.8): the runner is the only writer of node ``status`` — the
+        dispatch handler that called escalate returns
+        ``NodeOutcome(status='blocked')`` and the runner persists it.  This
+        mirrors the package ``CronosAdapter.escalate``, which writes run
+        level only.  The caller (run_executor.py) is responsible for setting
         ``RunState.waiting_node_id`` by converting back via
         ``workflowstate_to_runstate``.
 
@@ -446,18 +456,12 @@ class HarnessExecutorAdapter:
             "HarnessExecutorAdapter.escalate: node=%r reason=%r", node_id, reason
         )
 
-        ws = self.state.read()
-
         if _is_human_wait(reason):
-            # Human-wait park: set node to blocked + run to blocked.
-            if node_id not in ws.nodes:
-                ws.nodes[node_id] = WfNodeState(status="blocked")
-            else:
-                ws.nodes[node_id].status = "blocked"
-            # Persist via state_ops.write so runner.core sees the blocked status.
-            self.state.write({"status": "blocked", "nodes": {node_id: {"status": "blocked"}}})
+            # Human-wait park: run-level status only (node status is the
+            # runner's, written from the returned NodeOutcome).
+            self.state.write({"status": "blocked"})
             log.info(
-                "escalate: human-wait park — node=%r blocked; run status=blocked.", node_id
+                "escalate: human-wait park — node=%r; run status=blocked.", node_id
             )
         else:
             # Loop exhaust or global cap: escalate the run.

@@ -35,10 +35,14 @@ log = logging.getLogger(__name__)
 class NodeOutcome:
     """Result of dispatching a single node.
 
-    The runner writes this into WorkflowState.nodes[node_id] after each dispatch.
+    The runner writes this into WorkflowState.nodes[node_id] after each
+    dispatch — and it is the ONLY writer of node status/attempt/
+    artifact_paths/gate/fields (R9, 01-state-model.md §5.8).  Executors
+    (CronosAdapter, test doubles) return result objects and never touch
+    StateOps for node fields themselves.
     """
 
-    status: str  # "done" | "blocked" | "failed" | "escalated"
+    status: str  # "done" | "needs_fix" | "blocked" | "failed" | "escalated"
     attempt: int = 0
     artifact_paths: list[str] = field(default_factory=list)
     gate: dict[str, Any] | None = None
@@ -204,8 +208,16 @@ def _dispatch_gate(
         "evidence": result.evidence,
     }
 
+    # R9 (kills D11): a gate's non-proceed decision is written ONCE, by the
+    # runner, as the REAL node status `needs_fix` — with the decision detail
+    # in `gate`.  The historical shape (adapter wrote needs_fix out-of-band,
+    # runner unconditionally overwrote with `done`) put a phantom
+    # needs_fix→done transition in the event log and made `needs_fix`
+    # unreachable in final state.  A `needs_fix` gate still ROUTES: the runner
+    # treats it as a terminal, routable outcome (fix edges fire from it), not
+    # a halt.
     return NodeOutcome(
-        status="done",
+        status="done" if result.decision == "proceed" else "needs_fix",
         attempt=attempt,
         gate=gate_dict,
         fields={"decision": result.decision},

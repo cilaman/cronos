@@ -28,6 +28,28 @@ and at resume seeding, so a run that routes past a false branch without a park
 behaves identically to one that parks.  Back-edges are NOT part of exclusion
 accounting (they are excluded from the join in-degree already).
 
+Completeness invariant (R6, kills D5+D12; OD-3): the runner emits ``done`` at
+work-list drain ONLY when every node is either executed to a terminal
+node-status or excluded with proof; otherwise the run terminates ``stalled``
+with a machine-readable run-level ``state.stall`` record ({kind, nodes,
+reason[, dead_ends]}) so hosts never dig through nodes.  A false edge proves
+its target's exclusion only if the source actually routed somewhere (see
+``_completeness_stall``).  Exhausted gate fix-loops likewise terminate
+``stalled`` with ``kind="gate_exhausted"`` instead of the pre-R6 engineered
+dead-end-to-done.
+
+Single writer per node field (R9, kills D11; target §5.8): the runner is the
+ONLY writer of node ``status/attempt/artifact_paths/gate/fields`` through
+StateOps — executors return GateResult/ExecResult/AgentResult and never write
+node state out-of-band.  A gate's non-proceed decision is persisted ONCE as
+the real node status ``needs_fix`` (decision detail in ``gate``); ``needs_fix``
+is terminal-and-routable: it does not halt the run, contributes to the routing
+scope (so fix edges ``g-x.decision != 'proceed'`` fire from it), counts as
+"executed to a terminal node-status" for the completeness invariant, and a
+gate that re-runs after its fix edge fired follows the ordinary back-edge
+reset path (needs_fix → pending → done — real transitions only in the event
+log, no phantom needs_fix→done overwrite).
+
 Both edge sets are persisted as the ``edges_evaluated`` record (target §5.2)
 through ``state_ops.write({"edges_evaluated": …})`` so resume edge replay is
 idempotent across multiple resumes.  The record carries a ``graph_fingerprint``
@@ -60,6 +82,13 @@ log = logging.getLogger(__name__)
 
 # Sentinel used as a module-level constant to avoid inline magic strings.
 _DELIVERY_NODE_SENTINEL = "<!-- delivery-node: {node_id} -->"
+
+#: Terminal, ROUTABLE node statuses (R9): the node executed and its out-edges
+#: were (or will be) evaluated for real.  ``done`` is the ordinary terminal;
+#: ``needs_fix`` is a gate's non-proceed terminal — still routable (fix edges
+#: fire from it) and still "executed" for the completeness proof (§5.2:
+#: "executed to a terminal node-status").
+_ROUTED_TERMINAL = ("done", "needs_fix")
 
 
 def run(
@@ -162,19 +191,24 @@ def run(
     # Track which nodes we've dispatched (to avoid double-dispatch on resume).
     dispatched: set[str] = set()
 
-    # Resume: mark already-done nodes as dispatched, then replay their forward
-    # out-edges CONDITION-AWARE (R5, kills D1).  For every forward out-edge of
-    # a persisted-`done` node not already covered by the persisted
-    # `edges_evaluated` record (in the target's current generation), evaluate
-    # its `when` condition against the rebuilt typed scope: true → fired,
-    # false → excluded (with transitive exclusion propagation).  Replay is
-    # idempotent: recorded edges are skipped, and re-evaluation from the
-    # persisted scope reproduces the same result when the record was lost.
-    done_node_ids = [nid for nid, ns in state.nodes.items() if ns.status == "done"]
-    dispatched.update(done_node_ids)
-    if done_node_ids:
+    # Resume: mark already-terminal nodes as dispatched, then replay their
+    # forward out-edges CONDITION-AWARE (R5, kills D1).  "Terminal" is `done`
+    # OR `needs_fix` (R9 — a gate's persisted non-proceed terminal: it ran,
+    # its out-edges were evaluated for real, and re-dispatching it on resume
+    # would be R7 resume semantics, not seeding).  For every forward out-edge
+    # of such a node not already covered by the persisted `edges_evaluated`
+    # record (in the target's current generation), evaluate its `when`
+    # condition against the rebuilt typed scope: true → fired, false →
+    # excluded (with transitive exclusion propagation).  Replay is idempotent:
+    # recorded edges are skipped, and re-evaluation from the persisted scope
+    # reproduces the same result when the record was lost.
+    settled_node_ids = [
+        nid for nid, ns in state.nodes.items() if ns.status in _ROUTED_TERMINAL
+    ]
+    dispatched.update(settled_node_ids)
+    if settled_node_ids:
         resume_scope = build_scope(state, scope_base=dict(graph.variables))
-        for node_id in done_node_ids:
+        for node_id in settled_node_ids:
             for edge_idx, edge in outgoing.get(node_id, []):
                 if edge_idx not in forward_in_edges.get(edge.target, ()):
                     continue  # back-edge — loops re-enter via live fires only
@@ -189,7 +223,7 @@ def run(
                     condition_met = executor.evalCondition(edge.when, resume_scope)
                 if condition_met:
                     target_ns = state.nodes.get(edge.target)
-                    if target_ns is not None and target_ns.status == "done":
+                    if target_ns is not None and target_ns.status in _ROUTED_TERMINAL:
                         # Target already ran — the fire proves nothing, and
                         # re-recording it at the target's post-run generation
                         # would make the persisted record path-dependent
@@ -258,7 +292,12 @@ def run(
         # Pop next node from work-list (FIFO for determinism).
         node_id = work_list.pop(0)
 
-        if node_id in dispatched and state.nodes.get(node_id, NodeState(status="")).status == "done":
+        current_ns = state.nodes.get(node_id)
+        if (
+            node_id in dispatched
+            and current_ns is not None
+            and current_ns.status in _ROUTED_TERMINAL
+        ):
             # Already completed (can happen after a back-edge re-seed with stale entry).
             continue
 
@@ -327,7 +366,10 @@ def run(
             }}})
 
         # ----------------------------------------------------------------
-        # Handle non-done outcomes.
+        # Handle halting outcomes.  `needs_fix` (a gate's non-proceed
+        # terminal, R9) deliberately does NOT halt: it falls through to the
+        # gate fix-loop bound and _enqueue_successors below, where the fix
+        # edge routes exactly as it always did off the gate decision.
         # ----------------------------------------------------------------
         if outcome.status == "blocked":
             log.info("Runner: node %r blocked — halting run.", node_id)
@@ -350,7 +392,8 @@ def run(
                 state_ops.write({"status": "escalated"})
             return state
 
-        # Node is done — mark dispatched.
+        # Node reached a terminal, routable status (done / needs_fix) — mark
+        # dispatched.
         dispatched.add(node_id)
 
         # ----------------------------------------------------------------
@@ -370,18 +413,40 @@ def run(
                 # gate's attempt counter.
                 decision = (ns.gate or {}).get("decision")
                 if decision != "proceed" and ns.attempt >= node.loop.max:
-                    # Fix-loop exhausted.  Dead-end (skip _enqueue_successors) so
-                    # the run drains to status="done" with the gate's non-proceed
-                    # decision persisted, and the driver parks the goal WAITING
-                    # with the actionable _stalled_gate_reason.  We deliberately
-                    # do NOT executor.escalate() — that parks a generic message
-                    # and blocks the actionable one.
+                    # Fix-loop exhausted (R6/OD-3).  Terminate the run as
+                    # 'stalled' with machine-readable, RUN-LEVEL gate detail —
+                    # reversing the pre-R6 engineered dead-end that drained to
+                    # status="done" for the driver's _stalled_gate_reason
+                    # heuristic to unpick from node internals.  Hosts render
+                    # their park message from state.stall alone.  We still
+                    # deliberately do NOT executor.escalate() — that would park
+                    # a generic message over the actionable one.
+                    #
+                    # NOTE the boundary: this is GATE fix-loop exhaustion only.
+                    # LoopPolicy until-loop exhaustion on agent nodes keeps its
+                    # on_exhaust semantics (escalate/stop — see runner/loop.py);
+                    # making 'escalated' resumable is R7's problem.
+                    errors = (ns.gate or {}).get("errors") or []
+                    first_error = f": {errors[0]}" if errors else ""
+                    stall: dict[str, Any] = {
+                        "kind": "gate_exhausted",
+                        "nodes": [node_id],
+                        "reason": (
+                            f"gate '{node_id}' fix-loop exhausted after "
+                            f"{ns.attempt} evaluation(s) (max={node.loop.max}, "
+                            f"decision={decision}{first_error})"
+                        ),
+                    }
                     log.info(
                         "Runner: gate %r fix-loop exhausted (attempt %d >= max %d, "
-                        "decision=%s) — dead-ending for WAITING park.",
+                        "decision=%s) — run stalled (gate_exhausted).",
                         node_id, ns.attempt, node.loop.max, decision,
                     )
-                    continue
+                    state.status = "stalled"
+                    state.stall = stall
+                    if state_ops is not None:
+                        state_ops.write({"status": "stalled", "stall": stall})
+                    return state
                 # else: fall through to _enqueue_successors (routes fix edge on
                 # non-proceed, forward edge on proceed).
             else:
@@ -394,11 +459,24 @@ def run(
                     # output are reset (in state AND storage) so their stale
                     # fields/gates cannot leak into scope or survive a park.
                     dispatched.discard(node_id)
+                    downstream = _forward_downstream(forward_adjacency, node_id)
                     reset_downstream_nodes(
                         node_id,
                         state,
-                        _forward_downstream(forward_adjacency, node_id),
+                        downstream,
                         state_ops=state_ops,
+                    )
+                    # Edge records produced by the re-arming subtree are stale
+                    # (the nodes re-run and re-evaluate); purge AND persist so
+                    # a park before the subtree settles cannot resurrect them
+                    # through resume seeding.
+                    _purge_reset_edge_records(
+                        {node_id, *downstream},
+                        outgoing, forward_in_edges, fired_edges, excluded_edges,
+                    )
+                    _persist_edge_record(
+                        state, state_ops, fired_edges, excluded_edges,
+                        graph_fingerprint,
                     )
                     work_list.insert(0, node_id)
                     continue
@@ -428,12 +506,196 @@ def run(
         )
 
     # -----------------------------------------------------------------------
-    # Work-list exhausted — workflow done.
+    # Work-list exhausted — prove completeness (R6, kills D5) before reporting
+    # success: every node either executed to a terminal node-status or is
+    # EXCLUDED WITH PROOF.  An evaluated-false edge proves exclusion of its
+    # target only if its source actually ROUTED somewhere; a done node all of
+    # whose outgoing forward edges evaluated false is a DEAD-END — its
+    # unreached descendants are starved, not excluded, and the run is
+    # 'stalled' with the actionable frontier at RUN level (state.stall).
     # -----------------------------------------------------------------------
+    stall_record = _completeness_stall(
+        graph, state, fired_edges, excluded_edges, forward_in_edges, outgoing
+    )
+    if stall_record is not None:
+        log.warning(
+            "Runner: work-list drained without completeness proof — %s.",
+            stall_record["reason"],
+        )
+        state.status = "stalled"
+        state.stall = stall_record
+        if state_ops is not None:
+            state_ops.write({"status": "stalled", "stall": stall_record})
+        return state
+
     state.status = "done"
+    state.stall = None
     if state_ops is not None:
-        state_ops.write({"status": "done"})
+        # Clear any stall detail from an earlier stalled park of this run —
+        # 'stall' is only meaningful while status == "stalled".
+        state_ops.write({"status": "done", "stall": None})
     return state
+
+
+def _completeness_stall(
+    graph: IRGraph,
+    state: WorkflowState,
+    fired_edges: dict[str, set[tuple[int, int]]],
+    excluded_edges: dict[str, set[tuple[int, int]]],
+    forward_in_edges: dict[str, set[int]],
+    outgoing: dict[str, list[tuple[int, IREdge]]],
+) -> dict[str, Any] | None:
+    """Prove the completeness invariant at work-list drain (R6, target §5.2).
+
+    Returns ``None`` when every node is either executed (a terminal node
+    status — ``done``, or a gate's ``needs_fix``) or *validly* excluded;
+    otherwise the run-level stall record
+    ``{"kind": "starved_nodes", "nodes": [...], "reason": ..., "dead_ends":
+    [...]}``.
+
+    Validity of exclusion (the resolution of the docs' subtle contradiction,
+    consistent with all R6 acceptance cases): an evaluated-false forward edge
+    proves exclusion of its target ONLY if its source ROUTED somewhere — at
+    least one of the source's outgoing forward edges fired (or carries no
+    record because it evaluated true into an already-``done`` target, the
+    resume-replay shape that deliberately skips re-recording).  A ``done``
+    source with outgoing forward edges none of which routed is a dead-end:
+    exclusions it emitted are no proof, and its unreached descendants are
+    starved.  Transitive exclusion from a *validly* excluded node stays proof
+    (R5 propagation); nodes unreached because an ancestor starved are starved
+    too.
+
+    ``nodes`` lists the MINIMAL ACTIONABLE FRONTIER (01 §5.6 — "actionable
+    list, no gate archaeology"): the starved nodes none of whose in-edge
+    sources are themselves starved — the first unreached layer, adjacent to
+    the executed/excluded region.  The transitively-starved tail behind the
+    frontier is implied and deliberately not listed.
+
+    "Executed" means any terminal node-status in ``_ROUTED_TERMINAL`` (§5.2):
+    ``done`` or a gate's ``needs_fix`` (R9).  A ``needs_fix`` gate whose out-
+    edges all evaluated false is therefore a DEAD-END exactly like a routed-
+    nowhere ``done`` node — reported in ``dead_ends`` with its decision.
+    """
+    executed = {
+        nid for nid, ns in state.nodes.items() if ns.status in _ROUTED_TERMINAL
+    }
+
+    routed_cache: dict[str, bool] = {}
+
+    def _routed(src: str) -> bool:
+        """True when *src* routed somewhere: ≥1 outgoing forward edge fired.
+
+        A node with no outgoing forward edges is terminal — trivially routed.
+        An edge with NO record OF EITHER KIND, AT ANY GENERATION, whose target
+        is ``done`` counts as fired: the resume replay evaluates it true but
+        skips re-recording into an already-done target (see the seeding block
+        above).  The exclusion lookup is deliberately generation-agnostic,
+        mirroring the fired check — an edge excluded at the target's
+        pre-execution generation (the target later ran via a sibling in-edge,
+        bumping its attempt) must NOT be misread as an unrecorded true-fire:
+        that would count a routed-nowhere source as routed and let the run
+        terminate a false ``done`` with a silently starved node (the D5
+        class this proof exists to kill).  The genuine resume-replay case
+        leaves no record at any generation, so it still passes.
+        """
+        cached = routed_cache.get(src)
+        if cached is not None:
+            return cached
+        fwd = [
+            (idx, e)
+            for idx, e in outgoing.get(src, [])
+            if idx in forward_in_edges.get(e.target, ())
+        ]
+        result = not fwd  # terminal node — nothing to route, not a dead-end
+        for idx, edge in fwd:
+            if any(i == idx for (i, _g) in fired_edges.get(edge.target, ())):
+                result = True
+                break
+            if not any(
+                i == idx for (i, _g) in excluded_edges.get(edge.target, ())
+            ) and edge.target in executed:
+                result = True  # unrecorded true-fire into an already-done target
+                break
+        routed_cache[src] = result
+        return result
+
+    valid_excl: dict[str, bool] = {}
+
+    def _validly_excluded(nid: str) -> bool:
+        cached = valid_excl.get(nid)
+        if cached is not None:
+            return cached
+        valid_excl[nid] = False  # defensive cycle guard (forward edges are a DAG)
+        need = forward_in_edges.get(nid, set())
+        if not need:
+            return False  # entry node — never excluded
+        gen = _generation(state, nid)
+        if any(g == gen for (_i, g) in fired_edges.get(nid, ())):
+            return False  # a fired in-edge means it should have run, not been excluded
+        have_excluded = {i for (i, g) in excluded_edges.get(nid, ()) if g == gen}
+        if not need <= have_excluded:
+            return False  # some in-edge was never evaluated — no proof
+        ok = True
+        for idx in need:
+            src = graph.edges[idx].source
+            if src in executed:
+                if not _routed(src):
+                    ok = False  # dead-end source — its exclusions prove nothing
+                    break
+            elif not _validly_excluded(src):
+                ok = False  # transitive exclusion only from a proven exclusion
+                break
+        valid_excl[nid] = ok
+        return ok
+
+    starved = [
+        n.id
+        for n in graph.nodes
+        if n.id not in executed and not _validly_excluded(n.id)
+    ]
+    if not starved:
+        return None
+
+    starved_set = set(starved)
+    frontier = [
+        nid
+        for nid in starved
+        if all(
+            graph.edges[idx].source not in starved_set
+            for idx in forward_in_edges.get(nid, ())
+        )
+    ]
+    dead_ends = sorted({
+        graph.edges[idx].source
+        for nid in frontier
+        for idx in forward_in_edges.get(nid, ())
+        if graph.edges[idx].source in executed
+        and not _routed(graph.edges[idx].source)
+    })
+
+    def _dead_end_label(nid: str) -> str:
+        ns = state.nodes.get(nid)
+        decision = (ns.gate or {}).get("decision") if ns is not None else None
+        return f"{nid} (gate decision={decision})" if decision else nid
+
+    reason = (
+        "workflow drained with unexecuted node(s) not provably excluded: "
+        + ", ".join(frontier)
+    )
+    if dead_ends:
+        reason += (
+            "; dead-end node(s) "
+            + ", ".join(_dead_end_label(d) for d in dead_ends)
+            + " completed but no outgoing edge condition matched"
+        )
+    record: dict[str, Any] = {
+        "kind": "starved_nodes",
+        "nodes": frontier,
+        "reason": reason,
+    }
+    if dead_ends:
+        record["dead_ends"] = dead_ends
+    return record
 
 
 def _generation(state: WorkflowState, node_id: str) -> int:
@@ -550,6 +812,43 @@ def _apply_exclusion(
             and tgt not in work_list
         ):
             work_list.append(tgt)
+
+
+def _purge_reset_edge_records(
+    reset_sources: set[str],
+    outgoing: dict[str, list[tuple[int, IREdge]]],
+    forward_in_edges: dict[str, set[int]],
+    fired_edges: dict[str, set[tuple[int, int]]],
+    excluded_edges: dict[str, set[tuple[int, int]]],
+) -> None:
+    """Drop fired/excluded records for forward edges SOURCED from nodes being
+    re-armed by a back-edge/loop reset.
+
+    A reset node re-runs and re-evaluates its outgoing edges for real, so any
+    record it (or exclusion propagation through it) previously produced is
+    stale.  Without the purge, a transitive exclusion recorded during a gate's
+    ``needs_fix`` pass (e.g. ``signoff→architect`` excluded at generation 0
+    because the gate's proceed edge evaluated false) survives the fix-loop
+    reset; if the run then parks at the sign-off (which never live-evaluates
+    its out-edges) the resume seeding trusts the stale record
+    (``(edge_idx, gen) in excluded_edges → continue``) and the entire
+    post-sign-off tail starves — permanently, since every re-resume re-derives
+    the identical stall.  Purging at reset time restores fresh-run semantics
+    for the reset subtree.
+
+    Records for edges whose source is OUTSIDE the reset set are kept: those
+    sources will not re-fire, and dropping e.g. a join in-fire from an
+    unaffected branch would deadlock the join.  Purge is any-generation — a
+    re-running source supersedes ALL its previous evaluations.
+    """
+    for src in reset_sources:
+        for idx, edge in outgoing.get(src, []):
+            if idx not in forward_in_edges.get(edge.target, ()):
+                continue  # back-edges carry no fired/excluded records
+            for records in (fired_edges, excluded_edges):
+                entries = records.get(edge.target)
+                if entries:
+                    entries -= {e for e in entries if e[0] == idx}
 
 
 def _graph_fingerprint(graph: IRGraph) -> str:
@@ -716,11 +1015,22 @@ def _enqueue_successors(
             # target's previous run and is now stale — persistently so since
             # fields persist, R2), then re-enqueue it for another pass.
             dispatched.discard(target)
+            reset_ids = [target, *_forward_downstream(forward_adjacency, target)]
             reset_downstream_nodes(
                 target,
                 state,
-                [target, *_forward_downstream(forward_adjacency, target)],
+                reset_ids,
                 state_ops=state_ops,
+            )
+            # Edge records produced by the re-arming subtree are stale — the
+            # nodes re-run and re-evaluate their out-edges for real.  Without
+            # the purge, a transitive exclusion recorded during a gate's
+            # needs_fix pass survives the fix-loop reset and resume seeding
+            # trusts it, permanently starving the tail behind a parked
+            # sign-off (the caller persists the record right after).
+            _purge_reset_edge_records(
+                set(reset_ids),
+                outgoing, forward_in_edges, fired_edges, excluded_edges,
             )
             if target not in work_list:
                 work_list.append(target)

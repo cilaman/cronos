@@ -300,10 +300,11 @@ class TestGateFixLoop:
         assert any(nid == "sink" for nid, _ in rt.dispatch_log)
         assert rt.escalated == []
 
-    def test_bounded_and_dead_ends_without_escalate(self):
+    def test_bounded_exhaustion_stalls_with_gate_detail(self):
         """A gate that never proceeds is capped at loop.max evaluations, then the
-        run drains to 'done' with the non-proceed decision persisted (the driver
-        parks WAITING off that) — and the gate does NOT escalate."""
+        run terminates 'stalled' with kind=gate_exhausted at RUN level (R6/OD-3
+        — reversing the pre-R6 engineered dead-end-to-'done' the driver had to
+        unpick from node internals) — and the gate does NOT escalate."""
         graph = _make_gate_fix_loop_graph(max_iter=3)
         rt = _SequencedRuntime(
             agent_sequence=[],
@@ -311,16 +312,22 @@ class TestGateFixLoop:
         )
         state = run(graph, rt)
 
-        assert state.status == "done"
+        assert state.status == "stalled"
+        # Run-level machine-readable detail — hosts never dig through nodes.
+        assert state.stall is not None
+        assert state.stall["kind"] == "gate_exhausted"
+        assert state.stall["nodes"] == ["gate"]
+        assert "needs_fix" in state.stall["reason"]
+        assert "still bad" in state.stall["reason"]
         gate_evals = [g for g in rt.gate_log if g == "gate"]
         assert len(gate_evals) == 3, f"gate evaluated {len(gate_evals)}× (expected max=3)"
         producer_calls = [nid for nid, _ in rt.dispatch_log if nid == "producer"]
         assert len(producer_calls) == 3, f"producer dispatched {len(producer_calls)}×"
         # sink is never reached (gate never proceeds).
         assert not any(nid == "sink" for nid, _ in rt.dispatch_log)
-        # The gate's non-proceed decision is persisted for the driver's stall detector.
+        # The gate's non-proceed decision is still persisted as gate detail.
         assert state.nodes["gate"].gate["decision"] == "needs_fix"
-        # No generic escalate — the actionable WAITING park happens in the driver.
+        # No generic escalate — the actionable park message renders from state.stall.
         assert rt.escalated == []
 
 

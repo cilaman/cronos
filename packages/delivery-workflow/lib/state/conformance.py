@@ -4,8 +4,10 @@ The law (01-state-model.md §5.4): **everything the runner writes through
 ``StateOps.write()`` must read back identically through ``StateOps.read()``**.
 Concretely, for node patches that means ``status``, ``attempt``,
 ``artifact_paths``, ``gate`` and ``fields``; for top-level patches it means
-``status`` and ``edges_evaluated`` (the R5 edge-evaluation record — the
-runner writes the full snapshot, so a later write replaces the whole value).
+``status``, ``edges_evaluated`` (the R5 edge-evaluation record — the
+runner writes the full snapshot, so a later write replaces the whole value)
+and ``stall`` (the R6 run-level stall detail — full replacement, ``None``
+clears).
 Values already persisted by other writers (e.g. ``telemetry`` written by
 ``TelemetrySink``) must survive unrelated writes untouched.
 
@@ -78,12 +80,74 @@ _TELEMETRY = {"tokens": 1200.0, "usd": 0.12, "seconds": 34.0}
 def check_top_level_status_roundtrip(make_ops: MakeOps) -> None:
     """Every run status the runner writes reads back identically."""
     ops = make_ops(_fresh_state())
-    for status in ("blocked", "failed", "escalated", "running", "done"):
+    for status in ("blocked", "failed", "escalated", "stalled", "running", "done"):
         ops.write({"status": status})
         got = ops.read().status
         assert got == status, (
             f"top-level status round-trip broken: wrote {status!r}, read {got!r}"
         )
+
+
+def check_stall_detail_roundtrip(make_ops: MakeOps) -> None:
+    """The R6 run-level stall record: the runner writes it together with
+    ``status="stalled"`` (``write({"status": "stalled", "stall": …})``) — it
+    must read back identically, survive unrelated writes, and be CLEARED by a
+    later ``{"stall": None}`` (a resumed run that completed).  Hosts render
+    their park message from this record alone — a StateOps that drops it
+    forces the host back into node archaeology (the exact D5/D12 mechanism
+    R6 deletes)."""
+    record = {
+        "kind": "starved_nodes",
+        "nodes": ["frontend"],
+        "reason": "dead-end signoff-scope routed nowhere",
+        "dead_ends": ["signoff-scope"],
+    }
+    ops = make_ops(_fresh_state())
+    ops.write({"status": "stalled", "stall": record})
+    state = ops.read()
+    assert state.status == "stalled"
+    assert state.stall == record, (
+        f"stall detail round-trip broken: wrote {record!r}, read "
+        f"{state.stall!r} — the host cannot render an actionable park message"
+    )
+    # Unrelated writes must not clobber the record.
+    ops.write({"nodes": {"analyze": {"status": "done"}}})
+    assert ops.read().stall == record, (
+        f"stall detail clobbered by an unrelated write: {ops.read().stall!r}"
+    )
+    # A completing resume clears it.
+    ops.write({"status": "done", "stall": None})
+    state = ops.read()
+    assert state.status == "done"
+    assert state.stall is None, (
+        f"stall detail must clear on {{'stall': None}}, read {state.stall!r}"
+    )
+
+
+def check_needs_fix_node_status_roundtrip(make_ops: MakeOps) -> None:
+    """R9 (kills D11): ``needs_fix`` is a REAL node status with a single
+    writer — the runner persists a gate's non-proceed decision once, as this
+    status, with the decision detail in ``gate``.  The write shape below is
+    exactly what ``runner/core.py`` emits for a failing gate; it must read
+    back identically or gate fix-loop routing dies across a park/resume."""
+    ops = make_ops(_fresh_state())
+    gate_detail = {"decision": "needs_fix", "errors": ["review.md missing header"]}
+    ops.write({"nodes": {"g-review": {
+        "status": "needs_fix",
+        "attempt": 1,
+        "artifact_paths": [],
+        "gate": gate_detail,
+        "fields": {"decision": "needs_fix"},
+    }}})
+    node = ops.read().nodes["g-review"]
+    assert node.status == "needs_fix", (
+        f"node status 'needs_fix' round-trip broken: read {node.status!r} — "
+        "a gate's non-proceed terminal must persist as the node status (R9/D11)"
+    )
+    assert node.gate == gate_detail, f"gate detail: read back {node.gate!r}"
+    assert node.fields == {"decision": "needs_fix"}, (
+        f"fields: read back {node.fields!r}"
+    )
 
 
 def check_new_node_full_patch_roundtrip(make_ops: MakeOps) -> None:
@@ -259,6 +323,8 @@ def check_edges_evaluated_roundtrip(make_ops: MakeOps) -> None:
 
 STATEOPS_CONFORMANCE_CHECKS: tuple[Callable[[MakeOps], None], ...] = (
     check_top_level_status_roundtrip,
+    check_stall_detail_roundtrip,
+    check_needs_fix_node_status_roundtrip,
     check_new_node_full_patch_roundtrip,
     check_existing_node_update_roundtrip,
     check_partial_patch_preserves_unpatched_keys,
