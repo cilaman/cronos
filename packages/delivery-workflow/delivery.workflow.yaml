@@ -46,6 +46,10 @@ nodes:
   - id: signoff-scope
     kind: human
     prompt: "Right thing to build?"
+    # OD-1 (R7): a rejected scope sign-off re-runs the analysis with the
+    # user's feedback available in scope as `signoff-scope.fields.answer`
+    # ("no — change X" re-analyzes instead of silently approving, D10).
+    on_reject: analyze
 
   - id: frontend
     kind: agent
@@ -72,6 +76,9 @@ nodes:
   - id: signoff-design
     kind: human
     prompt: "Right design?"
+    # OD-1 (R7): a rejected design sign-off re-runs the architect with the
+    # feedback in scope (`signoff-design.fields.answer`).
+    on_reject: architect
 
   - id: testarch
     kind: agent

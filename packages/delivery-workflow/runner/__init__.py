@@ -5,6 +5,21 @@ from typing import TYPE_CHECKING
 
 from state_types import WorkflowState
 
+# R7 resume API — the only legal re-entry for a persisted halted run
+# (01-state-model.md §5.3).  Re-exported here so hosts import one surface:
+#   from runner import resume, HumanAnswer, RetryFailed, RaiseBudget, Nothing
+from runner.resume import (  # noqa: F401
+    DEFAULT_MAX_RESUME_RETRIES,
+    HumanAnswer,
+    Nothing,
+    RaiseBudget,
+    ResumeError,
+    ResumeEvent,
+    RetryFailed,
+    blocked_human_nodes,
+    resume,
+)
+
 if TYPE_CHECKING:
     from interface import ExecutorInterface, StateOps
     from ir import IRGraph

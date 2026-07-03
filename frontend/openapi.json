@@ -7047,6 +7047,21 @@
             "maxLength": 20000,
             "minLength": 1,
             "title": "Message"
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "approve",
+                  "reject"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verdict"
           }
         },
         "type": "object",
@@ -7708,6 +7723,34 @@
             ],
             "title": "Waiting Question"
           },
+          "waiting_kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "signoff",
+                  "node_failed",
+                  "stalled",
+                  "escalated"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waiting Kind"
+          },
+          "waiting_node_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waiting Node Id"
+          },
           "brief": {
             "type": "string",
             "title": "Brief",
@@ -8086,6 +8129,34 @@
               }
             ],
             "title": "Waiting Question"
+          },
+          "waiting_kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "signoff",
+                  "node_failed",
+                  "stalled",
+                  "escalated"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waiting Kind"
+          },
+          "waiting_node_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waiting Node Id"
           },
           "brief_preview": {
             "type": "string",

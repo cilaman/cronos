@@ -105,6 +105,10 @@ class _StateOps:
         (R5 edge-evaluation record; the runner always writes the full snapshot)
       - ``"stall"`` → full replacement of ``state.stall`` (R6 run-level stall
         detail; ``None`` clears it)
+      - ``"resume_retries"`` → full replacement (R7 RetryFailed counters —
+        ``runner.resume`` writes the full snapshot, like edges_evaluated)
+      - ``"budget"`` → per-key update of ``usd_ceiling``/``usd_spent`` (R7
+        RaiseBudget ceiling lift)
       - ``"nodes"`` → merges each node sub-dict into ``state.nodes``
     """
 
@@ -121,6 +125,14 @@ class _StateOps:
             self._state.edges_evaluated = dict(patch["edges_evaluated"] or {})
         if "stall" in patch:
             self._state.stall = patch["stall"]
+        if "resume_retries" in patch:
+            self._state.resume_retries = dict(patch["resume_retries"] or {})
+        if "budget" in patch and isinstance(patch["budget"], dict):
+            budget_patch = patch["budget"]
+            if "usd_ceiling" in budget_patch:
+                self._state.budget.usd_ceiling = float(budget_patch["usd_ceiling"])
+            if "usd_spent" in budget_patch:
+                self._state.budget.usd_spent = float(budget_patch["usd_spent"])
         if "nodes" in patch:
             for node_id, node_dict in patch["nodes"].items():
                 existing = self._state.nodes.get(node_id)

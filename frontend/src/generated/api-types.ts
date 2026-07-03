@@ -2536,6 +2536,8 @@ export interface components {
         ReplyBody: {
             /** Message */
             message: string;
+            /** Verdict */
+            verdict?: ("approve" | "reject") | null;
         };
         /** RoutedTo */
         RoutedTo: {
@@ -2878,6 +2880,10 @@ export interface components {
             claude_session_id?: string | null;
             /** Waiting Question */
             waiting_question?: string | null;
+            /** Waiting Kind */
+            waiting_kind?: ("signoff" | "node_failed" | "stalled" | "escalated") | null;
+            /** Waiting Node Id */
+            waiting_node_id?: string | null;
             /**
              * Brief
              * @default
@@ -3015,6 +3021,10 @@ export interface components {
             updated_at: string;
             /** Waiting Question */
             waiting_question?: string | null;
+            /** Waiting Kind */
+            waiting_kind?: ("signoff" | "node_failed" | "stalled" | "escalated") | null;
+            /** Waiting Node Id */
+            waiting_node_id?: string | null;
             /**
              * Brief Preview
              * @description First ~200 chars of the brief, for card display.

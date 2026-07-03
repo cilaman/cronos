@@ -233,6 +233,13 @@ definitions:
         const: human
       prompt:
         type: string
+      # OD-1 (R7): optional reject route — the node id re-armed when
+      # resume(HumanAnswer(verdict='reject')) is applied to this sign-off.
+      # Absent => a reject terminates the run 'stalled' (kind='rejected').
+      # Additive optional key: the format stays delivery/v1 (02-package-
+      # boundary.md apiVersion guidance — engine-side change, no format bump).
+      on_reject:
+        type: string
     additionalProperties: false
 
   LoopConfig:

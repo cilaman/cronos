@@ -14,9 +14,9 @@ closes those three blind spots at once:
    ``state.json`` behind the production trio ``StateStore`` + ``EventLog`` +
    ``CronosStateOps`` (``lib/state/store.py``, ``adapters/cronos/adapter.py``).
 3. **Multi-process lifecycle, not single-process** — every human node parks the
-   run ``blocked``; ``drive_with_host_resumes`` then applies the same state
-   patch the host applies today before re-entering ``runner.run`` (see
-   ``host_resume_from_blocked``), so park→resume composition is under test.
+   run ``blocked``; ``drive_with_host_resumes`` then re-enters through the R7
+   package resume API (``runner.resume`` with ``HumanAnswer(verdict='approve')``
+   — the same call the host makes), so park→resume composition is under test.
 
 Zero ``app.*`` / backend imports anywhere in this package's tests — the
 delivery-workflow CI job installs only this package (``pip install -e .[dev]``).
@@ -31,6 +31,7 @@ from typing import Any
 
 import compiler_a
 import runner as workflow_runner
+from runner import HumanAnswer
 from adapters.cronos.adapter import CronosStateOps
 from interface import StateOps
 from ir import IRGraph
@@ -92,6 +93,18 @@ def agent_done(**fields: Any) -> AgentResult:
     )
 
 
+def agent_failed(*open_questions: str) -> AgentResult:
+    """A failed agent result (e.g. an OOM-killed child with no fence)."""
+    return AgentResult(
+        status="failed",
+        artifact_paths=[],
+        produces="",
+        fields={},
+        open_questions=list(open_questions) or ["No node_status fence found"],
+        telemetry=TelemetryData(tokens=0, usd=0.0, seconds=0.0),
+    )
+
+
 def gate_decision(decision: str, errors: list[str] | None = None) -> GateResult:
     return GateResult(decision=decision, errors=list(errors or []))  # type: ignore[arg-type]
 
@@ -126,6 +139,10 @@ class ScriptedExecutor:
     - ``parks``  — ordered list of ``(node_id, reason)`` escalations; human
       sign-off parks carry a ``[human]``/``[wait/...]`` reason prefix
       (``runner/dispatch.py``).
+    - ``agent_inputs`` — per agent node, the full ``inputs`` dict of every
+      dispatch (deep-copied), so scenarios can assert what the child brief
+      would see — e.g. that a reject answer reached the re-run's
+      ``inputs['scope']`` (R7/OD-2).
 
     ``evalCondition`` delegates to the real ``lib.conditions.eval_condition``
     with the typed scope passed through un-coerced, and ``escalate`` writes
@@ -142,6 +159,7 @@ class ScriptedExecutor:
         self.telemetry = _NullTelemetry()
         self.calls: Counter[str] = Counter()
         self.parks: list[tuple[str, str]] = []
+        self.agent_inputs: dict[str, list[dict[str, Any]]] = defaultdict(list)
         self._script: dict[str, Any] = dict(script or {})
         self._cursor: dict[str, int] = defaultdict(int)
 
@@ -162,6 +180,7 @@ class ScriptedExecutor:
     def dispatchAgent(self, agent_ref: str, inputs: dict[str, Any]) -> AgentResult:
         node_id = inputs["node_id"]
         self.calls[node_id] += 1
+        self.agent_inputs[node_id].append(copy.deepcopy(inputs))
         return self._next(node_id, agent_done())
 
     def runGate(self, gate: dict[str, Any], artifact_paths: list[str]) -> GateResult:
@@ -233,41 +252,20 @@ def make_state_ops(run_dir: Path, graph: IRGraph, run_id: str = "run-conformance
 # ---------------------------------------------------------------------------
 
 
-def host_resume_from_blocked(state_ops: "StateOps", graph: IRGraph) -> list[str]:
-    """Host resume simulation — replace with ``DeliveryRun.resume()`` when R7 lands.
-
-    Package-side replica of ``delivery_driver._resume_from_blocked``
-    (backend/app/delivery_driver.py:318-367), the patch the host applies today
-    on every user answer before re-entering ``runner.run``: when the persisted
-    run is ``blocked``, every blocked human / human-mode wait node is marked
-    ``done`` ("the user answered → approved" — D10 semantics, faithfully
-    reproduced) and the run status reset to ``running``.
-
-    Returns the sorted list of approved node ids (empty when the run was not
-    blocked or no blocked human node exists — i.e. no progress is possible
-    through today's host resume path).
-    """
-    persisted = state_ops.read()
-    if persisted.status != "blocked":
-        return []
-
+def blocked_human_ids(state: WorkflowState, graph: IRGraph) -> list[str]:
+    """Sorted ids of blocked human / human-mode wait nodes in *state* — the
+    park points a ``HumanAnswer`` resume can legally address."""
     human_ids = {
         n.id
         for n in graph.nodes
         if n.kind == "human"
         or (n.kind == "wait" and (n.data or {}).get("mode", "human") == "human")
     }
-    approved = {
-        nid: {"status": "done"}
-        for nid, ns in persisted.nodes.items()
+    return sorted(
+        nid
+        for nid, ns in state.nodes.items()
         if ns.status == "blocked" and nid in human_ids
-    }
-
-    patch: dict[str, Any] = {"status": "running"}
-    if approved:
-        patch["nodes"] = approved
-    state_ops.write(patch)
-    return sorted(approved)
+    )
 
 
 @dataclass
@@ -284,33 +282,39 @@ def drive_with_host_resumes(
     executor: ScriptedExecutor,
     state_ops: "StateOps",
     max_resumes: int = 6,
+    answer_text: str = "approved",
 ) -> DriveOutcome:
-    """Run the workflow to a terminal, resuming past human parks like the host.
+    """Run the workflow to a terminal, approving human parks like the host.
 
-    Each cycle mirrors one production re-entry of the delivery driver: run the
-    real ``runner.run`` against persisted state; while the run parks
-    ``blocked``, apply ``host_resume_from_blocked`` and re-enter.  Stops when
-    the run reaches a non-blocked terminal, when a resume approves no human
-    node (no progress possible through today's host path — the production
-    "answer → instant re-park" livelock, kept bounded here), or after
-    *max_resumes* cycles (defensive bound; the shipped spec needs 3).
+    Each cycle mirrors one production re-entry of the delivery driver since
+    R7: run the real ``runner.run`` against persisted state; while the run
+    parks ``blocked`` on a human node, re-enter through the PACKAGE resume
+    API — ``runner.resume(HumanAnswer(node, answer_text, 'approve'))`` — the
+    only legal re-entry for a parked run (the pre-R7
+    ``_resume_from_blocked`` host patch this helper used to replicate is
+    deleted).  Stops at a non-blocked terminal, when the run is blocked with
+    NO blocked human node (nothing a HumanAnswer could address — e.g. a
+    budget park; hosts use RaiseBudget there), or after *max_resumes* cycles
+    (defensive bound; the shipped spec needs 3).
     """
-    outcome = DriveOutcome(final=state_ops.read())
-    while True:
-        outcome.final = workflow_runner.run(
-            graph=graph, executor=executor, state_ops=state_ops
+    outcome = DriveOutcome(
+        final=workflow_runner.run(graph=graph, executor=executor, state_ops=state_ops)
+    )
+    while outcome.final.status == "blocked" and len(outcome.resumes) < max_resumes:
+        blocked = blocked_human_ids(state_ops.read(), graph)
+        if not blocked:
+            return outcome
+        # The shipped spec parks on exactly one sign-off at a time; approve it
+        # and re-enter (resume applies the event, then delegates to run()).
+        node_id = blocked[0]
+        outcome.final = workflow_runner.resume(
+            graph,
+            executor,
+            state_ops,
+            HumanAnswer(node_id=node_id, text=answer_text, verdict="approve"),
         )
-        if outcome.final.status != "blocked" or len(outcome.resumes) >= max_resumes:
-            return outcome
-        approved = host_resume_from_blocked(state_ops, graph)
-        if not approved:
-            # The replica faithfully wrote {"status": "running"} even though it
-            # could approve nothing (exactly what _resume_from_blocked does),
-            # so re-read: the terminal observation must include the host's last
-            # action or the round-trip law would flag a stale snapshot.
-            outcome.final = state_ops.read()
-            return outcome
-        outcome.resumes.append(approved)
+        outcome.resumes.append([node_id])
+    return outcome
 
 
 # ---------------------------------------------------------------------------
@@ -334,6 +338,11 @@ def assert_state_roundtrip(state_ops: "StateOps", final: WorkflowState) -> None:
     assert persisted.stall == final.stall, (
         f"stall round-trip: in-memory {final.stall!r}, disk {persisted.stall!r} "
         "(R6 — the host could not render an actionable park message)"
+    )
+    assert persisted.resume_retries == final.resume_retries, (
+        "resume_retries round-trip: in-memory "
+        f"{final.resume_retries!r}, disk {persisted.resume_retries!r} "
+        "(R7 — the RetryFailed ceiling would not bind across restarts)"
     )
     assert set(persisted.nodes) == set(final.nodes), (
         f"node-set round-trip: in-memory {sorted(final.nodes)}, "

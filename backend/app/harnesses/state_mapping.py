@@ -75,14 +75,15 @@ conditions against missing keys → every branch False → transitive exclusion
 → the run finishes 'done' with the downstream tail silently never executed.
 Non-reserved ``WfNodeState.fields`` keys round-trip via
 ``HarnessNodeState.fields``; ``edges_evaluated`` round-trips verbatim on the
-run level.
+run level, and so do the R7 ``resume_retries`` counters (dropping them would
+unbound the RetryFailed ceiling across a harness restart).
 
 Round-trip contract
 -------------------
 runstate_to_workflowstate(rs, hid) followed by workflowstate_to_runstate(ws, rs)
 must produce a RunState equal to the original for all fields in NodeState,
-including ``fields`` extras and the run-level ``edges_evaluated`` and ``stall``
-records.
+including ``fields`` extras and the run-level ``edges_evaluated``, ``stall``
+and ``resume_retries`` records.
 """
 from __future__ import annotations
 
@@ -232,6 +233,8 @@ def runstate_to_workflowstate(run_state: RunState, harness_id: str) -> WorkflowS
         edges_evaluated=dict(run_state.edges_evaluated),
         # R6 stall detail round-trips verbatim (run level, like edges_evaluated).
         stall=run_state.stall,
+        # R7 RetryFailed counters round-trip verbatim (run level).
+        resume_retries=dict(run_state.resume_retries),
     )
 
 
@@ -304,4 +307,7 @@ def workflowstate_to_runstate(
         # R6: preserve the runner's run-level stall detail ('stalled' itself
         # maps to 'failed' — no such RunState value — but the reason survives).
         stall=workflow_state.stall,
+        # R7: preserve the RetryFailed counters — the ceiling must bind
+        # across harness restarts.
+        resume_retries=dict(workflow_state.resume_retries),
     )

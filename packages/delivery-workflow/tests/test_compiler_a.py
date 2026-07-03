@@ -274,3 +274,84 @@ class TestFixtureFile:
                 if e.source == gate_id and e.target == producer and "!= 'proceed'" in (e.when or "")
             ]
             assert fix_edges, f"{gate_id} missing '!= proceed' fix edge to {producer}"
+
+
+class TestOnRejectRouteValidation:
+    """OD-1/R7: on_reject must name a declared node that is a FORWARD-ANCESTOR
+    of the sign-off — a self/downstream/sibling target would let a rejection
+    silently route or starve the approve path (D10)."""
+
+    @staticmethod
+    def _spec(on_reject: str, extra_edges: list | None = None):
+        return {
+            "apiVersion": "delivery/v1",
+            "metadata": {"name": "reject-route"},
+            "defaults": {"models": {"build": "sonnet"}},
+            "nodes": [
+                {"id": "a", "kind": "agent", "agent": "a", "model": {"use": "build"}},
+                {"id": "fixer", "kind": "agent", "agent": "f", "model": {"use": "build"}},
+                {"id": "signoff", "kind": "human", "prompt": "ok?",
+                 "on_reject": on_reject},
+                {"id": "b", "kind": "agent", "agent": "b", "model": {"use": "build"}},
+            ],
+            "edges": [
+                {"from": "a", "to": "fixer"},
+                {"from": "fixer", "to": "signoff"},
+                {"from": "signoff", "to": "b"},
+                *(extra_edges or []),
+            ],
+        }
+
+    def test_undeclared_target_rejected(self):
+        with pytest.raises(ValueError, match="undeclared"):
+            compiler_a.compile(self._spec("ghost"))
+
+    def test_forward_ancestor_target_accepted(self):
+        graph = compiler_a.compile(self._spec("fixer"))
+        by_id = {n.id: n for n in graph.nodes}
+        assert by_id["signoff"].data["on_reject"] == "fixer"
+
+    def test_transitive_forward_ancestor_accepted(self):
+        graph = compiler_a.compile(self._spec("a"))
+        assert graph is not None
+
+    def test_self_target_rejected(self):
+        with pytest.raises(ValueError, match="forward-ancestor"):
+            compiler_a.compile(self._spec("signoff"))
+
+    def test_downstream_target_rejected(self):
+        with pytest.raises(ValueError, match="forward-ancestor"):
+            compiler_a.compile(self._spec("b"))
+
+    def test_parallel_branch_target_rejected(self):
+        """The D10-through-resume shape: a → signoff and a → fixer in
+        parallel, with fixer having NO path back into the sign-off."""
+        spec = {
+            "apiVersion": "delivery/v1",
+            "metadata": {"name": "reject-route-parallel"},
+            "defaults": {"models": {"build": "sonnet"}},
+            "nodes": [
+                {"id": "a", "kind": "agent", "agent": "a", "model": {"use": "build"}},
+                {"id": "signoff", "kind": "human", "prompt": "ok?",
+                 "on_reject": "fixer"},
+                {"id": "fixer", "kind": "agent", "agent": "f", "model": {"use": "build"}},
+                {"id": "b", "kind": "agent", "agent": "b", "model": {"use": "build"}},
+            ],
+            "edges": [
+                {"from": "a", "to": "signoff"},
+                {"from": "a", "to": "fixer"},
+                {"from": "signoff", "to": "b"},
+            ],
+        }
+        with pytest.raises(ValueError, match="forward-ancestor"):
+            compiler_a.compile(spec)
+
+    def test_shipped_spec_routes_still_compile(self):
+        prod_yaml = Path(__file__).parent.parent / "delivery.workflow.yaml"
+        graph = compiler_a.compile(load_spec(prod_yaml))
+        routes = {
+            n.id: n.data["on_reject"]
+            for n in graph.nodes
+            if "on_reject" in (n.data or {})
+        }
+        assert routes == {"signoff-scope": "analyze", "signoff-design": "architect"}

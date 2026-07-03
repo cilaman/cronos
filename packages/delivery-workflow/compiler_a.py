@@ -14,6 +14,17 @@ Responsibilities
 4. Parse ``loop:`` stanzas into LoopPolicy instances.
 5. Emit one IREdge per spec edge.
 6. Bare-string ``model: 'opus'`` (no ``{use: ...}``) passes through verbatim.
+7. Validate ``on_reject:`` routes on human nodes (OD-1/R7): the target must be
+   a declared node id AND a forward-ancestor of the sign-off (its re-run path
+   must reach the sign-off again so the rejection re-parks instead of silently
+   routing the approve path); raise a descriptive ValueError listing all
+   offenders.
+   The route itself stays in ``IRNode.data['on_reject']`` (node-data, not an
+   IREdge): its typical target is UPSTREAM of the sign-off, and back-edges are
+   deliberately outside the runner's live edge evaluation for un-dispatched
+   nodes — ``runner/resume.py`` performs the reject re-arm directly (the R8
+   reset path), so a synthesized edge would be dead weight the seeding had to
+   special-case.
 """
 from __future__ import annotations
 
@@ -40,7 +51,10 @@ def compile(spec: dict[str, Any]) -> IRGraph:  # noqa: A001
     ------
     ValueError
         If any ``model: {use: alias}`` reference cannot be resolved against
-        ``defaults.models``.  The message lists all (node_id, alias) pairs.
+        ``defaults.models`` (the message lists all (node_id, alias) pairs), or
+        if any human node's ``on_reject`` names an undeclared node or a node
+        that is not a forward-ancestor of the sign-off (the message lists all
+        (node_id, target) pairs).
     """
     defaults: dict[str, Any] = spec.get("defaults", {})
     models_map: dict[str, str] = defaults.get("models", {})
@@ -71,6 +85,71 @@ def compile(spec: dict[str, Any]) -> IRGraph:  # noqa: A001
         raise ValueError(
             f"Compiler A: undefined model aliases in spec — {pairs}. "
             f"Available aliases: {list(models_map.keys())}"
+        )
+
+    # OD-1 (R7): every on_reject route must name a declared node — a typo here
+    # would otherwise surface only at reject-resume time as a ResumeError.
+    declared_ids = {raw_node.get("id") for raw_node in spec_nodes}
+    bad_reject_routes = [
+        (raw_node.get("id", "<unknown>"), raw_node["on_reject"])
+        for raw_node in spec_nodes
+        if raw_node.get("on_reject") is not None
+        and raw_node["on_reject"] not in declared_ids
+    ]
+    if bad_reject_routes:
+        pairs = ", ".join(f"({nid!r}, {tgt!r})" for nid, tgt in bad_reject_routes)
+        raise ValueError(
+            f"Compiler A: on_reject routes name undeclared nodes — {pairs}."
+        )
+
+    # OD-1 (R7) route SHAPE: the on_reject target must be a forward-ancestor
+    # of its sign-off — the reject re-arm resets the target's downstream and
+    # relies on the re-run flow reaching the sign-off again (back-edge
+    # re-park).  A self/downstream/sibling target never leads back through the
+    # sign-off, so a rejection would silently starve (or route) the approve
+    # path instead of re-asking (D10).  Reachability uses the runner's
+    # positional forward-edge rule (source declared before target).
+    node_index = {raw_node.get("id"): i for i, raw_node in enumerate(spec_nodes)}
+    forward_adjacency: dict[str, list[str]] = {}
+    for raw_edge in spec_edges:
+        src = raw_edge.get("from", raw_edge.get("source", ""))
+        tgt = raw_edge.get("to", raw_edge.get("target", ""))
+        if (
+            src in node_index
+            and tgt in node_index
+            and node_index[src] < node_index[tgt]
+        ):
+            forward_adjacency.setdefault(src, []).append(tgt)
+
+    def _forward_reaches(start: str, goal: str) -> bool:
+        seen: set[str] = set()
+        stack = list(forward_adjacency.get(start, ()))
+        while stack:
+            nid = stack.pop()
+            if nid == goal:
+                return True
+            if nid in seen:
+                continue
+            seen.add(nid)
+            stack.extend(forward_adjacency.get(nid, ()))
+        return False
+
+    non_dominating: list[tuple[str, str]] = []
+    for raw_node in spec_nodes:
+        target = raw_node.get("on_reject")
+        if target is None:
+            continue
+        node_id = raw_node.get("id", "<unknown>")
+        if target == node_id or not _forward_reaches(target, node_id):
+            non_dominating.append((node_id, target))
+    if non_dominating:
+        pairs = ", ".join(f"({nid!r}, {tgt!r})" for nid, tgt in non_dominating)
+        raise ValueError(
+            f"Compiler A: on_reject routes do not lead back to their sign-off "
+            f"— {pairs}. The target must be a forward-ancestor of the node "
+            "(the re-run path must reach the sign-off again so it re-parks); "
+            "a self/downstream/sibling target would let a rejection silently "
+            "route or starve the approve path."
         )
 
     # -----------------------------------------------------------------------

@@ -59,4 +59,17 @@ class WorkflowState:
     #:                                  # routed nowhere (may be absent)
     #: Written by the runner through ``state_ops.write({"status": "stalled",
     #: "stall": ...})``; cleared (``None``) when a later resume completes.
+    #: R7 adds two stall kinds written by ``runner.resume``: ``"rejected"``
+    #: (a human sign-off was rejected and the node declares no ``on_reject``
+    #: route) and ``"retry_exhausted"`` (a ``RetryFailed`` resume exceeded the
+    #: per-node retry ceiling persisted in ``resume_retries``).
     stall: dict[str, Any] | None = None
+    #: Resume-retry bookkeeping (R7, 01-state-model.md §5.3): node_id → number
+    #: of times a ``RetryFailed`` resume has re-armed that node.  Persisted IN
+    #: STATE (replacing the driver's ``failed_resumes.json`` sidecar counter)
+    #: so the retry ceiling survives process restarts and lossy hosts cannot
+    #: loop a persistently-failing node forever.  Written by ``runner.resume``
+    #: through ``state_ops.write({"resume_retries": …})`` as a full-snapshot
+    #: replacement (like ``edges_evaluated``); pruned of entries whose node has
+    #: since progressed.  Empty on every pre-R7 state.json.
+    resume_retries: dict[str, int] = field(default_factory=dict)

@@ -121,6 +121,20 @@ class CronosStateOps:
         if "stall" in patch:
             state.stall = patch["stall"]
 
+        # Resume-retry counters (R7): runner.resume writes the full snapshot —
+        # full replacement, round-trips identically (like edges_evaluated).
+        if "resume_retries" in patch:
+            state.resume_retries = dict(patch["resume_retries"] or {})
+
+        # Budget lift (R7 RaiseBudget): runner.resume patches the persisted
+        # ceiling so 'escalated'/'blocked' budget parks become resumable.
+        if "budget" in patch and isinstance(patch["budget"], dict):
+            budget_patch = patch["budget"]
+            if "usd_ceiling" in budget_patch:
+                state.budget.usd_ceiling = float(budget_patch["usd_ceiling"])
+            if "usd_spent" in budget_patch:
+                state.budget.usd_spent = float(budget_patch["usd_spent"])
+
         # Node-level patches.
         nodes_patch: dict[str, Any] = patch.get("nodes", {})
         for node_id, ns_patch in nodes_patch.items():

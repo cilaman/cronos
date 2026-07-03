@@ -335,6 +335,13 @@ def parse_file(path: Path, space_id: str) -> Task:
             updated_at=meta["updated_at"],
             claude_session_id=meta.get("claude_session_id"),
             waiting_question=meta.get("waiting_question"),
+            waiting_kind=(
+                meta.get("waiting_kind")
+                if meta.get("waiting_kind")
+                in ("signoff", "node_failed", "stalled", "escalated")
+                else None
+            ),
+            waiting_node_id=meta.get("waiting_node_id") or None,
             brief=brief,
             history=history,
             pending_messages=pending,
@@ -371,6 +378,8 @@ def summarize(task: Task) -> TaskSummary:
         created_at=task.created_at,
         updated_at=task.updated_at,
         waiting_question=task.waiting_question,
+        waiting_kind=task.waiting_kind,
+        waiting_node_id=task.waiting_node_id,
         brief_preview=preview,
         priority=task.priority,
         manual_order=task.manual_order,
@@ -407,6 +416,8 @@ def dump_task(task: Task) -> str:
         "updated_at": _iso(task.updated_at),
         "claude_session_id": task.claude_session_id,
         "waiting_question": task.waiting_question,
+        "waiting_kind": task.waiting_kind,
+        "waiting_node_id": task.waiting_node_id,
         "agent_mode": task.agent_mode,
         "agent_model": task.agent_model,
         "pending_messages": list(task.pending_messages),
@@ -1226,9 +1237,13 @@ class TaskStore:
                     "updated_at": datetime.now(tz=UTC),
                 }
             )
-            # Leaving the waiting lane clears any pending question.
+            # Leaving the waiting lane clears any pending question + wait meta.
             if task.state == TaskState.WAITING and new_state != TaskState.WAITING:
-                updated = updated.model_copy(update={"waiting_question": None})
+                updated = updated.model_copy(update={
+                    "waiting_question": None,
+                    "waiting_kind": None,
+                    "waiting_node_id": None,
+                })
             path = self._path_by_id[task_id]
             atomic_write(path, dump_task(updated))
             self._reindex_locked(path)
@@ -1242,8 +1257,16 @@ class TaskStore:
         session_id: str | None,
         waiting_question: str | None,
         history_entry: str,
+        waiting_kind: str | None = None,
+        waiting_node_id: str | None = None,
     ) -> Task:
-        """Atomic post-agent-run update: state, session id, question, history."""
+        """Atomic post-agent-run update: state, session id, question, history.
+
+        ``waiting_kind``/``waiting_node_id`` carry the structured wait metadata
+        (§5.6) set by the delivery driver; every finalize either sets or clears
+        them (default ``None`` clears), so stale sign-off affordances cannot
+        survive a run that parked for a different reason.
+        """
         async with self._lock:
             task = self._by_id.get(task_id)
             if task is None:
@@ -1262,7 +1285,39 @@ class TaskStore:
                     "state": new_state,
                     "claude_session_id": session_id or task.claude_session_id,
                     "waiting_question": waiting_question,
+                    "waiting_kind": waiting_kind,
+                    "waiting_node_id": waiting_node_id,
                     "history": history,
+                    "updated_at": datetime.now(tz=UTC),
+                }
+            )
+            path = self._path_by_id[task_id]
+            atomic_write(path, dump_task(updated))
+            self._reindex_locked(path)
+            return self._by_id[task_id]
+
+    async def set_waiting_meta(
+        self,
+        task_id: str,
+        *,
+        waiting_kind: str | None,
+        waiting_node_id: str | None,
+    ) -> Task:
+        """Stamp structured wait metadata (§5.6) on an already-parked task.
+
+        No state transition and no history entry — used by the delivery driver
+        to label a WAITING park that was created elsewhere (e.g. by the
+        adapter's ``escalate`` mid-run) with its kind ('signoff', …) and the
+        workflow node it belongs to.
+        """
+        async with self._lock:
+            task = self._by_id.get(task_id)
+            if task is None:
+                raise TaskNotFound(task_id)
+            updated = task.model_copy(
+                update={
+                    "waiting_kind": waiting_kind,
+                    "waiting_node_id": waiting_node_id,
                     "updated_at": datetime.now(tz=UTC),
                 }
             )
@@ -1331,6 +1386,8 @@ class TaskStore:
                 update={
                     "state": TaskState.WAITING,
                     "waiting_question": waiting_question,
+                    "waiting_kind": None,
+                    "waiting_node_id": None,
                     "updated_at": datetime.now(tz=UTC),
                 }
             )
@@ -1380,6 +1437,8 @@ class TaskStore:
                     update={
                         "state": TaskState.ACTIVE,
                         "waiting_question": None,
+                        "waiting_kind": None,
+                        "waiting_node_id": None,
                         "history": history,
                         "updated_at": now,
                     }
@@ -1408,6 +1467,8 @@ class TaskStore:
                 update={
                     "state": TaskState.ACTIVE,
                     "waiting_question": None,
+                    "waiting_kind": None,
+                    "waiting_node_id": None,
                     "updated_at": datetime.now(tz=UTC),
                 }
             )

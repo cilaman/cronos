@@ -4,15 +4,21 @@ import type { TaskState } from "../types";
 interface Props {
   taskState: TaskState;
   waitingQuestion: string | null;
+  /** Structured wait kind (backend waiting_kind). 'signoff' shows the
+   * explicit Approve / Reject controls for delivery sign-off waits. */
+  waitingKind?: string | null;
   pendingCount: number;
   isSending: boolean;
   error: string | null;
-  onSend: (message: string) => Promise<void>;
+  onSend: (message: string, verdict?: "approve" | "reject") => Promise<void>;
   routeHint?: string;
   routeToast?: string | null;
 }
 
-function placeholderFor(state: TaskState): string {
+function placeholderFor(state: TaskState, isSignoff: boolean): string {
+  if (isSignoff) {
+    return "Optional note — or feedback required to reject…";
+  }
   switch (state) {
     case "backlog":
       return "Type a starting prompt or press Send to begin…";
@@ -30,6 +36,7 @@ function placeholderFor(state: TaskState): string {
 export function ChatInput({
   taskState,
   waitingQuestion,
+  waitingKind,
   pendingCount,
   isSending,
   error,
@@ -39,6 +46,8 @@ export function ChatInput({
 }: Props) {
   const [draft, setDraft] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const isSignoff = taskState === "waiting" && waitingKind === "signoff";
 
   // Auto-grow the textarea (capped by max-height).
   useEffect(() => {
@@ -55,10 +64,24 @@ export function ChatInput({
     setDraft("");
   }
 
+  async function handleVerdict(verdict: "approve" | "reject") {
+    if (isSending) return;
+    const message = draft.trim();
+    // Rejecting without feedback is meaningless — the button is disabled,
+    // but guard anyway. Approving without a note sends a default.
+    if (verdict === "reject" && !message) return;
+    await onSend(message || "Approved.", verdict);
+    setDraft("");
+  }
+
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
-      void handleSend();
+      if (isSignoff) {
+        void handleVerdict("approve");
+      } else {
+        void handleSend();
+      }
     }
   }
 
@@ -67,7 +90,7 @@ export function ChatInput({
       {waitingQuestion && taskState === "waiting" && (
         <div className="border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-300">
           <span className="mr-2 font-display font-semibold uppercase tracking-[0.18em] text-[10px]">
-            Agent asks
+            {isSignoff ? "Sign-off requested" : "Agent asks"}
           </span>
           {waitingQuestion}
         </div>
@@ -80,17 +103,43 @@ export function ChatInput({
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={handleKeyDown}
             rows={1}
-            placeholder={placeholderFor(taskState)}
+            placeholder={placeholderFor(taskState, isSignoff)}
             className="block w-full resize-none bg-transparent text-sm text-ink placeholder:text-ink-faint focus:outline-none"
           />
-          <button
-            type="button"
-            onClick={() => void handleSend()}
-            disabled={!draft.trim() || isSending}
-            className="rounded border border-accent bg-accent px-3 py-1.5 text-xs font-medium text-canvas transition hover:bg-accent-bright hover:shadow-accent-glow disabled:cursor-not-allowed disabled:border-hairline disabled:bg-surface-2 disabled:text-ink-faint disabled:shadow-none"
-          >
-            {isSending ? "Sending…" : "Send"}
-          </button>
+          {isSignoff ? (
+            <>
+              <button
+                type="button"
+                onClick={() => void handleVerdict("reject")}
+                disabled={!draft.trim() || isSending}
+                title={
+                  draft.trim()
+                    ? "Reject the sign-off — your feedback is routed back into the workflow"
+                    : "Type feedback to reject"
+                }
+                className="rounded border border-danger px-3 py-1.5 text-xs font-medium text-danger transition hover:bg-danger hover:text-canvas disabled:cursor-not-allowed disabled:border-hairline disabled:bg-surface-2 disabled:text-ink-faint"
+              >
+                Reject
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleVerdict("approve")}
+                disabled={isSending}
+                className="rounded border border-accent bg-accent px-3 py-1.5 text-xs font-medium text-canvas transition hover:bg-accent-bright hover:shadow-accent-glow disabled:cursor-not-allowed disabled:border-hairline disabled:bg-surface-2 disabled:text-ink-faint disabled:shadow-none"
+              >
+                {isSending ? "Sending…" : "Approve"}
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void handleSend()}
+              disabled={!draft.trim() || isSending}
+              className="rounded border border-accent bg-accent px-3 py-1.5 text-xs font-medium text-canvas transition hover:bg-accent-bright hover:shadow-accent-glow disabled:cursor-not-allowed disabled:border-hairline disabled:bg-surface-2 disabled:text-ink-faint disabled:shadow-none"
+            >
+              {isSending ? "Sending…" : "Send"}
+            </button>
+          )}
         </div>
 
         <div className="flex items-center gap-3 text-[11px] text-ink-faint">
@@ -98,7 +147,7 @@ export function ChatInput({
             <kbd className="rounded bg-surface-2 px-1 font-mono text-ink-muted ring-1 ring-hairline">
               ⌘⏎
             </kbd>{" "}
-            to send
+            {isSignoff ? "to approve" : "to send"}
           </span>
           {pendingCount > 0 && (
             <span className="rounded bg-surface-2 px-2 py-0.5 text-ink-muted ring-1 ring-hairline">

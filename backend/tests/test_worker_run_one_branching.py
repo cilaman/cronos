@@ -115,7 +115,7 @@ async def test_run_one_goal_calls_run_goal():
 
     await worker._run_one(task.id, None)
 
-    worker._run_goal.assert_called_once_with(task.id, None)
+    worker._run_goal.assert_called_once_with(task.id, None, None)
     worker._run_task.assert_not_called()
     worker._run_feature_decompose.assert_not_called()
 
@@ -128,7 +128,18 @@ async def test_run_one_goal_passes_user_message():
 
     await worker._run_one(task.id, "hello")
 
-    worker._run_goal.assert_called_once_with(task.id, "hello")
+    worker._run_goal.assert_called_once_with(task.id, "hello", None)
+
+
+@pytest.mark.asyncio
+async def test_run_one_goal_passes_verdict():
+    """_run_goal must receive the sign-off verdict (R7/D10)."""
+    task = _make_task(task_type="goal")
+    worker = _make_worker(task)
+
+    await worker._run_one(task.id, "no — change X", "reject")
+
+    worker._run_goal.assert_called_once_with(task.id, "no — change X", "reject")
 
 
 # ---------------------------------------------------------------------------

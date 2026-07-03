@@ -19,6 +19,10 @@ AgentMode = Literal["plan", "auto", "ask"]
 AgentModel = Literal["default", "sonnet", "opus", "haiku", "opus-4-8", "fable-5"]
 TaskType = Literal["task", "goal", "issue", "feature", "fix"]
 
+# Structured waiting kinds (01-state-model.md §5.6). 'signoff' is the one the
+# UI keys on (Approve/Reject controls); the rest label delivery-driver parks.
+WaitingKind = Literal["signoff", "node_failed", "stalled", "escalated"]
+
 
 class FeatureState(str, Enum):
     """Lifecycle state for feature and fix tasks.
@@ -54,6 +58,13 @@ class Task(BaseModel):
     updated_at: datetime
     claude_session_id: str | None = None
     waiting_question: str | None = None
+    # Structured wait metadata (01-state-model.md §5.6, minimal first step):
+    # set only by the delivery driver when a delivery goal parks WAITING.
+    # kind='signoff' means the wait is a human sign-off — the UI shows an
+    # explicit Approve/Reject affordance and the reply verdict is honored.
+    waiting_kind: WaitingKind | None = None
+    # The workflow node the wait belongs to (e.g. the parked sign-off node).
+    waiting_node_id: str | None = None
     brief: str = ""
     history: str = ""
     pending_messages: list[str] = Field(default_factory=list)
@@ -105,6 +116,8 @@ class TaskSummary(BaseModel):
     created_at: datetime
     updated_at: datetime
     waiting_question: str | None = None
+    waiting_kind: WaitingKind | None = None
+    waiting_node_id: str | None = None
     brief_preview: str = Field(
         default="",
         description="First ~200 chars of the brief, for card display.",

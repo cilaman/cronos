@@ -19,9 +19,7 @@ Sentinel constants (must be byte-identical in driver, worker, and tests):
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-import os
 import re
 import sys
 from pathlib import Path
@@ -94,8 +92,10 @@ async def run_delivery_goal(
     run_child: "Callable[..., Awaitable[Any]] | None" = None,
     cancel_event: "asyncio.Event | None" = None,
     goal_context: str = "",
+    user_message: str | None = None,
+    verdict: str | None = None,
 ) -> None:
-    """Execute a delivery-workflow goal via the portable runner.
+    """Execute (or resume) a delivery-workflow goal via the portable runner.
 
     Parameters
     ----------
@@ -124,6 +124,52 @@ async def run_delivery_goal(
         The goal's cancellation event; checked before each child dispatch.
     goal_context:
         The composed goal brief handed to each child agent as context.
+    user_message:
+        The reply text that re-activated a parked (WAITING) delivery goal, if
+        any.  On a run parked ``blocked`` (human sign-off) it becomes the
+        ``HumanAnswer`` text — landing in the sign-off node's ``fields.answer``
+        (OD-2) and flowing into downstream briefs.
+    verdict:
+        Explicit sign-off verdict from the UI: ``'approve'`` or ``'reject'``.
+        ``None`` with a non-empty message means **approve** (the documented
+        backward-compatible default for plain replies); the text is preserved
+        either way.  ``None`` with NO message (a backend restart, goal-sync
+        propagation, or board drag re-activated the goal without anyone
+        answering) is **no answer**: the sign-off stays pending and the goal
+        re-parks WAITING (kind='signoff') — silence never becomes a yes (D10).
+
+    Resume mapping (R7 — the driver holds NO resume heuristics; it translates
+    the persisted run status + the user's action into exactly one package
+    ``runner.resume()`` event and trusts the returned terminal):
+
+    ==========  ========================================================
+    persisted   package event
+    ==========  ========================================================
+    running     (fresh run / crash mid-run) plain ``runner.run()``
+    blocked     ``HumanAnswer(node, text=user_message, verdict)`` — the
+                parked sign-off node comes from the package query
+                ``runner.blocked_human_nodes``; NO event when there is no
+                reply text and no explicit verdict (the goal re-parks
+                WAITING kind='signoff' — an automatic re-entry never
+                approves, D10); a run blocked on a non-sign-off node (agent
+                self-reported ``blocked``) parks WAITING with a diagnostic
+                (no legal event exists yet)
+    failed      ``RetryFailed('all')`` — the retry ceiling lives in
+                package state (``resume_retries``), not a driver sidecar
+    escalated   ``Nothing()`` first (completes served timed waits, re-
+                enters iteration-cap halts); if the run re-derives
+                ``escalated`` without progress, one ``RetryFailed('all')``
+                (re-arms loop-exhausted nodes, again ceiling-bounded).
+                Budget escalations are NOT auto-raised (conservative
+                choice): the bounded RetryFailed path eventually parks
+                the goal WAITING with the runner's reason and the user
+                decides — ``RaiseBudget`` stays reserved for an explicit
+                future control.
+    stalled     stays parked (R6: a stalled run needs spec/state surgery)
+                EXCEPT ``kind='rejected'``: a NEW user message re-arms the
+                rejected sign-off via ``RetryFailed(stall.nodes)`` — the
+                workflow re-parks on the sign-off and asks again
+    ==========  ========================================================
     """
     from adapters.cronos.adapter import CronosAdapter
     import compiler_a
@@ -217,43 +263,35 @@ async def run_delivery_goal(
                 usd_ceiling=usd_ceiling,
             )
 
-        # Resume past a human sign-off (blocked run).
-        #
-        # A human/wait node parks the run with state.status="blocked" and its own
-        # node status="blocked" (CronosAdapter.escalate + runner dispatch), and the
-        # goal is parked WAITING with the sign-off question.  Answering the question
-        # is the *only* way a parked delivery goal returns to ACTIVE and re-enters
-        # this function.  But the runner reads the persisted "blocked" status on its
-        # first tick (cancel-race guard) and halts before dispatching anything, so
-        # without this the run can never progress past the sign-off — it just
-        # re-parks WAITING ("Please continue" loops forever).
-        #
-        # Treat re-entry on a blocked run as "human approved": mark the blocked
-        # human/wait node(s) done and reset the run status to running so the runner
-        # routes to their successors.
-        _resume_from_blocked(adapter, graph, goal_id)
+        # R7: a persisted halted run is re-entered ONLY through the package
+        # resume() API — the driver translates the persisted status + the
+        # user's action into one typed event (see the resume-mapping table in
+        # the docstring) and never touches WorkflowState.nodes itself.
+        persisted = _read_persisted_state(adapter)
+        persisted_status = getattr(persisted, "status", None)
 
-        # Bound re-dispatch of a persisted `failed` node.  A crash produces no
-        # artifact fence → node status="failed" → runner halts → goal parked
-        # WAITING; on the next re-activation the runner's resume seeding
-        # re-dispatches the same failed node with no ceiling, so a persistent
-        # failure (classically an OOM: exit -9) loops OOM→WAITING→resume→OOM.
-        # Count re-dispatch attempts and, past the cap, park the goal WAITING
-        # with a diagnostic and skip the runner entirely instead of looping.
-        _failed_park = _resume_from_failed(adapter, goal_id, run_dir)
-        if _failed_park is not None:
-            await _park_goal_waiting(store, goal_id, _failed_park)
-            return
-
-        # Run the synchronous work-list walker off the event loop so its callbacks
-        # into run_coroutine_threadsafe don't deadlock the loop they depend on.
-        # Passing state_ops enables persistence + resume + cancel-race detection.
-        final_state = await asyncio.to_thread(
-            workflow_runner.run,
-            graph=graph,
-            executor=adapter,
-            state_ops=adapter.state,
-        )
+        # Run the synchronous work-list walker / resume off the event loop so
+        # its callbacks into run_coroutine_threadsafe don't deadlock the loop
+        # they depend on.  Passing state_ops enables persistence + resume +
+        # cancel-race detection.
+        if persisted_status in _RESUMABLE_STATUSES:
+            final_state, park_reason, park_kind, park_node_id = await asyncio.to_thread(
+                _resume_persisted_run,
+                graph, adapter, persisted, user_message, verdict, goal_id,
+            )
+            if final_state is None:
+                await _park_goal_waiting(
+                    store, goal_id, park_reason or "",
+                    waiting_kind=park_kind, waiting_node_id=park_node_id,
+                )
+                return
+        else:
+            final_state = await asyncio.to_thread(
+                workflow_runner.run,
+                graph=graph,
+                executor=adapter,
+                state_ops=adapter.state,
+            )
     except Exception as exc:
         log.exception("delivery_driver: runner setup/run raised for goal %s", goal_id)
         await _park_goal_waiting(store, goal_id, f"Delivery runner error: {exc}")
@@ -273,154 +311,222 @@ async def run_delivery_goal(
         # dead-ended runs no longer reach this branch, they arrive as "stalled".
         await _finalize_goal_done(store, goal_id)
     elif final_state.status == "stalled":
-        # The runner proved the run incomplete (starved nodes or an exhausted
-        # gate fix-loop) and put the machine-readable detail at RUN level
-        # (final_state.stall).  Render it into an actionable WAITING message —
-        # the driver never digs through WorkflowState.nodes for this.
-        await _park_goal_waiting(store, goal_id, _stall_reason(final_state))
-    elif final_state.status == "failed":
-        # A node failed and the runner halted — park for attention.
+        # The runner proved the run incomplete (starved nodes, an exhausted
+        # gate fix-loop, a rejected sign-off without a route, or an exhausted
+        # resume-retry ceiling) and put the machine-readable detail at RUN
+        # level (final_state.stall).  Render it into an actionable WAITING
+        # message — the driver never digs through WorkflowState.nodes for this.
         await _park_goal_waiting(
-            store, goal_id, "Delivery workflow failed — a node returned status=failed."
+            store, goal_id, _stall_reason(final_state), waiting_kind="stalled",
+        )
+    elif final_state.status == "failed":
+        # A node failed and the runner halted — park for attention.  The next
+        # user re-entry resumes via RetryFailed('all') (package-bounded).
+        await _park_goal_waiting(
+            store,
+            goal_id,
+            "Delivery workflow failed — a node returned status=failed. "
+            "Reply to retry the failed node(s).",
+            waiting_kind="node_failed",
+        )
+    elif final_state.status == "blocked":
+        # Parked on a sign-off: the adapter's escalate() already parked the
+        # goal WAITING with the node's question — stamp the structured wait
+        # meta (§5.6) so the UI shows the Approve/Reject affordance, and park
+        # defensively if the adapter could not.
+        human_ids = _blocked_human_ids(graph, final_state)
+        await _park_goal_waiting(
+            store,
+            goal_id,
+            "Delivery workflow paused on a sign-off (runner status=blocked).",
+            only_if_active=True,
+            waiting_kind="signoff" if human_ids else None,
+            waiting_node_id=human_ids[0] if human_ids else None,
         )
     else:
-        # blocked / escalated / any other non-terminal status. The adapter's
-        # escalate() normally parks the goal on a human/blocked node, but never
-        # leave it ACTIVE: park it WAITING if it isn't already in a resting state.
+        # escalated / any other non-terminal status. The adapter's escalate()
+        # normally parks the goal (e.g. a timed wait), but never leave it
+        # ACTIVE: park it WAITING if it isn't already in a resting state.
         log.info(
             "delivery_driver: goal %s ended with runner status=%s", goal_id, final_state.status,
         )
         await _park_goal_waiting(
             store,
             goal_id,
-            f"Delivery workflow paused (runner status={final_state.status}).",
+            f"Delivery workflow paused (runner status={final_state.status}). "
+            "Reply to resume.",
             only_if_active=True,
+            waiting_kind="escalated",
         )
 
 
-def _resume_from_blocked(adapter: Any, graph: Any, goal_id: str) -> None:
-    """Clear a persisted ``blocked`` run so it resumes past a human sign-off.
-
-    Reads the persisted WorkflowState via ``adapter.state``.  When the run is
-    ``blocked`` (parked on a human/wait node awaiting sign-off), mark the blocked
-    human/wait node(s) ``done`` (the user answered → approved) and reset the run
-    status to ``running`` so the runner's cancel-race guard does not halt on the
-    first tick and instead routes to the approved node's successors.
-
-    A no-op on a fresh run (status ``running``) or when the adapter's state is a
-    test double whose ``read()`` does not yield a real WorkflowState.
-    """
-    state_ops = getattr(adapter, "state", None)
-    if state_ops is None or not hasattr(state_ops, "read"):
-        return
-    try:
-        persisted = state_ops.read()
-    except Exception:
-        return
-    if getattr(persisted, "status", None) != "blocked":
-        return
-
-    # Only human / human-mode wait nodes legitimately park a run "blocked".
-    human_ids = {
-        n.id
-        for n in getattr(graph, "nodes", [])
-        if getattr(n, "kind", None) == "human"
-        or (
-            getattr(n, "kind", None) == "wait"
-            and (getattr(n, "data", None) or {}).get("mode", "human") == "human"
-        )
-    }
-    approved = {
-        nid: {"status": "done"}
-        for nid, ns in getattr(persisted, "nodes", {}).items()
-        if getattr(ns, "status", None) == "blocked" and nid in human_ids
-    }
-
-    patch: dict[str, Any] = {"status": "running"}
-    if approved:
-        patch["nodes"] = approved
-    try:
-        state_ops.write(patch)
-    except Exception:
-        log.exception("delivery_driver: failed to clear blocked state for %s", goal_id)
-        return
-    log.info(
-        "delivery_driver: goal %s resuming from blocked; approved human node(s)=%s",
-        goal_id, sorted(approved) or "(none)",
-    )
+#: Persisted run statuses the driver re-enters via the package resume() API.
+#: Everything else (fresh 'running', crash mid-run, or a completed 'done')
+#: goes through plain runner.run().
+_RESUMABLE_STATUSES = ("blocked", "failed", "escalated", "stalled")
 
 
-# Max times a persisted `failed` node may be re-dispatched across resumes before
-# the driver stops looping and parks the goal WAITING for manual intervention.
-_MAX_FAILED_RESUMES = 2
+def _read_persisted_state(adapter: Any) -> Any:
+    """Best-effort read of the persisted WorkflowState via ``adapter.state``.
 
-
-def _resume_from_failed(adapter: Any, goal_id: str, run_dir: Path) -> str | None:
-    """Bound re-dispatch of a persisted ``failed`` node across resumes.
-
-    The runner re-dispatches any non-``done`` node on resume with no attempt
-    ceiling, so a node that keeps failing (classically an OOM: exit -9) loops
-    OOM→WAITING→resume→OOM.  Since the runner overwrites node ``attempt`` on
-    each dispatch, the attempt count is kept in a sidecar file in ``run_dir``.
-    (Scheduled for deletion in remediation step R7, when ``RetryFailed`` puts
-    the attempt ceiling into persisted state.)
-
-    Returns a park reason (the caller parks the goal WAITING and skips the runner)
-    once a failed node exceeds ``_MAX_FAILED_RESUMES``; otherwise ``None`` (let the
-    runner retry).  Best-effort and exception-tolerant — a bookkeeping error never
-    blocks a run.
+    Returns ``None`` when the adapter's state is absent or a test double whose
+    ``read()`` does not yield a real WorkflowState — the caller then falls back
+    to a plain ``runner.run()``.
     """
     state_ops = getattr(adapter, "state", None)
     if state_ops is None or not hasattr(state_ops, "read"):
         return None
     try:
-        persisted = state_ops.read()
+        return state_ops.read()
     except Exception:
         return None
-    if getattr(persisted, "status", None) != "failed":
-        return None
-    failed = [
-        nid
-        for nid, ns in getattr(persisted, "nodes", {}).items()
-        if getattr(ns, "status", None) == "failed"
-    ]
-    if not failed:
-        return None
 
-    counter_path = Path(run_dir) / "failed_resumes.json"
+
+def _blocked_human_ids(graph: Any, state: Any) -> list[str]:
+    """Package query for the sign-off node(s) a blocked run is parked on.
+
+    Delegates to ``runner.blocked_human_nodes`` (the driver never reads
+    ``WorkflowState.nodes`` itself); defensive against test doubles.
+    """
     try:
-        raw = json.loads(counter_path.read_text())
-        prev = raw if isinstance(raw, dict) else {}
-    except (FileNotFoundError, OSError, ValueError):
-        prev = {}
+        from runner import blocked_human_nodes
 
-    # Keep only currently-failed nodes (prune stale entries for nodes that have
-    # since progressed) and increment their attempt count.
-    counts = {nid: int(prev.get(nid, 0)) + 1 for nid in failed}
-    exhausted = sorted(nid for nid, c in counts.items() if c > _MAX_FAILED_RESUMES)
+        return blocked_human_nodes(graph, state)
+    except Exception:
+        return []
 
-    try:
-        tmp = counter_path.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(counts))
-        os.replace(tmp, counter_path)
-    except OSError:
-        log.warning(
-            "delivery_driver: could not persist failed-resume counter for %s", goal_id
+
+def _resume_persisted_run(
+    graph: Any,
+    adapter: Any,
+    persisted: Any,
+    user_message: str | None,
+    verdict: str | None,
+    goal_id: str,
+) -> "tuple[Any, str | None, str | None, str | None]":
+    """Re-enter a persisted halted run through ``runner.resume()`` (R7).
+
+    Translates the persisted run status + the user's action into exactly one
+    package resume event (mapping documented on ``run_delivery_goal``) and
+    returns ``(final_state, None, None, None)``.  When no legal event applies
+    — or the package rejects the event — returns ``(None, park_reason,
+    waiting_kind, waiting_node_id)`` and the caller parks the goal WAITING
+    with the actionable reason and the structured §5.6 wait metadata
+    (``'signoff'`` + node id for sign-off parks, ``'stalled'`` for stall
+    re-derives), so re-parked goals keep their UI affordance.
+
+    Runs synchronously in the runner worker thread (it may dispatch children).
+    """
+    import runner as workflow_runner
+    from runner import HumanAnswer, Nothing, ResumeError, RetryFailed
+
+    status = getattr(persisted, "status", None)
+    text = (user_message or "").strip()
+
+    def _resume(event: Any) -> Any:
+        return workflow_runner.resume(graph, adapter, adapter.state, event)
+
+    if status == "blocked":
+        human_ids = _blocked_human_ids(graph, persisted)
+        if not human_ids:
+            return None, (
+                "Delivery run is parked 'blocked' on a non-sign-off node (an "
+                "agent reported itself blocked). No resume event applies — "
+                "inspect the node's child task, fix the blocker, and start a "
+                "fresh run (or adjust the workflow spec)."
+            ), None, None
+        if len(human_ids) > 1:
+            log.warning(
+                "delivery_driver: goal %s has %d blocked sign-off nodes %s — "
+                "answering the first.", goal_id, len(human_ids), human_ids,
+            )
+        if not text and verdict not in ("approve", "reject"):
+            # No answer was given: a message-less re-entry (backend restart,
+            # goal-sync propagation, board drag) must NOT approve the pending
+            # sign-off — silence never becomes a yes (D10).  Re-park with the
+            # signoff metadata so the Approve/Reject affordance survives.
+            log.info(
+                "delivery_driver: goal %s re-entered blocked sign-off %r "
+                "without an answer — re-parking WAITING.",
+                goal_id, human_ids[0],
+            )
+            reason = (
+                f"Delivery workflow is still waiting on sign-off "
+                f"'{human_ids[0]}' — reply (or use Approve/Reject) to continue."
+            )
+            return None, reason, "signoff", human_ids[0]
+        chosen_verdict = verdict if verdict in ("approve", "reject") else "approve"
+        event = HumanAnswer(node_id=human_ids[0], text=text, verdict=chosen_verdict)
+        log.info(
+            "delivery_driver: goal %s resuming blocked sign-off %r "
+            "(verdict=%s, answer=%d chars).",
+            goal_id, human_ids[0], chosen_verdict, len(text),
         )
+        try:
+            return _resume(event), None, None, None
+        except ResumeError as exc:
+            return (
+                None,
+                f"Delivery sign-off resume rejected: {exc}",
+                "signoff",
+                human_ids[0],
+            )
 
-    if exhausted:
-        return (
-            f"Delivery node(s) {', '.join(exhausted)} failed on "
-            f"{_MAX_FAILED_RESUMES + 1} consecutive attempts — halting to avoid a "
-            "crash loop. Fix the root cause (if the agent exited -9 it was killed "
-            "out of memory: lower CRONOS_MAX_CONCURRENT_AGENTS or raise the "
-            "container mem_limit/swap) before resuming."
+    if status == "failed":
+        # Package-bounded: the per-node retry ceiling lives in state
+        # (WorkflowState.resume_retries); exhaustion terminates 'stalled'
+        # (kind=retry_exhausted) which the caller renders via _stall_reason.
+        log.info("delivery_driver: goal %s resuming failed run (RetryFailed all).", goal_id)
+        try:
+            return _resume(RetryFailed("all")), None, None, None
+        except ResumeError as exc:
+            return None, f"Delivery run could not be resumed: {exc}", "node_failed", None
+
+    if status == "escalated":
+        # Nothing() is the external-mitigation re-entry: it completes served
+        # timed waits and re-enters iteration-cap halts.  If the run re-derives
+        # 'escalated' without progress, the halt is pinned to failed/escalated
+        # node(s) (e.g. a loop-exhausted agent) — re-arm them once via
+        # RetryFailed('all'); the package ceiling bounds repetition.
+        log.info("delivery_driver: goal %s resuming escalated run (Nothing()).", goal_id)
+        try:
+            final = _resume(Nothing())
+        except ResumeError as exc:
+            return None, f"Delivery run could not be resumed: {exc}", "escalated", None
+        if getattr(final, "status", None) == "escalated":
+            log.info(
+                "delivery_driver: goal %s re-derived 'escalated' — "
+                "re-arming via RetryFailed('all').", goal_id,
+            )
+            try:
+                final = _resume(RetryFailed("all"))
+            except ResumeError:
+                # Nothing retryable — keep the escalated terminal; the caller
+                # parks the goal WAITING with the runner's status.
+                pass
+        return final, None, None, None
+
+    # stalled — stays parked (R6: needs spec/state surgery), EXCEPT a rejected
+    # sign-off: a NEW user message legitimately re-opens it by re-arming the
+    # rejected (needs_fix) node — the workflow re-parks on the sign-off and
+    # asks again, so the user can approve or reject-with-route this time.
+    stall = getattr(persisted, "stall", None) or {}
+    if stall.get("kind") == "rejected" and text:
+        nodes = [str(n) for n in (stall.get("nodes") or [])]
+        log.info(
+            "delivery_driver: goal %s re-opening rejected sign-off %s.",
+            goal_id, nodes,
         )
-    log.info(
-        "delivery_driver: goal %s retrying failed node(s) %s (attempts=%s)",
-        goal_id, sorted(failed), counts,
-    )
-    return None
+        try:
+            return _resume(RetryFailed(nodes)), None, None, None
+        except ResumeError as exc:
+            return (
+                None,
+                f"Delivery sign-off could not be re-opened: {exc}",
+                "stalled",
+                None,
+            )
+    return None, _stall_reason(persisted), "stalled", None
 
 
 def _stall_reason(final_state: Any) -> str:
@@ -444,17 +550,28 @@ def _stall_reason(final_state: Any) -> str:
     kind = str(stall.get("kind") or "")
     nodes = ", ".join(str(n) for n in (stall.get("nodes") or [])) or "?"
     reason = str(stall.get("reason") or "")
-    # Honest interim guidance: until R7 (resume as package API) lands, a
-    # re-run cannot retry an exhausted gate — resume seeding treats the
-    # persisted needs_fix gate as settled and never re-dispatches it, so a
-    # "fix the artifact and re-run" promise would loop the park forever.
     if kind == "gate_exhausted":
         msg = f"Delivery workflow stalled: gate {nodes} exhausted its fix-loop"
         tail = (
-            " Re-running cannot yet retry an exhausted gate (resume support "
-            "lands with R7) — adjust the gate routing or its loop max in the "
-            "workflow spec, or start a fresh run after fixing the named "
-            "check/artifact."
+            " Fix the named check/artifact and adjust the gate routing or its "
+            "loop max in the workflow spec, or start a fresh run — re-running "
+            "keeps the park (an exhausted gate is not blindly retried)."
+        )
+    elif kind == "rejected":
+        msg = f"Delivery sign-off {nodes} was rejected"
+        tail = (
+            " The workflow declares no on_reject route for this sign-off, so "
+            "the run is parked. Reply with a message to re-open the sign-off "
+            "(the workflow will ask again), or add an on_reject route to the "
+            "spec so a rejection re-runs the right node."
+        )
+    elif kind == "retry_exhausted":
+        msg = f"Delivery workflow stalled: node(s) {nodes} keep failing"
+        tail = (
+            " The resume retry ceiling was reached — fix the root cause (an "
+            "agent exiting -9 was killed out of memory: lower "
+            "CRONOS_MAX_CONCURRENT_AGENTS or raise the container "
+            "mem_limit/swap) before starting a fresh run."
         )
     else:
         msg = (
@@ -462,9 +579,7 @@ def _stall_reason(final_state: Any) -> str:
         )
         tail = (
             " Fix the upstream routing fields/conditions and re-run, or "
-            "adjust the workflow edges. (If this follows an exhausted gate "
-            "fix-loop, re-running cannot yet retry the gate — resume support "
-            "lands with R7.)"
+            "adjust the workflow edges."
         )
     if reason:
         msg += f" — {reason}."
@@ -492,29 +607,51 @@ async def _finalize_goal_done(store: "TaskStore", goal_id: str) -> None:
 
 
 async def _park_goal_waiting(
-    store: "TaskStore", goal_id: str, reason: str, *, only_if_active: bool = False
+    store: "TaskStore",
+    goal_id: str,
+    reason: str,
+    *,
+    only_if_active: bool = False,
+    waiting_kind: str | None = None,
+    waiting_node_id: str | None = None,
 ) -> None:
     """Park *goal_id* to WAITING with *reason* as the waiting_question.
 
     When *only_if_active* is True, only park a goal that is still ACTIVE/BACKLOG —
     used as a safety net that must NOT clobber a goal already parked WAITING by the
     adapter's escalate() (e.g. a human-signoff node with its own question).
+
+    ``waiting_kind``/``waiting_node_id`` carry the structured wait metadata
+    (§5.6).  A goal that is ALREADY WAITING keeps its question but still gets
+    the metadata stamped (via ``set_waiting_meta``) — that is how the sign-off
+    park created by the adapter's escalate() mid-run learns it is a sign-off.
     """
     from .models import TaskState
 
     try:
         task = store.get(goal_id)
-        if only_if_active and task is not None and task.state not in (
+        if task is None:
+            return
+        if task.state == TaskState.WAITING:
+            if waiting_kind is not None:
+                await store.set_waiting_meta(
+                    goal_id,
+                    waiting_kind=waiting_kind,
+                    waiting_node_id=waiting_node_id,
+                )
+            return
+        if only_if_active and task.state not in (
             TaskState.ACTIVE, TaskState.BACKLOG
         ):
             return
-        if task is not None and task.state != TaskState.WAITING:
-            await store.finalize_run(
-                goal_id,
-                new_state=TaskState.WAITING,
-                session_id=None,
-                waiting_question=reason,
-                history_entry=f"[delivery_driver] {reason}",
-            )
+        await store.finalize_run(
+            goal_id,
+            new_state=TaskState.WAITING,
+            session_id=None,
+            waiting_question=reason,
+            history_entry=f"[delivery_driver] {reason}",
+            waiting_kind=waiting_kind,
+            waiting_node_id=waiting_node_id,
+        )
     except Exception as exc:
         log.error("delivery_driver: failed to park goal %s to WAITING: %s", goal_id, exc)

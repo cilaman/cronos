@@ -165,6 +165,8 @@ export interface TaskSummary {
   created_at: string;
   updated_at: string;
   waiting_question: string | null;
+  waiting_kind?: "signoff" | "node_failed" | "stalled" | "escalated" | null;
+  waiting_node_id?: string | null;
   brief_preview: string;
   priority: number;
   manual_order: number;
@@ -226,6 +228,9 @@ export interface Task {
   updated_at: string;
   claude_session_id: string | null;
   waiting_question: string | null;
+  // Structured wait metadata (§5.6): 'signoff' waits get Approve/Reject controls.
+  waiting_kind?: "signoff" | "node_failed" | "stalled" | "escalated" | null;
+  waiting_node_id?: string | null;
   brief: string;
   history: string;
   pending_messages: string[];

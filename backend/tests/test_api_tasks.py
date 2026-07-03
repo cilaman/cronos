@@ -1250,6 +1250,147 @@ async def test_goal_reply_running_child_forwards_message(async_client, task_stor
 
 
 # ---------------------------------------------------------------------------
+# POST /api/tasks/{id}/reply — delivery goals (R7/D10): the reply resumes the
+# workflow run itself (never routes to a child) and carries the verdict.
+# ---------------------------------------------------------------------------
+
+_DELIVERY_BRIEF = "# Goal\n\n<!-- delivery-workflow: delivery.workflow.yaml -->"
+
+
+class _SpyWorker:
+    def __init__(self):
+        self.enqueued: list[dict] = []
+
+    async def enqueue(self, task_id: str, **kwargs) -> None:
+        self.enqueued.append({"task_id": task_id, **kwargs})
+
+    def stop_current(self, task_id: str) -> bool:
+        return False
+
+    def is_alive(self) -> bool:
+        return True
+
+    def current(self) -> str | None:
+        return None
+
+
+class _SpyPool:
+    def __init__(self, worker):
+        self._worker = worker
+
+    def get(self, space_id):
+        return self._worker
+
+    async def start_for_space(self, space_id):
+        return self._worker
+
+    async def stop_for_space(self, space_id):
+        pass
+
+    async def enqueue(self, space_id, task_id):
+        pass
+
+    def items(self):
+        return []
+
+    def running_ids(self, space_id):
+        return set()
+
+
+async def test_delivery_goal_reply_resumes_goal_with_verdict(async_client, task_store):
+    """A WAITING delivery goal reply re-activates the GOAL (no child routing)
+    and enqueues it with user_message + verdict for the delivery driver."""
+    from app.main import app
+    from app.models import TaskState
+
+    goal = await _create(
+        async_client, title="Delivery Goal", type="goal", brief=_DELIVERY_BRIEF
+    )
+    # A backlog child exists, but delivery replies must NOT route to it.
+    child = await _create(async_client, title="Old Child", parent_id=goal["id"])
+
+    stored_goal = task_store.get(goal["id"])
+    task_store._by_id[goal["id"]] = stored_goal.model_copy(update={
+        "state": TaskState.WAITING,
+        "waiting_question": "Right thing to build?",
+        "waiting_kind": "signoff",
+        "waiting_node_id": "signoff-scope",
+    })
+
+    spy = _SpyWorker()
+    original_pool = app.state.worker_pool
+    app.state.worker_pool = _SpyPool(spy)
+    try:
+        resp = await async_client.post(
+            f"/api/tasks/{goal['id']}/reply",
+            json={"message": "no — change X", "verdict": "reject"},
+        )
+    finally:
+        app.state.worker_pool = original_pool
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["routed_to"] is None
+    # The goal itself re-activated with the wait metadata cleared.
+    stored = task_store.get(goal["id"])
+    assert stored.state == TaskState.ACTIVE
+    assert stored.waiting_question is None
+    assert stored.waiting_kind is None
+    assert stored.waiting_node_id is None
+    # The child was untouched (no pending message routed to it).
+    assert task_store.get(child["id"]).pending_messages == []
+    # The worker got the message AND the verdict.
+    assert spy.enqueued == [{
+        "task_id": goal["id"],
+        "user_message": "no — change X",
+        "verdict": "reject",
+    }]
+
+
+async def test_delivery_goal_reply_without_verdict_defaults_to_none(async_client, task_store):
+    """No explicit verdict → verdict=None travels to the worker (the driver
+    treats it as approve — documented backward-compatible default)."""
+    from app.main import app
+    from app.models import TaskState
+
+    goal = await _create(
+        async_client, title="Delivery Goal 2", type="goal", brief=_DELIVERY_BRIEF
+    )
+    stored_goal = task_store.get(goal["id"])
+    task_store._by_id[goal["id"]] = stored_goal.model_copy(update={
+        "state": TaskState.WAITING,
+        "waiting_question": "OK?",
+        "waiting_kind": "signoff",
+    })
+
+    spy = _SpyWorker()
+    original_pool = app.state.worker_pool
+    app.state.worker_pool = _SpyPool(spy)
+    try:
+        resp = await async_client.post(
+            f"/api/tasks/{goal['id']}/reply", json={"message": "ship it"}
+        )
+    finally:
+        app.state.worker_pool = original_pool
+
+    assert resp.status_code == 200
+    assert spy.enqueued == [{
+        "task_id": goal["id"],
+        "user_message": "ship it",
+        "verdict": None,
+    }]
+
+
+async def test_reply_rejects_invalid_verdict(async_client):
+    task = await _create(async_client, title="T1")
+    resp = await async_client.post(
+        f"/api/tasks/{task['id']}/reply",
+        json={"message": "x", "verdict": "maybe"},
+    )
+    assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
 # GET /api/tasks/{id}/route-preview
 # ---------------------------------------------------------------------------
 

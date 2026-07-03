@@ -116,6 +116,29 @@ def _delivery_child_state_from_envelope(
     )
 
 
+def _human_answers_section(scope: dict[str, Any]) -> str:
+    """Render human sign-off answers from a delivery scope into brief markdown.
+
+    The runner's typed scope carries a parked-then-answered sign-off as
+    ``<node>.fields.answer`` (the user's text, OD-2) and
+    ``<node>.fields.verdict`` ('approve'|'reject').  Returns a markdown
+    section (trailing blank line included) or '' when no answer is present,
+    so the child brief composition can splice it in unconditionally.
+    """
+    lines: list[str] = []
+    for key in sorted(k for k in scope if k.endswith(".fields.answer")):
+        answer = scope[key]
+        if not isinstance(answer, str) or not answer.strip():
+            continue
+        node = key[: -len(".fields.answer")]
+        verdict = scope.get(f"{node}.fields.verdict")
+        label = f" ({verdict})" if isinstance(verdict, str) and verdict else ""
+        lines.append(f"- {node}{label}: {answer.strip()}")
+    if not lines:
+        return ""
+    return "## Human sign-off answers\n\n" + "\n".join(lines) + "\n\n"
+
+
 def _read_executor_variant(run_state_path: Path) -> str:
     """Read the executor variant from the run-state JSON file.
 
@@ -1017,8 +1040,21 @@ class RunExecutor:
 
     # ---- goal orchestration ----
 
-    async def run_goal(self, goal_id: str, user_message: str | None) -> None:
-        """Orchestrate a goal by running its child tasks sequentially in dep order."""
+    async def run_goal(
+        self,
+        goal_id: str,
+        user_message: str | None,
+        verdict: str | None = None,
+    ) -> None:
+        """Orchestrate a goal by running its child tasks sequentially in dep order.
+
+        ``user_message``/``verdict`` matter for delivery goals (R7/D10): the
+        reply that re-activated a parked delivery goal is forwarded to the
+        delivery driver, which turns it into a package ``resume()`` event
+        (e.g. ``HumanAnswer(text=user_message, verdict=verdict or 'approve')``
+        for a sign-off park). For ordinary goals they keep their historical
+        meaning (pending-message drain).
+        """
         goal = self.store.get(goal_id)
         if goal is None:
             log.warning("Skipping unknown goal %s", goal_id)
@@ -1062,6 +1098,8 @@ class RunExecutor:
                     run_child=self.run_delivery_child,
                     cancel_event=cancel_event,
                     goal_context=_goal_context,
+                    user_message=user_message,
+                    verdict=verdict,
                 )
             except Exception as _exc:
                 log.exception("Delivery goal %s failed in run_delivery_goal", goal_id)
@@ -1506,10 +1544,16 @@ class RunExecutor:
         )
         node_id = inputs.get("node_id", agent_ref)
         sentinel = DELIVERY_NODE_SENTINEL.format(node_id=node_id)
+        # R7/OD-2: human sign-off answers live in the typed scope as
+        # `<node>.fields.answer` (with `<node>.fields.verdict`); render them
+        # into the child brief so "no — change X" actually reaches the agent
+        # prompt of the node the reject route re-runs.
+        answer_section = _human_answers_section(inputs.get("scope") or {})
         brief = (
             f"# Agent: {agent_ref}\n\n"
             f"slug: {goal_slug}\n\n"
             f"{artifact_lines}\n\n"
+            f"{answer_section}"
             f"{sentinel}"
         ).strip()
         depends_on = inputs.get("depends_on") or None

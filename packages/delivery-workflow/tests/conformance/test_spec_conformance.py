@@ -2,19 +2,20 @@
 
 Each scenario drives the SHIPPED ``delivery.workflow.yaml`` end-to-end through
 the real ``spec_loader`` + ``compiler_a`` + ``runner.run`` against real
-``StateStore`` persistence, simulating host park→resume cycles the way
-``delivery_driver`` performs them today (see ``harness.host_resume_from_blocked``).
+``StateStore`` persistence, re-entering parked runs through the R7 package
+resume API (``runner.resume`` — see ``harness.drive_with_host_resumes``),
+exactly as the host does.
 
 Per scenario we assert:
   (a) the EXACT executed-node set and per-node dispatch counts,
   (b) the terminal ``WorkflowState.status``,
   (c) state round-trip equality (disk == in-memory result).
 
-Expectations today's code cannot meet are marked ``xfail(strict=True)`` with a
-reason naming the remediation item that will flip them (R5–R8,
-docs/pipeline-review/03-remediation-plan.md).  ``strict=True`` means a fix that
-lands unnoticed turns XPASS → hard failure, forcing the marker to be removed —
-the suite therefore doubles as the remediation progress meter:
+Expectations the code cannot meet yet are marked ``xfail(strict=True)`` with a
+reason naming the remediation item that will flip them
+(docs/pipeline-review/03-remediation-plan.md).  ``strict=True`` means a fix
+that lands unnoticed turns XPASS → hard failure, forcing the marker to be
+removed — the suite therefore doubles as the remediation progress meter:
 
     grep -rn "test_conformance_" packages/delivery-workflow/tests/conformance/
 
@@ -31,7 +32,15 @@ is GREEN: a drained work-list only reports ``done`` when every node is executed
 or excluded-with-proof, else ``stalled`` with the run-level ``state.stall``
 detail.  ``test_conformance_verdict_routed_gate`` guards the D12 inverse: a
 run that verdict-routed past a ``needs_fix`` gate decision IS complete.
-Remaining xfail: ``test_conformance_escalated_resume`` (R7).
+
+Since R7 (resume as package API), ``test_conformance_escalated_resume`` is
+GREEN (persisted ``escalated`` is resumable — D7 dead) and the suite gained
+the reject/retry lifecycle scenarios: ``test_conformance_reject_with_route``
+(OD-1/OD-2 — "no, change X" re-runs analysis with X in scope, killing D10),
+``test_conformance_reject_without_route`` (reject with no ``on_reject`` →
+``stalled`` kind=``rejected``) and ``test_conformance_retry_failed_ceiling``
+(the in-state retry ceiling that replaced ``failed_resumes.json``).
+No xfails remain.
 """
 from __future__ import annotations
 
@@ -40,6 +49,7 @@ from pathlib import Path
 import pytest
 
 import runner as workflow_runner
+from runner import HumanAnswer, Nothing, ResumeError, RetryFailed
 
 from tests.conformance.harness import (
     ALL_NODES,
@@ -49,10 +59,10 @@ from tests.conformance.harness import (
     AGENT_NODES,
     ScriptedExecutor,
     agent_done,
+    agent_failed,
     gate_decision,
     assert_state_roundtrip,
     drive_with_host_resumes,
-    host_resume_from_blocked,
     load_shipped_graph,
     make_state_ops,
 )
@@ -270,31 +280,25 @@ def test_conformance_verdict_routed_gate(tmp_path: Path, graph) -> None:
 
 # ===========================================================================
 # (d) TIMED-WAIT / ESCALATED (D7) — a run that persisted status="escalated"
-#     must be resumable.
+#     must be resumable.  GREEN since R7.
 #
-# Writers of persisted `escalated` today: wait(timed) dispatch
-# (runner/dispatch.py), the global iteration cap and loop-exhaust paths
-# (runner/core.py).  The shipped spec cannot reach a *persisted* escalated
-# cheaply (the adapter's escalate parks runs as `blocked`), so this scenario
-# parks the run at signoff-scope and then applies the status="escalated"
-# patch those writers produce.  The runner's cancel-race guard then halts on
-# `escalated` before dispatching anything, and today's only host resume
-# mechanism (_resume_from_blocked) does not match it: answer → instant halt →
-# re-park, forever (repro D9).
-#
-# When R7 lands, rewrite the resume step to the package API
-# (DeliveryRun.resume(RetryFailed|RaiseBudget)) and drop the host simulation.
+# Writers of persisted `escalated`: wait(timed) dispatch (runner/dispatch.py),
+# the global iteration cap and loop-exhaust paths (runner/core.py).  The
+# shipped spec cannot reach a *persisted* escalated cheaply (the adapter's
+# escalate parks runs as `blocked`), so this scenario parks the run at
+# signoff-scope and then applies the status="escalated" patch those writers
+# produce.  Bare `run()` on that state must HALT — that is now sealed,
+# correct behavior (top-of-run guard) — and `runner.resume(Nothing())` is the
+# legal re-entry (external mitigation): it flips the status back to running
+# and the run progresses to the sign-off park and, from there, to `done`.
 # ===========================================================================
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="R7 resume API (D7): persisted 'escalated' is a terminal trap — the "
-    "runner guard halts on it and no host resume path matches it",
-)
 def test_conformance_escalated_resume(tmp_path: Path, graph) -> None:
     executor, state_ops = _make_run(tmp_path, graph, {
         "analyze": agent_done(has_ui=True),
+        "review": agent_done(verdict="pass", finding_class="none"),
+        "security": agent_done(verdict="pass", finding_class="none"),
     })
 
     # Reach the first human park through the real pipeline prefix.
@@ -305,18 +309,194 @@ def test_conformance_escalated_resume(tmp_path: Path, graph) -> None:
     # global cap / loop exhaust).
     state_ops.write({"status": "escalated"})
 
-    # One full host resume cycle, exactly as re-entry works today.
+    # Bare run() must NOT tunnel past the escalation — the halt is the sealed
+    # half of R7 (resume() is the only legal re-entry).
     calls_before = sum(executor.calls.values())
-    host_resume_from_blocked(state_ops, graph)  # no-op: status != "blocked"
-    final = workflow_runner.run(graph=graph, executor=executor, state_ops=state_ops)
-
-    # (a)+(b) the resume must make progress: either new work was dispatched or
-    # the run left the escalated state.  Today neither happens.
-    progressed = sum(executor.calls.values()) > calls_before
-    assert progressed or final.status != "escalated", (
-        "persisted 'escalated' run made no progress on resume — every re-entry "
-        "halts instantly and the goal re-parks WAITING forever (D7)"
+    sealed = workflow_runner.run(graph=graph, executor=executor, state_ops=state_ops)
+    assert sealed.status == "escalated"
+    assert sum(executor.calls.values()) == calls_before, (
+        "bare run() dispatched work on a persisted 'escalated' state"
     )
+
+    # The legal re-entry: Nothing() (external mitigation).  The run re-arms,
+    # re-parks at the still-blocked sign-off (progress OUT of the escalated
+    # trap — D7 dead), and the ordinary approve cycle completes the pipeline.
+    resumed = workflow_runner.resume(graph, executor, state_ops, Nothing())
+    assert resumed.status == "blocked", (
+        f"escalated run did not progress on resume(Nothing()): {resumed.status!r}"
+    )
+
+    outcome = drive_with_host_resumes(graph, executor, state_ops)
+
+    # (a) full pipeline executed; the sign-off parked twice (once before the
+    # escalation, once after the Nothing() re-entry re-armed it).
+    assert executor.executed_nodes() == set(ALL_NODES)
+    assert executor.human_park_sequence() == [
+        "signoff-scope", "signoff-scope", "signoff-design", "release",
+    ]
+
+    # (b) terminal status.
+    assert outcome.final.status == "done"
+
+    # (c) round-trip law.
+    assert_state_roundtrip(state_ops, outcome.final)
+
+
+# ===========================================================================
+# (d') REJECT WITH on_reject ROUTE (R7, OD-1/OD-2 — kills D10) — the user
+#      answers the scope sign-off "no — change X": the sign-off must NOT be
+#      silently approved; `analyze` (the spec's on_reject target) re-runs with
+#      the answer text visible in its scope/inputs; the corrected analysis
+#      (has_ui flips false→true) then routes the frontend branch, the re-armed
+#      sign-off parks again, and the ordinary approve cycle completes.
+# ===========================================================================
+
+
+def test_conformance_reject_with_route(tmp_path: Path, graph) -> None:
+    reject_text = "no — the analysis must cover the admin UI"
+    executor, state_ops = _make_run(tmp_path, graph, {
+        # First analysis says no UI; the post-reject re-run says UI.
+        "analyze": [agent_done(has_ui=False), agent_done(has_ui=True)],
+        "review": agent_done(verdict="pass", finding_class="none"),
+        "security": agent_done(verdict="pass", finding_class="none"),
+    })
+
+    first = workflow_runner.run(graph=graph, executor=executor, state_ops=state_ops)
+    assert first.status == "blocked", "precondition: run parks at signoff-scope"
+
+    # The reject resume: analyze re-runs and the run re-parks at the sign-off.
+    rejected = workflow_runner.resume(
+        graph, executor, state_ops,
+        HumanAnswer(node_id="signoff-scope", text=reject_text, verdict="reject"),
+    )
+    assert rejected.status == "blocked"
+    assert executor.calls["analyze"] == 2, "on_reject target must re-run"
+
+    # OD-2 answer chain: the re-run's dispatch inputs carry the answer in
+    # scope (dispatchAgent inputs['scope'] is what brief composition reads).
+    rerun_scope = executor.agent_inputs["analyze"][1]["scope"]
+    assert rerun_scope.get("signoff-scope.fields.answer") == reject_text, (
+        "the reject answer did not reach the re-run node's inputs/scope (D10)"
+    )
+    assert rerun_scope.get("signoff-scope.fields.verdict") == "reject"
+
+    # Approve cycle to completion.
+    outcome = drive_with_host_resumes(graph, executor, state_ops)
+
+    # (a) exact executed-node set and counts: full pipeline; analyze and
+    # g-analysis ran twice (the reject iteration); frontend executed because
+    # the corrected analysis said has_ui=true.
+    assert executor.executed_nodes() == set(ALL_NODES)
+    expected_counts = {nid: 1 for nid in ALL_NODES - HUMAN_NODES}
+    expected_counts["analyze"] = 2
+    expected_counts["g-analysis"] = 2
+    assert dict(executor.calls) == expected_counts
+    assert executor.human_park_sequence() == [
+        "signoff-scope", "signoff-scope", "signoff-design", "release",
+    ]
+
+    # (b) terminal status.
+    assert outcome.final.status == "done"
+    assert outcome.final.stall is None
+    # The consumed answer was cleared when the re-run flow re-armed the
+    # sign-off; the final approval's answer is what remains.
+    assert outcome.final.nodes["signoff-scope"].fields["verdict"] == "approve"
+
+    # (c) round-trip law.
+    assert_state_roundtrip(state_ops, outcome.final)
+
+
+# ===========================================================================
+# (d'') REJECT WITHOUT on_reject ROUTE (R7, OD-1 fallback) — `release`
+#       declares no reject route: rejecting it must terminate the run
+#       'stalled' with kind='rejected' (never silently approve, never loop),
+#       with the answer preserved on the needs_fix node.
+# ===========================================================================
+
+
+def test_conformance_reject_without_route(tmp_path: Path, graph) -> None:
+    executor, state_ops = _make_run(tmp_path, graph, {
+        "analyze": agent_done(has_ui=True),
+        "review": agent_done(verdict="pass", finding_class="none"),
+        "security": agent_done(verdict="pass", finding_class="none"),
+    })
+
+    # Drive to the release park (two approvals: scope + design).
+    outcome = drive_with_host_resumes(graph, executor, state_ops, max_resumes=2)
+    assert outcome.final.status == "blocked"
+    assert outcome.resumes == [["signoff-scope"], ["signoff-design"]]
+
+    calls_before = sum(executor.calls.values())
+    final = workflow_runner.resume(
+        graph, executor, state_ops,
+        HumanAnswer(node_id="release", text="no — do not ship this", verdict="reject"),
+    )
+
+    # (a) nothing re-runs — there is no route.
+    assert sum(executor.calls.values()) == calls_before
+
+    # (b) terminal: stalled with machine-readable reject detail; the node
+    # terminates needs_fix carrying the answer (a "no" is never a "yes").
+    assert final.status == "stalled"
+    assert final.stall is not None
+    assert final.stall["kind"] == "rejected"
+    assert final.stall["nodes"] == ["release"]
+    assert "do not ship" in final.stall["reason"]
+    assert final.nodes["release"].status == "needs_fix"
+    assert final.nodes["release"].fields["answer"] == "no — do not ship this"
+
+    # (c) round-trip law.
+    assert_state_roundtrip(state_ops, final)
+
+
+# ===========================================================================
+# (d''') RETRYFAILED CEILING (R7) — a persistently-failing node may be
+#        re-armed by resume(RetryFailed) at most DEFAULT_MAX_RESUME_RETRIES
+#        times, with the counter persisted IN STATE (this is what deleted the
+#        driver's failed_resumes.json sidecar); the next retry terminates
+#        'stalled' kind='retry_exhausted' instead of looping the crash.
+# ===========================================================================
+
+
+def test_conformance_retry_failed_ceiling(tmp_path: Path, graph) -> None:
+    executor, state_ops = _make_run(tmp_path, graph, {
+        "scout": agent_failed("child was OOM-killed (exit -9)"),
+    })
+
+    final = workflow_runner.run(graph=graph, executor=executor, state_ops=state_ops)
+    assert final.status == "failed"
+    assert executor.calls["scout"] == 1
+
+    # Two legal retries (the ceiling), each re-dispatching the failed node.
+    for expected_calls, expected_count in ((2, 1), (3, 2)):
+        final = workflow_runner.resume(graph, executor, state_ops, RetryFailed("all"))
+        assert final.status == "failed"
+        assert executor.calls["scout"] == expected_calls
+        # The ceiling is persisted in state — read back from disk (R7: no
+        # sidecar files; the counter must survive a process restart).
+        assert state_ops.read().resume_retries == {"scout": expected_count}
+
+    # The third retry exceeds the ceiling: stalled, no dispatch.
+    final = workflow_runner.resume(graph, executor, state_ops, RetryFailed("all"))
+    assert executor.calls["scout"] == 3
+    assert final.status == "stalled"
+    assert final.stall is not None
+    assert final.stall["kind"] == "retry_exhausted"
+    assert final.stall["nodes"] == ["scout"]
+
+    # A further RetryFailed against the stalled run re-derives the same stall
+    # (idempotent — never a silent loop).
+    final = workflow_runner.resume(graph, executor, state_ops, RetryFailed(["scout"]))
+    assert executor.calls["scout"] == 3
+    assert final.status == "stalled"
+    assert final.stall["kind"] == "retry_exhausted"
+
+    # A HumanAnswer against the stalled run is a clear error, not corruption.
+    with pytest.raises(ResumeError):
+        workflow_runner.resume(
+            graph, executor, state_ops,
+            HumanAnswer(node_id="signoff-scope", text="ok", verdict="approve"),
+        )
 
     # (c) round-trip law.
     assert_state_roundtrip(state_ops, final)

@@ -45,6 +45,10 @@ def _deserialize(data: dict[str, Any]) -> WorkflowState:
         # instead of digging through nodes.  Pre-R6 state.json has no key →
         # None (never crash on legacy files).
         stall=data.get("stall"),
+        # Round-trip law (R7): the resume-retry counters that bound
+        # RetryFailed re-arms — dropping them would resurrect the unbounded
+        # crash-loop the deleted failed_resumes.json sidecar papered over.
+        resume_retries=dict(data.get("resume_retries", {})),
     )
 
 
@@ -83,6 +87,10 @@ def _serialize(state: WorkflowState) -> dict[str, Any]:
     # (omitted when None, so a completed run's state.json carries no key).
     if state.stall is not None:
         data["stall"] = state.stall
+    # Round-trip law (R7): persist the resume-retry counters when present
+    # (omitted when empty, so a never-resumed run's state.json carries no key).
+    if state.resume_retries:
+        data["resume_retries"] = state.resume_retries
     return data
 
 

@@ -5,9 +5,12 @@ The law (01-state-model.md §5.4): **everything the runner writes through
 Concretely, for node patches that means ``status``, ``attempt``,
 ``artifact_paths``, ``gate`` and ``fields``; for top-level patches it means
 ``status``, ``edges_evaluated`` (the R5 edge-evaluation record — the
-runner writes the full snapshot, so a later write replaces the whole value)
-and ``stall`` (the R6 run-level stall detail — full replacement, ``None``
-clears).
+runner writes the full snapshot, so a later write replaces the whole value),
+``stall`` (the R6 run-level stall detail — full replacement, ``None``
+clears), ``resume_retries`` (the R7 resume-retry counters that bound
+``RetryFailed`` re-arms — full replacement, replacing the deleted
+``failed_resumes.json`` sidecar) and ``budget`` (the R7 ``RaiseBudget``
+ceiling lift — per-key update of ``usd_ceiling``/``usd_spent``).
 Values already persisted by other writers (e.g. ``telemetry`` written by
 ``TelemetrySink``) must survive unrelated writes untouched.
 
@@ -321,6 +324,61 @@ def check_edges_evaluated_roundtrip(make_ops: MakeOps) -> None:
     )
 
 
+def check_resume_retries_roundtrip(make_ops: MakeOps) -> None:
+    """The R7 resume-retry counters: ``runner.resume`` persists the full
+    snapshot with ``write({"resume_retries": …})`` — it must read back
+    identically, survive unrelated writes, and be replaced (not merged) by a
+    later snapshot write.  A StateOps that drops it resurrects the unbounded
+    failed-node crash loop the deleted ``failed_resumes.json`` sidecar
+    counter existed to prevent."""
+    record = {"implement": 2, "scout": 1}
+    ops = make_ops(_fresh_state())
+    ops.write({"resume_retries": record})
+    got = ops.read().resume_retries
+    assert got == record, (
+        f"resume_retries round-trip broken: wrote {record!r}, read {got!r} — "
+        "the RetryFailed ceiling cannot bind across resumes (R7)"
+    )
+    # Unrelated writes must not clobber the record.
+    ops.write({"status": "failed", "nodes": {"implement": {"status": "failed"}}})
+    got = ops.read().resume_retries
+    assert got == record, (
+        f"resume_retries clobbered by an unrelated write: {got!r}"
+    )
+    # A later snapshot write replaces the whole record (pruned counters).
+    pruned = {"implement": 2}
+    ops.write({"resume_retries": pruned})
+    got = ops.read().resume_retries
+    assert got == pruned, (
+        f"resume_retries must be replaced by the new snapshot, read {got!r}"
+    )
+
+
+def check_budget_roundtrip(make_ops: MakeOps) -> None:
+    """The R7 ``RaiseBudget`` write shape: ``runner.resume`` lifts the
+    persisted ceiling with ``write({"budget": {"usd_ceiling": …,
+    "usd_spent": …}})`` — it must read back identically and survive
+    unrelated writes, or an 'escalated' budget park can never be resumed
+    with a raised ceiling (D7)."""
+    ops = make_ops(_fresh_state())
+    ops.write({"budget": {"usd_ceiling": 50.0, "usd_spent": 12.5}})
+    budget = ops.read().budget
+    assert budget.usd_ceiling == 50.0, (
+        f"budget.usd_ceiling round-trip broken: wrote 50.0, read "
+        f"{budget.usd_ceiling!r} — RaiseBudget cannot lift the ceiling (R7)"
+    )
+    assert budget.usd_spent == 12.5, (
+        f"budget.usd_spent round-trip broken: read {budget.usd_spent!r}"
+    )
+    # Unrelated writes must not reset the lifted ceiling.
+    ops.write({"status": "running", "nodes": {"analyze": {"status": "done"}}})
+    budget = ops.read().budget
+    assert budget.usd_ceiling == 50.0 and budget.usd_spent == 12.5, (
+        f"budget clobbered by an unrelated write: ceiling="
+        f"{budget.usd_ceiling!r} spent={budget.usd_spent!r}"
+    )
+
+
 STATEOPS_CONFORMANCE_CHECKS: tuple[Callable[[MakeOps], None], ...] = (
     check_top_level_status_roundtrip,
     check_stall_detail_roundtrip,
@@ -331,6 +389,8 @@ STATEOPS_CONFORMANCE_CHECKS: tuple[Callable[[MakeOps], None], ...] = (
     check_unrelated_write_preserves_other_nodes,
     check_fields_survive_park_resume_cycle,
     check_edges_evaluated_roundtrip,
+    check_resume_retries_roundtrip,
+    check_budget_roundtrip,
 )
 
 

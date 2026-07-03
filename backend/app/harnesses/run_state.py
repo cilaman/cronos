@@ -137,6 +137,16 @@ class RunState:
     terminates ``stalled`` maps to harness run status ``failed`` (there is no
     'stalled' in the RunState vocabulary — the full shared-outcome table is
     R10); the detail is preserved here so the reason is not lost.  ``None`` on
+    the BFS path and on legacy JSON files without the key.  R7 adds the
+    ``rejected`` and ``retry_exhausted`` kinds (written by ``runner.resume``).
+    """
+
+    resume_retries: dict = field(default_factory=dict)
+    """
+    The delivery-workflow runner's RetryFailed counters (R7, 01-state-model.md
+    §5.3): node_id → number of resume-triggered re-arms.  Persisted IN STATE
+    (never a sidecar file) so the retry ceiling binds across restarts; round-
+    trips verbatim through state_mapping like ``edges_evaluated``.  Empty on
     the BFS path and on legacy JSON files without the key.
     """
 
@@ -177,6 +187,7 @@ class RunState:
             status=data.get("status", "running"),
             edges_evaluated=data.get("edges_evaluated", {}),
             stall=data.get("stall"),
+            resume_retries=data.get("resume_retries", {}),
         )
 
 

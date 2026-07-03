@@ -109,6 +109,10 @@ class TransitionBody(BaseModel):
 
 class ReplyBody(BaseModel):
     message: str = Field(min_length=1, max_length=20_000)
+    # Explicit sign-off verdict (R7/D10): honored when the reply resumes a
+    # delivery goal parked on a human sign-off (waiting_kind='signoff').
+    # None = approve (backward-compatible default; the text is kept either way).
+    verdict: Literal["approve", "reject"] | None = None
 
 
 class RoutedTo(BaseModel):
@@ -492,7 +496,18 @@ async def reply_to_task(task_id: str, body: ReplyBody, request: Request) -> Goal
     if task is None:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
 
-    if task.type == "goal":
+    # Delivery goals (R7/D10): the reply resumes the WORKFLOW RUN itself, never
+    # routes to a child — apply_reply re-activates the goal and the message +
+    # explicit verdict travel to the delivery driver, which turns them into a
+    # package resume() event (e.g. HumanAnswer for a parked sign-off).
+    from ..delivery_driver import detect_delivery_workflow_spec
+
+    is_delivery_goal = (
+        task.type == "goal"
+        and detect_delivery_workflow_spec(task.brief or "") is not None
+    )
+
+    if task.type == "goal" and not is_delivery_goal:
         route = _goal_route(task_id, store, pool)
         if route is not None:
             child_id, child_title = route
@@ -520,7 +535,8 @@ async def reply_to_task(task_id: str, body: ReplyBody, request: Request) -> Goal
         task_read = _build_task_read(updated_goal, space_store.get(task.space_id), store)
         return GoalReplyResponse(task=task_read, routed_to=None)
 
-    # Non-goal: standard reply path.
+    # Non-goal (and delivery-goal) standard reply path: record the message,
+    # re-activate if parked, and enqueue with the message (+ verdict).
     try:
         outcome = await store.apply_reply(task_id, body.message)
     except TaskNotFound:
@@ -531,7 +547,7 @@ async def reply_to_task(task_id: str, body: ReplyBody, request: Request) -> Goal
         raise HTTPException(status_code=400, detail=str(e)) from None
     if outcome.should_enqueue:
         await get_worker_for_task(request, task_id).enqueue(
-            task_id, user_message=body.message
+            task_id, user_message=body.message, verdict=body.verdict
         )
     await goal_sync.propagate_to_parent(task_id, store, pool)
     try:
@@ -552,6 +568,12 @@ async def route_preview(task_id: str, request: Request) -> GoalReplyResponse:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
     task_read = _build_task_read(task, get_space_store(request).get(task.space_id), store)
     if task.type != "goal":
+        return GoalReplyResponse(task=task_read, routed_to=None)
+    # Delivery goals never route replies to children (the reply resumes the
+    # workflow run itself) — mirror reply_to_task so the UI hint matches.
+    from ..delivery_driver import detect_delivery_workflow_spec
+
+    if detect_delivery_workflow_spec(task.brief or "") is not None:
         return GoalReplyResponse(task=task_read, routed_to=None)
     route = _goal_route(task_id, store, pool)
     if route is None:

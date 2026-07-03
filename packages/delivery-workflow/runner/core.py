@@ -65,6 +65,13 @@ a fire into an already-``done`` target (the target ran — re-recording at its
 post-run generation would make the record path-dependent between a
 straight-through run and a parked+resumed one).
 
+Resume re-entry (R7, kills D7+D10): a persisted ``blocked``/``escalated``/
+``cancelled``/``stalled`` status is sealed for bare ``run()`` (top-of-run
+guard below) — ``runner/resume.py`` is the only legal re-entry.  It applies one typed event
+(HumanAnswer / RetryFailed / RaiseBudget / Nothing) to the persisted state,
+flips the status back to ``running`` and then delegates here, where the R5
+condition-aware seeding routes the re-armed frontier.
+
 No app.* imports allowed (enforced by .importlinter).
 """
 from __future__ import annotations
@@ -89,6 +96,14 @@ _DELIVERY_NODE_SENTINEL = "<!-- delivery-node: {node_id} -->"
 #: fire from it) and still "executed" for the completeness proof (§5.2:
 #: "executed to a terminal node-status").
 _ROUTED_TERMINAL = ("done", "needs_fix")
+
+
+def _is_human_node(node: IRNode) -> bool:
+    """A node whose park/answer lifecycle is owned by resume()'s HumanAnswer:
+    kind ``human``, or ``wait`` with ``mode: human``."""
+    if node.kind == "human":
+        return True
+    return node.kind == "wait" and (node.data or {}).get("mode", "human") == "human"
 
 
 def run(
@@ -123,6 +138,24 @@ def run(
     # -----------------------------------------------------------------------
     if state_ops is not None:
         state = state_ops.read()
+        # R7 (kills D7's silent half): a persisted halted status is SEALED for
+        # bare run() — the per-tick cancel-race guard would halt on it anyway,
+        # but only after seeding side-effects, and an empty work-list would
+        # skip the guard entirely and let the drain proof overwrite the
+        # status.  runner.resume() is the only legal re-entry: it applies a
+        # typed event and flips the status back to "running" first.
+        # `stalled` is sealed for the same reason with a sharper failure mode:
+        # a rejected sign-off terminates `needs_fix` (routable, so its
+        # fields.answer stays in scope), and a bare re-entry would replay its
+        # unconditional out-edges — silently converting the recorded "no"
+        # into a routed "yes" (D10 through the back door).
+        if state.status in ("cancelled", "blocked", "escalated", "stalled"):
+            log.info(
+                "Runner: persisted status %r — halting without dispatch; "
+                "re-enter via runner.resume() (R7).",
+                state.status,
+            )
+            return state
     else:
         budget_meta = graph.metadata.get("budget", {})
         ceiling = float(budget_meta.get("usd_ceiling", 0.0))
@@ -209,6 +242,23 @@ def run(
     if settled_node_ids:
         resume_scope = build_scope(state, scope_base=dict(graph.variables))
         for node_id in settled_node_ids:
+            settled_node = node_by_id.get(node_id)
+            settled_ns = state.nodes.get(node_id)
+            if (
+                settled_node is not None
+                and settled_ns is not None
+                and settled_ns.status == "needs_fix"
+                and _is_human_node(settled_node)
+            ):
+                # A rejected sign-off (needs_fix HUMAN node) never routes its
+                # forward out-edges — only gates legitimately route from
+                # needs_fix.  Replaying them here would fire the approve-path
+                # edge off the recorded "no" whenever the on_reject target does
+                # not dominate the sign-off's downstream (D10 through the
+                # resume path).  Skipping keeps its fields.answer in scope
+                # (needs_fix stays terminal-and-scoped) while a non-dominating
+                # route terminates stalled/starved instead of a silent 'done'.
+                continue
             for edge_idx, edge in outgoing.get(node_id, []):
                 if edge_idx not in forward_in_edges.get(edge.target, ()):
                     continue  # back-edge — loops re-enter via live fires only
@@ -453,6 +503,30 @@ def run(
                 # Rebuild scope with this node's just-written outcome.
                 updated_scope = build_scope(state, scope_base=dict(graph.variables))
                 loop_back = should_loop_back(node, state, updated_scope, executor)
+                if not loop_back and ns.status == "escalated":
+                    # Loop exhausted with on_exhaust='escalate' (R7):
+                    # should_loop_back called executor.escalate() and mutated
+                    # the node's IN-MEMORY status to 'escalated' — persist that
+                    # status AND terminate the run 'escalated', overriding any
+                    # 'blocked' the executor's escalate() hook may have written
+                    # (the Cronos adapter parks 'blocked' for every escalation
+                    # cause).  Without this write the run persisted 'blocked'
+                    # with the node 'done' — a state the resume event grammar
+                    # has no coherent event for, and whose only accepted event
+                    # (RaiseBudget) would silently route past the failed
+                    # quality loop by treating the exhausted node as a
+                    # routable 'done' at resume seeding.
+                    log.info(
+                        "Runner: node %r loop-exhausted (on_exhaust=escalate) "
+                        "— halting run 'escalated'.", node_id,
+                    )
+                    state.status = "escalated"
+                    if state_ops is not None:
+                        state_ops.write({
+                            "nodes": {node_id: {"status": "escalated"}},
+                            "status": "escalated",
+                        })
+                    return state
                 if loop_back:
                     # Loop-back: re-enqueue this node; dispatched flag cleared.
                     # Downstream nodes that consumed the previous iteration's

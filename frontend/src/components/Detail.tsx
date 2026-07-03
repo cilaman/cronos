@@ -831,8 +831,8 @@ export function Detail({ taskId, onClose }: Props) {
     onClose();
   }
 
-  async function onSend(message: string) {
-    const result = await replyTask.mutateAsync(message);
+  async function onSend(message: string, verdict?: "approve" | "reject") {
+    const result = await replyTask.mutateAsync({ message, verdict });
     if (result.routed_to) {
       setRouteToast(`Sent to ${result.routed_to.title}`);
       setTimeout(() => setRouteToast(null), 3000);
@@ -1139,6 +1139,7 @@ export function Detail({ taskId, onClose }: Props) {
                       <ChatInput
                         taskState={task.state}
                         waitingQuestion={task.waiting_question}
+                        waitingKind={task.waiting_kind}
                         pendingCount={task.pending_messages.length}
                         isSending={replyTask.isPending}
                         error={chatError}

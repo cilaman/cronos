@@ -59,7 +59,13 @@ export function useUpdateTask(id: string) {
 export function useReplyToTask(id: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (message: string) => api.reply(id, message),
+    mutationFn: ({
+      message,
+      verdict,
+    }: {
+      message: string;
+      verdict?: "approve" | "reject";
+    }) => api.reply(id, message, verdict),
     onSuccess: (result) => {
       qc.setQueryData(["task", id], result.task);
       invalidateBoards(qc);

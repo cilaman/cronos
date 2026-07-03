@@ -194,7 +194,9 @@ class Worker:
         self._on_task_state_change = on_task_state_change
         self._space_id: str | None = None
         self._pool = pool
-        self._queue: asyncio.Queue[tuple[str, str | None]] = asyncio.Queue()
+        # Items: (task_id, user_message, verdict). `verdict` ('approve'|'reject'
+        # or None) travels with a sign-off reply to a delivery goal (R7/D10).
+        self._queue: asyncio.Queue[tuple[str, str | None, str | None]] = asyncio.Queue()
         # EventBus owns all pub/sub state; Worker delegates to it.
         self._bus = EventBus()
         self._current_id: str | None = None
@@ -339,8 +341,13 @@ class Worker:
 
     # ---- public api ----
 
-    async def enqueue(self, task_id: str, user_message: str | None = None) -> None:
-        await self._queue.put((task_id, user_message))
+    async def enqueue(
+        self,
+        task_id: str,
+        user_message: str | None = None,
+        verdict: str | None = None,
+    ) -> None:
+        await self._queue.put((task_id, user_message, verdict))
         log.info("Enqueued task %s (queue size=%d)", task_id, self._queue.qsize())
 
     def current(self) -> str | None:
@@ -387,7 +394,7 @@ class Worker:
     async def stop(self) -> None:
         self._stop.set()
         # Push a poison pill so the queue.get() unblocks.
-        await self._queue.put(("__stop__", None))
+        await self._queue.put(("__stop__", None, None))
         if self._loop_task is not None:
             try:
                 await asyncio.wait_for(self._loop_task, timeout=5.0)
@@ -399,11 +406,11 @@ class Worker:
     async def _run_forever(self) -> None:
         log.info("Worker loop started")
         while not self._stop.is_set():
-            task_id, user_message = await self._queue.get()
+            task_id, user_message, verdict = await self._queue.get()
             if task_id == "__stop__":
                 break
             try:
-                await self._run_one(task_id, user_message)
+                await self._run_one(task_id, user_message, verdict)
             except Exception:
                 log.exception("Unhandled error processing task %s", task_id)
             finally:
@@ -419,13 +426,15 @@ class Worker:
                         log.exception("on_idle hook error for space %s", self._space_id)
         log.info("Worker loop stopped")
 
-    async def _run_one(self, task_id: str, user_message: str | None) -> None:
+    async def _run_one(
+        self, task_id: str, user_message: str | None, verdict: str | None = None
+    ) -> None:
         task = self.store.get(task_id)
         if task is None:
             log.warning("Skipping unknown task %s", task_id)
             return
         if task.type == "goal":
-            await self._run_goal(task_id, user_message)
+            await self._run_goal(task_id, user_message, verdict)
         elif task.type in ("feature", "fix") and task.feature_state == FeatureState.PROCESSING:
             await self._run_feature_decompose(task_id, user_message)
         else:
@@ -553,11 +562,13 @@ class Worker:
             started_at=started_at, memory_injected=memory_injected,
         )
 
-    async def _run_goal(self, goal_id: str, user_message: str | None) -> None:
+    async def _run_goal(
+        self, goal_id: str, user_message: str | None, verdict: str | None = None
+    ) -> None:
         """Orchestrate a goal — delegates to RunExecutor.run_goal."""
         ex = self._ensure_executor()
         ex.space_store = self.space_store
-        await ex.run_goal(goal_id, user_message)
+        await ex.run_goal(goal_id, user_message, verdict=verdict)
 
     async def _publish(self, task_id: str, event: dict) -> None:
         """Publish *event* via the EventBus. Thin async wrapper for await callers."""

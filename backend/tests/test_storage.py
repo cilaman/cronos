@@ -452,6 +452,69 @@ async def test_task_store_transition_waiting_to_backlog_clears_waiting_question(
     assert updated.waiting_question is None
 
 
+async def test_waiting_meta_persists_and_clears_on_leave(task_store):
+    """R7/§5.6: waiting_kind + waiting_node_id survive the markdown round-trip
+    (finalize_run → file → reload) and are cleared when leaving WAITING."""
+    task = await task_store.create(space_id=SPACE_ID, title="Delivery G", brief="")
+    await task_store.transition(task.id, TaskState.ACTIVE, allowed=USER_TRANSITIONS)
+
+    await task_store.finalize_run(
+        task.id,
+        new_state=TaskState.WAITING,
+        session_id=None,
+        waiting_question="Right thing to build?",
+        history_entry="[delivery] parked",
+        waiting_kind="signoff",
+        waiting_node_id="signoff-scope",
+    )
+    stored = task_store.get(task.id)
+    assert stored.waiting_kind == "signoff"
+    assert stored.waiting_node_id == "signoff-scope"
+
+    # Survives a full reload from disk (dump_task ↔ parse_file round-trip).
+    await task_store.reload_all()
+    reloaded = task_store.get(task.id)
+    assert reloaded.waiting_kind == "signoff"
+    assert reloaded.waiting_node_id == "signoff-scope"
+
+    # apply_reply (WAITING → ACTIVE) clears the wait metadata with the question.
+    outcome = await task_store.apply_reply(task.id, "ship it")
+    assert outcome.task.state == TaskState.ACTIVE
+    assert outcome.task.waiting_kind is None
+    assert outcome.task.waiting_node_id is None
+
+
+async def test_set_waiting_meta_stamps_without_transition(task_store):
+    """set_waiting_meta labels an already-parked task without state change."""
+    task = await task_store.create(space_id=SPACE_ID, title="T", brief="")
+    await task_store.transition(task.id, TaskState.ACTIVE, allowed=USER_TRANSITIONS)
+    await task_store.transition(task.id, TaskState.WAITING, allowed=WORKER_TRANSITIONS)
+
+    updated = await task_store.set_waiting_meta(
+        task.id, waiting_kind="signoff", waiting_node_id="signoff"
+    )
+    assert updated.state == TaskState.WAITING
+    assert updated.waiting_kind == "signoff"
+    assert updated.waiting_node_id == "signoff"
+
+
+async def test_task_store_transition_leaving_waiting_clears_wait_meta(task_store):
+    """Dragging a WAITING task out of the lane clears waiting_kind/node_id —
+    a stale 'signoff' kind would resurrect the Approve/Reject affordance."""
+    task = await task_store.create(space_id=SPACE_ID, title="T", brief="")
+    await task_store.transition(task.id, TaskState.ACTIVE, allowed=USER_TRANSITIONS)
+    await task_store.transition(task.id, TaskState.WAITING, allowed=WORKER_TRANSITIONS)
+    await task_store.set_waiting_meta(
+        task.id, waiting_kind="signoff", waiting_node_id="n1"
+    )
+
+    updated = await task_store.transition(
+        task.id, TaskState.BACKLOG, allowed=USER_TRANSITIONS
+    )
+    assert updated.waiting_kind is None
+    assert updated.waiting_node_id is None
+
+
 async def test_task_store_transition_done_to_backlog_succeeds_for_plain_task(
     task_store,
 ):

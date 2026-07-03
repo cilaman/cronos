@@ -15,9 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "packages" / "deliv
 from app.delivery_driver import (
     DELIVERY_NODE_SENTINEL,
     DELIVERY_WORKFLOW_SENTINEL_PATTERN,
-    _MAX_FAILED_RESUMES,
-    _resume_from_blocked,
-    _resume_from_failed,
+    _resume_persisted_run,
     _stall_reason,
     detect_delivery_workflow_spec,
     run_delivery_goal,
@@ -335,7 +333,10 @@ async def test_run_delivery_goal_blocked_does_not_clobber_waiting(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# _resume_from_blocked — clear a blocked run so it continues past a sign-off
+# _resume_persisted_run — translate persisted halt + user action into ONE
+# package resume() event (R7).  The pre-R7 heuristics (_resume_from_blocked,
+# _resume_from_failed + the failed_resumes.json sidecar) are DELETED: the
+# package owns resume semantics and the retry ceiling lives in state.
 # ---------------------------------------------------------------------------
 
 class _FakeStateOps:
@@ -369,103 +370,289 @@ def _graph_with_human():
     )
 
 
-def test_resume_from_blocked_approves_human_node_and_clears_status():
-    from state_types import BudgetState, NodeState, WorkflowState
-
-    state = WorkflowState(
-        spec="w", run_id="goal-1", status="blocked",
-        budget=BudgetState(usd_ceiling=5.0),
-        nodes={
-            "scout": NodeState(status="done"),
-            "signoff-scope": NodeState(status="blocked"),
-        },
-    )
-    ops = _FakeStateOps(state)
-    adapter = SimpleNamespace(state=ops)
-
-    _resume_from_blocked(adapter, _graph_with_human(), "goal-1")
-
-    # Status reset to running so the runner's cancel-race guard won't halt.
-    assert state.status == "running"
-    # The blocked human node is marked done → runner routes to its successors.
-    assert state.nodes["signoff-scope"].status == "done"
-    assert ops.writes and ops.writes[0]["status"] == "running"
-    assert ops.writes[0]["nodes"]["signoff-scope"]["status"] == "done"
-
-
-def test_resume_from_blocked_noop_when_running():
-    from state_types import BudgetState, NodeState, WorkflowState
-
-    state = WorkflowState(
-        spec="w", run_id="g", status="running",
-        budget=BudgetState(usd_ceiling=5.0),
-        nodes={"scout": NodeState(status="done")},
-    )
-    ops = _FakeStateOps(state)
-    _resume_from_blocked(SimpleNamespace(state=ops), _graph_with_human(), "g")
-    # Fresh (non-blocked) run must not be patched.
-    assert ops.writes == []
-
-
-def test_resume_from_blocked_does_not_touch_non_human_blocked_node():
-    """A blocked node that is NOT a human/wait node is left blocked (only status cleared)."""
-    from state_types import BudgetState, NodeState, WorkflowState
-
-    state = WorkflowState(
-        spec="w", run_id="g", status="blocked",
-        budget=BudgetState(usd_ceiling=5.0),
-        nodes={"scout": NodeState(status="blocked")},  # scout is an agent, not human
-    )
-    ops = _FakeStateOps(state)
-    _resume_from_blocked(SimpleNamespace(state=ops), _graph_with_human(), "g")
-    assert state.status == "running"
-    assert state.nodes["scout"].status == "blocked"  # not auto-approved
-    assert "nodes" not in ops.writes[0]
-
-
-# ---------------------------------------------------------------------------
-# _resume_from_failed — bound re-dispatch of a persistently-failing node
-# ---------------------------------------------------------------------------
-
-
-def _failed_state(node_ids, status="failed"):
+def _wf_state(status, nodes=None, stall=None):
     from state_types import BudgetState, NodeState, WorkflowState
 
     return WorkflowState(
         spec="w", run_id="goal-1", status=status,
         budget=BudgetState(usd_ceiling=5.0),
-        nodes={nid: NodeState(status="failed") for nid in node_ids},
+        nodes={nid: NodeState(status=s) for nid, s in (nodes or {}).items()},
+        stall=stall,
     )
 
 
-def test_resume_from_failed_bounds_retries(tmp_path):
-    adapter = SimpleNamespace(state=_FakeStateOps(_failed_state(["testrun"])))
-    # The first _MAX_FAILED_RESUMES re-entries allow a retry (return None).
-    for _ in range(_MAX_FAILED_RESUMES):
-        assert _resume_from_failed(adapter, "goal-1", tmp_path) is None
-    # The next re-entry exceeds the cap → park reason returned, runner skipped.
-    reason = _resume_from_failed(adapter, "goal-1", tmp_path)
-    assert reason is not None
-    assert "testrun" in reason
-    # Counter is persisted in a sidecar so the cap survives process restarts.
-    assert (tmp_path / "failed_resumes.json").exists()
+class _ResumeSpy:
+    """Patches runner.resume to record events and return scripted states."""
+
+    def __init__(self, results):
+        self._results = list(results)
+        self.events: list = []
+
+    def __enter__(self):
+        import runner as _runner_mod
+        self._mod = _runner_mod
+        self._orig = _runner_mod.resume
+
+        def fake_resume(graph, executor, state_ops, event, **kwargs):
+            self.events.append(event)
+            result = self._results.pop(0)
+            if isinstance(result, Exception):
+                raise result
+            return result
+
+        _runner_mod.resume = fake_resume
+        return self
+
+    def __exit__(self, *exc):
+        self._mod.resume = self._orig
+        return False
 
 
-def test_resume_from_failed_noop_when_not_failed(tmp_path):
-    adapter = SimpleNamespace(state=_FakeStateOps(_failed_state([], status="running")))
-    assert _resume_from_failed(adapter, "g", tmp_path) is None
+def test_resume_blocked_signoff_builds_human_answer_approve_default():
+    """blocked + message, no explicit verdict → HumanAnswer(approve) with the
+    text preserved (backward-compatible default, D10: text never dropped)."""
+    from runner import HumanAnswer
+
+    persisted = _wf_state("blocked", {"scout": "done", "signoff-scope": "blocked"})
+    adapter = SimpleNamespace(state=_FakeStateOps(persisted))
+    done_state = _wf_state("done")
+
+    with _ResumeSpy([done_state]) as spy:
+        final, reason, park_kind, park_node = _resume_persisted_run(
+            _graph_with_human(), adapter, persisted, "looks good", None, "goal-1",
+        )
+
+    assert final is done_state and reason is None
+    assert spy.events == [
+        HumanAnswer(node_id="signoff-scope", text="looks good", verdict="approve")
+    ]
 
 
-def test_resume_from_failed_noop_when_no_failed_nodes(tmp_path):
-    from state_types import BudgetState, NodeState, WorkflowState
+def test_resume_blocked_signoff_reject_verdict_passes_through():
+    from runner import HumanAnswer
 
-    state = WorkflowState(
-        spec="w", run_id="g", status="failed",
-        budget=BudgetState(usd_ceiling=5.0),
-        nodes={"a": NodeState(status="done")},
+    persisted = _wf_state("blocked", {"signoff-scope": "blocked"})
+    adapter = SimpleNamespace(state=_FakeStateOps(persisted))
+
+    with _ResumeSpy([_wf_state("stalled")]) as spy:
+        final, reason, park_kind, park_node = _resume_persisted_run(
+            _graph_with_human(), adapter, persisted, "no — change X", "reject", "goal-1",
+        )
+
+    assert reason is None
+    assert spy.events == [
+        HumanAnswer(node_id="signoff-scope", text="no — change X", verdict="reject")
+    ]
+
+
+@pytest.mark.parametrize("message", [None, "", "   "])
+def test_resume_blocked_signoff_without_message_reparks_never_approves(message):
+    """A message-less re-entry of a blocked sign-off (backend restart recovery,
+    goal-sync propagation, board drag) is NOT an answer: no HumanAnswer event
+    is synthesized — the goal re-parks WAITING with the signoff metadata so
+    the Approve/Reject affordance survives (D10: silence never becomes a yes)."""
+    persisted = _wf_state("blocked", {"scout": "done", "signoff-scope": "blocked"})
+    adapter = SimpleNamespace(state=_FakeStateOps(persisted))
+
+    with _ResumeSpy([]) as spy:
+        final, reason, park_kind, park_node = _resume_persisted_run(
+            _graph_with_human(), adapter, persisted, message, None, "goal-1",
+        )
+
+    assert final is None
+    assert spy.events == [], "no resume event may be synthesized without an answer"
+    assert "signoff-scope" in reason
+    assert park_kind == "signoff"
+    assert park_node == "signoff-scope"
+
+
+def test_resume_blocked_signoff_explicit_verdict_without_text_applies():
+    """An explicit UI verdict with no accompanying text is still a real
+    answer (the user pressed Approve): HumanAnswer(text='') is legal."""
+    from runner import HumanAnswer
+
+    persisted = _wf_state("blocked", {"signoff-scope": "blocked"})
+    adapter = SimpleNamespace(state=_FakeStateOps(persisted))
+    done_state = _wf_state("done")
+
+    with _ResumeSpy([done_state]) as spy:
+        final, reason, park_kind, park_node = _resume_persisted_run(
+            _graph_with_human(), adapter, persisted, None, "approve", "goal-1",
+        )
+
+    assert final is done_state and reason is None
+    assert spy.events == [
+        HumanAnswer(node_id="signoff-scope", text="", verdict="approve")
+    ]
+
+
+def test_resume_stalled_rederive_parks_with_stalled_kind():
+    """Stall re-derives keep the §5.6 structured metadata across re-parks:
+    waiting_kind='stalled' is returned for the caller to stamp."""
+    stall = {"kind": "gate_exhausted", "nodes": ["g-build"], "reason": "max=3"}
+    persisted = _wf_state("stalled", stall=stall)
+    adapter = SimpleNamespace(state=_FakeStateOps(persisted))
+
+    with _ResumeSpy([]):
+        final, reason, park_kind, park_node = _resume_persisted_run(
+            _graph_with_human(), adapter, persisted, "what now?", None, "goal-1",
+        )
+
+    assert final is None
+    assert park_kind == "stalled"
+
+
+def test_resume_blocked_without_human_node_parks_with_reason():
+    """A run blocked on a non-sign-off node (agent self-reported blocked) has
+    no legal resume event — the driver returns a park reason, never guesses."""
+    persisted = _wf_state("blocked", {"scout": "blocked"})  # agent node
+    adapter = SimpleNamespace(state=_FakeStateOps(persisted))
+
+    with _ResumeSpy([]) as spy:
+        final, reason, park_kind, park_node = _resume_persisted_run(
+            _graph_with_human(), adapter, persisted, "hello", None, "goal-1",
+        )
+
+    assert final is None
+    assert "non-sign-off" in reason
+    assert spy.events == []
+
+
+def test_resume_failed_builds_retry_failed_all():
+    from runner import RetryFailed
+
+    persisted = _wf_state("failed", {"scout": "failed"})
+    adapter = SimpleNamespace(state=_FakeStateOps(persisted))
+    done_state = _wf_state("done")
+
+    with _ResumeSpy([done_state]) as spy:
+        final, reason, park_kind, park_node = _resume_persisted_run(
+            _graph_with_human(), adapter, persisted, None, None, "goal-1",
+        )
+
+    assert final is done_state and reason is None
+    assert spy.events == [RetryFailed("all")]
+
+
+def test_resume_failed_resume_error_parks_with_message():
+    from runner import ResumeError
+
+    persisted = _wf_state("failed", {"scout": "failed"})
+    adapter = SimpleNamespace(state=_FakeStateOps(persisted))
+
+    with _ResumeSpy([ResumeError("nothing to retry")]):
+        final, reason, park_kind, park_node = _resume_persisted_run(
+            _graph_with_human(), adapter, persisted, None, None, "goal-1",
+        )
+
+    assert final is None
+    assert "nothing to retry" in reason
+
+
+def test_resume_escalated_tries_nothing_then_retry_failed_on_no_progress():
+    """escalated → Nothing() first; a re-derived 'escalated' terminal (no
+    progress) is re-armed once via RetryFailed('all') (package-bounded)."""
+    from runner import Nothing, RetryFailed
+
+    persisted = _wf_state("escalated", {"scout": "escalated"})
+    adapter = SimpleNamespace(state=_FakeStateOps(persisted))
+    still_escalated = _wf_state("escalated", {"scout": "escalated"})
+    done_state = _wf_state("done")
+
+    with _ResumeSpy([still_escalated, done_state]) as spy:
+        final, reason, park_kind, park_node = _resume_persisted_run(
+            _graph_with_human(), adapter, persisted, None, None, "goal-1",
+        )
+
+    assert final is done_state and reason is None
+    assert spy.events == [Nothing(), RetryFailed("all")]
+
+
+def test_resume_escalated_nothing_suffices_when_run_progresses():
+    from runner import Nothing
+
+    persisted = _wf_state("escalated")
+    adapter = SimpleNamespace(state=_FakeStateOps(persisted))
+    done_state = _wf_state("done")
+
+    with _ResumeSpy([done_state]) as spy:
+        final, reason, park_kind, park_node = _resume_persisted_run(
+            _graph_with_human(), adapter, persisted, None, None, "goal-1",
+        )
+
+    assert final is done_state and reason is None
+    assert spy.events == [Nothing()]
+
+
+def test_resume_escalated_keeps_terminal_when_nothing_retryable():
+    """Nothing() re-derives 'escalated' and RetryFailed matches nothing — the
+    escalated terminal is returned and the caller parks the goal."""
+    from runner import Nothing, ResumeError, RetryFailed
+
+    persisted = _wf_state("escalated")
+    adapter = SimpleNamespace(state=_FakeStateOps(persisted))
+    still_escalated = _wf_state("escalated")
+
+    with _ResumeSpy([still_escalated, ResumeError("no retryable node")]) as spy:
+        final, reason, park_kind, park_node = _resume_persisted_run(
+            _graph_with_human(), adapter, persisted, None, None, "goal-1",
+        )
+
+    assert final is still_escalated and reason is None
+    assert spy.events == [Nothing(), RetryFailed("all")]
+
+
+def test_resume_stalled_rejected_with_message_reopens_signoff():
+    from runner import RetryFailed
+
+    stall = {"kind": "rejected", "nodes": ["signoff-scope"], "reason": "rejected"}
+    persisted = _wf_state(
+        "stalled", {"signoff-scope": "needs_fix"}, stall=stall,
     )
-    adapter = SimpleNamespace(state=_FakeStateOps(state))
-    assert _resume_from_failed(adapter, "g", tmp_path) is None
+    adapter = SimpleNamespace(state=_FakeStateOps(persisted))
+    blocked_again = _wf_state("blocked", {"signoff-scope": "blocked"})
+
+    with _ResumeSpy([blocked_again]) as spy:
+        final, reason, park_kind, park_node = _resume_persisted_run(
+            _graph_with_human(), adapter, persisted, "please re-ask", None, "goal-1",
+        )
+
+    assert final is blocked_again and reason is None
+    assert spy.events == [RetryFailed(["signoff-scope"])]
+
+
+def test_resume_stalled_non_rejected_stays_parked_with_stall_reason():
+    """R6 semantics: a stalled run (starved/gate_exhausted/retry_exhausted)
+    stays parked — no blind resume."""
+    stall = {"kind": "gate_exhausted", "nodes": ["g-build"], "reason": "max=3"}
+    persisted = _wf_state("stalled", stall=stall)
+    adapter = SimpleNamespace(state=_FakeStateOps(persisted))
+
+    with _ResumeSpy([]) as spy:
+        final, reason, park_kind, park_node = _resume_persisted_run(
+            _graph_with_human(), adapter, persisted, "try again", None, "goal-1",
+        )
+
+    assert final is None
+    assert "g-build" in reason
+    assert spy.events == []
+
+
+def test_resume_stalled_rejected_without_message_stays_parked():
+    """Re-activation without a NEW message does not re-open a rejected
+    sign-off — the park message explains how to."""
+    stall = {"kind": "rejected", "nodes": ["signoff-scope"], "reason": "no"}
+    persisted = _wf_state("stalled", stall=stall)
+    adapter = SimpleNamespace(state=_FakeStateOps(persisted))
+
+    with _ResumeSpy([]) as spy:
+        final, reason, park_kind, park_node = _resume_persisted_run(
+            _graph_with_human(), adapter, persisted, None, None, "goal-1",
+        )
+
+    assert final is None
+    assert "rejected" in reason.lower()
+    assert spy.events == []
 
 
 # ---------------------------------------------------------------------------

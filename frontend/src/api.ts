@@ -155,10 +155,10 @@ export const api = {
   delete: (id: string) => request<void>(`/api/tasks/${id}`, { method: "DELETE" }),
   start: (id: string) =>
     request<Task>(`/api/tasks/${id}/start`, { method: "POST", body: "{}" }),
-  reply: (id: string, message: string) =>
+  reply: (id: string, message: string, verdict?: "approve" | "reject") =>
     request<ReplyResponse>(`/api/tasks/${id}/reply`, {
       method: "POST",
-      body: JSON.stringify({ message }),
+      body: JSON.stringify(verdict ? { message, verdict } : { message }),
     }),
   routePreview: (id: string) =>
     request<ReplyResponse>(`/api/tasks/${id}/route-preview`),

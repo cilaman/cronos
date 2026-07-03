@@ -92,6 +92,13 @@ class MemStateOps:
             self._state.status = patch["status"]
         if "stall" in patch:  # R6 run-level stall detail (mirrors CronosStateOps)
             self._state.stall = patch["stall"]
+        if "resume_retries" in patch:  # R7 RetryFailed counters (mirrors CronosStateOps)
+            self._state.resume_retries = dict(patch["resume_retries"] or {})
+        if "budget" in patch and isinstance(patch["budget"], dict):  # R7 RaiseBudget
+            if "usd_ceiling" in patch["budget"]:
+                self._state.budget.usd_ceiling = float(patch["budget"]["usd_ceiling"])
+            if "usd_spent" in patch["budget"]:
+                self._state.budget.usd_spent = float(patch["budget"]["usd_spent"])
         for nid, ns_patch in patch.get("nodes", {}).items():
             node = self._state.nodes.setdefault(nid, NodeState(status="pending"))
             if "status" in ns_patch:
@@ -400,22 +407,43 @@ print(f"--> successful agent classified {res8.status!r} (fence lost): {ok}  "
       f"{'DEFECT CONFIRMED' if ok else 'not reproduced'}")
 
 # ===========================================================================
-# D9 — Persisted 'escalated' run can never resume (livelock)
+# D9 — Persisted 'escalated' run can never resume (livelock).
+# R7 mechanism change: the halt on BARE run() is now CORRECT, SEALED behavior
+# (top-of-run guard, runner/core.py) — the defect was that no legal re-entry
+# existed.  runner/resume.py is that re-entry: resume(state_ops, graph, event)
+# applies one typed event (HumanAnswer / RetryFailed / RaiseBudget / Nothing)
+# and flips the run back to 'running' before delegating to run().  This
+# section runs BOTH halves: bare run() must still halt without dispatching
+# (sealed), and resume(RaiseBudget) — the external-mitigation event for a
+# policy/budget escalation — must make real progress.
+# DEFECT CONFIRMED = the sealed halt broke OR the resume re-entry makes no
+# progress (the pre-R7 answer→halt→WAITING-forever livelock).
 # ===========================================================================
-hr("D9  'escalated' is a terminal trap (core.py:143-147; no driver reset)")
+hr("D9  'escalated' resume re-entry (runner/resume.py; bare run() stays sealed)")
+from runner import RaiseBudget, resume as workflow_resume  # noqa: E402
+
 g9 = IRGraph(nodes=[node("a")], edges=[], metadata={}, variables={})
 st9 = fresh_state()
 st9.status = "escalated"
 ops9 = MemStateOps(st9)
 ex9 = RecordingExecutor()
 ex9.state = ops9
+
+# Half 1 — bare run() on the persisted escalation: sealed, no dispatch.
 s9 = workflow_runner.run(graph=g9, executor=ex9, state_ops=ops9)
-print(f"persisted status='escalated' -> runner dispatched={ex9.dispatched}, "
-      f"returned status={s9.status!r}")
-# delivery_driver has _resume_from_blocked / _resume_from_failed /
-# _resume_from_stalled_gate — none matches 'escalated' (delivery_driver.py:318-527).
-ok = ex9.dispatched == [] and s9.status == "escalated"
-print(f"--> every resume halts instantly, goal re-parks WAITING forever: {ok}  "
+sealed_ok = ex9.dispatched == [] and s9.status == "escalated"
+print(f"bare run(): dispatched={ex9.dispatched}, returned status={s9.status!r} "
+      f"(sealed halt intact: {sealed_ok})")
+
+# Half 2 — the legal re-entry: RaiseBudget lifts the persisted ceiling and
+# re-enters; the runner must dispatch the pending work and finish.
+s9r = workflow_resume(g9, ex9, ops9, RaiseBudget(10.0))
+resumed_ok = ex9.dispatched == ["a"] and s9r.status == "done"
+print(f"resume(RaiseBudget(10.0)): dispatched={ex9.dispatched}, "
+      f"final status={s9r.status!r}, persisted ceiling="
+      f"{ops9.read().budget.usd_ceiling}")
+ok = not (sealed_ok and resumed_ok)
+print(f"--> escalated trap without a legal re-entry: {ok}  "
       f"{'DEFECT CONFIRMED' if ok else 'not reproduced'}")
 
 print("\nAll repros complete.")
