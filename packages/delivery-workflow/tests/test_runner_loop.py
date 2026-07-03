@@ -80,13 +80,16 @@ class TestShouldLoopBack:
         rt = _MockRuntime(condition_result=False)
         assert should_loop_back(node, state, {}, rt) is True
 
-    def test_loop_back_increments_attempt(self):
+    def test_loop_back_does_not_touch_attempt(self):
+        """Single attempt owner (R8/D8): dispatch increments once per execution;
+        the loop-back path must never add a second increment (which halved loop
+        budgets: max=4 yielded 3 executions with the counter overshooting to 5)."""
         lp = LoopPolicy(until="x == 'done'", max=5)
         node = IRNode(id="n", kind="agent", loop=lp)
         state = _state_with_node("n", attempt=2)
         rt = _MockRuntime(condition_result=False)
-        should_loop_back(node, state, {}, rt)
-        assert state.nodes["n"].attempt == 3
+        assert should_loop_back(node, state, {}, rt) is True
+        assert state.nodes["n"].attempt == 2  # unchanged — dispatch owns it
 
     def test_loop_back_zeroes_artifact_paths(self):
         lp = LoopPolicy(until="x == 'done'", max=5)
@@ -145,8 +148,10 @@ class TestShouldLoopBack:
         assert result is False  # condition met → no loop-back
         assert rt.condition_calls != []
 
-    def test_node_missing_from_state_starts_at_attempt_1(self):
-        """If node not yet in state.nodes, attempt starts at 0 → increments to 1."""
+    def test_node_missing_from_state_loops_without_incrementing(self):
+        """Defensive branch: node not yet in state.nodes (the runner normally
+        writes the outcome before the loop check).  Loops back; attempt stays 0
+        — the next dispatch increments it to 1 (single owner, R8/D8)."""
         lp = LoopPolicy(until="x == 'done'", max=5)
         node = IRNode(id="fresh", kind="agent", loop=lp)
         state = WorkflowState(
@@ -156,7 +161,7 @@ class TestShouldLoopBack:
         rt = _MockRuntime(condition_result=False)
         result = should_loop_back(node, state, {}, rt)
         assert result is True
-        assert state.nodes["fresh"].attempt == 1
+        assert state.nodes["fresh"].attempt == 0
 
 
 class TestResetDownstreamNodes:

@@ -264,9 +264,14 @@ print(f"--> partial execution reported as success: {ok}  "
       f"{'DEFECT CONFIRMED' if ok else 'not reproduced'}")
 
 # ===========================================================================
-# D6 — Loop attempt double-increment: max=4 yields only 2 executions
+# D6 — Loop attempt double-increment: max=4 yields fewer executions.
+# R8 mechanism change: dispatch is the SINGLE attempt owner (attempt=old+1
+# once per execution); the loop-back second increment in runner/loop.py is
+# deleted.  Same defect scenario, same runner entry point — loop.max=4 must
+# yield exactly 4 executions with final attempt=4.
+# DEFECT CONFIRMED = the loop budget is still cut short.
 # ===========================================================================
-hr("D6  Loop attempt double-increment (dispatch.py:65 + loop.py:98)")
+hr("D6  Loop attempt double-increment (single owner in dispatch.py since R8)")
 from ir import LoopPolicy  # noqa: E402
 g6 = IRGraph(
     nodes=[node("r", loop=LoopPolicy(until="r.fields.verdict == 'pass'",
@@ -283,9 +288,14 @@ print(f"--> loop budget halved by double increment: {ok}  "
       f"{'DEFECT CONFIRMED (' + str(len(ex6.dispatched)) + ' of 4)' if ok else 'not reproduced'}")
 
 # ===========================================================================
-# D7 — Loop-back double-decrements join in_degree: join fires prematurely
+# D7 — Loop-back re-fire double-satisfies a join: join fires prematurely.
+# R8 mechanism change: the in_degree decrement-with-clamp is replaced by a
+# fired-edge set keyed (edge, target generation), so re-firing the same edge
+# de-duplicates.  Same defect scenario, same runner entry point — the join
+# must wait for ALL its predecessors.
+# DEFECT CONFIRMED = 'j' still executes although 's' never ran.
 # ===========================================================================
-hr("D7  Premature join after loop-back (core.py:341-345 double decrement)")
+hr("D7  Premature join after loop-back (fired-edge set in core.py since R8)")
 g7 = IRGraph(
     nodes=[node("r"), node("s"), node("j")],
     edges=[IREdge(source="r", target="r", when="LOOP_ONCE", port=None),

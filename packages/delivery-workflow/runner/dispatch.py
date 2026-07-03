@@ -61,6 +61,9 @@ def dispatch_node(
     Only the gate handler needs it (to read its upstream producer's
     artifact_paths); the other kinds ignore it.
     """
+    # SINGLE attempt owner (R8/D8): this is the only place attempt increments —
+    # once per execution.  The loop-back path (runner/loop.py) must never add a
+    # second increment, or loop budgets halve and the counter overshoots max.
     current_ns = state.nodes.get(node.id)
     attempt = (current_ns.attempt if current_ns else 0) + 1
 
