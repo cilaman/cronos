@@ -12,14 +12,36 @@ Implements the main execution loop described in the SG4 design:
 Join arithmetic (R8, kills D9): forward-edge joins are tracked by a fired-edge
 set keyed ``(edge_index, target_generation)`` instead of the historical
 decrement-with-clamp in-degree counter.  A target is ready when every one of
-its forward in-edges has fired in the target's CURRENT generation (its
-``attempt`` at fire time), so a looping source re-firing the same edge cannot
-double-satisfy a join, and fires recorded before a downstream reset cannot
-satisfy the next iteration.  The fired-edge set is part of the runner's
-in-memory walk; it is NOT persisted — resume seeding rebuilds it by replaying
-every forward out-edge of persisted-``done`` nodes (today unconditionally,
-matching the historical blanket decrement; R5's condition-aware edge replay
-will own persisted fired-edges).
+its NON-EXCLUDED forward in-edges has fired in the target's CURRENT generation
+(its ``attempt`` at fire time), so a looping source re-firing the same edge
+cannot double-satisfy a join, and fires recorded before a downstream reset
+cannot satisfy the next iteration.
+
+Exclusion propagation (R5, kills D1): a forward edge whose ``when`` condition
+evaluates false is recorded *excluded*; a node ALL of whose forward in-edges
+are excluded (and none fired) is excluded, and its own outgoing forward edges
+are excluded in turn (recorded, not evaluated).  A join therefore fires once
+every non-excluded in-edge has fired — an excluded branch (e.g. ``frontend``
+when ``has_ui == false``) drops out of the join requirement instead of
+starving it.  The same mechanism runs at fire time (``_enqueue_successors``)
+and at resume seeding, so a run that routes past a false branch without a park
+behaves identically to one that parks.  Back-edges are NOT part of exclusion
+accounting (they are excluded from the join in-degree already).
+
+Both edge sets are persisted as the ``edges_evaluated`` record (target §5.2)
+through ``state_ops.write({"edges_evaluated": …})`` so resume edge replay is
+idempotent across multiple resumes.  The record carries a ``graph_fingerprint``
+(hash of the edge list): entries are keyed by positional edge index, so a
+record written against a *different* graph (spec/harness edited between park
+and resume) would misattribute fired/excluded entries to shifted edges — on
+fingerprint mismatch the record is discarded and seeding falls back to
+condition re-evaluation.  When the record is absent (pre-R5 state.json,
+StateOps that ignore the key), resume seeding rebuilds it by re-evaluating
+each done node's outgoing ``when`` conditions against the rebuilt typed scope
+(complete since R2+R3) — idempotent by construction.  Replay never re-records
+a fire into an already-``done`` target (the target ran — re-recording at its
+post-run generation would make the record path-dependent between a
+straight-through run and a parked+resumed one).
 
 No app.* imports allowed (enforced by .importlinter).
 """
@@ -111,12 +133,17 @@ def run(
             forward_in_edges.setdefault(edge.target, set()).add(edge_idx)
             forward_adjacency.setdefault(edge.source, []).append(edge.target)
 
-    # Fired-edge set (R8/D9): target → {(edge_index, target_generation)}.
-    # A forward-edge fire is recorded against the target's generation (its
-    # `attempt` at fire time); re-firing the same edge in the same generation
-    # de-duplicates, so it cannot double-satisfy a join.  In-memory only —
-    # resume seeding below rebuilds it from persisted-`done` nodes.
-    fired_edges: dict[str, set[tuple[int, int]]] = {}
+    # Edge-evaluation sets (R8/D9 + R5/D1): target → {(edge_index, target_
+    # generation)}.  `fired_edges` records forward edges whose condition
+    # evaluated true; `excluded_edges` records forward edges that evaluated
+    # false or were transitively excluded.  Both are persisted as the
+    # `edges_evaluated` record and reloaded here; an absent record — or one
+    # written against a different graph (fingerprint mismatch) — degrades to
+    # condition re-evaluation in the resume seeding below.
+    graph_fingerprint = _graph_fingerprint(graph)
+    fired_edges, excluded_edges = _load_edge_record(
+        state.edges_evaluated, graph_fingerprint
+    )
 
     # -----------------------------------------------------------------------
     # Global iteration cap: sum(max loop iterations) * 2 or 200, whichever
@@ -135,29 +162,71 @@ def run(
     # Track which nodes we've dispatched (to avoid double-dispatch on resume).
     dispatched: set[str] = set()
 
-    # Resume: mark already-done nodes as dispatched and rebuild the fired-edge
-    # set by replaying their forward out-edges.  The replay is currently
-    # unconditional (`when` is not evaluated — the historical blanket-decrement
-    # behavior, D1); R5's condition-aware edge replay will fix that and own
-    # persisted fired-edges.
-    for node_id, ns in state.nodes.items():
-        if ns.status == "done":
-            dispatched.add(node_id)
+    # Resume: mark already-done nodes as dispatched, then replay their forward
+    # out-edges CONDITION-AWARE (R5, kills D1).  For every forward out-edge of
+    # a persisted-`done` node not already covered by the persisted
+    # `edges_evaluated` record (in the target's current generation), evaluate
+    # its `when` condition against the rebuilt typed scope: true → fired,
+    # false → excluded (with transitive exclusion propagation).  Replay is
+    # idempotent: recorded edges are skipped, and re-evaluation from the
+    # persisted scope reproduces the same result when the record was lost.
+    done_node_ids = [nid for nid, ns in state.nodes.items() if ns.status == "done"]
+    dispatched.update(done_node_ids)
+    if done_node_ids:
+        resume_scope = build_scope(state, scope_base=dict(graph.variables))
+        for node_id in done_node_ids:
             for edge_idx, edge in outgoing.get(node_id, []):
-                if edge_idx in forward_in_edges.get(edge.target, ()):
+                if edge_idx not in forward_in_edges.get(edge.target, ()):
+                    continue  # back-edge — loops re-enter via live fires only
+                gen = _generation(state, edge.target)
+                if (edge_idx, gen) in fired_edges.get(edge.target, ()):
+                    continue  # persisted record: already fired
+                if (edge_idx, gen) in excluded_edges.get(edge.target, ()):
+                    continue  # persisted record: evaluated false / excluded
+                if edge.when == "" or edge.when is None:
+                    condition_met = True
+                else:
+                    condition_met = executor.evalCondition(edge.when, resume_scope)
+                if condition_met:
+                    target_ns = state.nodes.get(edge.target)
+                    if target_ns is not None and target_ns.status == "done":
+                        # Target already ran — the fire proves nothing, and
+                        # re-recording it at the target's post-run generation
+                        # would make the persisted record path-dependent
+                        # (parked+resumed vs straight-through divergence).
+                        continue
                     _record_edge_fire(fired_edges, edge_idx, edge.target, state)
+                else:
+                    _apply_exclusion(
+                        edge_idx,
+                        edge.target,
+                        fired_edges=fired_edges,
+                        excluded_edges=excluded_edges,
+                        forward_in_edges=forward_in_edges,
+                        outgoing=outgoing,
+                        state=state,
+                        dispatched=dispatched,
+                        work_list=work_list,
+                    )
+        _persist_edge_record(
+            state, state_ops, fired_edges, excluded_edges, graph_fingerprint
+        )
 
-    # Seed every ready node (all forward in-edges fired, or none declared) that
-    # is not already dispatched.  On a fresh run this is exactly
+    # Seed every ready node (all non-excluded forward in-edges fired, or none
+    # declared) that is not already dispatched.  On a fresh run this is exactly
     # graph.entry_nodes (both derive from the same forward-edge rule).  On
     # resume it ALSO includes nodes whose predecessors are already `done` —
     # their in-edges were replayed above — so the run progresses past the
     # resumed frontier instead of finishing early with an empty work-list (B1
-    # resume fix).
+    # resume fix).  Nodes already enqueued by exclusion propagation are kept.
     for node in graph.nodes:
         nid = node.id
-        if nid not in dispatched and _join_satisfied(
-            fired_edges, forward_in_edges, state, nid
+        if (
+            nid not in dispatched
+            and nid not in work_list
+            and _join_satisfied(
+                fired_edges, excluded_edges, forward_in_edges, state, nid
+            )
         ):
             work_list.append(nid)
 
@@ -196,6 +265,28 @@ def run(
         node = node_by_id.get(node_id)
         if node is None:
             log.warning("Runner: unknown node_id %r in work-list; skipping.", node_id)
+            continue
+
+        # ----------------------------------------------------------------
+        # Settle guard (R8/D9 corollary): a FORWARD-ancestor of this node is
+        # still queued — a back-edge reset re-enqueued it after this node
+        # became ready (e.g. an exclusion-completed join enqueued mid-loop).
+        # Dispatching now would run the node on pre-settle scope, and the
+        # ancestor's re-fire would then reset and run it AGAIN — whether that
+        # happens depends only on edge declaration order.  Defer to the back
+        # of the list instead: forward edges form a DAG, so the queue always
+        # contains a node with no queued ancestor and deferral terminates
+        # (each deferral consumes one global iteration, bounded by the cap).
+        # ----------------------------------------------------------------
+        if any(
+            node_id in _forward_downstream(forward_adjacency, queued)
+            for queued in work_list
+        ):
+            log.debug(
+                "Runner: deferring %r — a queued forward-ancestor has not settled.",
+                node_id,
+            )
+            work_list.append(node_id)
             continue
 
         # ----------------------------------------------------------------
@@ -321,12 +412,19 @@ def run(
             state=state,
             dispatched=dispatched,
             fired_edges=fired_edges,
+            excluded_edges=excluded_edges,
             forward_in_edges=forward_in_edges,
             forward_adjacency=forward_adjacency,
             work_list=work_list,
             executor=executor,
             scope=build_scope(state, scope_base=dict(graph.variables)),
             state_ops=state_ops,
+        )
+
+        # Persist the edge-evaluation record (R5): fired + excluded forward
+        # edges, so a park/resume replays them instead of re-deciding routing.
+        _persist_edge_record(
+            state, state_ops, fired_edges, excluded_edges, graph_fingerprint
         )
 
     # -----------------------------------------------------------------------
@@ -366,17 +464,175 @@ def _record_edge_fire(
 
 def _join_satisfied(
     fired_edges: dict[str, set[tuple[int, int]]],
+    excluded_edges: dict[str, set[tuple[int, int]]],
     forward_in_edges: dict[str, set[int]],
     state: WorkflowState,
     target: str,
 ) -> bool:
-    """True when every forward in-edge of *target* fired in its current generation."""
+    """True when every NON-EXCLUDED forward in-edge of *target* fired in its
+    current generation (R5): excluded edges drop out of the join requirement,
+    but at least one in-edge must have actually fired — a node all of whose
+    in-edges are excluded is excluded, not ready."""
     need = forward_in_edges.get(target, set())
     if not need:
         return True  # entry node — no forward in-edges to wait for
     gen = _generation(state, target)
-    have = {idx for (idx, g) in fired_edges.get(target, ()) if g == gen}
-    return need <= have
+    have_fired = {idx for (idx, g) in fired_edges.get(target, ()) if g == gen}
+    if not have_fired:
+        return False  # nothing fired — either not ready yet, or excluded
+    have_excluded = {idx for (idx, g) in excluded_edges.get(target, ()) if g == gen}
+    return need <= (have_fired | have_excluded)
+
+
+def _node_excluded(
+    fired_edges: dict[str, set[tuple[int, int]]],
+    excluded_edges: dict[str, set[tuple[int, int]]],
+    forward_in_edges: dict[str, set[int]],
+    state: WorkflowState,
+    target: str,
+) -> bool:
+    """True when ALL forward in-edges of *target* are excluded and none fired
+    in its current generation (R5 transitive exclusion).  Entry nodes are
+    never excluded; a fired in-edge always wins over exclusion records."""
+    need = forward_in_edges.get(target, set())
+    if not need:
+        return False
+    gen = _generation(state, target)
+    if any(g == gen for (_, g) in fired_edges.get(target, ())):
+        return False
+    have_excluded = {idx for (idx, g) in excluded_edges.get(target, ()) if g == gen}
+    return need <= have_excluded
+
+
+def _apply_exclusion(
+    edge_idx: int,
+    target: str,
+    *,
+    fired_edges: dict[str, set[tuple[int, int]]],
+    excluded_edges: dict[str, set[tuple[int, int]]],
+    forward_in_edges: dict[str, set[int]],
+    outgoing: dict[str, list[tuple[int, IREdge]]],
+    state: WorkflowState,
+    dispatched: set[str],
+    work_list: list[str],
+) -> None:
+    """Record an evaluated-false forward edge and propagate exclusion (R5/D1).
+
+    Shared by resume seeding and forward execution (``_enqueue_successors``)
+    so both paths route identically:
+
+    - the edge is recorded excluded for the target's current generation;
+    - a node ALL of whose forward in-edges are excluded (and none fired) is
+      excluded, and its own outgoing forward edges are excluded in turn
+      (recorded, not evaluated) — transitively;
+    - a join whose remaining non-excluded in-edges have all fired becomes
+      ready and is enqueued (the exclusion completed the join).
+
+    The walk follows forward edges only (a DAG by the positional back-edge
+    rule), so it terminates; already-dispatched targets get the record but no
+    propagation (they executed — their out-edges were evaluated for real).
+    """
+    stack: list[tuple[int, str]] = [(edge_idx, target)]
+    while stack:
+        idx, tgt = stack.pop()
+        excluded_edges.setdefault(tgt, set()).add((idx, _generation(state, tgt)))
+        if tgt in dispatched:
+            continue
+        if _node_excluded(fired_edges, excluded_edges, forward_in_edges, state, tgt):
+            for out_idx, out_edge in outgoing.get(tgt, []):
+                if out_idx not in forward_in_edges.get(out_edge.target, ()):
+                    continue  # back-edges never participate in exclusion
+                entry = (out_idx, _generation(state, out_edge.target))
+                if entry not in excluded_edges.get(out_edge.target, set()):
+                    stack.append((out_idx, out_edge.target))
+        elif (
+            _join_satisfied(fired_edges, excluded_edges, forward_in_edges, state, tgt)
+            and tgt not in work_list
+        ):
+            work_list.append(tgt)
+
+
+def _graph_fingerprint(graph: IRGraph) -> str:
+    """Stable hash of the graph's edge list (source, target, when).
+
+    The ``edges_evaluated`` record keys entries by positional edge index; the
+    fingerprint detects a spec/harness edit between park and resume (edge
+    inserted, removed or reordered), where the same index would denote a
+    DIFFERENT edge and the record would silently misroute the resumed run.
+    """
+    import hashlib
+
+    payload = "\n".join(
+        f"{e.source}->{e.target}?{e.when or ''}" for e in graph.edges
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+
+
+def _load_edge_record(
+    record: dict[str, Any] | None,
+    graph_fingerprint: str,
+) -> tuple[dict[str, set[tuple[int, int]]], dict[str, set[tuple[int, int]]]]:
+    """Rebuild the in-memory (fired, excluded) edge sets from a persisted
+    ``edges_evaluated`` record.  Tolerant: an absent/malformed record yields
+    empty sets (resume seeding then re-evaluates conditions instead).  A
+    record written against a different graph (``graph_fingerprint`` present
+    and mismatched) is discarded wholesale — its positional edge indices
+    would misattribute fired/excluded entries to different edges."""
+    fired: dict[str, set[tuple[int, int]]] = {}
+    excluded: dict[str, set[tuple[int, int]]] = {}
+    if not isinstance(record, dict):
+        return fired, excluded
+    recorded_fp = record.get("graph_fingerprint")
+    if isinstance(recorded_fp, str) and recorded_fp != graph_fingerprint:
+        log.warning(
+            "Runner: edges_evaluated record was written against a different "
+            "graph (fingerprint %r != %r) — discarding; resume seeding "
+            "re-evaluates edge conditions from the persisted scope.",
+            recorded_fp, graph_fingerprint,
+        )
+        return fired, excluded
+    for key, dest in (("fired", fired), ("excluded", excluded)):
+        entries = record.get(key)
+        if not isinstance(entries, dict):
+            continue
+        for target, pairs in entries.items():
+            try:
+                dest[str(target)] = {(int(i), int(g)) for i, g in pairs}
+            except (TypeError, ValueError):
+                log.warning(
+                    "Runner: malformed edges_evaluated entry for %r — ignored.",
+                    target,
+                )
+    return fired, excluded
+
+
+def _persist_edge_record(
+    state: WorkflowState,
+    state_ops: "StateOps | None",
+    fired_edges: dict[str, set[tuple[int, int]]],
+    excluded_edges: dict[str, set[tuple[int, int]]],
+    graph_fingerprint: str,
+) -> None:
+    """Serialize the edge sets into ``state.edges_evaluated`` and persist the
+    full snapshot through StateOps (no-op when nothing changed).  The record
+    carries the graph fingerprint so a later resume against an edited graph
+    discards it instead of misattributing positional edge indices."""
+    record: dict[str, Any] = {}
+    for key, source in (("fired", fired_edges), ("excluded", excluded_edges)):
+        serialized = {
+            tgt: sorted([list(entry) for entry in entries])
+            for tgt, entries in sorted(source.items())
+            if entries
+        }
+        if serialized:
+            record[key] = serialized
+    if record:
+        record["graph_fingerprint"] = graph_fingerprint
+    if record == state.edges_evaluated:
+        return
+    state.edges_evaluated = record
+    if state_ops is not None:
+        state_ops.write({"edges_evaluated": record})
 
 
 def _forward_downstream(
@@ -400,6 +656,7 @@ def _enqueue_successors(
     state: WorkflowState,
     dispatched: set[str],
     fired_edges: dict[str, set[tuple[int, int]]],
+    excluded_edges: dict[str, set[tuple[int, int]]],
     forward_in_edges: dict[str, set[int]],
     forward_adjacency: dict[str, list[str]],
     work_list: list[str],
@@ -410,15 +667,21 @@ def _enqueue_successors(
     """Evaluate outgoing edges from *node_id* and enqueue ready successors.
 
     Forward edges are recorded in the fired-edge set and the target enqueued
-    only once EVERY one of its forward in-edges has fired in its current
-    generation (R8/D9 — a looping source re-firing one edge cannot satisfy a
-    join on behalf of predecessors that never ran).
+    only once EVERY one of its non-excluded forward in-edges has fired in its
+    current generation (R8/D9 — a looping source re-firing one edge cannot
+    satisfy a join on behalf of predecessors that never ran).
+
+    A forward edge whose condition evaluates FALSE is recorded excluded and
+    exclusion propagates transitively (R5/D1, ``_apply_exclusion``) — the same
+    mechanism resume seeding uses, so routing past a false branch behaves
+    identically with and without an intervening park.
 
     Back-edge handling: when a condition fires to an already-dispatched node
     (a cyclic loop-back), the target AND its forward-downstream nodes are
     reset to 'pending' (stale fields/artifacts/gates cleared in state and
     storage — see ``reset_downstream_nodes``) and the target is re-enqueued
-    directly, bypassing the join bookkeeping.
+    directly, bypassing the join bookkeeping.  A back-edge evaluating false is
+    NOT an exclusion (back-edges never participate in exclusion accounting).
     """
     from runner.loop import reset_downstream_nodes
 
@@ -432,6 +695,19 @@ def _enqueue_successors(
             condition_met = executor.evalCondition(edge.when, scope)
 
         if not condition_met:
+            if edge_idx in forward_in_edges.get(target, ()):
+                # Forward edge evaluated false — record + propagate exclusion.
+                _apply_exclusion(
+                    edge_idx,
+                    target,
+                    fired_edges=fired_edges,
+                    excluded_edges=excluded_edges,
+                    forward_in_edges=forward_in_edges,
+                    outgoing=outgoing,
+                    state=state,
+                    dispatched=dispatched,
+                    work_list=work_list,
+                )
             continue
 
         if target in dispatched:
@@ -449,10 +725,13 @@ def _enqueue_successors(
             if target not in work_list:
                 work_list.append(target)
         else:
-            # Forward edge: record the fire; enqueue once the join is complete.
+            # Forward edge: record the fire; enqueue once the join is complete
+            # (every non-excluded forward in-edge fired, R5).
             _record_edge_fire(fired_edges, edge_idx, target, state)
             if (
-                _join_satisfied(fired_edges, forward_in_edges, state, target)
+                _join_satisfied(
+                    fired_edges, excluded_edges, forward_in_edges, state, target
+                )
                 and target not in work_list
             ):
                 work_list.append(target)

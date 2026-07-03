@@ -291,20 +291,23 @@ print(f"--> loop budget halved by double increment: {ok}  "
 # D7 — Loop-back re-fire double-satisfies a join: join fires prematurely.
 # R8 mechanism change: the in_degree decrement-with-clamp is replaced by a
 # fired-edge set keyed (edge, target generation), so re-firing the same edge
-# de-duplicates.  Same defect scenario, same runner entry point — the join
-# must wait for ALL its predecessors.
-# DEFECT CONFIRMED = 'j' still executes although 's' never ran.
+# de-duplicates.
+# R5 mechanism change: a forward edge that evaluates FALSE now records an
+# EXCLUSION that propagates transitively (runner/core.py _apply_exclusion) —
+# a predecessor gated behind a never-true edge is provably excluded and the
+# join's requirement drops to its non-excluded in-edges (the same rule that
+# routes the shipped spec's signoff→frontend/architect diamond).  "j ran
+# although s never ran" therefore stopped being a defect observable when s is
+# excluded; the join defect is checked two ways instead:
+#   (a) ordering with a FIRING sibling: a loop-back re-fire must not satisfy
+#       the join on s's behalf — j must dispatch after s (D9 double-decrement
+#       dispatched j first);
+#   (b) exclusion contract: with s excluded, j must run exactly once, after
+#       the loop settles, and s must never run (a starved join here means the
+#       R5 exclusion propagation regressed).
+# DEFECT CONFIRMED = either check violated.
 # ===========================================================================
-hr("D7  Premature join after loop-back (fired-edge set in core.py since R8)")
-g7 = IRGraph(
-    nodes=[node("r"), node("s"), node("j")],
-    edges=[IREdge(source="r", target="r", when="LOOP_ONCE", port=None),
-           IREdge(source="r", target="j", when="", port=None),
-           IREdge(source="s", target="j", when="", port=None),
-           # s is gated behind a condition that never fires:
-           IREdge(source="r", target="s", when="NEVER", port=None)],
-    metadata={}, variables={})
-# in_degree: j=2 (r->j, s->j forward), s=1 (r->s forward), r=0 (self edge is back-edge)
+hr("D7  Premature join after loop-back (fired-edge set + R5 exclusion, core.py)")
 loop_calls = {"n": 0}
 class LoopOnceExec(RecordingExecutor):
     def evalCondition(self, expr, scope):
@@ -314,12 +317,43 @@ class LoopOnceExec(RecordingExecutor):
         if expr == "NEVER":
             return False
         return super().evalCondition(expr, scope)
-ex7 = LoopOnceExec()
-s7 = workflow_runner.run(graph=g7, executor=ex7, state_ops=None)
-print(f"dispatched={ex7.dispatched}")
-ok = "j" in ex7.dispatched and "s" not in ex7.dispatched
-print(f"--> join 'j' fired although predecessor 's' never ran: {ok}  "
-      f"{'DEFECT CONFIRMED' if ok else 'not reproduced'}")
+
+# (a) firing sibling: s fires late; a double-satisfied join dispatches j early.
+g7a = IRGraph(
+    nodes=[node("r"), node("s"), node("j")],
+    edges=[IREdge(source="r", target="r", when="LOOP_ONCE", port=None),
+           IREdge(source="r", target="j", when="", port=None),
+           IREdge(source="s", target="j", when="", port=None),
+           IREdge(source="r", target="s", when="", port=None)],
+    metadata={}, variables={})
+ex7a = LoopOnceExec()
+workflow_runner.run(graph=g7a, executor=ex7a, state_ops=None)
+print(f"(a) firing sibling: dispatched={ex7a.dispatched}")
+premature = (ex7a.dispatched.count("j") != 1
+             or "s" not in ex7a.dispatched
+             or ex7a.dispatched.index("j") < ex7a.dispatched.index("s"))
+
+# (b) excluded sibling: NEVER-gated s is excluded; join must not starve.
+loop_calls["n"] = 0
+g7b = IRGraph(
+    nodes=[node("r"), node("s"), node("j")],
+    edges=[IREdge(source="r", target="r", when="LOOP_ONCE", port=None),
+           IREdge(source="r", target="j", when="", port=None),
+           IREdge(source="s", target="j", when="", port=None),
+           # s is gated behind a condition that never fires -> excluded (R5):
+           IREdge(source="r", target="s", when="NEVER", port=None)],
+    metadata={}, variables={})
+ex7b = LoopOnceExec()
+workflow_runner.run(graph=g7b, executor=ex7b, state_ops=None)
+print(f"(b) excluded sibling: dispatched={ex7b.dispatched}")
+excl_broken = (ex7b.dispatched.count("j") != 1
+               or "s" in ex7b.dispatched
+               or ex7b.dispatched.count("r") != 2
+               or ex7b.dispatched[-1] != "j")
+
+ok = premature or excl_broken
+print(f"--> premature join (a): {premature}; exclusion contract broken (b): "
+      f"{excl_broken}  {'DEFECT CONFIRMED' if ok else 'not reproduced'}")
 
 # ===========================================================================
 # D8 — Fence after long prose must survive classification.

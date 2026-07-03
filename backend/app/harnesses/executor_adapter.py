@@ -100,6 +100,8 @@ class _StateOps:
     ``write(patch)`` applies a shallow merge from the patch dict into the
     in-memory WorkflowState:
       - ``"status"`` → ``state.status``
+      - ``"edges_evaluated"`` → full replacement of ``state.edges_evaluated``
+        (R5 edge-evaluation record; the runner always writes the full snapshot)
       - ``"nodes"`` → merges each node sub-dict into ``state.nodes``
     """
 
@@ -112,6 +114,8 @@ class _StateOps:
     def write(self, patch: dict[str, Any]) -> None:
         if "status" in patch:
             self._state.status = patch["status"]  # type: ignore[assignment]
+        if "edges_evaluated" in patch:
+            self._state.edges_evaluated = dict(patch["edges_evaluated"] or {})
         if "nodes" in patch:
             for node_id, node_dict in patch["nodes"].items():
                 existing = self._state.nodes.get(node_id)

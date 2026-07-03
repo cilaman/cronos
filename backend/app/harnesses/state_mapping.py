@@ -53,10 +53,23 @@ Loop bookkeeping
 NodeState.attempt is stored directly on WfNodeState.attempt (same field name).
 NodeState.prior_finding_ids is stored in WfNodeState.fields['prior_finding_ids'].
 
+Routing-field and edge-record fidelity (R5)
+-------------------------------------------
+The runner path stores agent envelope fields (``verdict``, ``exit_reason``, …)
+in ``WfNodeState.fields`` and its fired/excluded forward-edge record in
+``WorkflowState.edges_evaluated``.  Both MUST survive the RunState mapping:
+without them, R5's condition-aware resume seeding re-evaluates routing
+conditions against missing keys → every branch False → transitive exclusion
+→ the run finishes 'done' with the downstream tail silently never executed.
+Non-reserved ``WfNodeState.fields`` keys round-trip via
+``HarnessNodeState.fields``; ``edges_evaluated`` round-trips verbatim on the
+run level.
+
 Round-trip contract
 -------------------
 runstate_to_workflowstate(rs, hid) followed by workflowstate_to_runstate(ws, rs)
-must produce a RunState equal to the original for all fields in NodeState.
+must produce a RunState equal to the original for all fields in NodeState,
+including ``fields`` extras and the run-level ``edges_evaluated`` record.
 """
 from __future__ import annotations
 
@@ -117,6 +130,20 @@ _WF_TO_HARNESS_RUN: dict[str, str] = {
 # has no budget information.  Zero ceiling, zero spent.
 _ZERO_BUDGET = BudgetState(usd_ceiling=0.0, usd_spent=0.0)
 
+# WfNodeState.fields keys owned by the mapping itself (canonical attributes on
+# HarnessNodeState plus the status sentinel).  Everything else is a routing/
+# envelope extra (e.g. ``verdict``) that round-trips via HarnessNodeState.fields.
+_RESERVED_FIELD_KEYS = frozenset({
+    "prior_finding_ids",
+    "child_task_id",
+    "output",
+    "reason",
+    "started_at",
+    "ended_at",
+    "wake_at",
+    "_harness_status",
+})
+
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -147,6 +174,9 @@ def runstate_to_workflowstate(run_state: RunState, harness_id: str) -> WorkflowS
         - ``WfNodeState.fields['started_at']`` ← ``HarnessNodeState.started_at``
         - ``WfNodeState.fields['ended_at']`` ← ``HarnessNodeState.ended_at``
         - ``WfNodeState.fields['wake_at']`` ← ``HarnessNodeState.wake_at``
+        - non-reserved ``HarnessNodeState.fields`` extras (e.g. ``verdict``)
+          are merged into ``WfNodeState.fields`` (R5 routing-field fidelity)
+        - ``WorkflowState.edges_evaluated`` ← ``RunState.edges_evaluated``
     """
     run_status = _HARNESS_TO_WF_RUN.get(run_state.status, "running")
 
@@ -157,6 +187,8 @@ def runstate_to_workflowstate(run_state: RunState, harness_id: str) -> WorkflowS
             status=wf_status,
             attempt=ns.attempt,
             fields={
+                # Envelope/routing extras first — canonical keys below win.
+                **dict(ns.fields),
                 "prior_finding_ids": list(ns.prior_finding_ids),
                 "child_task_id": ns.child_task_id,
                 "output": ns.output,
@@ -177,6 +209,7 @@ def runstate_to_workflowstate(run_state: RunState, harness_id: str) -> WorkflowS
         status=run_status,  # type: ignore[arg-type]
         budget=_ZERO_BUDGET,
         nodes=nodes,
+        edges_evaluated=dict(run_state.edges_evaluated),
     )
 
 
@@ -230,6 +263,11 @@ def workflowstate_to_runstate(
             wake_at=fields.get("wake_at"),
             attempt=wf_node.attempt,
             prior_finding_ids=list(fields.get("prior_finding_ids") or []),
+            # Routing/envelope extras (e.g. ``verdict``) — everything the
+            # runner stored beyond the reserved canonical keys (R5).
+            fields={
+                k: v for k, v in fields.items() if k not in _RESERVED_FIELD_KEYS
+            },
         )
         nodes[node_id] = h_node
 
@@ -240,4 +278,5 @@ def workflowstate_to_runstate(
         nodes_executed=nodes,
         status=run_status,
         waiting_node_id=base_run_state.waiting_node_id,
+        edges_evaluated=dict(workflow_state.edges_evaluated),
     )

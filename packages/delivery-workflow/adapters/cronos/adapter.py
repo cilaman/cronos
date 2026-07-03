@@ -103,6 +103,11 @@ class CronosStateOps:
         if "status" in patch:
             state.status = patch["status"]
 
+        # Edge-evaluation record (R5/D1): the runner writes the full snapshot
+        # with each update — full replacement, round-trips identically.
+        if "edges_evaluated" in patch:
+            state.edges_evaluated = dict(patch["edges_evaluated"] or {})
+
         # Node-level patches.
         nodes_patch: dict[str, Any] = patch.get("nodes", {})
         for node_id, ns_patch in nodes_patch.items():

@@ -25,9 +25,12 @@ Contract (01-state-model.md §5.5):
 """
 from __future__ import annotations
 
+import itertools
 import sys
 from pathlib import Path
 from typing import Any
+
+import pytest
 
 _PKG = Path(__file__).parent.parent.parent
 if str(_PKG) not in sys.path:
@@ -267,9 +270,9 @@ class TestLoopBudget:
 # ===========================================================================
 
 
-def _d9_graph() -> IRGraph:
+def _d9_graph(s_when: str = "NEVER") -> IRGraph:
     """The D9 repro shape: r loops back once via a self back-edge; the join j
-    needs BOTH r and s, but s is starved behind a never-true condition."""
+    needs BOTH r and s, with s gated behind the *s_when* condition."""
     return IRGraph(
         nodes=[IRNode(id="r", kind="agent"), IRNode(id="s", kind="agent"),
                IRNode(id="j", kind="agent")],
@@ -277,7 +280,7 @@ def _d9_graph() -> IRGraph:
             IREdge(source="r", target="r", when="LOOP_ONCE"),
             IREdge(source="r", target="j"),
             IREdge(source="s", target="j"),
-            IREdge(source="r", target="s", when="NEVER"),
+            IREdge(source="r", target="s", when=s_when),
         ],
     )
 
@@ -285,16 +288,79 @@ def _d9_graph() -> IRGraph:
 class TestJoinArithmetic:
     def test_join_waits_for_all_predecessors_across_loop_back(self):
         """r executes twice (self back-edge) and re-fires r→j twice; the join
-        must NOT fire — s never ran (D9: the double decrement made j execute
-        with missing inputs)."""
+        must NOT fire on r's double-fire alone — it waits for s (D9: the
+        double decrement made j execute before s ran).  s is gated behind a
+        condition that FIRES, so no exclusion applies and the join needs both
+        inputs: j must dispatch exactly once, strictly after s."""
+        ex = RecordingExecutor(cond_script={"LOOP_ONCE": [True, False], "ALWAYS": True})
+        workflow_runner.run(graph=_d9_graph(s_when="ALWAYS"), executor=ex, state_ops=None)
+
+        assert ex.count("r") == 2
+        assert ex.count("s") == 1
+        assert ex.count("j") == 1
+        order = [nid for nid, _ in ex.dispatched]
+        assert order.index("j") > order.index("s"), (
+            "join fired before predecessor 's' ran (D9 double-satisfy)"
+        )
+
+    def test_join_drops_excluded_predecessor_across_loop_back(self):
+        """R5 exclusion semantics on the same shape: s is gated behind a
+        never-true condition, so it is provably EXCLUDED (evaluated-false
+        forward edge → transitive exclusion) and the join's requirement drops
+        to the fired r→j edge — j executes exactly once with s never run,
+        only after the loop settles.  (Pre-R5 this starved the join; the
+        original D9 assertion expected j never to run, which conflated the
+        double-satisfy defect with legitimate exclusion routing.)"""
         ex = RecordingExecutor(cond_script={"LOOP_ONCE": [True, False], "NEVER": False})
-        workflow_runner.run(graph=_d9_graph(), executor=ex, state_ops=None)
+        state = workflow_runner.run(graph=_d9_graph(), executor=ex, state_ops=None)
 
         assert ex.count("r") == 2
         assert ex.count("s") == 0
-        assert ex.count("j") == 0, (
-            "join fired although predecessor 's' never ran (D9 double-satisfy)"
+        assert ex.count("j") == 1, (
+            "join starved although 's' was provably excluded (R5 regression)"
         )
+        order = [nid for nid, _ in ex.dispatched]
+        assert order[-1] == "j", "join must fire only after the loop settles"
+        assert state.status == "done"
+
+    @pytest.mark.parametrize(
+        "edge_order",
+        list(itertools.permutations(["back", "r_j", "s_j", "r_s"])),
+        ids=lambda p: "-".join(p),
+    )
+    def test_join_exclusion_contract_independent_of_edge_order(self, edge_order):
+        """The exactly-once/after-settle contract must not depend on edge
+        DECLARATION order.  With the exclusion edge declared before the self
+        back-edge, the exclusion-completed join used to be enqueued mid-loop
+        (before r settled) and the iteration-2 re-fire then reset and ran it a
+        SECOND time — j dispatched twice on ['r','j','r','j'].  The settle
+        guard defers a popped node while a forward-ancestor is still queued,
+        so every declaration order yields j exactly once, after the loop."""
+        mk = {
+            "back": lambda: IREdge(source="r", target="r", when="LOOP_ONCE"),
+            "r_j": lambda: IREdge(source="r", target="j"),
+            "s_j": lambda: IREdge(source="s", target="j"),
+            "r_s": lambda: IREdge(source="r", target="s", when="NEVER"),
+        }
+        g = IRGraph(
+            nodes=[IRNode(id="r", kind="agent"), IRNode(id="s", kind="agent"),
+                   IRNode(id="j", kind="agent")],
+            edges=[mk[name]() for name in edge_order],
+        )
+        ex = RecordingExecutor(cond_script={"LOOP_ONCE": [True, False], "NEVER": False})
+        state = workflow_runner.run(graph=g, executor=ex, state_ops=None)
+
+        assert ex.count("r") == 2
+        assert ex.count("s") == 0
+        assert ex.count("j") == 1, (
+            f"join must fire exactly once regardless of edge declaration "
+            f"order {edge_order}, got dispatches {ex.dispatched}"
+        )
+        order = [nid for nid, _ in ex.dispatched]
+        assert order[-1] == "j", (
+            f"join must fire only after the loop settles (order {edge_order}): {order}"
+        )
+        assert state.status == "done"
 
     def test_join_fires_exactly_once_when_all_predecessors_ran(self):
         """Positive control: with both predecessors running (one of them via a

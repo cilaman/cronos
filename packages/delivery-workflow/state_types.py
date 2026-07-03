@@ -27,3 +27,13 @@ class WorkflowState:
     status: Literal["running", "done", "failed", "blocked", "escalated"]
     budget: BudgetState
     nodes: dict[str, NodeState] = field(default_factory=dict)
+    #: Edge-evaluation record (R5/D1, 01-state-model.md §5.2 ``edges_evaluated``).
+    #: Shape: ``{"fired": {target: [[edge_index, target_generation], ...]},
+    #:           "excluded": {target: [[edge_index, target_generation], ...]}}``
+    #: — the forward edges the runner evaluated true (fired) or false/
+    #: transitively-excluded (excluded).  Written by the runner through
+    #: StateOps so resume edge replay is idempotent; an absent/empty record
+    #: (pre-R5 state.json, lossy StateOps) makes resume re-evaluate conditions
+    #: from the rebuilt typed scope instead.  R6 will use it as the
+    #: completeness proof at drain time.
+    edges_evaluated: dict[str, Any] = field(default_factory=dict)

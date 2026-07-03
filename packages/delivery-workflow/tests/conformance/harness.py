@@ -326,6 +326,11 @@ def assert_state_roundtrip(state_ops: "StateOps", final: WorkflowState) -> None:
     assert persisted.status == final.status, (
         f"run status round-trip: in-memory {final.status!r}, disk {persisted.status!r}"
     )
+    assert persisted.edges_evaluated == final.edges_evaluated, (
+        "edges_evaluated round-trip: in-memory "
+        f"{final.edges_evaluated!r}, disk {persisted.edges_evaluated!r} "
+        "(R5 — resume edge replay would not be idempotent)"
+    )
     assert set(persisted.nodes) == set(final.nodes), (
         f"node-set round-trip: in-memory {sorted(final.nodes)}, "
         f"disk {sorted(persisted.nodes)}"

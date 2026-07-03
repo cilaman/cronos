@@ -36,6 +36,11 @@ def _deserialize(data: dict[str, Any]) -> WorkflowState:
         status=data["status"],
         budget=budget,
         nodes=nodes,
+        # Round-trip law (R5/D1): the edge-evaluation record proves which
+        # forward edges fired / were excluded; dropping it would force resume
+        # to re-evaluate conditions (correct but the record must survive when
+        # written — everything the runner writes reads back identically).
+        edges_evaluated=dict(data.get("edges_evaluated", {})),
     )
 
 
@@ -57,7 +62,7 @@ def _serialize(state: WorkflowState) -> dict[str, Any]:
         if ns.fields:
             entry["fields"] = ns.fields
         nodes[nid] = entry
-    return {
+    data: dict[str, Any] = {
         "spec": state.spec,
         "run_id": state.run_id,
         "status": state.status,
@@ -67,6 +72,10 @@ def _serialize(state: WorkflowState) -> dict[str, Any]:
         },
         "nodes": nodes,
     }
+    # Round-trip law (R5/D1): persist the edge-evaluation record when present.
+    if state.edges_evaluated:
+        data["edges_evaluated"] = state.edges_evaluated
+    return data
 
 
 def resume_node_status(node_state: NodeState | None) -> str:

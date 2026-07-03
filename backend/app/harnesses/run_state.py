@@ -68,6 +68,11 @@ class NodeState:
     # Loop bookkeeping (G3.1): finding IDs from the previous loop attempt,
     # used for recurring_findings stall detection.  Empty list when no prior run.
     prior_finding_ids: list = field(default_factory=list)
+    # Structured agent-output/routing fields (R5): the delivery-workflow runner
+    # stores envelope fields (e.g. ``verdict``, ``exit_reason``) on the node so
+    # conditional edges keyed ``{node}.fields.{k}`` survive a park/resume.
+    # The BFS executor ignores this dict; state_mapping round-trips it.
+    fields: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -112,6 +117,19 @@ class RunState:
     """
 
     # ------------------------------------------------------------------
+    # Runner-path edge-evaluation record (R5)
+    # ------------------------------------------------------------------
+
+    edges_evaluated: dict = field(default_factory=dict)
+    """
+    The delivery-workflow runner's persisted fired/excluded forward-edge record
+    (01-state-model.md §5.2).  Written on the ``CRONOS_HARNESS_RUNNER=runner``
+    path via ``state_mapping``; without it a resume would re-evaluate routing
+    conditions with no memory of previously-fired branches.  Empty (and unused)
+    on the BFS path; legacy JSON files without this key load as ``{}``.
+    """
+
+    # ------------------------------------------------------------------
     # Serialisation helpers
     # ------------------------------------------------------------------
 
@@ -135,6 +153,7 @@ class RunState:
                 wake_at=ns.get("wake_at"),
                 attempt=ns.get("attempt", 0),
                 prior_finding_ids=ns.get("prior_finding_ids", []),
+                fields=ns.get("fields", {}),
             )
             for node_id, ns in nodes_raw.items()
         }
@@ -145,6 +164,7 @@ class RunState:
             nodes_executed=nodes,
             waiting_node_id=data.get("waiting_node_id"),
             status=data.get("status", "running"),
+            edges_evaluated=data.get("edges_evaluated", {}),
         )
 
 

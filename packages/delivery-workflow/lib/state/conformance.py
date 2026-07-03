@@ -4,8 +4,10 @@ The law (01-state-model.md §5.4): **everything the runner writes through
 ``StateOps.write()`` must read back identically through ``StateOps.read()``**.
 Concretely, for node patches that means ``status``, ``attempt``,
 ``artifact_paths``, ``gate`` and ``fields``; for top-level patches it means
-``status``. Values already persisted by other writers (e.g. ``telemetry``
-written by ``TelemetrySink``) must survive unrelated writes untouched.
+``status`` and ``edges_evaluated`` (the R5 edge-evaluation record — the
+runner writes the full snapshot, so a later write replaces the whole value).
+Values already persisted by other writers (e.g. ``telemetry`` written by
+``TelemetrySink``) must survive unrelated writes untouched.
 
 Every ``StateOps`` implementation — the package's ``CronosStateOps``, the
 backend harness ``_StateOps``, any future embedder — must pass every check in
@@ -222,6 +224,39 @@ def check_fields_survive_park_resume_cycle(make_ops: MakeOps) -> None:
     )
 
 
+def check_edges_evaluated_roundtrip(make_ops: MakeOps) -> None:
+    """The R5 edge-evaluation record: the runner persists the full snapshot
+    with ``write({"edges_evaluated": …})`` — it must read back identically,
+    survive unrelated node/status writes, and be replaced (not merged) by a
+    later snapshot write.  A StateOps that drops it degrades resume to
+    condition re-evaluation, which the runner tolerates — but the round-trip
+    law is what makes replay idempotent across multiple resumes."""
+    record = {
+        "fired": {"signoff": [[4, 1]], "architect": [[7, 0]]},
+        "excluded": {"frontend": [[6, 0]], "architect": [[8, 0]]},
+    }
+    ops = make_ops(_fresh_state())
+    ops.write({"edges_evaluated": record})
+    got = ops.read().edges_evaluated
+    assert got == record, (
+        f"edges_evaluated round-trip broken: wrote {record!r}, read {got!r} — "
+        "resume edge replay cannot be idempotent (R5)"
+    )
+    # Unrelated writes must not clobber the record.
+    ops.write({"status": "blocked", "nodes": {"analyze": {"status": "done"}}})
+    got = ops.read().edges_evaluated
+    assert got == record, (
+        f"edges_evaluated clobbered by an unrelated write: {got!r}"
+    )
+    # A later snapshot write replaces the whole record (runner write shape).
+    smaller = {"fired": {"signoff": [[4, 1]]}}
+    ops.write({"edges_evaluated": smaller})
+    got = ops.read().edges_evaluated
+    assert got == smaller, (
+        f"edges_evaluated must be replaced by the new snapshot, read {got!r}"
+    )
+
+
 STATEOPS_CONFORMANCE_CHECKS: tuple[Callable[[MakeOps], None], ...] = (
     check_top_level_status_roundtrip,
     check_new_node_full_patch_roundtrip,
@@ -229,6 +264,7 @@ STATEOPS_CONFORMANCE_CHECKS: tuple[Callable[[MakeOps], None], ...] = (
     check_partial_patch_preserves_unpatched_keys,
     check_unrelated_write_preserves_other_nodes,
     check_fields_survive_park_resume_cycle,
+    check_edges_evaluated_roundtrip,
 )
 
 

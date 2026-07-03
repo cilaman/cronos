@@ -20,14 +20,11 @@ the suite therefore doubles as the remediation progress meter:
 
 Scenario names are stable and greppable; do not rename them.
 
-Known coverage gap (until R5): no GREEN scenario live-evaluates the shipped
-spec's typed-boolean edges (signoff-scope→frontend/architect on
-``analyze.fields.has_ui``) — the sign-off parks the run before the edges are
-evaluated and today's resume seeding replays edges unconditionally (D1), so an
-R3 revert would not fail this suite alone (it is caught by
-tests/regression/test_typed_conditions_r3.py).  When R5 lands and
-``test_conformance_signoff_branch`` flips green, that scenario becomes the
-composition-level typed-condition guard.
+Since R5 (condition-aware resume seeding), ``test_conformance_signoff_branch``
+is GREEN and live-evaluates the shipped spec's typed-boolean edges
+(signoff-scope→frontend/architect on ``analyze.fields.has_ui``) across the
+park→resume cycle — it is the composition-level typed-condition guard (an R3
+revert fails it, in addition to tests/regression/test_typed_conditions_r3.py).
 """
 from __future__ import annotations
 
@@ -133,18 +130,14 @@ def test_conformance_happy_path(tmp_path: Path, graph) -> None:
 # (b) SIGN-OFF BRANCH (D1) — has_ui=false: after the resume past
 #     signoff-scope, `frontend` must NOT execute and `architect` must.
 #
-# Today the resume seeding (runner/core.py) decrements in_degree along EVERY
-# outgoing edge of every persisted-done node without evaluating `when`
-# conditions, so `frontend` always runs after the signoff-scope park/resume.
-# R5's acceptance criterion quotes this exact scenario.
+# GREEN since R5: resume seeding replays each done node's outgoing `when`
+# conditions against the rebuilt typed scope, records fired vs excluded edges
+# (the `edges_evaluated` map), and propagates exclusion transitively — the
+# excluded frontend branch drops out of the frontend→architect join instead
+# of firing unconditionally (D1) or starving architect.
 # ===========================================================================
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="R5 condition-aware resume seeding (D1): resume fires conditional "
-    "edges of done nodes unconditionally, so frontend runs despite has_ui=false",
-)
 def test_conformance_signoff_branch(tmp_path: Path, graph) -> None:
     executor, state_ops = _make_run(tmp_path, graph, {
         "analyze": agent_done(has_ui=False),  # JSON bool — no UI in this build
