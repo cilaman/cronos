@@ -1,14 +1,11 @@
 """Tests for runner/loop.py — LoopPolicy evaluation (I5)."""
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from ir import IRNode, LoopPolicy
-from runner.loop import reset_downstream_nodes, should_loop_back
-from state_types import BudgetState, NodeState, WorkflowState
+from delivery_workflow.ir import IRNode, LoopPolicy
+from delivery_workflow.runner.loop import reset_downstream_nodes, should_loop_back
+from delivery_workflow.state_types import BudgetState, NodeState, WorkflowState
 
 
 # ---------------------------------------------------------------------------
@@ -16,6 +13,13 @@ from state_types import BudgetState, NodeState, WorkflowState
 # ---------------------------------------------------------------------------
 
 class _MockRuntime:
+    """Host + scripted condition evaluator for should_loop_back (R10b).
+
+    The runner no longer asks the executor to evaluate conditions —
+    ``should_loop_back`` takes a ``host`` (on_event receives the loop-exhaust
+    RunEscalated) and an ``eval_condition`` simulation hook.
+    """
+
     def __init__(self, condition_result: bool = False) -> None:
         self._condition_result = condition_result
         self.escalated: list[tuple[str, str]] = []
@@ -25,8 +29,11 @@ class _MockRuntime:
         self.condition_calls.append((expr, scope))
         return self._condition_result
 
-    def escalate(self, node_id: str, reason: str) -> None:
-        self.escalated.append((node_id, reason))
+    def on_event(self, event) -> None:
+        from delivery_workflow.events import RunEscalated
+
+        if isinstance(event, RunEscalated):
+            self.escalated.append((event.node_id, event.detail))
 
     @property
     def state(self):
@@ -62,7 +69,7 @@ class TestShouldLoopBack:
         node = IRNode(id="n", kind="agent", loop=None)
         state = _state_with_node("n")
         rt = _MockRuntime()
-        assert should_loop_back(node, state, {}, rt) is False
+        assert should_loop_back(node, state, {}, host=rt, eval_condition=rt.evalCondition) is False
 
     def test_condition_met_does_not_loop(self):
         """When until-condition is True, loop exits (no back-edge)."""
@@ -70,7 +77,7 @@ class TestShouldLoopBack:
         node = IRNode(id="review", kind="agent", loop=lp)
         state = _state_with_node("review", attempt=1)
         rt = _MockRuntime(condition_result=True)
-        assert should_loop_back(node, state, {}, rt) is False
+        assert should_loop_back(node, state, {}, host=rt, eval_condition=rt.evalCondition) is False
 
     def test_condition_not_met_loops_back(self):
         """When until-condition is False and attempt < max, loop-back."""
@@ -78,7 +85,7 @@ class TestShouldLoopBack:
         node = IRNode(id="review", kind="agent", loop=lp)
         state = _state_with_node("review", attempt=1)
         rt = _MockRuntime(condition_result=False)
-        assert should_loop_back(node, state, {}, rt) is True
+        assert should_loop_back(node, state, {}, host=rt, eval_condition=rt.evalCondition) is True
 
     def test_loop_back_does_not_touch_attempt(self):
         """Single attempt owner (R8/D8): dispatch increments once per execution;
@@ -88,7 +95,7 @@ class TestShouldLoopBack:
         node = IRNode(id="n", kind="agent", loop=lp)
         state = _state_with_node("n", attempt=2)
         rt = _MockRuntime(condition_result=False)
-        assert should_loop_back(node, state, {}, rt) is True
+        assert should_loop_back(node, state, {}, host=rt, eval_condition=rt.evalCondition) is True
         assert state.nodes["n"].attempt == 2  # unchanged — dispatch owns it
 
     def test_loop_back_zeroes_artifact_paths(self):
@@ -97,7 +104,7 @@ class TestShouldLoopBack:
         state = _state_with_node("n", attempt=1)
         state.nodes["n"].artifact_paths = ["old/file.md"]
         rt = _MockRuntime(condition_result=False)
-        should_loop_back(node, state, {}, rt)
+        should_loop_back(node, state, {}, host=rt, eval_condition=rt.evalCondition)
         assert state.nodes["n"].artifact_paths == []
 
     def test_loop_back_zeroes_fields(self):
@@ -106,7 +113,7 @@ class TestShouldLoopBack:
         state = _state_with_node("n", attempt=1)
         state.nodes["n"].fields = {"verdict": "needs_fix"}
         rt = _MockRuntime(condition_result=False)
-        should_loop_back(node, state, {}, rt)
+        should_loop_back(node, state, {}, host=rt, eval_condition=rt.evalCondition)
         assert state.nodes["n"].fields == {}
 
     def test_max_reached_escalates(self):
@@ -114,7 +121,7 @@ class TestShouldLoopBack:
         node = IRNode(id="review", kind="agent", loop=lp)
         state = _state_with_node("review", attempt=3)
         rt = _MockRuntime(condition_result=False)
-        result = should_loop_back(node, state, {}, rt)
+        result = should_loop_back(node, state, {}, host=rt, eval_condition=rt.evalCondition)
         # Should NOT loop back when max reached.
         assert result is False
         # Should have escalated.
@@ -128,7 +135,7 @@ class TestShouldLoopBack:
         node = IRNode(id="review", kind="agent", loop=lp)
         state = _state_with_node("review", attempt=3)
         rt = _MockRuntime(condition_result=False)
-        result = should_loop_back(node, state, {}, rt)
+        result = should_loop_back(node, state, {}, host=rt, eval_condition=rt.evalCondition)
         assert result is False
         assert rt.escalated == []
 
@@ -141,10 +148,10 @@ class TestShouldLoopBack:
         # Override to use actual eval.
         def _eval(expr: str, s: dict) -> bool:
             rt.condition_calls.append((expr, s))
-            from lib.conditions import eval_condition
+            from delivery_workflow.lib.conditions import eval_condition
             return eval_condition(expr, s)
         rt.evalCondition = _eval
-        result = should_loop_back(node, state, scope, rt)
+        result = should_loop_back(node, state, scope, host=rt, eval_condition=rt.evalCondition)
         assert result is False  # condition met → no loop-back
         assert rt.condition_calls != []
 
@@ -159,7 +166,7 @@ class TestShouldLoopBack:
             budget=BudgetState(usd_ceiling=0.0),
         )
         rt = _MockRuntime(condition_result=False)
-        result = should_loop_back(node, state, {}, rt)
+        result = should_loop_back(node, state, {}, host=rt, eval_condition=rt.evalCondition)
         assert result is True
         assert state.nodes["fresh"].attempt == 0
 

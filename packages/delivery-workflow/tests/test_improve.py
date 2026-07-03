@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from lib.improve import (
+from delivery_workflow.lib.improve import (
     BackHalfResult,
     Routed,
     classify_findings,
@@ -283,7 +283,7 @@ class TestOnePRPerFinding:
 
     def test_proposed_pr_md_fallback_written(self, tmp_path):
         """When gh probe returns False, PROPOSED_PR.md fallback is written (REQ-003)."""
-        from lib.git_pr import emit_pr
+        from delivery_workflow.lib.git_pr import emit_pr
 
         proposals_dir = tmp_path / "proposals"
         fallback_path = emit_pr(
@@ -484,7 +484,7 @@ class TestGhPath:
 
     def test_emit_pr_gh_path_uses_stable_base_ref(self, tmp_path):
         """Branch is created with the stable base ref as explicit parent."""
-        from lib.git_pr import emit_pr
+        from delivery_workflow.lib.git_pr import emit_pr
 
         calls, fake_runner = self._make_fake_runner()
         proposals = tmp_path / "proposals"
@@ -509,7 +509,7 @@ class TestGhPath:
 
     def test_emit_pr_gh_path_restores_head_after_success(self, tmp_path):
         """HEAD is restored to the original branch after a successful PR emission."""
-        from lib.git_pr import emit_pr
+        from delivery_workflow.lib.git_pr import emit_pr
 
         calls, fake_runner = self._make_fake_runner()
         proposals = tmp_path / "proposals"
@@ -534,7 +534,7 @@ class TestGhPath:
 
     def test_emit_pr_gh_path_restores_head_on_failure(self, tmp_path):
         """HEAD is restored even when gh pr create fails (finally block)."""
-        from lib.git_pr import emit_pr
+        from delivery_workflow.lib.git_pr import emit_pr
 
         calls: list[list[str]] = []
 
@@ -571,7 +571,7 @@ class TestGhPath:
 
     def test_two_findings_branch_from_same_stable_base(self, tmp_path):
         """REQ-003 + F1 fix: 2 sequential emit_pr calls both branch from the same base."""
-        from lib.git_pr import emit_pr
+        from delivery_workflow.lib.git_pr import emit_pr
 
         calls, fake_runner = self._make_fake_runner()
         proposals = tmp_path / "proposals"
@@ -598,7 +598,7 @@ class TestGhPath:
 
     def test_run_back_half_two_findings_all_get_prs(self, tmp_path):
         """end-to-end: run_back_half with gh path produces one PR per finding."""
-        from lib.git_pr import emit_pr
+        from delivery_workflow.lib.git_pr import emit_pr
 
         pr_counter = [0]
 

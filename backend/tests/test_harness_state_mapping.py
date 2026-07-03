@@ -32,14 +32,10 @@ from pathlib import Path
 
 import pytest
 
-# Bring delivery-workflow onto sys.path (same pattern as other backend tests).
-_BUNDLE = Path(__file__).parent.parent.parent / "packages" / "delivery-workflow"
-if str(_BUNDLE) not in sys.path:
-    sys.path.insert(0, str(_BUNDLE))
 
-from state_types import NodeState as WfNodeState  # noqa: E402
-from state_types import WorkflowState  # noqa: E402
-from state_types import BudgetState  # noqa: E402
+from delivery_workflow.state_types import NodeState as WfNodeState  # noqa: E402
+from delivery_workflow.state_types import WorkflowState  # noqa: E402
+from delivery_workflow.state_types import BudgetState  # noqa: E402
 
 from app.harnesses.run_state import NodeState as HarnessNodeState, RunState  # noqa: E402
 from app.harnesses.state_mapping import (  # noqa: E402
@@ -128,7 +124,9 @@ def test_forward_node_status(harness_status: str, expected_wf_status: str) -> No
         ("running", "running"),
         ("done", "done"),
         ("failed", "failed"),
-        ("cancelled", "failed"),
+        # R10d: 'cancelled' is a real WorkflowState status since R10b — the
+        # runner's sealed re-entry guard halts on it instead of retrying.
+        ("cancelled", "cancelled"),
     ],
 )
 def test_forward_run_status(harness_run_status: str, expected_wf_status: str) -> None:
@@ -263,9 +261,11 @@ def test_reverse_node_status(wf_status: str, expected_harness_status: str) -> No
         ("failed", "failed"),
         ("blocked", "running"),
         ("escalated", "failed"),
+        ("cancelled", "cancelled"),
         # R6: 'stalled' (completeness invariant unmet / gate fix-loop exhausted)
-        # is a hard terminal for the harness run; the detail rides on
-        # RunState.stall (see test_reverse_run_stall_detail_preserved).
+        # has no RunState/UI vocabulary value; the detail rides on
+        # RunState.stall (see test_reverse_run_stall_detail_preserved) and the
+        # tracking-task terminal comes from the shared Outcome table (R10d).
         ("stalled", "failed"),
     ],
 )
@@ -444,7 +444,7 @@ def test_roundtrip_multiple_nodes() -> None:
 
 @pytest.mark.parametrize(
     "run_status",
-    ["running", "done", "failed"],
+    ["running", "done", "failed", "cancelled"],
 )
 def test_roundtrip_run_status_no_loss(run_status: str) -> None:
     """Run-level statuses that are valid in both systems round-trip exactly."""
@@ -520,3 +520,68 @@ def test_reverse_node_without_harness_status_sentinel_uses_wf_mapping() -> None:
     base = _make_run_state()
     rs = workflowstate_to_runstate(ws, base)
     assert rs.nodes_executed["n1"].status == "done"
+
+
+# ---------------------------------------------------------------------------
+# R10d: waiting_node_id pinning + the blocked='pending' collision fix
+# ---------------------------------------------------------------------------
+
+
+def test_reverse_waiting_node_id_override_pins_the_park_point() -> None:
+    """The caller (run_executor) derives the parked human node from
+    Outcome.node_id and passes it explicitly — it becomes the resume-routing
+    key even when the base RunState (an initial run) had none."""
+    ws = WorkflowState(
+        spec="h", run_id="run-1", status="blocked",
+        budget=BudgetState(usd_ceiling=0.0),
+        nodes={"wait-1": WfNodeState(status="blocked")},
+    )
+    base = _make_run_state(waiting_node_id=None)
+    rs = workflowstate_to_runstate(ws, base, waiting_node_id="wait-1")
+    assert rs.waiting_node_id == "wait-1"
+
+
+def test_reverse_waiting_node_id_defaults_to_base_when_not_given() -> None:
+    ws = WorkflowState(
+        spec="h", run_id="run-1", status="running",
+        budget=BudgetState(usd_ceiling=0.0),
+    )
+    base = _make_run_state(waiting_node_id="w-base")
+    rs = workflowstate_to_runstate(ws, base)
+    assert rs.waiting_node_id == "w-base"
+
+
+def test_reverse_parked_wait_node_maps_in_progress_not_pending() -> None:
+    """D16-note collision fix: the human-wait node a blocked run is parked ON
+    renders 'in_progress' (the BFS convention for a parked human wait), while
+    genuinely-unreached 'blocked' nodes still render 'pending'."""
+    ws = WorkflowState(
+        spec="h", run_id="run-1", status="blocked",
+        budget=BudgetState(usd_ceiling=0.0),
+        nodes={
+            "wait-1": WfNodeState(status="blocked"),      # the park point
+            "agent-final": WfNodeState(status="blocked"), # never reached
+        },
+    )
+    base = _make_run_state()
+    rs = workflowstate_to_runstate(ws, base, waiting_node_id="wait-1")
+    assert rs.nodes_executed["wait-1"].status == "in_progress"
+    assert rs.nodes_executed["agent-final"].status == "pending"
+
+
+def test_reverse_parked_wait_node_sentinel_still_wins() -> None:
+    """A _harness_status sentinel (round-trip fidelity) outranks the
+    waiting-node override — the collision fix only applies to runner-written
+    node states that carry no sentinel."""
+    ws = WorkflowState(
+        spec="h", run_id="run-1", status="blocked",
+        budget=BudgetState(usd_ceiling=0.0),
+        nodes={
+            "wait-1": WfNodeState(
+                status="blocked", fields={"_harness_status": "pending"}
+            ),
+        },
+    )
+    base = _make_run_state()
+    rs = workflowstate_to_runstate(ws, base, waiting_node_id="wait-1")
+    assert rs.nodes_executed["wait-1"].status == "pending"

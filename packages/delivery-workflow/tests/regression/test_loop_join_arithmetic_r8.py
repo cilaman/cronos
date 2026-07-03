@@ -26,24 +26,20 @@ Contract (01-state-model.md §5.5):
 from __future__ import annotations
 
 import itertools
-import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-_PKG = Path(__file__).parent.parent.parent
-if str(_PKG) not in sys.path:
-    sys.path.insert(0, str(_PKG))
 
-import runner as workflow_runner  # noqa: E402
-from adapters.cronos.adapter import CronosStateOps  # noqa: E402
-from ir import IREdge, IRGraph, IRNode, LoopPolicy  # noqa: E402
-from lib.state.events import EventLog  # noqa: E402
-from lib.state.store import StateStore  # noqa: E402
-from results import AgentResult, GateResult, TelemetryData  # noqa: E402
-from runner.loop import reset_downstream_nodes  # noqa: E402
-from state_types import BudgetState, NodeState, WorkflowState  # noqa: E402
+from delivery_workflow import runner as workflow_runner  # noqa: E402
+from delivery_workflow.lib.state.ops import StateStoreOps  # noqa: E402
+from delivery_workflow.ir import IREdge, IRGraph, IRNode, LoopPolicy  # noqa: E402
+from delivery_workflow.lib.state.events import EventLog  # noqa: E402
+from delivery_workflow.lib.state.store import StateStore  # noqa: E402
+from delivery_workflow.results import AgentResult, GateResult, TelemetryData  # noqa: E402
+from delivery_workflow.runner.loop import reset_downstream_nodes  # noqa: E402
+from delivery_workflow.state_types import BudgetState, NodeState, WorkflowState  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -84,7 +80,7 @@ class RecordingExecutor:
         self._agent_script = dict(agent_script or {})
         self._gate_script = dict(gate_script or {})
         self._cond_script = dict(cond_script or {})
-        self.state = None  # optional StateOps, mirrored from CronosAdapter
+        self.state = None  # optional StateOps, mirrored from host adapters
         self.telemetry = self
 
     def emit(self, node_id: str, data: dict) -> None:  # TelemetryOps
@@ -119,12 +115,21 @@ class RecordingExecutor:
     def evalCondition(self, expr: str, scope: dict[str, Any]) -> bool:
         if expr in self._cond_script:
             return bool(self._next(self._cond_script, expr, False))
-        from lib.conditions import eval_condition
+        from delivery_workflow.lib.conditions import eval_condition
 
         return eval_condition(expr, scope)
 
-    def escalate(self, node_id: str, reason: str) -> None:
-        self.escalations.append((node_id, reason))
+    # HostPort (R10b): typed events replace the escalate() hook; recorded in
+    # the same (node_id, reason-ish) shape the old asserts consume.
+    def on_event(self, event) -> None:
+        from delivery_workflow.events import RunBlocked, RunEscalated
+
+        if isinstance(event, RunBlocked):
+            self.escalations.append((event.node_id, event.question))
+        elif isinstance(event, RunEscalated):
+            self.escalations.append((event.node_id, event.detail))
+        else:
+            return
         if self.state is not None:
             self.state.write({"status": "blocked"})
 
@@ -184,9 +189,9 @@ class _MergeStateOps:
                 ns.fields = {**(ns.fields or {}), **np["fields"]}
 
 
-def _store_ops(tmp_path: Path) -> CronosStateOps:
+def _store_ops(tmp_path: Path) -> StateStoreOps:
     """Real replace-style persistence: StateStore + EventLog on disk."""
-    ops = CronosStateOps(StateStore(tmp_path), EventLog(tmp_path))
+    ops = StateStoreOps(StateStore(tmp_path), EventLog(tmp_path))
     ops.bootstrap_if_absent(spec="r8", run_id="run-r8", usd_ceiling=0.0)
     return ops
 
@@ -207,7 +212,7 @@ class TestLoopBudget:
             )],
         )
         ex = RecordingExecutor(agent_script={"r": _agent_done(verdict="fail")})
-        state = workflow_runner.run(graph=g, executor=ex, state_ops=None)
+        state = workflow_runner.run(graph=g, executor=ex, state_ops=None, host=ex, eval_condition=ex.evalCondition)
 
         assert ex.count("r") == 4, f"loop.max=4 must yield 4 executions, got {ex.count('r')}"
         assert state.nodes["r"].attempt == 4, "final attempt must equal loop.max"
@@ -225,7 +230,7 @@ class TestLoopBudget:
             )],
         )
         ex = RecordingExecutor(agent_script={"r": _agent_done(verdict="fail")})
-        workflow_runner.run(graph=g, executor=ex, state_ops=None)
+        workflow_runner.run(graph=g, executor=ex, state_ops=None, host=ex, eval_condition=ex.evalCondition)
 
         assert ex.executions("r") == [1, 2, 3, 4]
 
@@ -238,7 +243,7 @@ class TestLoopBudget:
             )],
         )
         ex = RecordingExecutor(agent_script={"r": _agent_done(verdict="fail")})
-        workflow_runner.run(graph=g, executor=ex, state_ops=None)
+        workflow_runner.run(graph=g, executor=ex, state_ops=None, host=ex, eval_condition=ex.evalCondition)
 
         assert ex.count("r") == 3
         assert len(ex.escalations) == 1
@@ -257,7 +262,7 @@ class TestLoopBudget:
             _agent_done(verdict="needs_fix"),
             _agent_done(verdict="pass"),
         ]})
-        state = workflow_runner.run(graph=g, executor=ex, state_ops=None)
+        state = workflow_runner.run(graph=g, executor=ex, state_ops=None, host=ex, eval_condition=ex.evalCondition)
 
         assert ex.executions("r") == [1, 2, 3]
         assert state.nodes["r"].attempt == 3
@@ -293,7 +298,7 @@ class TestJoinArithmetic:
         condition that FIRES, so no exclusion applies and the join needs both
         inputs: j must dispatch exactly once, strictly after s."""
         ex = RecordingExecutor(cond_script={"LOOP_ONCE": [True, False], "ALWAYS": True})
-        workflow_runner.run(graph=_d9_graph(s_when="ALWAYS"), executor=ex, state_ops=None)
+        workflow_runner.run(graph=_d9_graph(s_when="ALWAYS"), executor=ex, state_ops=None, host=ex, eval_condition=ex.evalCondition)
 
         assert ex.count("r") == 2
         assert ex.count("s") == 1
@@ -312,7 +317,7 @@ class TestJoinArithmetic:
         original D9 assertion expected j never to run, which conflated the
         double-satisfy defect with legitimate exclusion routing.)"""
         ex = RecordingExecutor(cond_script={"LOOP_ONCE": [True, False], "NEVER": False})
-        state = workflow_runner.run(graph=_d9_graph(), executor=ex, state_ops=None)
+        state = workflow_runner.run(graph=_d9_graph(), executor=ex, state_ops=None, host=ex, eval_condition=ex.evalCondition)
 
         assert ex.count("r") == 2
         assert ex.count("s") == 0
@@ -348,7 +353,7 @@ class TestJoinArithmetic:
             edges=[mk[name]() for name in edge_order],
         )
         ex = RecordingExecutor(cond_script={"LOOP_ONCE": [True, False], "NEVER": False})
-        state = workflow_runner.run(graph=g, executor=ex, state_ops=None)
+        state = workflow_runner.run(graph=g, executor=ex, state_ops=None, host=ex, eval_condition=ex.evalCondition)
 
         assert ex.count("r") == 2
         assert ex.count("s") == 0
@@ -375,7 +380,7 @@ class TestJoinArithmetic:
             ],
         )
         ex = RecordingExecutor(cond_script={"LOOP_ONCE": [True, False]})
-        state = workflow_runner.run(graph=g, executor=ex, state_ops=None)
+        state = workflow_runner.run(graph=g, executor=ex, state_ops=None, host=ex, eval_condition=ex.evalCondition)
 
         assert ex.count("s") == 1
         assert ex.count("r") == 2
@@ -395,7 +400,7 @@ class TestJoinArithmetic:
             ],
         )
         ex = RecordingExecutor()
-        state = workflow_runner.run(graph=g, executor=ex, state_ops=None)
+        state = workflow_runner.run(graph=g, executor=ex, state_ops=None, host=ex, eval_condition=ex.evalCondition)
 
         assert ex.count("j") == 1
         assert state.status == "done"
@@ -416,7 +421,7 @@ class TestJoinArithmetic:
         ops = _MergeStateOps(seeded)
         ex = RecordingExecutor()
         ex.state = ops
-        state = workflow_runner.run(graph=g, executor=ex, state_ops=ops)
+        state = workflow_runner.run(graph=g, executor=ex, state_ops=ops, host=ex, eval_condition=ex.evalCondition)
 
         assert ex.count("b") == 0 and ex.count("c") == 0  # done → skipped
         assert ex.count("j") == 1
@@ -435,7 +440,7 @@ class TestJoinArithmetic:
         ops = _MergeStateOps(seeded)
         ex = RecordingExecutor()
         ex.state = ops
-        state = workflow_runner.run(graph=g, executor=ex, state_ops=ops)
+        state = workflow_runner.run(graph=g, executor=ex, state_ops=ops, host=ex, eval_condition=ex.evalCondition)
 
         dispatch_order = [nid for nid, _ in ex.dispatched]
         assert dispatch_order == ["c", "j"], (
@@ -496,7 +501,7 @@ class TestDownstreamResetOnBackEdge:
         status pending, fields/artifacts/gate zeroed — instead of leaking its
         iteration-1 fields into scope and state."""
         ex = _stale_branch_executor()
-        state = workflow_runner.run(graph=_stale_branch_graph(), executor=ex, state_ops=None)
+        state = workflow_runner.run(graph=_stale_branch_graph(), executor=ex, state_ops=None, host=ex, eval_condition=ex.evalCondition)
 
         assert state.status == "done"
         assert ex.count("p") == 2
@@ -516,13 +521,13 @@ class TestDownstreamResetOnBackEdge:
             )
 
     def test_back_edge_reset_persisted_through_replace_style_stateops(self, tmp_path):
-        """Replace-style StateOps (StateStore + CronosStateOps, the delivery
+        """Replace-style StateOps (StateStore + StateStoreOps, the delivery
         driver's persistence): the reset must be WRITTEN, so the staleness
         cannot survive a park/resume (fields persist since R2)."""
         ops = _store_ops(tmp_path)
         ex = _stale_branch_executor()
         ex.state = ops
-        state = workflow_runner.run(graph=_stale_branch_graph(), executor=ex, state_ops=ops)
+        state = workflow_runner.run(graph=_stale_branch_graph(), executor=ex, state_ops=ops, host=ex, eval_condition=ex.evalCondition)
 
         assert state.status == "done"
         persisted = ops.read()
@@ -538,7 +543,7 @@ class TestDownstreamResetOnBackEdge:
         ops = _MergeStateOps(_fresh_state())
         ex = _stale_branch_executor()
         ex.state = ops
-        state = workflow_runner.run(graph=_stale_branch_graph(), executor=ex, state_ops=ops)
+        state = workflow_runner.run(graph=_stale_branch_graph(), executor=ex, state_ops=ops, host=ex, eval_condition=ex.evalCondition)
 
         assert state.status == "done"
         persisted = ops.read()
@@ -571,7 +576,7 @@ class TestDownstreamResetOnBackEdge:
             _agent_done(verdict="pass"),
         ]})
         ex.state = ops
-        state = workflow_runner.run(graph=g, executor=ex, state_ops=ops)
+        state = workflow_runner.run(graph=g, executor=ex, state_ops=ops, host=ex, eval_condition=ex.evalCondition)
 
         assert state.status == "done"
         assert ex.executions("L") == [1, 2]
@@ -598,7 +603,7 @@ class TestDownstreamResetOnBackEdge:
         ops = _MergeStateOps(seeded)
         ex = RecordingExecutor()
         ex.state = ops
-        state = workflow_runner.run(graph=g, executor=ex, state_ops=ops)
+        state = workflow_runner.run(graph=g, executor=ex, state_ops=ops, host=ex, eval_condition=ex.evalCondition)
 
         assert ex.executions("b") == [3], "attempt must continue from the persisted value"
         assert ex.count("c") == 1

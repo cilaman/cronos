@@ -20,9 +20,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-_BUNDLE = Path(__file__).parent.parent.parent / "packages" / "delivery-workflow"
-if str(_BUNDLE) not in sys.path:
-    sys.path.insert(0, str(_BUNDLE))
 
 from app.run_executor import RunExecutor
 from app.models import TaskState
@@ -165,12 +162,12 @@ async def test_run_delivery_child_streams_and_finalizes():
     assert "run_start" in _published_types(worker, "child-1")
     assert "run_end" in _published_types(worker, "child-1")
 
-    # Finalized + drained + returned the trace for delivery_status parsing.
+    # Finalized + drained + returned the trace for node_status classification.
     ex._finalizer.finalize_child.assert_awaited_once()
     bus.drain_subscribers.assert_any_call("child-1", {"type": "stream_end"})
-    # Returns {trace, delivery}; delivery is None here (no space_store → no report).
-    assert returned["trace"] is trace
-    assert returned["delivery"] is None
+    # R11: run_child returns the bare RunTrace (the CC-v1 {trace, delivery}
+    # wrapper is gone — the adapter reads trace.node_status directly).
+    assert returned is trace
 
 
 @pytest.mark.asyncio

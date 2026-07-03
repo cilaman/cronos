@@ -1,85 +1,78 @@
 """
-Portability test: lib.verify and lib.contract must be importable WITHOUT loading any app.* module.
+Portability test: delivery_workflow.lib.verify and delivery_workflow.lib.contract
+must be importable WITHOUT loading any app.* module.
 
 This test validates R6 (importlinter compliance) by using sys.modules introspection.
-The test runs in a subprocess to get a pristine Python environment.
+The test runs in a subprocess to get a pristine Python environment. The package is
+an installed (editable) distribution, so the subprocess needs no cwd/sys.path setup.
 """
 import subprocess
 import sys
-from pathlib import Path
-
-# Package root (packages/delivery-workflow) — where ``lib`` lives on sys.path.
-# Derived from this file so the subprocess is portable across machines/CI,
-# not pinned to a single deployment's absolute path.
-_PKG_ROOT = str(Path(__file__).resolve().parents[1])
 
 
 def test_lib_verify_importable_without_app():
-    """lib.verify must import cleanly without pulling in any app.* module."""
+    """delivery_workflow.lib.verify must import cleanly without pulling in any app.* module."""
     code = """
 import sys
 # Save pristine state
 before = set(sys.modules.keys())
-import lib.verify
+import delivery_workflow.lib.verify
 after = set(sys.modules.keys())
 new_modules = after - before
 app_modules = [m for m in new_modules if m == 'app' or m.startswith('app.')]
 if app_modules:
-    print(f"FAIL: importing lib.verify loaded app modules: {app_modules}", file=sys.stderr)
+    print(f"FAIL: importing delivery_workflow.lib.verify loaded app modules: {app_modules}", file=sys.stderr)
     sys.exit(1)
-print(f"OK: lib.verify imported cleanly; {len(new_modules)} new modules, none from app.*")
+print(f"OK: delivery_workflow.lib.verify imported cleanly; {len(new_modules)} new modules, none from app.*")
 """
     result = subprocess.run(
         [sys.executable, "-c", code],
         capture_output=True,
         text=True,
-        cwd=_PKG_ROOT,  # ensures lib is on sys.path
     )
     assert result.returncode == 0, (
-        f"lib.verify import pulled in app modules:\nstdout: {result.stdout}\nstderr: {result.stderr}"
+        f"delivery_workflow.lib.verify import pulled in app modules:\nstdout: {result.stdout}\nstderr: {result.stderr}"
     )
 
 
 def test_lib_contract_importable_without_app():
-    """lib.contract must import cleanly without pulling in any app.* module."""
+    """delivery_workflow.lib.contract must import cleanly without pulling in any app.* module."""
     code = """
 import sys
 before = set(sys.modules.keys())
-import lib.contract
+import delivery_workflow.lib.contract
 after = set(sys.modules.keys())
 new_modules = after - before
 app_modules = [m for m in new_modules if m == 'app' or m.startswith('app.')]
 if app_modules:
-    print(f"FAIL: importing lib.contract loaded app modules: {app_modules}", file=sys.stderr)
+    print(f"FAIL: importing delivery_workflow.lib.contract loaded app modules: {app_modules}", file=sys.stderr)
     sys.exit(1)
-print(f"OK: lib.contract imported cleanly")
+print(f"OK: delivery_workflow.lib.contract imported cleanly")
 """
     result = subprocess.run(
         [sys.executable, "-c", code],
         capture_output=True,
         text=True,
-        cwd=_PKG_ROOT,
     )
     assert result.returncode == 0, (
-        f"lib.contract import pulled in app modules:\nstdout: {result.stdout}\nstderr: {result.stderr}"
+        f"delivery_workflow.lib.contract import pulled in app modules:\nstdout: {result.stdout}\nstderr: {result.stderr}"
     )
 
 
 def test_lib_verify_schemas_dir_resolves():
-    """SCHEMAS_DIR in lib.verify must resolve to packages/delivery-workflow/lib/schemas/."""
+    """SCHEMAS_DIR in delivery_workflow.lib.verify must resolve to the packaged lib/schemas/."""
     code = """
-import lib.verify, pathlib, sys
-schemas_dir = pathlib.Path(lib.verify.SCHEMAS_DIR)
+import delivery_workflow.lib.verify as verify, pathlib, sys
+schemas_dir = pathlib.Path(verify.SCHEMAS_DIR)
 assert schemas_dir.exists(), f"SCHEMAS_DIR does not exist: {schemas_dir}"
 yaml_count = len(list(schemas_dir.glob("*.yaml")))
 assert yaml_count == 8, f"Expected 8 YAML files in lib/schemas/, got {yaml_count}"
-assert "delivery-workflow" in str(schemas_dir), f"SCHEMAS_DIR not under delivery-workflow: {schemas_dir}"
+assert "delivery_workflow" in str(schemas_dir), f"SCHEMAS_DIR not under delivery_workflow: {schemas_dir}"
 print(f"OK: SCHEMAS_DIR={schemas_dir}, {yaml_count} yaml files")
 """
     result = subprocess.run(
         [sys.executable, "-c", code],
         capture_output=True,
         text=True,
-        cwd=_PKG_ROOT,
     )
     assert result.returncode == 0, f"SCHEMAS_DIR check failed:\n{result.stdout}\n{result.stderr}"

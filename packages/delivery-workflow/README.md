@@ -1,54 +1,101 @@
 # delivery-workflow
 
-Portable delivery/v1 workflow executor library — the foundational package for the delivery pipeline system. Provides a 6-operation executor interface, workflow spec loading, state management, and telemetry accumulation.
+Portable delivery/v1 workflow executor — a standalone, host-agnostic engine for multi-agent delivery pipelines. Hosts drive the `DeliveryRun` facade and consume the closed `Outcome` taxonomy + typed `RunEvent`s; the package ships its own reference runtime (`LocalProcessExecutor`) and CLI, so the pipeline runs with **no host at all**.
 
 ## Overview
 
-The delivery/v1 pipeline is a multi-agent orchestration system where agents (e.g., scout, analyst, architect, implementor, reviewer, doc-sync, tester) execute sequentially over a workflow specification. This package defines the portable core that any runtime can adopt to execute delivery pipelines.
+The delivery/v1 pipeline is a multi-agent orchestration system where agents (e.g., scout, analyst, architect, implementor, reviewer, doc-sync, tester) execute over a workflow specification with gates, loops, human sign-offs, and typed edge conditions. This package IS the execution engine; hosts (the Cronos backend, CI, cron, your laptop) supply only a `NodeExecutor` (how to run node work), a `StateOps` (where state persists), and optionally a `HostPort` (where events go).
 
 **Key responsibilities:**
-- Define the executor interface (6 operations typed as runtime-checkable Protocols)
-- Load and validate workflow specs (`delivery.workflow.yaml`) against JSON-Schema
-- Parse agent return envelopes (`node_status` primary, `delivery_status` legacy)
-- Manage execution state (read/write, atomic updates, resume policy)
+- The `DeliveryRun` facade (`start` / `resume` / `outcome` / `cancel`) — the ONLY host surface
+- The closed `Outcome` taxonomy (done / stalled / failed / blocked / escalated / cancelled) and typed `RunEvent` grammar
+- The two ports (`NodeExecutor`, `HostPort`) + `StateOps` with conformance-tested round-trip laws
+- Load and validate workflow specs (`delivery.workflow.yaml`) against JSON-Schema; compile to IR
+- Parse agent return envelopes (`node_status` primary, `delivery_status` legacy) and close the agent-status vocabulary (`agent_result_from_envelope`)
+- Reference runtime + standalone CLI (`python -m delivery_workflow`)
 - Accumulate telemetry (tokens, USD, duration) with budget ceiling enforcement
-- Provide a null implementation for testing
+
+## Standalone usage (no host required)
+
+```bash
+pip install -e packages/delivery-workflow    # or: pip install delivery-workflow
+
+# Start a run: agent nodes spawn `claude -p <brief>` in --workdir; state
+# persists in <workdir>/.delivery-run/ (state.json + events.jsonl).
+python -m delivery_workflow run spec.yaml --workdir ./myrun
+
+# A human sign-off parks the run (exit code 10, question on stderr).
+# Resume with the same typed grammar every host uses:
+python -m delivery_workflow run spec.yaml --workdir ./myrun \
+    --resume human-answer --node signoff-scope --text "approved" --verdict approve
+python -m delivery_workflow run spec.yaml --workdir ./myrun --resume retry-failed
+python -m delivery_workflow run spec.yaml --workdir ./myrun --resume raise-budget --ceiling 50
+python -m delivery_workflow run spec.yaml --workdir ./myrun --resume nothing
+
+# Pure read of the persisted Outcome (JSON on stdout); cancel is terminal.
+python -m delivery_workflow outcome spec.yaml --workdir ./myrun
+python -m delivery_workflow cancel  spec.yaml --workdir ./myrun
+```
+
+The agent invocation is configurable: `--claude-cmd 'claude -p {brief}'` (shlex-split; `{brief}` / `{agent_ref}` / `{node_id}` placeholders). Progress streams to stderr as JSON lines (`{"event": "node_started", ...}`); stdout carries exactly one Outcome JSON object.
+
+**Workflow specs are trusted input** — treat them like Makefiles: `exec` nodes run arbitrary shell commands in `--workdir` with your full environment (including any tokens such as `CLAUDE_CODE_OAUTH_TOKEN`), and agent nodes spawn the configured `--claude-cmd`. Only run specs you trust; the runner is not a sandbox.
+
+**Exit codes are honest per Outcome kind** (also in `--help`):
+
+| code | meaning |
+|------|---------|
+| 0    | `done` — workflow completed |
+| 10   | `blocked` — parked on a human sign-off (resume with `--resume human-answer`) |
+| 20   | `stalled` — terminated without full coverage (stall record in the JSON) |
+| 30   | `failed` — a node failed (`--resume retry-failed`) |
+| 40   | `escalated` — loop / timed-wait / iteration-cap / budget halt |
+| 50   | `cancelled` — terminal until a fresh run |
+| 60   | `running` — non-terminal (outcome read mid-flight) |
+| 2    | usage error / unloadable spec / no persisted run |
+| 3    | resume or cancel event rejected (does not match the persisted state) |
+
+`LocalProcessExecutor` reads each child's `node_status` fence with the package's own parser and closes the status vocabulary through the **same** `agent_result_from_envelope` mapping the Cronos adapter uses — one mapping, every executor.
 
 ## Bundle Layout
 
 ```
-packages/delivery-workflow/
-├── interface.py              # 6-op executor Protocol + StateOps / TelemetryOps
-├── results.py               # AgentResult, GateResult, TelemetryData
+packages/delivery-workflow/          # package root: pyproject.toml, plugin.json, tests/, docs/
+└── src/delivery_workflow/       # the importable distribution (R10a src layout)
+    ├── __main__.py               # Standalone CLI: python -m delivery_workflow run|outcome|cancel
+    ├── delivery_run.py           # DeliveryRun facade (start / resume / outcome / cancel)
+    ├── outcome.py                # Closed Outcome taxonomy + outcome_from_state()
+    ├── events.py                 # Typed RunEvent grammar, NullHost, safe_emit
+    ├── interface.py              # The two ports (NodeExecutor, HostPort) + StateOps / TelemetryOps
+    ├── local_executor.py         # LocalProcessExecutor (spawns `claude -p`) + LocalHostPort
+├── results.py               # AgentResult/GateResult/ExecResult + agent_result_from_envelope (closed vocab)
 ├── state_types.py           # BudgetState, NodeState, WorkflowState
 ├── null_runtime.py          # NullRuntime stub (raises NotImplementedError)
 ├── spec_loader.py           # Load and validate delivery.workflow.yaml
+├── compiler_a.py            # spec dict → IRGraph
 │
 ├── lib/                      # Portable libraries (no app.* imports)
 │   ├── delivery_status.py    # Parse delivery_status blocks from agent output
 │   ├── node_status.py      # Parse node_status blocks from agent output (primary envelope)
+│   ├── conditions.py        # Typed edge/loop condition evaluator (runner-internal)
+│   ├── exec_node.py         # run_exec_command(): the one exec-node implementation
 │   ├── git_pr.py            # PR emission helper — git/gh subprocess, PROPOSED_PR.md fallback
 │   ├── improve.py           # Tier-1/Tier-2 back-half applier (classifier + PR routing)
 │   ├── security.py          # Security check evaluator — scanner execution, JSON parsing, decision logic
 │   ├── evals/               # Portable eval corpus runner (no CC-v1 coupling)
 │   │   ├── __init__.py      # Exports EvalResult and run_eval_corpus()
 │   │   ├── corpus.py        # EvalResult dataclass and run_eval_corpus() implementation
-│   │   └── __main__.py      # CLI: python -m lib.evals [--repo-root] [--json]
+│   │   └── __main__.py      # CLI: python -m delivery_workflow.lib.evals [--repo-root] [--json]
 │   ├── state/
 │   │   ├── store.py         # StateStore: read/write state.json atomically
-│   │   └── events.py        # EventLog: append-only events.jsonl
+│   │   ├── events.py        # EventLog: append-only events.jsonl
+│   │   ├── ops.py           # StateStoreOps: THE StateOps implementation (hosts reuse it)
+│   │   └── conformance.py   # Round-trip laws every StateOps must satisfy
 │   └── telemetry/
 │       ├── sink.py          # TelemetrySink: accumulate tokens/USD with ceiling
 │       └── __init__.py
 │
-├── runner/                   # Abstract runner (Phase 6+)
-├── adapters/
-│   └── cronos/              # Cronos ExecutorInterface implementation (G6.1)
-│       ├── adapter.py       # CronosAdapter (6 ops) + helpers
-│       ├── fixtures/        # Test fixtures (e.g., sdlc_ping.yaml)
-│       ├── README.md        # Operation mapping and integration guide
-│       └── __init__.py      # Module marker
-│
+├── runner/                   # Work-list walker: core, dispatch, loop, scope + resume.py (typed re-entry)
 ├── schemas/                  # JSON-Schema validation
 │   ├── delivery.workflow.schema.yaml
 │   ├── research.schema.yaml
@@ -68,21 +115,41 @@ packages/delivery-workflow/
 └── .importlinter             # Import boundary enforcement
 ```
 
-## Executor Interface (6 Operations)
+## Host boundary (R10b): DeliveryRun facade + two ports
 
-The core abstraction is `ExecutorInterface`, a runtime-checkable Protocol defining the operations a runtime must implement to execute a delivery pipeline:
+Hosts drive a run exclusively through the `DeliveryRun` facade and consume the
+closed `Outcome` taxonomy plus typed `RunEvent`s — never `WorkflowState`
+internals:
+
+```python
+from delivery_workflow import DeliveryRun, HumanAnswer
+
+run = DeliveryRun(spec_path_or_graph, executor=my_executor, state_ops=my_ops, host=my_host)
+outcome = run.start()                                   # -> Outcome(kind=done|stalled|failed|blocked|escalated|cancelled)
+outcome = run.resume(HumanAnswer("signoff-scope", "yes", "approve"))
+outcome = run.outcome()                                 # pure read, for UIs
+outcome = run.cancel()                                  # persists status='cancelled'
+```
+
+The old `ExecutorInterface` is split into two ports:
 
 ```python
 @runtime_checkable
-class ExecutorInterface(Protocol):
-    state: StateOps                      # Read and write execution state
-    telemetry: TelemetryOps              # Record telemetry per node
-    
+class NodeExecutor(Protocol):            # executes node work
     def dispatchAgent(self, agent_ref: str, inputs: dict[str, Any]) -> AgentResult
     def runGate(self, gate: dict[str, Any], artifact_paths: list[str]) -> GateResult
-    def evalCondition(self, expr: str, scope: dict[str, Any]) -> bool
-    def escalate(self, node_id: str, reason: str) -> None
+    def runExec(self, node_id: str, command: str, inputs: dict[str, Any]) -> ExecResult
+
+@runtime_checkable
+class HostPort(Protocol):                # receives typed run events
+    def on_event(self, event: RunEvent) -> None
+    # RunEvent = NodeStarted | NodeFinished | RunBlocked | RunStalled
+    #          | RunFailed | RunEscalated
 ```
+
+`evalCondition` left the executor surface entirely — edge/loop condition
+evaluation is runner-internal (`delivery_workflow.lib.conditions`); `escalate`
+was replaced by `HostPort.on_event`.
 
 ### StateOps Protocol
 
@@ -121,14 +188,16 @@ def dispatchAgent(self, agent_ref: str, inputs: dict[str, Any]) -> AgentResult
 
 **Inputs:**
 - `agent_ref`: string identifier (e.g., "pipeline-scout", "pipeline-architect")
-- `inputs`: dict with keys like `prompt`, `goal_slug`, `task_id`, etc.
+- `inputs`: dict the runner forwards (`scope`, `node_id`, `attempt`, `model`, `produces`, `tools`, `recon`, `inputs`)
 
-**Returns:** `AgentResult` with fields:
-- `success: bool`
-- `result: str` (agent's final_text / stdout)
-- `exit_reason: str` (status marker or failure reason)
+**Returns:** `AgentResult` with fields `status` (closed vocabulary: `done` / `blocked` / `needs_fix` / `failed`), `artifact_paths`, `produces`, `fields`, `open_questions`, `telemetry`.
 
-**Implementation:** Runtime-specific. Cronos spawns `claude code -s <space> <agent_ref>` subprocess; Phase 6 will invoke a web API.
+Every executor closes the status vocabulary through the shared
+`results.agent_result_from_envelope` mapping: no `node_status` fence →
+`failed`; a status outside the vocabulary → `failed` with an
+`unknown_status:<raw>` marker — never silently `done`.
+
+**Implementations:** the Cronos adapter (`backend/app/delivery_adapter.py`, host-owned) creates a child task and reads its run trace; the in-package `LocalProcessExecutor` spawns `claude -p <brief>` and parses stdout.
 
 ### Gate Verification
 
@@ -140,37 +209,26 @@ def runGate(self, gate: dict[str, Any], artifact_paths: list[str]) -> GateResult
 - `gate`: gate configuration (e.g., `{"kind": "verify", ...}`)
 - `artifact_paths`: list of file paths to verify
 
-**Returns:** `GateResult` with fields:
-- `verdict: str` ("pass" | "fail" | "escalate")
-- `details: str` (explanation)
+**Returns:** `GateResult` with fields `decision` ("proceed" | "needs_fix" | "fail" | "retry"), `errors`, `evidence`.
 
-**Implementation:** Invokes the backend verifier (e.g., `backend/app/pipeline/verify.py`) to validate deliverables.
+**Implementation:** Invokes the packaged verifier (`delivery_workflow.lib.verify` via `delivery_workflow.lib.gate`) to validate deliverables. Both shipped executors delegate to `lib.gate.runGate`.
 
-### Condition Evaluation
+### Condition Evaluation (runner-internal since R10b)
 
-```python
-def evalCondition(self, expr: str, scope: dict[str, Any]) -> bool
-```
+Edge `when` and loop `until` expressions are evaluated by
+`delivery_workflow.lib.conditions.eval_condition` inside the runner — hosts do
+not implement condition evaluation.  The Cronos harness grammar
+(`app.harnesses.decision`) delegates to the same module, so semantics are
+identical on both paths.
 
-**Inputs:**
-- `expr`: condition expression (e.g., `"exit_reason == 'SUCCESS'"`)
-- `scope`: variables available in the expression
+### Host notification (`HostPort.on_event`, replaces `escalate`)
 
-**Returns:** boolean result
-
-**Implementation:** Evaluates the condition against the scope. Cronos will reuse the decision logic from harness control flow.
-
-### Escalation
-
-```python
-def escalate(self, node_id: str, reason: str) -> None
-```
-
-**Inputs:**
-- `node_id`: ID of the node encountering a recoverable error
-- `reason`: escalation reason
-
-**Returns:** None (escalation is a signal; handling is runtime-specific)
+The runner emits typed events: `NodeStarted`/`NodeFinished` around each
+dispatch, `RunBlocked(node_id, question)` for human sign-off parks,
+`RunStalled(detail)` with the machine-readable stall record,
+`RunFailed(node_id, reason)`, and `RunEscalated(kind, node_id, detail)` for
+loop exhaust / timed waits / the global iteration cap.  Delivery is
+fire-and-forget: a raising host callback is logged and swallowed.
 
 **Implementation:** Routes the escalation to observability or human intervention. Cronos will log to structured output.
 
@@ -260,7 +318,7 @@ Returns a typed `DeliveryStatus` object with phase, status, artifacts, and token
 - Injectable `runner` and `gh_probe` parameters for testing without real git/gh
 
 ```python
-from lib.git_pr import emit_pr
+from delivery_workflow.lib.git_pr import emit_pr
 
 url_or_path = emit_pr(
     title="tier1-improvement(F1): agent_prompt — clearer instructions",
@@ -282,7 +340,7 @@ url_or_path = emit_pr(
 
 **Public API:**
 ```python
-from lib.improve import classify_findings, render_proposal, run_back_half
+from delivery_workflow.lib.improve import classify_findings, render_proposal, run_back_half
 
 # 1. Classify findings by fix_type (fix_type is authoritative, not declared tier)
 routed = classify_findings(findings)  # → Routed(tier0=[], tier1=[...], tier2=[...])
@@ -303,7 +361,7 @@ result = run_back_half(
 
 **CLI usage:**
 ```bash
-python -m lib.improve <retro_artifact> \
+python -m delivery_workflow.lib.improve <retro_artifact> \
     --evals-passed [true|false] \
     --proposals-dir <path> \
     [--repo-root <path>]
@@ -322,7 +380,7 @@ python -m lib.improve <retro_artifact> \
 
 **Public API:**
 ```python
-from lib.security import evaluate_security
+from delivery_workflow.lib.security import evaluate_security
 
 decision, errors, evidence = evaluate_security(
     check={
@@ -356,7 +414,7 @@ decision, errors, evidence = evaluate_security(
 
 **Public API:**
 ```python
-from lib.evals import run_eval_corpus, EvalResult
+from delivery_workflow.lib.evals import run_eval_corpus, EvalResult
 
 result = run_eval_corpus(
     repo_root="/path/to/repo",
@@ -369,7 +427,7 @@ result = run_eval_corpus(
 
 **CLI:**
 ```bash
-python -m lib.evals [--repo-root /path] [--json]
+python -m delivery_workflow.lib.evals [--repo-root /path] [--json]
 # Exits with corpus exit code; --json prints EvalResult as JSON
 ```
 
@@ -419,18 +477,18 @@ If a `StateStore` is provided, `emit()` persists the node's telemetry to `state.
 
 ### Cronos Runtime (G6.1 — Current)
 
-The Cronos backend adopts delivery/v1 via `CronosAdapter` in `packages/delivery-workflow/adapters/cronos/adapter.py`.
+The Cronos backend adopts delivery/v1 via `CronosAdapter` in `backend/app/delivery_adapter.py` — **host code, not part of this package** (R10c, 02-package-boundary.md §2.3). The host imports the package's `StateStore`/`EventLog`/`TelemetrySink`/`StateStoreOps` and result types; the package carries zero Cronos knowledge.
 
-**6 operations mapped to Cronos backend:**
+**Port surface mapped to the Cronos backend** (`NodeExecutor` + `HostPort` split, R10b — plus the state/telemetry ops):
 
 | Operation | Implementation |
 |---|---|
 | `dispatchAgent` | Create child task, poll state, load trace, parse node_status (primary) or delivery_status (legacy) → `AgentResult` |
-| `runGate` | Delegate to `app.pipeline.gate.runGate()` → `GateResult` with decision/errors/evidence |
-| `evalCondition` | Delegate to `lib.conditions.eval_condition()` for conditional routing |
-| `state.read/write` | `CronosStateOps` → `lib/state/StateStore` atomic read/write + EventLog audit trail |
+| `runGate` | Delegate to `delivery_workflow.lib.gate.runGate()` → `GateResult` with decision/errors/evidence |
+| (conditions) | Runner-internal via `lib.conditions.eval_condition()` — not an adapter op since R10b |
+| `state.read/write` | `lib/state/ops.StateStoreOps` (package-native; re-exported by the host as `CronosStateOps`) → atomic read/write + EventLog audit trail |
 | `telemetry.emit` | `CronosTelemetryOps` → `lib/telemetry/TelemetrySink` accumulate tokens/USD with ceiling |
-| `escalate` | Park tracking task → WAITING + waiting_question for human intervention |
+| `on_event` | `RunBlocked`/`RunEscalated` park the tracking task → WAITING + waiting_question |
 
 **Features:**
 - ✓ Async dispatch loop with configurable poll interval + timeout
@@ -446,19 +504,27 @@ The Cronos backend adopts delivery/v1 via `CronosAdapter` in `packages/delivery-
 - ✓ Review: PASS (commit 3432044)
 - ✓ Test: PASS (commit cf3a91f)
 
-See `adapters/cronos/README.md` for detailed operation mapping and integration points.
+See `backend/app/delivery_adapter.py` (module docstring) for detailed operation mapping and integration points.
 
-### Phase 6 Standalone Runtime (Future)
+### Standalone runtime (shipped — R10e)
 
-A separate orchestrator (Phase 6+) will:
-- Implement `ExecutorInterface` to invoke a Cronos API endpoint for agent dispatch
-- Use `lib/state/StateStore` for full persistence to `state.json`
-- Use `lib/telemetry/TelemetrySink` with a configured state_store for atomic budget tracking
-- Handle resume/retry/escalation locally
+The package's own reference runtime (see "Standalone usage" above):
+- `LocalProcessExecutor` implements `NodeExecutor` by spawning `claude -p <brief>` per agent node (configurable argv template), delegating gates to `lib.gate` and exec nodes to `lib.exec_node`
+- `LocalHostPort` implements `HostPort` by printing JSON progress lines
+- `python -m delivery_workflow` wires spec_loader → compiler_a → `DeliveryRun` with `StateStoreOps` persistence in `<workdir>/.delivery-run/`
+- Resume / retry / budget / cancel flow through the same typed grammar every host uses
 
 ## Testing
 
-The package includes 347 tests:
+**The conformance suite (`tests/conformance/`) is the compatibility gate**: it
+drives the SHIPPED `delivery.workflow.yaml` through the real
+loader → compiler → `DeliveryRun` facade with real disk persistence and
+scripted park→resume lifecycles, asserting Outcomes, dispatch counts, and the
+StateOps round-trip law (mirror-vs-disk). Any change to runner semantics,
+persistence, or the host surface must keep it green — it runs with zero
+Cronos imports, exactly as a third-party host would.
+
+Highlighted suites:
 
 - **test_package_skeleton.py** — module structure, imports
 - **test_import_boundary.py** — AST verification that no `app.*` imports leak into portable core (auto-verifies new `lib/security.py` and `lib/evals/` modules)
@@ -473,6 +539,9 @@ The package includes 347 tests:
 - **test_telemetry.py** — `TelemetrySink` accumulation, budget ceiling, persistence
 - **test_tier1_no_auto_apply.py** — REQ-005 hard safety: agents/skills files byte-identical after Tier-1 run
 - **test_improve.py** — Tier-1/Tier-2 routing, no-PR-on-red, one-PR-per-finding, Tier-2 escalate-only, fence fields
+- **test_delivery_run_facade.py** — DeliveryRun lifecycle, typed-event delivery, cancel semantics, Outcome derivation
+- **test_local_executor.py** — the reference runtime: fence parse, closed-vocab mapping, timeout/nonzero-exit/no-binary failure paths
+- **test_cli_standalone.py** — subprocess CLI smoke with a fake `claude` on PATH: run → park → resume → done, retry-failed, cancel, exit codes, and the no-`app`-in-`sys.modules` purity pin
 
 Run with:
 ```bash

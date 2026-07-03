@@ -23,24 +23,19 @@ from __future__ import annotations
 
 import json
 import logging
-import sys
-from pathlib import Path
 
-_PKG = Path(__file__).parent.parent.parent
-if str(_PKG) not in sys.path:
-    sys.path.insert(0, str(_PKG))
 
-import runner as workflow_runner  # noqa: E402
-from ir import IREdge, IRGraph, IRNode  # noqa: E402
-from lib.conditions import (  # noqa: E402
+from delivery_workflow import runner as workflow_runner  # noqa: E402
+from delivery_workflow.ir import IREdge, IRGraph, IRNode  # noqa: E402
+from delivery_workflow.lib.conditions import (  # noqa: E402
     canonical_scalar,
     canonicalize_scope,
     eval_condition,
 )
-from lib.state.store import StateStore  # noqa: E402
-from results import AgentResult, TelemetryData  # noqa: E402
-from runner.scope import build_scope  # noqa: E402
-from state_types import BudgetState, NodeState, WorkflowState  # noqa: E402
+from delivery_workflow.lib.state.store import StateStore  # noqa: E402
+from delivery_workflow.results import AgentResult, TelemetryData  # noqa: E402
+from delivery_workflow.runner.scope import build_scope  # noqa: E402
+from delivery_workflow.state_types import BudgetState, NodeState, WorkflowState  # noqa: E402
 
 
 def _state(**nodes: NodeState) -> WorkflowState:
@@ -270,20 +265,19 @@ class TestD3Chain:
         assert eval_condition("analyze.fields.has_ui == false", scope) is True
         assert eval_condition("analyze.fields.has_ui == true", scope) is False
 
-    def test_adapter_evalcondition_passes_typed_scope_through(self, tmp_path):
-        """CronosAdapter.evalCondition no longer str()-coerces the scope (D3)."""
-        from adapters.cronos.adapter import CronosAdapter
+    def test_runner_condition_path_passes_typed_scope_through(self):
+        """The runner-internal condition path never str()-coerces the scope (D3).
 
-        run_dir = tmp_path / "run"
-        run_dir.mkdir()
-        StateStore(run_dir).write(_state())
-        adapter = CronosAdapter(
-            store=object(), trace_store=object(), space_id="s", run_dir=run_dir,
-        )
+        R10b: evalCondition left the executor surface — the runner calls
+        ``lib.conditions.eval_condition`` directly, so THIS is the production
+        condition path.  (That the host adapter has no evalCondition method
+        is pinned in the backend suite — test_cronos_adapter_condition.py —
+        where the adapter lives since R10c.)
+        """
         scope = {"analyze.fields.has_ui": True}
-        assert adapter.evalCondition("analyze.fields.has_ui == true", scope) is True
-        assert adapter.evalCondition("analyze.fields.has_ui == false", scope) is False
-        assert adapter.evalCondition("exists(analyze.fields.has_ui)", scope) is True
+        assert eval_condition("analyze.fields.has_ui == true", scope) is True
+        assert eval_condition("analyze.fields.has_ui == false", scope) is False
+        assert eval_condition("exists(analyze.fields.has_ui)", scope) is True
 
     def test_runner_routes_has_ui_false_to_architect(self):
         """Pre-resume acceptance: JSON bool has_ui=false skips frontend and

@@ -15,15 +15,12 @@ Key assertions:
 """
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from ir import IREdge, IRGraph, IRNode, LoopPolicy
-from results import AgentResult, GateResult, TelemetryData
-from runner import run
-from state_types import BudgetState, NodeState, WorkflowState
+from delivery_workflow.ir import IREdge, IRGraph, IRNode, LoopPolicy
+from delivery_workflow.results import AgentResult, GateResult, TelemetryData
+from delivery_workflow.runner import run
 
 
 # ---------------------------------------------------------------------------
@@ -80,11 +77,17 @@ class _SequencedRuntime:
 
     def evalCondition(self, expr: str, scope: dict) -> bool:
         self.conditions.append((expr, scope))
-        from lib.conditions import eval_condition
+        from delivery_workflow.lib.conditions import eval_condition
         return eval_condition(expr, scope)
 
-    def escalate(self, node_id: str, reason: str) -> None:
-        self.escalated.append((node_id, reason))
+    # HostPort (R10b): typed events replace the escalate() hook.
+    def on_event(self, event) -> None:
+        from delivery_workflow.events import RunBlocked, RunEscalated
+
+        if isinstance(event, RunBlocked):
+            self.escalated.append((event.node_id, event.question))
+        elif isinstance(event, RunEscalated):
+            self.escalated.append((event.node_id, event.detail))
 
     @property
     def state(self):
@@ -169,7 +172,7 @@ class TestNeedsFixLoopBack:
             ],
         )
 
-        state = run(graph, rt)
+        state = run(graph, rt, host=rt, eval_condition=rt.evalCondition)
 
         # Final state must be done.
         assert state.status == "done", f"Expected done, got {state.status}"
@@ -201,7 +204,7 @@ class TestNeedsFixLoopBack:
             ],
         )
 
-        state = run(graph, rt)
+        state = run(graph, rt, host=rt, eval_condition=rt.evalCondition)
         assert state.status == "done"
         implement_calls = [nid for nid, _ in rt.dispatch_log if nid == "implement"]
         assert len(implement_calls) == 1
@@ -222,7 +225,7 @@ class TestNeedsFixLoopBack:
             ],
         )
 
-        run(graph, rt)
+        run(graph, rt, host=rt, eval_condition=rt.evalCondition)
 
         # Verify that a condition referencing review.fields.verdict was evaluated.
         exprs = [expr for expr, _ in rt.conditions]
@@ -272,7 +275,7 @@ class TestGateFixLoop:
                 GateResult(decision="proceed", errors=[]),            # attempt 2
             ],
         )
-        state = run(graph, rt)
+        state = run(graph, rt, host=rt, eval_condition=rt.evalCondition)
 
         assert state.status == "done"
         producer_calls = [nid for nid, _ in rt.dispatch_log if nid == "producer"]
@@ -292,7 +295,7 @@ class TestGateFixLoop:
                 GateResult(decision="proceed", errors=[]),                 # attempt 2
             ],
         )
-        state = run(graph, rt)
+        state = run(graph, rt, host=rt, eval_condition=rt.evalCondition)
 
         assert state.status == "done"
         producer_calls = [nid for nid, _ in rt.dispatch_log if nid == "producer"]
@@ -310,7 +313,7 @@ class TestGateFixLoop:
             agent_sequence=[],
             gate_sequence=[GateResult(decision="needs_fix", errors=["still bad"]) for _ in range(10)],
         )
-        state = run(graph, rt)
+        state = run(graph, rt, host=rt, eval_condition=rt.evalCondition)
 
         assert state.status == "stalled"
         # Run-level machine-readable detail — hosts never dig through nodes.
@@ -339,7 +342,10 @@ class TestImportBoundary:
     """
 
     def test_no_app_imports_in_runner_modules(self):
-        runner_dir = Path(__file__).parent.parent / "runner"
+        runner_dir = (
+            Path(__file__).parent.parent / "src" / "delivery_workflow" / "runner"
+        )
+        assert runner_dir.is_dir(), f"runner dir moved? {runner_dir}"
         forbidden_patterns = ["from app", "import app", "from backend", "import backend"]
         violations: list[str] = []
         for py_file in runner_dir.glob("*.py"):
@@ -352,16 +358,14 @@ class TestImportBoundary:
         assert violations == [], "Import boundary violation:\n" + "\n".join(violations)
 
     def test_no_app_imports_in_lib_modules(self):
-        lib_dir = Path(__file__).parent.parent / "lib"
-        if not lib_dir.exists():
-            return
+        lib_dir = Path(__file__).parent.parent / "src" / "delivery_workflow" / "lib"
+        assert lib_dir.is_dir(), f"lib dir moved? {lib_dir}"
         forbidden_patterns = ["from app", "import app", "from backend", "import backend"]
         # Only *module-level* (unindented) imports break import-time portability
-        # — those are what load app.* when ``import lib.x`` runs.  A deferred,
-        # function-local import (indented, e.g. lib/verify.py's CLI-only
-        # ``from app.pipeline.normalize import normalize`` behind ``--normalize``)
-        # does not, and is verified by test_lib_verify_portability's subprocess
-        # import check.  So match the raw line, not the stripped one.
+        # — those are what load app.* when ``import delivery_workflow.lib.x``
+        # runs.  (The last function-local residual — lib/verify.py's CLI-only
+        # normalize import — was deleted in R11.)  Match the raw line, not the
+        # stripped one; test_import_boundary.py covers indented imports via AST.
         violations: list[str] = []
         for py_file in lib_dir.rglob("*.py"):
             text = py_file.read_text(encoding="utf-8")

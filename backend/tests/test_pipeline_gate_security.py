@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from lib.gate import _check_security
+from delivery_workflow.lib.gate import _check_security
 
 FIXTURES = Path(__file__).parent / "fixtures" / "gate" / "security"
 FAKE_SECRETS = FIXTURES / "fake_secrets_scanner.py"

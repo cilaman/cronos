@@ -21,7 +21,13 @@ jobs:
           cache-dependency-path: backend/pyproject.toml
 
       - name: Install dependencies
-        run: pip install -e ".[dev]" ruff mypy
+        # The sibling delivery-workflow package first (editable, src layout) —
+        # it is NOT on PyPI and deliberately not a bare dev requirement, so it
+        # must be installed explicitly for `import delivery_workflow` to
+        # resolve without any sys.path shim (R10a).
+        run: |
+          pip install -e ../packages/delivery-workflow
+          pip install -e ".[dev]" ruff mypy
 
       - name: Lint (ruff)
         run: ruff check app/
@@ -52,6 +58,9 @@ jobs:
 
       - name: Install package (with dev + runtime deps)
         run: pip install -e ".[dev]"
+
+      - name: Import boundary (import-linter, .importlinter contract)
+        run: lint-imports
 
       - name: Test (pytest) — portable delivery-workflow suite
         run: pytest tests/

@@ -1,9 +1,16 @@
 import pytest
 
-from interface import ExecutorInterface, StateOps, TelemetryOps
-from null_runtime import NullRuntime
-from results import AgentResult, GateResult, TelemetryData
-from state_types import BudgetState, NodeState, WorkflowState
+from delivery_workflow.events import NullHost, RunBlocked
+from delivery_workflow.interface import (
+    ExecutorInterface,
+    HostPort,
+    NodeExecutor,
+    StateOps,
+    TelemetryOps,
+)
+from delivery_workflow.null_runtime import NullRuntime
+from delivery_workflow.results import AgentResult, GateResult, TelemetryData
+from delivery_workflow.state_types import BudgetState, NodeState, WorkflowState
 
 
 # ---------------------------------------------------------------------------
@@ -13,7 +20,16 @@ from state_types import BudgetState, NodeState, WorkflowState
 
 def test_null_runtime_satisfies_executor_interface():
     runtime = NullRuntime()
-    assert isinstance(runtime, ExecutorInterface)
+    assert isinstance(runtime, NodeExecutor)
+    # Deprecated alias kept one release (R10b) — same protocol object.
+    assert ExecutorInterface is NodeExecutor
+
+
+def test_null_host_satisfies_host_port():
+    host = NullHost()
+    assert isinstance(host, HostPort)
+    # Swallows every event without effect.
+    host.on_event(RunBlocked(node_id="signoff", question="ok?"))
 
 
 def test_null_state_satisfies_state_ops():
@@ -39,9 +55,11 @@ def test_run_gate_raises():
         NullRuntime().runGate({"type": "schema"}, [])
 
 
-def test_eval_condition_raises():
-    with pytest.raises(NotImplementedError):
-        NullRuntime().evalCondition("review.fields.verdict == 'pass'", {})
+def test_eval_condition_and_escalate_left_the_executor_surface():
+    """R10b port split: condition evaluation is runner-internal and host
+    notification is HostPort.on_event — NodeExecutor stubs carry neither."""
+    assert not hasattr(NullRuntime, "evalCondition")
+    assert not hasattr(NullRuntime, "escalate")
 
 
 def test_state_read_raises():
@@ -57,11 +75,6 @@ def test_state_write_raises():
 def test_telemetry_emit_raises():
     with pytest.raises(NotImplementedError):
         NullRuntime().telemetry.emit("scout", {"tokens": 100.0, "usd": 0.01, "seconds": 5.0})
-
-
-def test_escalate_raises():
-    with pytest.raises(NotImplementedError):
-        NullRuntime().escalate("review", "stall detected")
 
 
 # ---------------------------------------------------------------------------

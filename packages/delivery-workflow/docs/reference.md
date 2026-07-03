@@ -140,24 +140,30 @@ Top-level keys (full schema: [`../schemas/delivery.workflow.schema.yaml`](../sch
 
 **Resume policy:** `done` → skip · `failed`/torn → re-dispatch · absent → dispatch.
 
-## Executor interface (for integrators)
+## Host surface (for integrators)
 
-[`../interface.py`](../interface.py):
+[`../src/delivery_workflow/interface.py`](../src/delivery_workflow/interface.py) — the two ports
+(R10b), driven through the `DeliveryRun` facade:
 
 | Member | Signature |
 |---|---|
-| `state` | `StateOps` — `read() -> WorkflowState`, `write(patch: dict) -> None` |
-| `telemetry` | `TelemetryOps` — `emit(node_id: str, data: dict[str, float]) -> None` |
-| `dispatchAgent` | `(agent_ref, inputs) -> AgentResult` |
-| `runGate` | `(gate, artifact_paths) -> GateResult` |
-| `evalCondition` | `(expr, scope) -> bool` |
-| `escalate` | `(node_id, reason) -> None` |
+| `NodeExecutor.dispatchAgent` | `(agent_ref, inputs) -> AgentResult` |
+| `NodeExecutor.runGate` | `(gate, artifact_paths) -> GateResult` |
+| `NodeExecutor.runExec` | `(node_id, command, inputs) -> ExecResult` |
+| `HostPort.on_event` | `(event: RunEvent) -> None` (optional; `NullHost` ignores) |
+| `StateOps` | `read() -> WorkflowState`, `write(patch: dict) -> None` |
+| `TelemetryOps` | `emit(node_id: str, data: dict[str, float]) -> None` |
 
-Result types ([`../results.py`](../results.py)):
+Edge/loop conditions are runner-internal (`lib.conditions`); `evalCondition` and `escalate`
+left the executor surface in R10b.
+
+Result types ([`../src/delivery_workflow/results.py`](../src/delivery_workflow/results.py)):
 
 - `AgentResult(status, artifact_paths, produces, fields, open_questions, telemetry)` —
-  `status` ∈ `done | blocked | needs_fix | failed`.
+  `status` ∈ `done | blocked | needs_fix | failed` (`AGENT_STATUS_VOCAB`; close it with
+  `agent_result_from_envelope`).
 - `GateResult(decision, errors, evidence={})` — `decision` ∈ `proceed | needs_fix | fail | retry`.
+- `ExecResult(status, exit_code, stdout_tail, artifact_path, produces)` — `status` ∈ `done | failed`.
 - `TelemetryData(tokens, usd, seconds)`.
 
 ## Commands
@@ -166,7 +172,7 @@ Result types ([`../results.py`](../results.py)):
 # Install (editable, with dev deps)
 cd packages/delivery-workflow && pip install -e ".[dev]"
 
-# Run the test suite (231 tests)
+# Run the test suite
 pytest tests/ -v
 
 # Enforce the import boundary

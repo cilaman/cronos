@@ -20,8 +20,8 @@ import textwrap
 
 import pytest
 
-from lib.delivery_status import DeliveryStatusBlock, parse_delivery_status
-from results import TelemetryData
+from delivery_workflow.lib.delivery_status import DeliveryStatusBlock, parse_delivery_status
+from delivery_workflow.results import TelemetryData
 
 FIXTURES_DIR = pathlib.Path(__file__).parent / "fixtures"
 

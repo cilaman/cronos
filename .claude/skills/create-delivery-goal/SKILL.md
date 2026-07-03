@@ -12,7 +12,7 @@ Creates a single delivery goal on the Cronos board by POSTing to the backend API
 
 Use this skill when:
 - You are creating a goal that should be driven by the delivery-workflow runner (e.g. a multi-phase delivery pipeline for a feature or fix).
-- The workflow spec exists at a known path (default: `packages/delivery-workflow/delivery.workflow.yaml`).
+- The workflow spec exists at a known path (default: `packages/delivery-workflow/src/delivery_workflow/delivery.workflow.yaml`).
 
 Use `/create-goal` instead for:
 - Coordination / ops goals (release checklists, migration runbooks, ad-hoc fix groups).
@@ -23,10 +23,10 @@ Use `/create-goal` instead for:
 The delivery-workflow sentinel is a single HTML comment line embedded anywhere in the goal brief:
 
 ```
-<!-- delivery-workflow: packages/delivery-workflow/delivery.workflow.yaml -->
+<!-- delivery-workflow: packages/delivery-workflow/src/delivery_workflow/delivery.workflow.yaml -->
 ```
 
-The sentinel must appear on its own line. `spec_path` is relative to the space root. The canonical delivery workflow spec is `packages/delivery-workflow/delivery.workflow.yaml`; override this only when the space ships a custom workflow.
+The sentinel must appear on its own line. `spec_path` is relative to the space root. The canonical delivery workflow spec is `packages/delivery-workflow/src/delivery_workflow/delivery.workflow.yaml`; override this only when the space ships a custom workflow.
 
 **Do NOT pre-create** scout / analyst / architect / impl / test / review / doc tasks — the runner reads `delivery.workflow.yaml` and creates child tasks itself. Pre-created tasks will race the runner and produce duplicate work.
 
@@ -85,7 +85,7 @@ goal = api_post({
 - file_a.py — describe the change
 - file_b.tsx — describe the change
 
-<!-- delivery-workflow: packages/delivery-workflow/delivery.workflow.yaml -->""",
+<!-- delivery-workflow: packages/delivery-workflow/src/delivery_workflow/delivery.workflow.yaml -->""",
     "type": "goal",
     "priority": 2,
     "agent_mode": "auto",

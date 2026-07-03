@@ -4,10 +4,9 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from runner.scope import build_scope
-from state_types import BudgetState, NodeState, WorkflowState
+from delivery_workflow.runner.scope import build_scope
+from delivery_workflow.state_types import BudgetState, NodeState, WorkflowState
 
 
 def _state(*node_pairs: tuple[str, NodeState]) -> WorkflowState:

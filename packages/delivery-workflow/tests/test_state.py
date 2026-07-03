@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from lib.state.events import EventLog
-from lib.state.store import StateStore, resume_node_status
-from state_types import BudgetState, NodeState, WorkflowState
+from delivery_workflow.lib.state.events import EventLog
+from delivery_workflow.lib.state.store import StateStore, resume_node_status
+from delivery_workflow.state_types import BudgetState, NodeState, WorkflowState
 
 
 # ---------------------------------------------------------------------------
@@ -296,7 +296,7 @@ def test_gate_write_then_read_does_not_raise(tmp_path: Path) -> None:
     bootstrapped state.json (creating a statusless node), and a subsequent
     StateStore.read() succeeds — the KeyError('status') path from the delivery
     runner."""
-    from lib.gate import runGate
+    from delivery_workflow.lib.gate import runGate
 
     # Bootstrap a valid state.json (as the delivery driver now does).
     _make_state(tmp_path, status="running")

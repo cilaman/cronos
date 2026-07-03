@@ -1,0 +1,160 @@
+# Schema: test-class artifact YAML header (CC-v1)
+# Class: test
+# Phase identifier: test
+# Artifact path: {space}/.cronos/pipeline/{goal_slug}/test-report-{goal_slug}.md
+#
+# Validation: python -m delivery_workflow.lib.verify --agent test --slug <slug> --space <space>
+#
+# Cronos deviations from Delivery Notes v1.0 (validation-class):
+#   - cc_version + phase are new base-header fields
+#   - kb_hits removed (replaced by memory_hits, optional for test class)
+#   - duration_s / token_spend are trace-owned; agents MUST NOT write them
+#   - sub_mode removed for simplicity (Cronos test agent is single-mode gate runner)
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "test.schema.yaml"
+title: "Test-Class Artifact YAML Header (CC-v1)"
+description: "Strict schema for test-class pipeline artifacts — gate run results and verdict."
+type: object
+additionalProperties: false
+
+required:
+  - cc_version
+  - agent
+  - slug
+  - phase
+  - status
+  - confidence
+  - inputs_used
+  - outputs_produced
+  - blockers
+  - next_consumer
+  - metrics
+  - gate_decision
+  - tests_added
+  - passed
+  - failed
+
+properties:
+
+  cc_version:
+    type: string
+    const: "1.0"
+
+  agent:
+    type: string
+    minLength: 1
+    description: "Agent name from the pipeline registry (e.g. 'tester')."
+
+  slug:
+    type: string
+    pattern: "^[a-z0-9]+(-[a-z0-9]+)*(--[a-z0-9]+(-[a-z0-9]+)*)?$"
+    maxLength: 120
+
+  phase:
+    type: string
+    const: "test"
+
+  status:
+    type: string
+    enum: ["done", "partial", "blocked", "failed"]
+    description: "status=done with gate_decision=fail is valid: the gate ran cleanly but the suite failed."
+
+  confidence:
+    type: number
+    minimum: 0.0
+    maximum: 1.0
+
+  inputs_used:
+    type: array
+    items:
+      type: string
+      pattern: "^(?![/\\\\])(?![A-Za-z]:).*$"
+
+  outputs_produced:
+    type: array
+    minItems: 1
+    items:
+      type: string
+      pattern: "^(?![/\\\\])(?![A-Za-z]:).*$"
+
+  blockers:
+    type: array
+    items:
+      type: object
+      required: [description, severity]
+      properties:
+        description: { type: string, minLength: 1 }
+        severity: { type: string, enum: ["low", "medium", "high", "critical"] }
+        suggested_resolution: { type: string }
+
+  next_consumer:
+    type: string
+    minLength: 1
+    description: "Typically 'review' on PASS, or 'user' on FAIL escalation."
+
+  # --- test-class specific fields ---
+
+  gate_decision:
+    type: string
+    enum: ["pass", "fail", "escalate"]
+    description: "Machine-readable verdict used for phase transition. R-val-5: pass implies failed=0."
+
+  tests_added:
+    type: integer
+    minimum: 0
+    description: "New test cases introduced during this test run (0 for gate-only runs)."
+
+  passed:
+    type: integer
+    minimum: 0
+    description: "Count of test cases that passed."
+
+  failed:
+    type: integer
+    minimum: 0
+    description: "Count of test cases that failed. R-val-5: must be 0 when gate_decision=pass."
+
+  errors:
+    type: integer
+    minimum: 0
+    description: "Count of test cases that errored (uncaught exceptions)."
+
+  coverage:
+    type: number
+    minimum: 0.0
+    maximum: 100.0
+    description: "Optional coverage percentage if measured."
+
+  metrics:
+    type: object
+    required: [tool_calls, files_read]
+    additionalProperties: true
+    properties:
+      tool_calls: { type: integer, minimum: 1 }
+      files_read: { type: integer, minimum: 0 }
+      memory_hits: { type: integer, minimum: 0 }
+      tests_run:
+        type: integer
+        minimum: 0
+        description: "Total test cases executed (passed + failed + errors)."
+
+# Cross-field rules enforced by verifier.py:
+#
+# R1: Non-empty blockers requires status in {blocked, failed}.
+# R2: status=done requires confidence >= 0.7.
+# R3: confidence in [0.0, 1.0].
+# R4: metrics.files_read + metrics.memory_hits >= len(inputs_used).
+# R5: outputs_produced[0] matches canonical path (warning).
+# R6: slug verbatim from orchestrator.
+# R7: workspace-relative forward-slash paths only.
+#
+# Test-class extensions (R-val):
+#   R-val-1: gate_decision in {pass, fail, escalate}.
+#   R-val-2: passed, failed, errors are non-negative integers.
+#   R-val-3: gate_decision=pass implies failed=0.
+#   R-val-4: gate_decision=fail with status=done is VALID (gate ran, suite failed).
+#
+# Required markdown sections:
+#   ## Summary, ## Gate result, ## Failures, ## Assumptions,
+#   ## Open questions, ## Next consumer brief

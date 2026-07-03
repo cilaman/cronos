@@ -5,9 +5,8 @@ import sys
 from pathlib import Path
 
 # Ensure the package root is on sys.path for direct module imports.
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from ir import IREdge, IRGraph, IRNode, LoopPolicy
+from delivery_workflow.ir import IREdge, IRGraph, IRNode, LoopPolicy
 
 
 class TestLoopPolicy:

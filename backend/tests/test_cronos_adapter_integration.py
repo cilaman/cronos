@@ -19,16 +19,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-_BUNDLE = Path(__file__).parent.parent.parent / "packages" / "delivery-workflow"
-if str(_BUNDLE) not in sys.path:
-    sys.path.insert(0, str(_BUNDLE))
 
-from adapters.cronos.adapter import CronosAdapter
-from interface import ExecutorInterface, StateOps, TelemetryOps
-from lib.state.events import EventLog
-from lib.state.store import StateStore
-from results import AgentResult, GateResult
-from state_types import BudgetState, NodeState, WorkflowState
+from app.delivery_adapter import CronosAdapter
+from delivery_workflow.interface import ExecutorInterface, StateOps, TelemetryOps
+from delivery_workflow.lib.state.events import EventLog
+from delivery_workflow.lib.state.store import StateStore
+from delivery_workflow.results import AgentResult, GateResult
+from delivery_workflow.state_types import BudgetState, NodeState, WorkflowState
 
 
 # ---------------------------------------------------------------------------
@@ -138,17 +135,21 @@ class TestAllSixOps:
 
         # --- R4: runGate ---
         with patch(
-            "lib.gate.runGate",
+            "delivery_workflow.lib.gate.runGate",
             return_value=_make_cronos_gate_result("proceed"),
         ):
             gate_result = adapter.runGate({"id": "g-scout", "checks": []}, ["scout-report.md"])
         assert isinstance(gate_result, GateResult)
         assert gate_result.decision == "proceed"
 
-        # --- R5: evalCondition ---
+        # --- R5 (re-anchored by R10b): the condition path is runner-internal;
+        # the adapter carries no evalCondition method anymore.
+        from delivery_workflow.lib.conditions import eval_condition
+
         scope = {"analyze.fields.has_ui": "false"}
-        assert adapter.evalCondition("analyze.fields.has_ui == 'false'", scope) is True
-        assert adapter.evalCondition("analyze.fields.has_ui == 'true'", scope) is False
+        assert eval_condition("analyze.fields.has_ui == 'false'", scope) is True
+        assert eval_condition("analyze.fields.has_ui == 'true'", scope) is False
+        assert not hasattr(adapter, "evalCondition")
 
         # --- R8: escalate ---
         store.get = MagicMock(return_value=_make_task("ACTIVE"))

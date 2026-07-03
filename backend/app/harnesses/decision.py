@@ -34,9 +34,7 @@ nodes.
 from __future__ import annotations
 
 import re
-import sys
 import logging
-from pathlib import Path
 from typing import Any
 
 from .model import HarnessEdge, HarnessNode
@@ -45,16 +43,10 @@ from ..trace_parser import RunTrace
 
 # ---------------------------------------------------------------------------
 # Import boundary (SG3): the condition grammar lives in the portable
-# ``lib.conditions`` module so the runner, adapter, and this backend decision
-# path share one evaluator (with ``||`` OR-of-ANDs support).  Bootstrap the
-# delivery-workflow package onto sys.path before importing, mirroring
-# state_mapping.py / compiler.py — the editable install may be absent.
+# ``delivery_workflow.lib.conditions`` module so the runner, adapter, and this
+# backend decision path share one evaluator (with ``||`` OR-of-ANDs support).
 # ---------------------------------------------------------------------------
-_DELIVERY_WF = Path(__file__).parent.parent.parent.parent / "packages" / "delivery-workflow"
-if str(_DELIVERY_WF) not in sys.path:
-    sys.path.insert(0, str(_DELIVERY_WF))
-
-from lib.conditions import eval_condition  # noqa: E402
+from delivery_workflow.lib.conditions import eval_condition
 
 log = logging.getLogger(__name__)
 

@@ -9,10 +9,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-import spec_loader
-
+from delivery_workflow import spec_loader
 PACKAGE_ROOT = Path(__file__).parent.parent
-SPEC_PATH = PACKAGE_ROOT / "delivery.workflow.yaml"
+SPEC_PATH = PACKAGE_ROOT / "src" / "delivery_workflow" / "delivery.workflow.yaml"
 
 
 # ---------------------------------------------------------------------------

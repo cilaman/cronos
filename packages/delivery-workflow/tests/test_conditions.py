@@ -3,7 +3,7 @@
 Covers all 5 operators (==, !=, in, &&, ||) with positive + negative cases,
 multi-clause conjunctions, mixed AND/OR, edge cases (empty string, bad grammar).
 """
-from lib.conditions import eval_condition
+from delivery_workflow.lib.conditions import eval_condition
 
 
 # ---------------------------------------------------------------------------

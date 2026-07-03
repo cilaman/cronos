@@ -24,7 +24,7 @@ import textwrap
 
 import pytest
 
-from lib.node_status import NodeStatusBlock, parse_node_status
+from delivery_workflow.lib.node_status import NodeStatusBlock, parse_node_status
 
 FIXTURES_DIR = pathlib.Path(__file__).parent / "fixtures"
 

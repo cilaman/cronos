@@ -16,9 +16,10 @@ dependencies = [
     "croniter>=1.4",
     "python-dateutil>=2.9",
     "bcrypt>=4.0",
-    # Runtime deps of the shipped-but-not-pip-installed delivery-workflow package
-    # (packages/delivery-workflow). pyyaml is already listed above; jsonschema is
-    # used by lib/verify.py. Kept in sync by test_delivery_packaging.py.
+    # Runtime deps shared with the delivery-workflow package (pip-installed
+    # editable from packages/delivery-workflow, R10a). pyyaml is already listed
+    # above; jsonschema is used by delivery_workflow.lib.verify. Kept in sync
+    # by test_delivery_packaging.py.
     "jsonschema>=4.0",
 ]
 
@@ -29,9 +30,12 @@ dev = [
     "httpx>=0.27",
     "pytest-json-report",
     "pytest-cov",
-    # delivery-workflow portable lib — editable install from monorepo sibling package.
-    # Install with: pip install -e ../packages/delivery-workflow
-    "delivery-workflow",
+    # delivery-workflow portable lib (src layout, `import delivery_workflow`) —
+    # deliberately NOT a bare requirement: the name is not on PyPI, so listing
+    # it would (a) break `pip install -e ".[dev]"` on a fresh machine and
+    # (b) open a dependency-confusion window if the name is ever registered.
+    # Install the monorepo sibling explicitly FIRST (same as CI/Dockerfile):
+    #   pip install -e ../packages/delivery-workflow
 ]
 
 [build-system]

@@ -6,11 +6,10 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import compiler_a
-from ir import IREdge, IRGraph, IRNode, LoopPolicy
-from spec_loader import load_spec
+from delivery_workflow import compiler_a
+from delivery_workflow.ir import IREdge, IRGraph, IRNode, LoopPolicy
+from delivery_workflow.spec_loader import load_spec
 
 
 MINIMAL_SPEC = {
@@ -240,7 +239,7 @@ class TestFixtureFile:
 
     def test_compile_delivery_workflow_yaml(self):
         """Compile the production delivery.workflow.yaml without error."""
-        prod_yaml = Path(__file__).parent.parent / "delivery.workflow.yaml"
+        prod_yaml = Path(__file__).parent.parent / "src" / "delivery_workflow" / "delivery.workflow.yaml"
         spec = load_spec(prod_yaml)
         graph = compiler_a.compile(spec)
         node_ids = [n.id for n in graph.nodes]
@@ -253,7 +252,7 @@ class TestFixtureFile:
     def test_simple_gates_have_bounded_fix_loops(self):
         """§P4: each simple gate carries a loop block AND a non-proceed fix edge
         routing back to its producing agent (so a failure doesn't hard-stall)."""
-        prod_yaml = Path(__file__).parent.parent / "delivery.workflow.yaml"
+        prod_yaml = Path(__file__).parent.parent / "src" / "delivery_workflow" / "delivery.workflow.yaml"
         graph = compiler_a.compile(load_spec(prod_yaml))
         by_id = {n.id: n for n in graph.nodes}
         # gate id → producing agent it should route back to on non-proceed.
@@ -347,7 +346,7 @@ class TestOnRejectRouteValidation:
             compiler_a.compile(spec)
 
     def test_shipped_spec_routes_still_compile(self):
-        prod_yaml = Path(__file__).parent.parent / "delivery.workflow.yaml"
+        prod_yaml = Path(__file__).parent.parent / "src" / "delivery_workflow" / "delivery.workflow.yaml"
         graph = compiler_a.compile(load_spec(prod_yaml))
         routes = {
             n.id: n.data["on_reject"]

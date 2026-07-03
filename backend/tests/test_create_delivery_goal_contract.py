@@ -30,7 +30,7 @@ def _read_skill() -> str:
 EXPECTED_NAME_FIELD = "name: create-delivery-goal"
 EXPECTED_SENTINEL_SUBSTRING = "<!-- delivery-workflow:"
 EXPECTED_DO_NOT_PRE_CREATE = "do not pre-create"
-EXPECTED_CANONICAL_SPEC = "packages/delivery-workflow/delivery.workflow.yaml"
+EXPECTED_CANONICAL_SPEC = "packages/delivery-workflow/src/delivery_workflow/delivery.workflow.yaml"
 
 
 # ---------------------------------------------------------------------------

@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from lib.improve import BackHalfResult, classify_findings, run_back_half
+from delivery_workflow.lib.improve import BackHalfResult, classify_findings, run_back_half
 
 PACKAGE_ROOT = Path(__file__).parent.parent
 

@@ -14,7 +14,7 @@ persistence (the conformance harness ``make_state_ops``):
 
 The persistence round-trip law for the new keys (``resume_retries``,
 ``budget``) lives in ``lib/state/conformance.py`` and runs against BOTH
-StateOps implementations — ``CronosStateOps`` here
+StateOps implementations — ``StateStoreOps`` here
 (tests/regression/test_stateops_conformance.py) and the backend harness
 ``_StateOps`` (backend/tests/test_harness_stateops_conformance.py).
 """
@@ -24,9 +24,9 @@ from pathlib import Path
 
 import pytest
 
-import runner as workflow_runner
-from ir import IREdge, IRGraph, IRNode
-from runner import (
+from delivery_workflow import runner as workflow_runner
+from delivery_workflow.ir import IREdge, IRGraph, IRNode
+from delivery_workflow.runner import (
     DEFAULT_MAX_RESUME_RETRIES,
     HumanAnswer,
     Nothing,
@@ -615,7 +615,7 @@ def test_rejected_signoff_never_routes_forward_edges_at_seeding(tmp_path: Path) 
 
 
 def _loop_graph(max_iter: int = 2) -> IRGraph:
-    from ir import LoopPolicy
+    from delivery_workflow.ir import LoopPolicy
 
     return IRGraph(
         nodes=[

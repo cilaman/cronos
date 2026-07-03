@@ -44,14 +44,14 @@ RUN pip install --upgrade pip && pip install .
 # App source
 COPY backend/app ./app
 
-# Portable delivery-workflow package (lib/runner/adapters + top-level modules
-# compiler_a, spec_loader, ir, …). It is NOT pip-installed (the wheel omits the
-# top-level modules the runner imports), so we ship the source tree and add it
-# to PYTHONPATH. This makes the delivery/v2 runner and the app.pipeline gate
-# importable at runtime — without it, delivery goals fail with
-# "No module named 'adapters'".
+# Portable delivery-workflow package (src layout: src/delivery_workflow with
+# runner/lib/adapters + data assets). Installed as a real pip package (R10a) —
+# `import delivery_workflow` works with zero path shims. The editable install
+# keeps the shipped source tree as the single copy, so the canonical spec at
+# packages/delivery-workflow/src/delivery_workflow/delivery.workflow.yaml
+# stays resolvable by path too.
 COPY packages/delivery-workflow ./packages/delivery-workflow
-ENV PYTHONPATH=/app/packages/delivery-workflow
+RUN pip install -e ./packages/delivery-workflow
 
 # Ensure /app and /data are owned by cronos so the non-root process can
 # write there. /data is a bind-mount at runtime; the entrypoint re-chowns

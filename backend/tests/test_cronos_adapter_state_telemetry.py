@@ -21,21 +21,18 @@ from unittest.mock import MagicMock
 import pytest
 
 # Make sure the delivery-workflow package is importable.
-_BUNDLE = Path(__file__).parent.parent.parent / "packages" / "delivery-workflow"
-if str(_BUNDLE) not in sys.path:
-    sys.path.insert(0, str(_BUNDLE))
 
-from adapters.cronos.adapter import (
+from app.delivery_adapter import (
     CronosAdapter,
     CronosStateOps,
     CronosTelemetryOps,
     _telemetry_from_trace,
 )
-from interface import ExecutorInterface, StateOps, TelemetryOps
-from lib.state.events import EventLog
-from lib.state.store import StateStore
-from lib.telemetry.sink import BudgetExceededSignal, TelemetrySink
-from state_types import BudgetState, WorkflowState
+from delivery_workflow.interface import ExecutorInterface, StateOps, TelemetryOps
+from delivery_workflow.lib.state.events import EventLog
+from delivery_workflow.lib.state.store import StateStore
+from delivery_workflow.lib.telemetry.sink import BudgetExceededSignal, TelemetrySink
+from delivery_workflow.state_types import BudgetState, WorkflowState
 
 
 # ---------------------------------------------------------------------------
@@ -201,7 +198,7 @@ class TestCronosTelemetryOps:
         ops = CronosTelemetryOps(sink)
         # Pre-create the node so telemetry persistence finds it.
         ws = state_store.read()
-        from state_types import NodeState
+        from delivery_workflow.state_types import NodeState
 
         ws.nodes["scout"] = NodeState(status="done")
         state_store.write(ws)
@@ -273,8 +270,12 @@ class TestProtocolConformance:
         assert isinstance(adapter.telemetry, TelemetryOps)
 
     def test_required_methods_present(self, adapter: CronosAdapter) -> None:
-        for method in ("dispatchAgent", "runGate", "evalCondition", "escalate"):
+        # NodeExecutor port + HostPort (R10b).  evalCondition left the
+        # surface entirely (condition evaluation is runner-internal);
+        # escalate survives as the internal parking bridge behind on_event.
+        for method in ("dispatchAgent", "runGate", "runExec", "on_event"):
             assert hasattr(adapter, method), f"Missing method: {method}"
+        assert not hasattr(adapter, "evalCondition")
 
     def test_state_methods_present(self, adapter: CronosAdapter) -> None:
         assert hasattr(adapter.state, "read")

@@ -13,11 +13,8 @@ import sys
 from pathlib import Path
 
 # Make the delivery-workflow package importable.
-_BUNDLE = Path(__file__).parent.parent.parent / "packages" / "delivery-workflow"
-if str(_BUNDLE) not in sys.path:
-    sys.path.insert(0, str(_BUNDLE))
 
-from adapters.cronos.adapter import _fallback_delivery_status  # noqa: E402
+from app.delivery_adapter import _fallback_delivery_status  # noqa: E402
 
 
 def _report(produces: str) -> str:

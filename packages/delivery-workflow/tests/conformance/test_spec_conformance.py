@@ -1,15 +1,16 @@
 """R4 spec-conformance suite — the remediation progress meter.
 
 Each scenario drives the SHIPPED ``delivery.workflow.yaml`` end-to-end through
-the real ``spec_loader`` + ``compiler_a`` + ``runner.run`` against real
-``StateStore`` persistence, re-entering parked runs through the R7 package
-resume API (``runner.resume`` — see ``harness.drive_with_host_resumes``),
-exactly as the host does.
+the real ``spec_loader`` + ``compiler_a`` + the R10b ``DeliveryRun`` FACADE
+(``start``/``resume``/``outcome`` — the only surface hosts call,
+02-package-boundary.md §2.3) against real ``StateStore`` persistence,
+re-entering parked runs through ``DeliveryRun.resume`` (see
+``harness.drive_with_host_resumes``), exactly as the host does.
 
 Per scenario we assert:
   (a) the EXACT executed-node set and per-node dispatch counts,
-  (b) the terminal ``WorkflowState.status``,
-  (c) state round-trip equality (disk == in-memory result).
+  (b) the terminal ``Outcome`` (closed taxonomy — what a host consumes),
+  (c) state round-trip equality (disk == the mirror of every runner write).
 
 Expectations the code cannot meet yet are marked ``xfail(strict=True)`` with a
 reason naming the remediation item that will flip them
@@ -48,8 +49,7 @@ from pathlib import Path
 
 import pytest
 
-import runner as workflow_runner
-from runner import HumanAnswer, Nothing, ResumeError, RetryFailed
+from delivery_workflow.runner import HumanAnswer, Nothing, ResumeError, RetryFailed
 
 from tests.conformance.harness import (
     ALL_NODES,
@@ -64,6 +64,7 @@ from tests.conformance.harness import (
     assert_state_roundtrip,
     drive_with_host_resumes,
     load_shipped_graph,
+    make_delivery_run,
     make_state_ops,
 )
 
@@ -302,28 +303,29 @@ def test_conformance_escalated_resume(tmp_path: Path, graph) -> None:
     })
 
     # Reach the first human park through the real pipeline prefix.
-    first = workflow_runner.run(graph=graph, executor=executor, state_ops=state_ops)
-    assert first.status == "blocked", "precondition: run parks at signoff-scope"
+    run = make_delivery_run(graph, executor, state_ops)
+    first = run.start()
+    assert first.kind == "blocked", "precondition: run parks at signoff-scope"
 
     # The policy-limit writers persist status="escalated" (wait(timed) /
     # global cap / loop exhaust).
     state_ops.write({"status": "escalated"})
 
-    # Bare run() must NOT tunnel past the escalation — the halt is the sealed
-    # half of R7 (resume() is the only legal re-entry).
+    # Bare start() must NOT tunnel past the escalation — the halt is the
+    # sealed half of R7 (resume() is the only legal re-entry).
     calls_before = sum(executor.calls.values())
-    sealed = workflow_runner.run(graph=graph, executor=executor, state_ops=state_ops)
-    assert sealed.status == "escalated"
+    sealed = run.start()
+    assert sealed.kind == "escalated"
     assert sum(executor.calls.values()) == calls_before, (
-        "bare run() dispatched work on a persisted 'escalated' state"
+        "bare start() dispatched work on a persisted 'escalated' state"
     )
 
     # The legal re-entry: Nothing() (external mitigation).  The run re-arms,
     # re-parks at the still-blocked sign-off (progress OUT of the escalated
     # trap — D7 dead), and the ordinary approve cycle completes the pipeline.
-    resumed = workflow_runner.resume(graph, executor, state_ops, Nothing())
-    assert resumed.status == "blocked", (
-        f"escalated run did not progress on resume(Nothing()): {resumed.status!r}"
+    resumed = run.resume(Nothing())
+    assert resumed.kind == "blocked", (
+        f"escalated run did not progress on resume(Nothing()): {resumed.kind!r}"
     )
 
     outcome = drive_with_host_resumes(graph, executor, state_ops)
@@ -361,15 +363,16 @@ def test_conformance_reject_with_route(tmp_path: Path, graph) -> None:
         "security": agent_done(verdict="pass", finding_class="none"),
     })
 
-    first = workflow_runner.run(graph=graph, executor=executor, state_ops=state_ops)
-    assert first.status == "blocked", "precondition: run parks at signoff-scope"
+    run = make_delivery_run(graph, executor, state_ops)
+    first = run.start()
+    assert first.kind == "blocked", "precondition: run parks at signoff-scope"
+    assert first.node_id == "signoff-scope"
 
     # The reject resume: analyze re-runs and the run re-parks at the sign-off.
-    rejected = workflow_runner.resume(
-        graph, executor, state_ops,
+    rejected = run.resume(
         HumanAnswer(node_id="signoff-scope", text=reject_text, verdict="reject"),
     )
-    assert rejected.status == "blocked"
+    assert rejected.kind == "blocked"
     assert executor.calls["analyze"] == 2, "on_reject target must re-run"
 
     # OD-2 answer chain: the re-run's dispatch inputs carry the answer in
@@ -423,30 +426,35 @@ def test_conformance_reject_without_route(tmp_path: Path, graph) -> None:
 
     # Drive to the release park (two approvals: scope + design).
     outcome = drive_with_host_resumes(graph, executor, state_ops, max_resumes=2)
+    assert outcome.outcome.kind == "blocked"
     assert outcome.final.status == "blocked"
     assert outcome.resumes == [["signoff-scope"], ["signoff-design"]]
 
     calls_before = sum(executor.calls.values())
-    final = workflow_runner.resume(
-        graph, executor, state_ops,
+    run = make_delivery_run(graph, executor, state_ops)
+    final = run.resume(
         HumanAnswer(node_id="release", text="no — do not ship this", verdict="reject"),
     )
 
     # (a) nothing re-runs — there is no route.
     assert sum(executor.calls.values()) == calls_before
 
-    # (b) terminal: stalled with machine-readable reject detail; the node
-    # terminates needs_fix carrying the answer (a "no" is never a "yes").
-    assert final.status == "stalled"
+    # (b) terminal Outcome: stalled with machine-readable reject detail
+    # (hosts consume THIS, never node internals); the node terminates
+    # needs_fix carrying the answer (a "no" is never a "yes") — verified
+    # against the persisted state via the mirror oracle.
+    assert final.kind == "stalled"
     assert final.stall is not None
     assert final.stall["kind"] == "rejected"
     assert final.stall["nodes"] == ["release"]
+    assert final.node_id == "release"
     assert "do not ship" in final.stall["reason"]
-    assert final.nodes["release"].status == "needs_fix"
-    assert final.nodes["release"].fields["answer"] == "no — do not ship this"
+    mirror = state_ops.mirror
+    assert mirror.nodes["release"].status == "needs_fix"
+    assert mirror.nodes["release"].fields["answer"] == "no — do not ship this"
 
     # (c) round-trip law.
-    assert_state_roundtrip(state_ops, final)
+    assert_state_roundtrip(state_ops, mirror)
 
 
 # ===========================================================================
@@ -463,43 +471,44 @@ def test_conformance_retry_failed_ceiling(tmp_path: Path, graph) -> None:
         "scout": agent_failed("child was OOM-killed (exit -9)"),
     })
 
-    final = workflow_runner.run(graph=graph, executor=executor, state_ops=state_ops)
-    assert final.status == "failed"
+    run = make_delivery_run(graph, executor, state_ops)
+    final = run.start()
+    assert final.kind == "failed"
+    assert final.node_id == "scout"
     assert executor.calls["scout"] == 1
 
     # Two legal retries (the ceiling), each re-dispatching the failed node.
     for expected_calls, expected_count in ((2, 1), (3, 2)):
-        final = workflow_runner.resume(graph, executor, state_ops, RetryFailed("all"))
-        assert final.status == "failed"
+        final = run.resume(RetryFailed("all"))
+        assert final.kind == "failed"
         assert executor.calls["scout"] == expected_calls
         # The ceiling is persisted in state — read back from disk (R7: no
         # sidecar files; the counter must survive a process restart).
         assert state_ops.read().resume_retries == {"scout": expected_count}
 
     # The third retry exceeds the ceiling: stalled, no dispatch.
-    final = workflow_runner.resume(graph, executor, state_ops, RetryFailed("all"))
+    final = run.resume(RetryFailed("all"))
     assert executor.calls["scout"] == 3
-    assert final.status == "stalled"
+    assert final.kind == "stalled"
     assert final.stall is not None
     assert final.stall["kind"] == "retry_exhausted"
     assert final.stall["nodes"] == ["scout"]
 
     # A further RetryFailed against the stalled run re-derives the same stall
     # (idempotent — never a silent loop).
-    final = workflow_runner.resume(graph, executor, state_ops, RetryFailed(["scout"]))
+    final = run.resume(RetryFailed(["scout"]))
     assert executor.calls["scout"] == 3
-    assert final.status == "stalled"
+    assert final.kind == "stalled"
     assert final.stall["kind"] == "retry_exhausted"
 
     # A HumanAnswer against the stalled run is a clear error, not corruption.
     with pytest.raises(ResumeError):
-        workflow_runner.resume(
-            graph, executor, state_ops,
+        run.resume(
             HumanAnswer(node_id="signoff-scope", text="ok", verdict="approve"),
         )
 
     # (c) round-trip law.
-    assert_state_roundtrip(state_ops, final)
+    assert_state_roundtrip(state_ops, state_ops.mirror)
 
 
 # ===========================================================================

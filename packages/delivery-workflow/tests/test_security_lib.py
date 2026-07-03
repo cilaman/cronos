@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from lib.security import evaluate_security
+from delivery_workflow.lib.security import evaluate_security
 
 # Reuse the backend gate security fixtures — same scanners, same planted sentinel
 FIXTURES = (
@@ -125,7 +125,7 @@ def test_build_subprocess_env_puts_interpreter_bin_on_path():
     import os
     import sys
 
-    from lib.security import build_subprocess_env
+    from delivery_workflow.lib.security import build_subprocess_env
 
     env = build_subprocess_env()
     bindir = os.path.dirname(sys.executable)

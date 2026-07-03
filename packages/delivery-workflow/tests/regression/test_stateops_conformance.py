@@ -1,14 +1,14 @@
 """R2 regression — persistence round-trip law (kills D2).
 
 D2 (00-assessment.md §2): ``NodeState.fields`` were never persisted —
-``_serialize``/``_deserialize`` omitted them and ``CronosStateOps.write``
+``_serialize``/``_deserialize`` omitted them and ``StateStoreOps.write``
 dropped them — so all field-based routing (``has_ui``, ``verdict``,
 ``finding_class``) and ``loop.until`` conditions referencing pre-resume nodes
 were dead after any resume.
 
 This file runs the package-provided StateOps conformance suite
 (``lib/state/conformance.py``) against the StateStore-backed
-``CronosStateOps`` — the implementation that failed the law at HEAD — plus
+``StateStoreOps`` — the implementation that failed the law at HEAD — plus
 direct ``StateStore`` round-trip regressions for the ``_serialize`` /
 ``_deserialize`` half of the defect.
 
@@ -23,19 +23,19 @@ from pathlib import Path
 
 import pytest
 
-from adapters.cronos.adapter import CronosStateOps
-from lib.state.conformance import (
+from delivery_workflow.lib.state.ops import StateStoreOps
+from delivery_workflow.lib.state.conformance import (
     STATEOPS_CONFORMANCE_CHECKS,
     run_stateops_conformance,
 )
-from lib.state.events import EventLog
-from lib.state.store import StateStore
-from runner.scope import build_scope
-from state_types import BudgetState, NodeState, WorkflowState
+from delivery_workflow.lib.state.events import EventLog
+from delivery_workflow.lib.state.store import StateStore
+from delivery_workflow.runner.scope import build_scope
+from delivery_workflow.state_types import BudgetState, NodeState, WorkflowState
 
 
 # ---------------------------------------------------------------------------
-# Factory: fresh StateStore-backed CronosStateOps per invocation.
+# Factory: fresh StateStore-backed StateStoreOps per invocation.
 # ---------------------------------------------------------------------------
 
 
@@ -43,18 +43,18 @@ from state_types import BudgetState, NodeState, WorkflowState
 def make_cronos_ops(tmp_path: Path):
     counter = itertools.count()
 
-    def _make(initial: WorkflowState) -> CronosStateOps:
+    def _make(initial: WorkflowState) -> StateStoreOps:
         run_dir = tmp_path / f"run-{next(counter)}"
         run_dir.mkdir()
         store = StateStore(run_dir)
         store.write(initial)
-        return CronosStateOps(store, EventLog(run_dir))
+        return StateStoreOps(store, EventLog(run_dir))
 
     return _make
 
 
 # ---------------------------------------------------------------------------
-# Conformance suite against CronosStateOps (the D2 offender).
+# Conformance suite against StateStoreOps (the D2 offender).
 # ---------------------------------------------------------------------------
 
 
@@ -127,11 +127,11 @@ def test_scope_rebuilt_from_persisted_state_contains_fields(
     tmp_path: Path,
 ) -> None:
     """The repro D2 scenario end-to-end: a runner-shaped write through
-    CronosStateOps, read back, and the condition-evaluation scope rebuilt from
+    StateStoreOps, read back, and the condition-evaluation scope rebuilt from
     the persisted state must expose the routing fields."""
     store = StateStore(tmp_path)
     store.write(_state_with({}))
-    ops = CronosStateOps(store, EventLog(tmp_path))
+    ops = StateStoreOps(store, EventLog(tmp_path))
     ops.write({"nodes": {"analyze": {
         "status": "done", "attempt": 1, "artifact_paths": ["a.md"],
         "gate": None, "fields": {"has_ui": "no", "verdict": "pass"},

@@ -16,14 +16,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-_BUNDLE = Path(__file__).parent.parent.parent / "packages" / "delivery-workflow"
-if str(_BUNDLE) not in sys.path:
-    sys.path.insert(0, str(_BUNDLE))
 
-from adapters.cronos.adapter import CronosAdapter
-from lib.state.store import StateStore
-from results import GateResult
-from state_types import BudgetState, WorkflowState
+from app.delivery_adapter import CronosAdapter
+from delivery_workflow.lib.state.store import StateStore
+from delivery_workflow.results import GateResult
+from delivery_workflow.state_types import BudgetState, WorkflowState
 
 
 # ---------------------------------------------------------------------------
@@ -78,7 +75,7 @@ class TestRunGateProceed:
         gate = {"id": "g-scout", "checks": []}
 
         with patch(
-            "lib.gate.runGate",
+            "delivery_workflow.lib.gate.runGate",
             return_value=_make_cronos_gate_result("proceed"),
         ):
             result = adapter.runGate(gate, ["reports/scout.md"])
@@ -95,7 +92,7 @@ class TestRunGateProceed:
         gate = {"id": "g-scout", "checks": []}
 
         with patch(
-            "lib.gate.runGate",
+            "delivery_workflow.lib.gate.runGate",
             return_value=_make_cronos_gate_result("proceed"),
         ):
             adapter.runGate(gate, [])
@@ -117,7 +114,7 @@ class TestRunGateProceed:
             captured["space"] = space
             return _make_cronos_gate_result("proceed")
 
-        with patch("lib.gate.runGate", side_effect=_fake_run_gate):
+        with patch("delivery_workflow.lib.gate.runGate", side_effect=_fake_run_gate):
             adapter.runGate(gate, ["a.md", "b.md"])
 
         # Paths are resolved to absolute under the space dir so the gate's direct
@@ -138,7 +135,7 @@ class TestRunGateProceed:
             captured["checks"] = gate.get("checks")
             return _make_cronos_gate_result("proceed")
 
-        with patch("lib.gate.runGate", side_effect=_fake_run_gate):
+        with patch("delivery_workflow.lib.gate.runGate", side_effect=_fake_run_gate):
             adapter.runGate(gate, [".cronos/pipeline/my-goal/scout-report-my-goal.md"])
 
         schema_check = captured["checks"][0]
@@ -147,12 +144,7 @@ class TestRunGateProceed:
 
 
 def test_class_and_slug_from_artifact():
-    import sys as _sys
-    from pathlib import Path as _P
-    _bundle = _P(__file__).parent.parent.parent / "packages" / "delivery-workflow"
-    if str(_bundle) not in _sys.path:
-        _sys.path.insert(0, str(_bundle))
-    from adapters.cronos.adapter import _class_and_slug_from_artifact
+    from app.delivery_adapter import _class_and_slug_from_artifact
 
     # .cronos/pipeline/ convention: slug in the filename suffix.
     assert _class_and_slug_from_artifact(
@@ -210,7 +202,7 @@ class TestRunGateSingleWriter:
             return _make_cronos_gate_result("proceed")
 
         adapter = _adapter(tmp_path)
-        with patch("lib.gate.runGate", side_effect=_fake_run_gate):
+        with patch("delivery_workflow.lib.gate.runGate", side_effect=_fake_run_gate):
             adapter.runGate({"id": "g-scout", "checks": []}, [])
 
         assert captured["state_path"] is None
@@ -222,7 +214,7 @@ class TestRunGateNeedsFix:
         gate = {"id": "g-review", "checks": []}
 
         with patch(
-            "lib.gate.runGate",
+            "delivery_workflow.lib.gate.runGate",
             return_value=_make_cronos_gate_result(
                 "needs_fix",
                 errors=["schema check failed: missing required field 'traceability'"],
@@ -240,7 +232,7 @@ class TestRunGateNeedsFix:
         gate = {"id": "g-review", "checks": []}
 
         with patch(
-            "lib.gate.runGate",
+            "delivery_workflow.lib.gate.runGate",
             return_value=_make_cronos_gate_result("needs_fix"),
         ):
             adapter.runGate(gate, [])
@@ -258,7 +250,7 @@ class TestRunGateFail:
         gate = {"id": "g-tests", "checks": []}
 
         with patch(
-            "lib.gate.runGate",
+            "delivery_workflow.lib.gate.runGate",
             return_value=_make_cronos_gate_result(
                 "fail", errors=["tests failed: 3 tests failing"]
             ),
@@ -274,7 +266,7 @@ class TestRunGateFail:
         evidence = {"coverage": 72.5, "failing_tests": 3}
 
         with patch(
-            "lib.gate.runGate",
+            "delivery_workflow.lib.gate.runGate",
             return_value=_make_cronos_gate_result("fail", evidence=evidence),
         ):
             result = adapter.runGate(gate, [])
@@ -290,7 +282,7 @@ class TestRunGateNoId:
         gate = {"checks": []}
 
         with patch(
-            "lib.gate.runGate",
+            "delivery_workflow.lib.gate.runGate",
             return_value=_make_cronos_gate_result("proceed"),
         ):
             result = adapter.runGate(gate, [])

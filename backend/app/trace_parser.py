@@ -56,10 +56,11 @@ _FILE_PATH_RE = re.compile(r'"file_path"\s*:\s*"([^"]+)"')
 # node_status envelope transport parser (R1 / D6)
 # ---------------------------------------------------------------------------
 # Deliberate, documented duplication of the package-side parser
-# (packages/delivery-workflow/lib/node_status.py): trace_parser must NOT
-# import the delivery-workflow package — it is not reliably on sys.path for
-# every backend entry point. This ~15-line transport parser stays until R10
-# consolidates the boundary. Transport-only: it returns the raw fence dict
+# (delivery_workflow.lib.node_status): trace_parser stays dependency-free of
+# the delivery-workflow package so every backend entry point can parse traces
+# without pulling in workflow machinery (R1 documented decision; the package
+# is now a real installed distribution, so this is a coupling choice, not a
+# sys.path constraint). Transport-only: it returns the raw fence dict
 # and does not validate the status vocabulary — the vocabulary is closed at
 # the adapter boundary (CronosAdapter.dispatchAgent), never here.
 

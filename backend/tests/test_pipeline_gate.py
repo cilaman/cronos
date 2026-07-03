@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from lib.gate import (
+from delivery_workflow.lib.gate import (
     GateResult,
     CHECK_REGISTRY,
     runGate,
@@ -400,7 +400,7 @@ class TestSchema:
             )
         )
         gate = {"checks": [{"type": "schema", "agent": "research", "slug": "my-goal"}]}
-        # Non-empty artifact_paths — mirrors what adapters/cronos/adapter.py's
+        # Non-empty artifact_paths — mirrors what app/delivery_adapter.py's
         # runGate resolves from the producing node's real output.
         result = runGate(gate, [str(artifact_path)], space=tmp_path)
         assert result.decision == "proceed", (
@@ -433,7 +433,7 @@ class TestSchema:
         doesn't exist, the retry message names THAT real path — not a
         fictitious pipeline-convention guess (no silent re-guessing across
         conventions once a real path is known; see B2 cross-goal leakage
-        guard in adapters/cronos/adapter.py)."""
+        guard in app/delivery_adapter.py)."""
         missing_path = tmp_path / ".cronos" / "delivery" / "my-goal" / "scout-report.md"
         gate = {"checks": [{"type": "schema", "agent": "research", "slug": "my-goal"}]}
         result = runGate(gate, [str(missing_path)], space=tmp_path)

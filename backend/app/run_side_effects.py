@@ -215,15 +215,16 @@ class RunSideEffects:
 
 
 def _emit_delivery_telemetry(task_id: str, trace: Any) -> None:
-    """Emit per-task telemetry into a transient TelemetrySink from lib.telemetry.
+    """Emit per-task telemetry into a transient TelemetrySink from
+    delivery_workflow.lib.telemetry.
 
     Derives token_spend (sum of all token categories across turns) and
     duration_seconds from the RunTrace. USD is 0.0 — rate table deferred to
     Phase 6. The sink is not persisted here; Phase 6 wires in a StateStore to
-    write to the delivery/v1 state.json. Importing lib.telemetry here proves
-    the backend has the editable delivery-workflow package on sys.path (R14 AC).
+    write to the delivery/v1 state.json. Importing delivery_workflow.lib.telemetry
+    here proves the backend has the installed delivery-workflow package (R14 AC).
     """
-    from lib.telemetry import TelemetrySink
+    from delivery_workflow.lib.telemetry import TelemetrySink
 
     token_spend = sum(
         t.input_tokens + t.output_tokens + t.cache_read_tokens + t.cache_creation_tokens

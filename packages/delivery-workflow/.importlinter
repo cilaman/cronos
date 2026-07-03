@@ -1,18 +1,13 @@
 [importlinter]
 root_packages =
-    lib
-    runner
-    adapters
+    delivery_workflow
 include_external_packages = True
 
 [importlinter:contract:no-app-imports]
-name = No app.* imports from portable delivery-workflow core
+name = No app.* imports anywhere in the delivery-workflow package
 type = forbidden
 source_modules =
-    lib
-    runner
+    delivery_workflow
 forbidden_modules =
     app
     backend
-ignore_imports =
-    lib.verify -> app

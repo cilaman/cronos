@@ -3,11 +3,24 @@ backend/app/harnesses/state_mapping — RunState ↔ WorkflowState mapping.
 
 Pure functions with no app-runtime imports.  Standalone testable.
 
+SCOPE (R10d)
+------------
+These tables exist ONLY to persist the harness UI/REST vocabulary: the
+RunState JSON consumed by ``GET /api/harness-runs/{run_id}`` and the frontend
+overlay (``runStatus.ts``: node 'pending|in_progress|done|failed|skipped',
+run 'running|done|failed|cancelled') and to rebuild a WorkflowState on
+runner-path resume.  TERMINAL interpretation does NOT flow through them:
+``run_executor`` finalizes the tracking task from the package ``Outcome``
+via the shared table in ``app.delivery_outcomes`` (kills D16 — the old
+``failed``/``escalated`` → task-DONE collapse lived downstream of this
+module and is gone).
+
 Status mapping (node-level)
 ---------------------------
 Harness RunState NodeState statuses:
     'pending'     — not yet started
-    'in_progress' — currently executing
+    'in_progress' — currently executing (incl. a parked human Wait — BFS
+                    convention: the node stays in_progress while WAITING)
     'done'        — finished successfully
     'failed'      — finished with an error
     'skipped'     — bypassed by control-flow (treated as done for the runner)
@@ -16,7 +29,7 @@ Delivery-workflow WorkflowState NodeState statuses:
     'running'    — currently executing
     'done'       — finished successfully
     'failed'     — finished with an error
-    'blocked'    — waiting / not yet started
+    'blocked'    — waiting / not yet started / parked human wait
     'escalated'  — loop exhausted or hard failure requiring human escalation
 
 Forward mapping  (harness → runner):
@@ -30,35 +43,49 @@ Reverse mapping  (runner → harness):
     'running'    → 'in_progress'
     'done'       → 'done'
     'failed'     → 'failed'
-    'blocked'    → 'pending'
+    'blocked'    → 'pending'      EXCEPT the parked human-wait node named by
+                                  ``waiting_node_id`` → 'in_progress' (R10d:
+                                  fixes the D16-note collision where the node
+                                  the run is parked ON rendered identically
+                                  to genuinely-unreached nodes)
     'escalated'  → 'failed'  (loop exhausted is a hard failure for RunState)
     'needs_fix'  → 'failed'  (R9: a gate's non-proceed terminal.  The harness
                               compiler emits no gate nodes, so this is
                               defensive only — mapping it to a terminal keeps
                               an unexpected needs_fix from defaulting to
-                              'pending' and silently re-running the node.
-                              The full shared-outcome table is R10.)
+                              'pending' and silently re-running the node.)
 
 Run-level status mapping
 ------------------------
 Forward (RunState.status → WorkflowState.status):
-    'running'   → 'running'
+    'running'   → 'running'    EXCEPT when ``waiting_node_id`` names a
+                               still-'in_progress' node → 'blocked' (+ that
+                               node → 'blocked'): the parked human wait is
+                               rebuilt so ``DeliveryRun.resume(HumanAnswer)``
+                               is legal on re-entry and bare ``start()`` is
+                               sealed on the park (see runstate_to_workflowstate)
     'done'      → 'done'
     'failed'    → 'failed'
-    'cancelled' → 'failed'   (no cancelled concept in WorkflowState)
+    'cancelled' → 'cancelled'  (R10d: WorkflowState gained a real 'cancelled'
+                                in R10b — the runner's sealed re-entry guard
+                                now halts a cancelled harness run instead of
+                                treating it as a retryable failure)
 
 Reverse (WorkflowState.status → RunState.status):
     'running'   → 'running'
     'done'      → 'done'
     'failed'    → 'failed'
-    'blocked'   → 'running'  (parked waiting, harness is still running)
+    'blocked'   → 'running'  (parked waiting, harness is still running —
+                              and still cancellable via the cancel endpoint)
     'escalated' → 'failed'
+    'cancelled' → 'cancelled'
     'stalled'   → 'failed'   (R6: the runner proved the run incomplete — starved
-                              nodes or exhausted gate fix-loop.  RunState has no
-                              'stalled' value; 'failed' is the safe terminal, and
-                              the machine-readable detail is preserved verbatim
-                              on ``RunState.stall`` so the reason is not lost.
-                              The full shared-outcome table is R10 territory.)
+                              nodes or exhausted gate fix-loop.  The RunState/UI
+                              vocabulary has no 'stalled' value; 'failed' is the
+                              honest pill, and the machine-readable detail is
+                              preserved verbatim on ``RunState.stall``.  The
+                              tracking-task terminal comes from the Outcome
+                              table, not from this value.)
 
 Loop bookkeeping
 ----------------
@@ -87,23 +114,12 @@ and ``resume_retries`` records.
 """
 from __future__ import annotations
 
-import sys
-from pathlib import Path
+from delivery_workflow.state_types import BudgetState
+from delivery_workflow.state_types import NodeState as WfNodeState
+from delivery_workflow.state_types import WorkflowState
 
-# ---------------------------------------------------------------------------
-# Import boundary: bring delivery-workflow package into the path without
-# importing any app-runtime modules.
-# ---------------------------------------------------------------------------
-_DELIVERY_WF = Path(__file__).parent.parent.parent.parent / "packages" / "delivery-workflow"
-if str(_DELIVERY_WF) not in sys.path:
-    sys.path.insert(0, str(_DELIVERY_WF))
-
-from state_types import BudgetState  # noqa: E402
-from state_types import NodeState as WfNodeState  # noqa: E402
-from state_types import WorkflowState  # noqa: E402
-
-from app.harnesses.run_state import NodeState as HarnessNodeState  # noqa: E402
-from app.harnesses.run_state import RunState  # noqa: E402
+from app.harnesses.run_state import NodeState as HarnessNodeState
+from app.harnesses.run_state import RunState
 
 # ---------------------------------------------------------------------------
 # Status translation tables
@@ -132,7 +148,10 @@ _HARNESS_TO_WF_RUN: dict[str, str] = {
     "running": "running",
     "done": "done",
     "failed": "failed",
-    "cancelled": "failed",
+    # R10d: 'cancelled' is a real WorkflowState status since R10b — the
+    # runner's sealed re-entry guard halts on it (a cancelled run stays
+    # cancelled instead of being re-run as a 'failed' retry).
+    "cancelled": "cancelled",
 }
 
 _WF_TO_HARNESS_RUN: dict[str, str] = {
@@ -141,9 +160,12 @@ _WF_TO_HARNESS_RUN: dict[str, str] = {
     "failed": "failed",
     "blocked": "running",
     "escalated": "failed",
+    "cancelled": "cancelled",
     # R6: a 'stalled' workflow (completeness invariant unmet / gate fix-loop
-    # exhausted) is a hard terminal for the harness run; the stall detail
-    # round-trips via RunState.stall (see workflowstate_to_runstate).
+    # exhausted) has no RunState/UI vocabulary value; 'failed' is the honest
+    # pill and the stall detail round-trips via RunState.stall.  The tracking
+    # task's terminal comes from the shared Outcome table (R10d), not from
+    # this persisted value.
     "stalled": "failed",
 }
 
@@ -224,6 +246,23 @@ def runstate_to_workflowstate(run_state: RunState, harness_id: str) -> WorkflowS
         )
         nodes[node_id] = wf_node
 
+    # Rebuild the human-wait park (R10d follow-up).  The RunState/UI
+    # vocabulary has no 'blocked' run status (a parked harness renders
+    # 'running' and stays cancellable), so ``waiting_node_id`` IS the
+    # persisted park marker: when it names a still-live ('in_progress' →
+    # 'running') node on a 'running' run, the runner-facing state must show
+    # run 'blocked' + node 'blocked' — otherwise a resumed run re-dispatches
+    # the wait node instead of accepting a ``HumanAnswer`` (and ``start()``
+    # is never sealed on the park).  ``waiting_node_id`` is only ever pinned
+    # from a blocked Outcome's human node (run_executor step 5), so this
+    # cannot capture an agent node.  Round-trip fidelity is preserved via
+    # ``fields['_harness_status']`` (node) and 'blocked' → 'running' (run).
+    if run_state.waiting_node_id is not None and run_status == "running":
+        parked = nodes.get(run_state.waiting_node_id)
+        if parked is not None and parked.status == "running":
+            parked.status = "blocked"
+            run_status = "blocked"
+
     return WorkflowState(
         spec=harness_id,
         run_id=run_state.run_id,
@@ -241,13 +280,14 @@ def runstate_to_workflowstate(run_state: RunState, harness_id: str) -> WorkflowS
 def workflowstate_to_runstate(
     workflow_state: WorkflowState,
     base_run_state: RunState,
+    *,
+    waiting_node_id: str | None = None,
 ) -> RunState:
     """Convert a runner WorkflowState back into a harness RunState.
 
     The ``base_run_state`` supplies immutable identity fields (``run_id``,
-    ``harness_id``, ``goal_task_id``, ``waiting_node_id``) that are not
-    encoded in WorkflowState.  All node execution data is taken from
-    ``workflow_state.nodes``.
+    ``harness_id``, ``goal_task_id``) that are not encoded in WorkflowState.
+    All node execution data is taken from ``workflow_state.nodes``.
 
     Round-trip guarantee
     --------------------
@@ -260,6 +300,14 @@ def workflowstate_to_runstate(
         The runner's current WorkflowState.
     base_run_state:
         The original RunState used to supply identity and routing fields.
+    waiting_node_id:
+        The human-wait node a ``blocked`` run is parked on (R10d — the
+        caller derives it from ``Outcome.node_id``).  When given, it (a)
+        becomes ``RunState.waiting_node_id`` (the resume-routing key —
+        ``base_run_state``'s value is used when None) and (b) maps that
+        node's ``blocked`` status to ``'in_progress'`` per the BFS
+        convention, so the parked node no longer renders identically to
+        genuinely-unreached ``'pending'`` nodes (the D16-note collision).
 
     Returns
     -------
@@ -267,16 +315,29 @@ def workflowstate_to_runstate(
         A new RunState reflecting the runner's updated execution progress.
     """
     run_status = _WF_TO_HARNESS_RUN.get(workflow_state.status, "running")
+    effective_waiting = (
+        waiting_node_id if waiting_node_id is not None
+        else base_run_state.waiting_node_id
+    )
 
     nodes: dict[str, HarnessNodeState] = {}
     for node_id, wf_node in workflow_state.nodes.items():
         fields = wf_node.fields or {}
 
         # Prefer the stored original harness status for perfect round-trip
-        # fidelity (e.g. 'skipped' which maps to 'done' in the forward pass).
-        harness_status = fields.get("_harness_status") or _WF_TO_HARNESS_NODE.get(
-            wf_node.status, "pending"
-        )
+        # fidelity (e.g. 'skipped' which maps to 'done' in the forward pass) —
+        # but ONLY when it is still CONSISTENT with the runner-side status.
+        # After a resume the runner mutates node statuses (an answered
+        # sign-off goes 'blocked' → 'done'); the sentinel planted by the
+        # forward pass is then stale and must not resurrect the old status.
+        sentinel = fields.get("_harness_status")
+        if sentinel and _HARNESS_TO_WF_NODE.get(sentinel) == wf_node.status:
+            harness_status = sentinel
+        elif node_id == effective_waiting and wf_node.status == "blocked":
+            # The parked human-wait node itself is live, not unreached (R10d).
+            harness_status = "in_progress"
+        else:
+            harness_status = _WF_TO_HARNESS_NODE.get(wf_node.status, "pending")
 
         h_node = HarnessNodeState(
             status=harness_status,
@@ -302,7 +363,7 @@ def workflowstate_to_runstate(
         goal_task_id=base_run_state.goal_task_id,
         nodes_executed=nodes,
         status=run_status,
-        waiting_node_id=base_run_state.waiting_node_id,
+        waiting_node_id=effective_waiting,
         edges_evaluated=dict(workflow_state.edges_evaluated),
         # R6: preserve the runner's run-level stall detail ('stalled' itself
         # maps to 'failed' — no such RunState value — but the reason survives).

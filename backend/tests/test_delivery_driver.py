@@ -10,16 +10,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 # Ensure package is importable.
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "packages" / "delivery-workflow"))
 
 from app.delivery_driver import (
     DELIVERY_NODE_SENTINEL,
     DELIVERY_WORKFLOW_SENTINEL_PATTERN,
     _resume_persisted_run,
-    _stall_reason,
     detect_delivery_workflow_spec,
     run_delivery_goal,
 )
+from app.delivery_outcomes import render_stall_message
 
 
 # ---------------------------------------------------------------------------
@@ -28,9 +27,9 @@ from app.delivery_driver import (
 
 class TestDetectDeliveryWorkflowSpec:
     def test_returns_spec_path(self):
-        brief = "# Goal\n\n<!-- delivery-workflow: packages/delivery-workflow/delivery.workflow.yaml -->"
+        brief = "# Goal\n\n<!-- delivery-workflow: packages/delivery-workflow/src/delivery_workflow/delivery.workflow.yaml -->"
         path = detect_delivery_workflow_spec(brief)
-        assert path == "packages/delivery-workflow/delivery.workflow.yaml"
+        assert path == "packages/delivery-workflow/src/delivery_workflow/delivery.workflow.yaml"
 
     def test_no_sentinel_returns_none(self):
         brief = "# Regular goal\n\nSome description."
@@ -131,7 +130,7 @@ async def test_run_delivery_goal_loads_spec_and_runs(tmp_path):
     run_dir = tmp_path / "runs" / "goal-1"
 
     # Mock the runner to return done immediately.
-    from state_types import BudgetState, WorkflowState
+    from delivery_workflow.state_types import BudgetState, WorkflowState
     mock_state = WorkflowState(
         spec="test-workflow", run_id="goal-1", status="done",
         budget=BudgetState(usd_ceiling=5.0),
@@ -140,21 +139,22 @@ async def test_run_delivery_goal_loads_spec_and_runs(tmp_path):
     # Patch runner.run at the module level it's imported.
     called_with = {}
 
-    def fake_run(graph, executor, state_ops=None):
+    def fake_run(graph, executor, state_ops=None, host=None, **kwargs):
         called_with["graph"] = graph
         called_with["executor"] = executor
         called_with["state_ops"] = state_ops
+        called_with["host"] = host
         return mock_state
 
     # Patch runner.run where it's imported inside the driver function.
     # The driver does `import runner as workflow_runner` inside the async fn,
     # so we patch the module-level runner.run.
-    import runner as _runner_mod
+    from delivery_workflow import runner as _runner_mod
     original_run = _runner_mod.run
     _runner_mod.run = fake_run
 
     try:
-        with patch("adapters.cronos.adapter.CronosAdapter") as MockAdapter:
+        with patch("app.delivery_adapter.CronosAdapter") as MockAdapter:
             MockAdapter.return_value = MagicMock()
             store = _make_store()
             ts = _make_trace_store()
@@ -270,7 +270,7 @@ async def test_run_delivery_goal_blocked_parks_active_goal(tmp_path):
     run_dir = tmp_path / "runs" / "goal-1"
 
     from app.models import TaskState as _TS
-    from state_types import BudgetState, WorkflowState
+    from delivery_workflow.state_types import BudgetState, WorkflowState
     store = _make_store()
     store.get.return_value = SimpleNamespace(
         id="goal-1", state=_TS.ACTIVE, title="T", brief="...", waiting_question=None,
@@ -281,11 +281,11 @@ async def test_run_delivery_goal_blocked_parks_active_goal(tmp_path):
         spec="test-workflow", run_id="goal-1", status="blocked",
         budget=BudgetState(usd_ceiling=5.0),
     )
-    import runner as _runner_mod
+    from delivery_workflow import runner as _runner_mod
     original_run = _runner_mod.run
     _runner_mod.run = lambda graph, executor, state_ops=None: blocked_state
     try:
-        with patch("adapters.cronos.adapter.CronosAdapter"):
+        with patch("app.delivery_adapter.CronosAdapter"):
             await run_delivery_goal(
                 goal_id="goal-1", spec_path="workflow.yaml", store=store,
                 trace_store=ts, space_id="space", space_dir=tmp_path, run_dir=run_dir,
@@ -305,7 +305,7 @@ async def test_run_delivery_goal_blocked_does_not_clobber_waiting(tmp_path):
     run_dir = tmp_path / "runs" / "goal-1"
 
     from app.models import TaskState as _TS
-    from state_types import BudgetState, WorkflowState
+    from delivery_workflow.state_types import BudgetState, WorkflowState
     store = _make_store()
     store.get.return_value = SimpleNamespace(
         id="goal-1", state=_TS.WAITING, title="T", brief="...",
@@ -317,11 +317,11 @@ async def test_run_delivery_goal_blocked_does_not_clobber_waiting(tmp_path):
         spec="test-workflow", run_id="goal-1", status="blocked",
         budget=BudgetState(usd_ceiling=5.0),
     )
-    import runner as _runner_mod
+    from delivery_workflow import runner as _runner_mod
     original_run = _runner_mod.run
     _runner_mod.run = lambda graph, executor, state_ops=None: blocked_state
     try:
-        with patch("adapters.cronos.adapter.CronosAdapter"):
+        with patch("app.delivery_adapter.CronosAdapter"):
             await run_delivery_goal(
                 goal_id="goal-1", spec_path="workflow.yaml", store=store,
                 trace_store=ts, space_id="space", space_dir=tmp_path, run_dir=run_dir,
@@ -330,6 +330,107 @@ async def test_run_delivery_goal_blocked_does_not_clobber_waiting(tmp_path):
         _runner_mod.run = original_run
 
     store.finalize_run.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_run_delivery_goal_cancel_event_persists_cancelled(tmp_path):
+    """R11 real cancellation: a user stop (cancel_event set mid-run) persists
+    run status 'cancelled' via DeliveryRun.cancel and parks the goal with the
+    cancelled row (no 'node_failed' kind, no retry prompt) — not as a
+    silently-retryable failure."""
+    spec_file = tmp_path / "workflow.yaml"
+    spec_file.write_text(MINIMAL_SPEC_YAML)
+    run_dir = tmp_path / "runs" / "goal-1"
+
+    from app.models import TaskState as _TS
+    from delivery_workflow.state_types import BudgetState, WorkflowState
+    store = _make_store()
+    store.get.return_value = SimpleNamespace(
+        id="goal-1", state=_TS.ACTIVE, title="T", brief="...", waiting_question=None,
+    )
+    ts = _make_trace_store()
+
+    # A cancelled child dispatch surfaces to the runner as a failed node.
+    failed_state = WorkflowState(
+        spec="test-workflow", run_id="goal-1", status="failed",
+        budget=BudgetState(usd_ceiling=5.0),
+    )
+    cancel_event = asyncio.Event()
+    cancel_event.set()
+
+    from delivery_workflow import runner as _runner_mod
+    original_run = _runner_mod.run
+    _runner_mod.run = lambda graph, executor, state_ops=None, host=None, **kw: failed_state
+    try:
+        with patch("app.delivery_adapter.CronosAdapter") as MockAdapter:
+            adapter = MagicMock()
+            # First read: _read_persisted_state at entry — fresh run (no
+            # persisted state yet).  Second read: DeliveryRun.cancel reads
+            # the failed state before sealing it 'cancelled'.
+            adapter.state.read.side_effect = [
+                FileNotFoundError("no state yet"), failed_state,
+            ]
+            MockAdapter.return_value = adapter
+            await run_delivery_goal(
+                goal_id="goal-1", spec_path="workflow.yaml", store=store,
+                trace_store=ts, space_id="space", space_dir=tmp_path,
+                run_dir=run_dir, cancel_event=cancel_event,
+            )
+    finally:
+        _runner_mod.run = original_run
+
+    # The 'cancelled' status was persisted through StateOps (the R10b seal:
+    # start() halts and resume() raises on it).
+    adapter.state.write.assert_any_call({"status": "cancelled"})
+    kwargs = store.finalize_run.call_args.kwargs
+    assert kwargs["new_state"] == _TS.WAITING
+    assert "cancelled" in kwargs["waiting_question"].lower()
+    assert kwargs.get("waiting_kind") is None
+
+
+@pytest.mark.asyncio
+async def test_run_delivery_goal_remaps_legacy_spec_path(tmp_path):
+    """R10a legacy remap: a goal created before the src-layout restructure
+    points at the deleted old canonical spec path; the driver resolves it to
+    the relocated spec instead of parking on FileNotFoundError forever."""
+    legacy_rel = "packages/delivery-workflow/delivery.workflow.yaml"
+    new_rel = "packages/delivery-workflow/src/delivery_workflow/delivery.workflow.yaml"
+    spec_file = tmp_path / new_rel
+    spec_file.parent.mkdir(parents=True, exist_ok=True)
+    spec_file.write_text(MINIMAL_SPEC_YAML)
+    run_dir = tmp_path / "runs" / "goal-1"
+
+    from delivery_workflow.state_types import BudgetState, WorkflowState
+    done_state = WorkflowState(
+        spec="test-workflow", run_id="goal-1", status="done",
+        budget=BudgetState(usd_ceiling=5.0),
+    )
+    called_with = {}
+
+    def fake_run(graph, executor, state_ops=None, host=None, **kwargs):
+        called_with["graph"] = graph
+        return done_state
+
+    from delivery_workflow import runner as _runner_mod
+    original_run = _runner_mod.run
+    _runner_mod.run = fake_run
+    try:
+        with patch("app.delivery_adapter.CronosAdapter") as MockAdapter:
+            MockAdapter.return_value = MagicMock()
+            store = _make_store()
+            ts = _make_trace_store()
+            await run_delivery_goal(
+                goal_id="goal-1", spec_path=legacy_rel, store=store,
+                trace_store=ts, space_id="space", space_dir=tmp_path,
+                run_dir=run_dir,
+            )
+    finally:
+        _runner_mod.run = original_run
+
+    # The remapped spec compiled and ran — no "spec load/compiler error" park.
+    assert called_with["graph"].metadata.get("name") == "test-workflow"
+    kwargs = store.finalize_run.call_args.kwargs
+    assert kwargs["waiting_question"] is None  # finalized DONE, not parked
 
 
 # ---------------------------------------------------------------------------
@@ -359,7 +460,7 @@ class _FakeStateOps:
 
 
 def _graph_with_human():
-    from ir import IREdge, IRGraph, IRNode
+    from delivery_workflow.ir import IREdge, IRGraph, IRNode
     return IRGraph(
         nodes=[
             IRNode(id="scout", kind="agent"),
@@ -370,8 +471,17 @@ def _graph_with_human():
     )
 
 
+def _make_run(adapter):
+    """Build the DeliveryRun facade _resume_persisted_run drives (R10d)."""
+    from delivery_workflow import DeliveryRun
+
+    return DeliveryRun(
+        _graph_with_human(), executor=adapter, state_ops=adapter.state,
+    )
+
+
 def _wf_state(status, nodes=None, stall=None):
-    from state_types import BudgetState, NodeState, WorkflowState
+    from delivery_workflow.state_types import BudgetState, NodeState, WorkflowState
 
     return WorkflowState(
         spec="w", run_id="goal-1", status=status,
@@ -389,7 +499,7 @@ class _ResumeSpy:
         self.events: list = []
 
     def __enter__(self):
-        import runner as _runner_mod
+        from delivery_workflow import runner as _runner_mod
         self._mod = _runner_mod
         self._orig = _runner_mod.resume
 
@@ -411,7 +521,7 @@ class _ResumeSpy:
 def test_resume_blocked_signoff_builds_human_answer_approve_default():
     """blocked + message, no explicit verdict → HumanAnswer(approve) with the
     text preserved (backward-compatible default, D10: text never dropped)."""
-    from runner import HumanAnswer
+    from delivery_workflow.runner import HumanAnswer
 
     persisted = _wf_state("blocked", {"scout": "done", "signoff-scope": "blocked"})
     adapter = SimpleNamespace(state=_FakeStateOps(persisted))
@@ -419,24 +529,24 @@ def test_resume_blocked_signoff_builds_human_answer_approve_default():
 
     with _ResumeSpy([done_state]) as spy:
         final, reason, park_kind, park_node = _resume_persisted_run(
-            _graph_with_human(), adapter, persisted, "looks good", None, "goal-1",
+            _make_run(adapter), persisted, "looks good", None, "goal-1",
         )
 
-    assert final is done_state and reason is None
+    assert final.kind == "done" and reason is None
     assert spy.events == [
         HumanAnswer(node_id="signoff-scope", text="looks good", verdict="approve")
     ]
 
 
 def test_resume_blocked_signoff_reject_verdict_passes_through():
-    from runner import HumanAnswer
+    from delivery_workflow.runner import HumanAnswer
 
     persisted = _wf_state("blocked", {"signoff-scope": "blocked"})
     adapter = SimpleNamespace(state=_FakeStateOps(persisted))
 
     with _ResumeSpy([_wf_state("stalled")]) as spy:
         final, reason, park_kind, park_node = _resume_persisted_run(
-            _graph_with_human(), adapter, persisted, "no — change X", "reject", "goal-1",
+            _make_run(adapter), persisted, "no — change X", "reject", "goal-1",
         )
 
     assert reason is None
@@ -456,7 +566,7 @@ def test_resume_blocked_signoff_without_message_reparks_never_approves(message):
 
     with _ResumeSpy([]) as spy:
         final, reason, park_kind, park_node = _resume_persisted_run(
-            _graph_with_human(), adapter, persisted, message, None, "goal-1",
+            _make_run(adapter), persisted, message, None, "goal-1",
         )
 
     assert final is None
@@ -469,7 +579,7 @@ def test_resume_blocked_signoff_without_message_reparks_never_approves(message):
 def test_resume_blocked_signoff_explicit_verdict_without_text_applies():
     """An explicit UI verdict with no accompanying text is still a real
     answer (the user pressed Approve): HumanAnswer(text='') is legal."""
-    from runner import HumanAnswer
+    from delivery_workflow.runner import HumanAnswer
 
     persisted = _wf_state("blocked", {"signoff-scope": "blocked"})
     adapter = SimpleNamespace(state=_FakeStateOps(persisted))
@@ -477,10 +587,10 @@ def test_resume_blocked_signoff_explicit_verdict_without_text_applies():
 
     with _ResumeSpy([done_state]) as spy:
         final, reason, park_kind, park_node = _resume_persisted_run(
-            _graph_with_human(), adapter, persisted, None, "approve", "goal-1",
+            _make_run(adapter), persisted, None, "approve", "goal-1",
         )
 
-    assert final is done_state and reason is None
+    assert final.kind == "done" and reason is None
     assert spy.events == [
         HumanAnswer(node_id="signoff-scope", text="", verdict="approve")
     ]
@@ -495,7 +605,7 @@ def test_resume_stalled_rederive_parks_with_stalled_kind():
 
     with _ResumeSpy([]):
         final, reason, park_kind, park_node = _resume_persisted_run(
-            _graph_with_human(), adapter, persisted, "what now?", None, "goal-1",
+            _make_run(adapter), persisted, "what now?", None, "goal-1",
         )
 
     assert final is None
@@ -510,7 +620,7 @@ def test_resume_blocked_without_human_node_parks_with_reason():
 
     with _ResumeSpy([]) as spy:
         final, reason, park_kind, park_node = _resume_persisted_run(
-            _graph_with_human(), adapter, persisted, "hello", None, "goal-1",
+            _make_run(adapter), persisted, "hello", None, "goal-1",
         )
 
     assert final is None
@@ -519,7 +629,7 @@ def test_resume_blocked_without_human_node_parks_with_reason():
 
 
 def test_resume_failed_builds_retry_failed_all():
-    from runner import RetryFailed
+    from delivery_workflow.runner import RetryFailed
 
     persisted = _wf_state("failed", {"scout": "failed"})
     adapter = SimpleNamespace(state=_FakeStateOps(persisted))
@@ -527,22 +637,22 @@ def test_resume_failed_builds_retry_failed_all():
 
     with _ResumeSpy([done_state]) as spy:
         final, reason, park_kind, park_node = _resume_persisted_run(
-            _graph_with_human(), adapter, persisted, None, None, "goal-1",
+            _make_run(adapter), persisted, None, None, "goal-1",
         )
 
-    assert final is done_state and reason is None
+    assert final.kind == "done" and reason is None
     assert spy.events == [RetryFailed("all")]
 
 
 def test_resume_failed_resume_error_parks_with_message():
-    from runner import ResumeError
+    from delivery_workflow.runner import ResumeError
 
     persisted = _wf_state("failed", {"scout": "failed"})
     adapter = SimpleNamespace(state=_FakeStateOps(persisted))
 
     with _ResumeSpy([ResumeError("nothing to retry")]):
         final, reason, park_kind, park_node = _resume_persisted_run(
-            _graph_with_human(), adapter, persisted, None, None, "goal-1",
+            _make_run(adapter), persisted, None, None, "goal-1",
         )
 
     assert final is None
@@ -552,7 +662,7 @@ def test_resume_failed_resume_error_parks_with_message():
 def test_resume_escalated_tries_nothing_then_retry_failed_on_no_progress():
     """escalated → Nothing() first; a re-derived 'escalated' terminal (no
     progress) is re-armed once via RetryFailed('all') (package-bounded)."""
-    from runner import Nothing, RetryFailed
+    from delivery_workflow.runner import Nothing, RetryFailed
 
     persisted = _wf_state("escalated", {"scout": "escalated"})
     adapter = SimpleNamespace(state=_FakeStateOps(persisted))
@@ -561,15 +671,15 @@ def test_resume_escalated_tries_nothing_then_retry_failed_on_no_progress():
 
     with _ResumeSpy([still_escalated, done_state]) as spy:
         final, reason, park_kind, park_node = _resume_persisted_run(
-            _graph_with_human(), adapter, persisted, None, None, "goal-1",
+            _make_run(adapter), persisted, None, None, "goal-1",
         )
 
-    assert final is done_state and reason is None
+    assert final.kind == "done" and reason is None
     assert spy.events == [Nothing(), RetryFailed("all")]
 
 
 def test_resume_escalated_nothing_suffices_when_run_progresses():
-    from runner import Nothing
+    from delivery_workflow.runner import Nothing
 
     persisted = _wf_state("escalated")
     adapter = SimpleNamespace(state=_FakeStateOps(persisted))
@@ -577,17 +687,17 @@ def test_resume_escalated_nothing_suffices_when_run_progresses():
 
     with _ResumeSpy([done_state]) as spy:
         final, reason, park_kind, park_node = _resume_persisted_run(
-            _graph_with_human(), adapter, persisted, None, None, "goal-1",
+            _make_run(adapter), persisted, None, None, "goal-1",
         )
 
-    assert final is done_state and reason is None
+    assert final.kind == "done" and reason is None
     assert spy.events == [Nothing()]
 
 
 def test_resume_escalated_keeps_terminal_when_nothing_retryable():
     """Nothing() re-derives 'escalated' and RetryFailed matches nothing — the
     escalated terminal is returned and the caller parks the goal."""
-    from runner import Nothing, ResumeError, RetryFailed
+    from delivery_workflow.runner import Nothing, ResumeError, RetryFailed
 
     persisted = _wf_state("escalated")
     adapter = SimpleNamespace(state=_FakeStateOps(persisted))
@@ -595,15 +705,15 @@ def test_resume_escalated_keeps_terminal_when_nothing_retryable():
 
     with _ResumeSpy([still_escalated, ResumeError("no retryable node")]) as spy:
         final, reason, park_kind, park_node = _resume_persisted_run(
-            _graph_with_human(), adapter, persisted, None, None, "goal-1",
+            _make_run(adapter), persisted, None, None, "goal-1",
         )
 
-    assert final is still_escalated and reason is None
+    assert final.kind == "escalated" and reason is None
     assert spy.events == [Nothing(), RetryFailed("all")]
 
 
 def test_resume_stalled_rejected_with_message_reopens_signoff():
-    from runner import RetryFailed
+    from delivery_workflow.runner import RetryFailed
 
     stall = {"kind": "rejected", "nodes": ["signoff-scope"], "reason": "rejected"}
     persisted = _wf_state(
@@ -614,10 +724,10 @@ def test_resume_stalled_rejected_with_message_reopens_signoff():
 
     with _ResumeSpy([blocked_again]) as spy:
         final, reason, park_kind, park_node = _resume_persisted_run(
-            _graph_with_human(), adapter, persisted, "please re-ask", None, "goal-1",
+            _make_run(adapter), persisted, "please re-ask", None, "goal-1",
         )
 
-    assert final is blocked_again and reason is None
+    assert final.kind == "blocked" and reason is None
     assert spy.events == [RetryFailed(["signoff-scope"])]
 
 
@@ -630,7 +740,7 @@ def test_resume_stalled_non_rejected_stays_parked_with_stall_reason():
 
     with _ResumeSpy([]) as spy:
         final, reason, park_kind, park_node = _resume_persisted_run(
-            _graph_with_human(), adapter, persisted, "try again", None, "goal-1",
+            _make_run(adapter), persisted, "try again", None, "goal-1",
         )
 
     assert final is None
@@ -647,7 +757,7 @@ def test_resume_stalled_rejected_without_message_stays_parked():
 
     with _ResumeSpy([]) as spy:
         final, reason, park_kind, park_node = _resume_persisted_run(
-            _graph_with_human(), adapter, persisted, None, None, "goal-1",
+            _make_run(adapter), persisted, None, None, "goal-1",
         )
 
     assert final is None
@@ -656,16 +766,19 @@ def test_resume_stalled_rejected_without_message_stays_parked():
 
 
 # ---------------------------------------------------------------------------
-# _stall_reason — render the runner's RUN-LEVEL stall detail (R6).
-# The pre-R6 node-archaeology heuristics (_stalled_gate_ids,
-# _stalled_gate_reason, _resume_from_stalled_gate + the stalled_gate_resumes.json
-# sidecar) are DELETED: the runner now proves completeness itself and reports
-# 'stalled' with machine-readable detail at run level.
+# render_stall_message (app.delivery_outcomes, shared by BOTH hosts since
+# R10d) — renders the runner's RUN-LEVEL stall record (R6).  The pre-R6
+# node-archaeology heuristics (_stalled_gate_ids, _stalled_gate_reason,
+# _resume_from_stalled_gate + the stalled_gate_resumes.json sidecar) are
+# DELETED: the runner proves completeness itself and reports 'stalled' with
+# machine-readable detail at run level.  The renderer takes ONLY that record
+# (Outcome.stall, a plain dict) — it structurally cannot read
+# WorkflowState.nodes, which is the R6 no-archaeology guarantee.
 # ---------------------------------------------------------------------------
 
 
 def _stalled_wf_state(stall: dict | None):
-    from state_types import BudgetState, WorkflowState
+    from delivery_workflow.state_types import BudgetState, WorkflowState
 
     return WorkflowState(
         spec="w", run_id="goal-1", status="stalled",
@@ -675,47 +788,42 @@ def _stalled_wf_state(stall: dict | None):
 
 
 def test_stall_reason_renders_starved_nodes_detail():
-    reason = _stall_reason(_stalled_wf_state({
+    reason = render_stall_message({
         "kind": "starved_nodes",
         "nodes": ["frontend"],
         "reason": "dead-end node(s) signoff-scope completed but no outgoing "
                   "edge condition matched",
         "dead_ends": ["signoff-scope"],
-    }))
+    })
     assert "frontend" in reason
     assert "signoff-scope" in reason
     assert "never reached" in reason
 
 
 def test_stall_reason_renders_gate_exhausted_detail():
-    reason = _stall_reason(_stalled_wf_state({
+    reason = render_stall_message({
         "kind": "gate_exhausted",
         "nodes": ["g-build"],
         "reason": "gate 'g-build' fix-loop exhausted after 3 evaluation(s) "
                   "(max=3, decision=needs_fix: impl-report failed schema check)",
-    }))
+    })
     assert "g-build" in reason
     assert "fix-loop" in reason
     assert "impl-report failed schema check" in reason
 
 
 def test_stall_reason_without_detail_is_generic_but_honest():
-    reason = _stall_reason(_stalled_wf_state(None))
+    reason = render_stall_message(None)
     assert "stalled" in reason.lower()
 
 
-def test_stall_reason_never_reads_workflow_nodes():
-    """The driver must render the park message from the run-level record only —
-    a state whose ``nodes`` access explodes must still render fine."""
-
-    class _NoNodes:
-        stall = {"kind": "starved_nodes", "nodes": ["b"], "reason": "a dead-ended"}
-
-        @property
-        def nodes(self):  # pragma: no cover - the assertion is that it's unused
-            raise AssertionError("_stall_reason must not read WorkflowState.nodes")
-
-    reason = _stall_reason(_NoNodes())
+def test_stall_reason_takes_only_the_run_level_record():
+    """The park message is rendered from the run-level stall record ONLY —
+    the renderer's input is the plain ``Outcome.stall`` dict, so no host can
+    smuggle node archaeology back in through it."""
+    reason = render_stall_message(
+        {"kind": "starved_nodes", "nodes": ["b"], "reason": "a dead-ended"}
+    )
     assert "b" in reason
 
 
@@ -740,11 +848,11 @@ async def test_run_delivery_goal_stalled_parks_waiting_with_detail(tmp_path):
         "reason": "gate 'g-build' fix-loop exhausted after 3 evaluation(s) "
                   "(max=3, decision=needs_fix)",
     })
-    import runner as _runner_mod
+    from delivery_workflow import runner as _runner_mod
     original_run = _runner_mod.run
-    _runner_mod.run = lambda graph, executor, state_ops=None: stalled_state
+    _runner_mod.run = lambda graph, executor, state_ops=None, **kw: stalled_state
     try:
-        with patch("adapters.cronos.adapter.CronosAdapter"):
+        with patch("app.delivery_adapter.CronosAdapter"):
             await run_delivery_goal(
                 goal_id="goal-1", spec_path="workflow.yaml", store=store,
                 trace_store=ts, space_id="space", space_dir=tmp_path, run_dir=run_dir,
@@ -770,7 +878,7 @@ async def test_run_delivery_goal_done_with_non_proceed_gate_finalizes_done(tmp_p
     run_dir = tmp_path / "runs" / "goal-1"
 
     from app.models import TaskState as _TS
-    from state_types import BudgetState, NodeState, WorkflowState
+    from delivery_workflow.state_types import BudgetState, NodeState, WorkflowState
     store = _make_store()
     store.get.return_value = SimpleNamespace(
         id="goal-1", state=_TS.ACTIVE, title="T", brief="...", waiting_question=None,
@@ -788,11 +896,11 @@ async def test_run_delivery_goal_done_with_non_proceed_gate_finalizes_done(tmp_p
             "security": NodeState(status="done"),
         },
     )
-    import runner as _runner_mod
+    from delivery_workflow import runner as _runner_mod
     original_run = _runner_mod.run
-    _runner_mod.run = lambda graph, executor, state_ops=None: verdict_routed_done
+    _runner_mod.run = lambda graph, executor, state_ops=None, **kw: verdict_routed_done
     try:
-        with patch("adapters.cronos.adapter.CronosAdapter"):
+        with patch("app.delivery_adapter.CronosAdapter"):
             await run_delivery_goal(
                 goal_id="goal-1", spec_path="workflow.yaml", store=store,
                 trace_store=ts, space_id="space", space_dir=tmp_path, run_dir=run_dir,
@@ -823,7 +931,7 @@ async def test_run_delivery_goal_parks_on_runner_exception(tmp_path):
         id="goal-1", state=_TS.ACTIVE, title="T", brief="...", waiting_question=None,
     )
 
-    import runner as _runner_mod
+    from delivery_workflow import runner as _runner_mod
     original_run = _runner_mod.run
 
     def exploding_run(graph, executor, state_ops=None):
@@ -831,7 +939,7 @@ async def test_run_delivery_goal_parks_on_runner_exception(tmp_path):
 
     _runner_mod.run = exploding_run
     try:
-        with patch("adapters.cronos.adapter.CronosAdapter"):
+        with patch("app.delivery_adapter.CronosAdapter"):
             await run_delivery_goal(
                 goal_id="goal-1",
                 spec_path="workflow.yaml",

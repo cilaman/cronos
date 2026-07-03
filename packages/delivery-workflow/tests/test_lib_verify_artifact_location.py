@@ -14,9 +14,8 @@ import sys
 import textwrap
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from lib.verify import (
+from delivery_workflow.lib.verify import (
     canonical_artifact_relpath,
     delivery_artifact_relpath,
     locate_artifact,

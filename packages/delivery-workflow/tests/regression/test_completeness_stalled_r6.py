@@ -32,21 +32,16 @@ from __future__ import annotations
 
 import copy
 import json
-import sys
 from pathlib import Path
 from typing import Any
 
-_PKG = Path(__file__).parent.parent.parent
-if str(_PKG) not in sys.path:
-    sys.path.insert(0, str(_PKG))
 
-import runner as workflow_runner  # noqa: E402
-from ir import IREdge, IRGraph, IRNode, LoopPolicy  # noqa: E402
-from lib.state.events import EventLog  # noqa: E402
-from lib.state.store import StateStore  # noqa: E402
-from adapters.cronos.adapter import CronosStateOps  # noqa: E402
-from results import AgentResult, GateResult, TelemetryData  # noqa: E402
-from state_types import BudgetState, WorkflowState  # noqa: E402
+from delivery_workflow import runner as workflow_runner  # noqa: E402
+from delivery_workflow.ir import IREdge, IRGraph, IRNode, LoopPolicy  # noqa: E402
+from delivery_workflow.lib.state.events import EventLog  # noqa: E402
+from delivery_workflow.lib.state.store import StateStore  # noqa: E402
+from delivery_workflow.lib.state.ops import StateStoreOps  # noqa: E402
+from delivery_workflow.results import AgentResult, GateResult, TelemetryData  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -105,7 +100,7 @@ class RecordingExecutor:
         raise NotImplementedError
 
     def evalCondition(self, expr: str, scope: dict[str, Any]) -> bool:
-        from lib.conditions import eval_condition
+        from delivery_workflow.lib.conditions import eval_condition
 
         return eval_condition(expr, scope)
 
@@ -119,10 +114,10 @@ def _node(nid: str, kind: str = "agent", data: dict | None = None, loop=None) ->
     return IRNode(id=nid, kind=kind, data=data or {}, loop=loop)
 
 
-def _state_ops(tmp_path: Path) -> CronosStateOps:
+def _state_ops(tmp_path: Path) -> StateStoreOps:
     run_dir = tmp_path / "run"
     run_dir.mkdir(parents=True, exist_ok=True)
-    ops = CronosStateOps(StateStore(run_dir), EventLog(run_dir))
+    ops = StateStoreOps(StateStore(run_dir), EventLog(run_dir))
     ops.bootstrap_if_absent(spec="r6", run_id="run-r6", usd_ceiling=0.0)
     return ops
 
@@ -559,7 +554,7 @@ class TestStalledPersistence:
             edges=[IREdge(source="a", target="b", when="a.fields.go == 'yes'", port=None)],
             metadata={}, variables={},
         )
-        ops = CronosStateOps(store, EventLog(run_dir))
+        ops = StateStoreOps(store, EventLog(run_dir))
         ex = RecordingExecutor()
         ex.state = ops
         final = workflow_runner.run(graph=g, executor=ex, state_ops=ops)

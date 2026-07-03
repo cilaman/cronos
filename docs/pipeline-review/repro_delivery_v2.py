@@ -16,16 +16,17 @@ REPO = Path(_arg).resolve()
 if not (REPO / "packages" / "delivery-workflow").is_dir():
     sys.exit(f"error: {REPO} does not look like a cronos checkout "
              "(pass the repo root as the first argument)")
-sys.path.insert(0, str(REPO / "packages" / "delivery-workflow"))
+# The delivery_workflow package is an installed (editable) distribution — no
+# sys.path shim needed for it. Only app.* (backend) still needs a path insert.
 sys.path.insert(0, str(REPO / "backend"))
 
-from ir import IREdge, IRGraph, IRNode  # noqa: E402
-from state_types import BudgetState, NodeState, WorkflowState  # noqa: E402
-from results import AgentResult, TelemetryData  # noqa: E402
-import runner as workflow_runner  # noqa: E402
-from runner.scope import build_scope  # noqa: E402
-from lib.conditions import eval_condition  # noqa: E402
-from lib.node_status import parse_node_status  # noqa: E402
+from delivery_workflow.ir import IREdge, IRGraph, IRNode  # noqa: E402
+from delivery_workflow.state_types import BudgetState, NodeState, WorkflowState  # noqa: E402
+from delivery_workflow.results import AgentResult, TelemetryData  # noqa: E402
+from delivery_workflow import runner as workflow_runner  # noqa: E402
+from delivery_workflow.runner.scope import build_scope  # noqa: E402
+from delivery_workflow.lib.conditions import eval_condition  # noqa: E402
+from delivery_workflow.lib.node_status import parse_node_status  # noqa: E402
 
 
 def hr(title: str) -> None:
@@ -64,21 +65,31 @@ class RecordingExecutor:
         raise NotImplementedError
 
     def evalCondition(self, expr, scope):
+        # R10b: condition evaluation is runner-internal (lib.conditions); this
+        # method is passed to run() as the scripted eval_condition= hook so the
+        # sections that force conditions (LOOP_ONCE/NEVER) keep working.
         if self._cond_script is not None and expr in self._cond_script:
             return self._cond_script[expr]
-        # mirrors CronosAdapter.evalCondition (R3: typed pass-through, no str() coercion)
         return eval_condition(expr, scope)
 
-    def escalate(self, node_id, reason):
-        self.escalations.append((node_id, reason))
-        if self.state is not None:                      # mirrors CronosAdapter.escalate
+    def on_event(self, event):
+        # R10b HostPort: typed events replace the escalate() hook; recorded in
+        # the same (node_id, reason-ish) shape, state write mirrors CronosAdapter.
+        from delivery_workflow.events import RunBlocked, RunEscalated
+        if isinstance(event, RunBlocked):
+            self.escalations.append((event.node_id, event.question))
+        elif isinstance(event, RunEscalated):
+            self.escalations.append((event.node_id, event.detail))
+        else:
+            return
+        if self.state is not None:                      # mirrors CronosAdapter.on_event
             self.state.write({"status": "blocked"})
 
 
 class MemStateOps:
-    """In-memory StateOps that mimics CronosStateOps.write field-handling
+    """In-memory StateOps that mimics StateStoreOps.write field-handling
     faithfully when drop_fields=True (status/attempt/artifact_paths/gate only,
-    per adapter.py CronosStateOps.write + lib/state/store.py _serialize)."""
+    per lib/state/ops.py StateStoreOps.write + lib/state/store.py _serialize)."""
 
     def __init__(self, initial: WorkflowState, drop_fields: bool = True):
         self._state = copy.deepcopy(initial)
@@ -90,9 +101,9 @@ class MemStateOps:
     def write(self, patch):
         if "status" in patch:
             self._state.status = patch["status"]
-        if "stall" in patch:  # R6 run-level stall detail (mirrors CronosStateOps)
+        if "stall" in patch:  # R6 run-level stall detail (mirrors StateStoreOps)
             self._state.stall = patch["stall"]
-        if "resume_retries" in patch:  # R7 RetryFailed counters (mirrors CronosStateOps)
+        if "resume_retries" in patch:  # R7 RetryFailed counters (mirrors StateStoreOps)
             self._state.resume_retries = dict(patch["resume_retries"] or {})
         if "budget" in patch and isinstance(patch["budget"], dict):  # R7 RaiseBudget
             if "usd_ceiling" in patch["budget"]:
@@ -145,7 +156,7 @@ ex1 = RecordingExecutor(agent_results={"analyze": AgentResult(
     telemetry=TelemetryData(tokens=0, usd=0.0, seconds=0.0))})
 ops = MemStateOps(fresh_state(), drop_fields=False)  # keep fields: isolate D1 from D2
 ex1.state = ops
-s = workflow_runner.run(graph=g, executor=ex1, state_ops=ops)
+s = workflow_runner.run(graph=g, executor=ex1, state_ops=ops, host=ex1, eval_condition=ex1.evalCondition)
 print(f"run 1: dispatched={ex1.dispatched}  run.status={s.status}  "
       f"(human node blocked as expected)")
 
@@ -155,7 +166,7 @@ ops.write({"status": "running", "nodes": {"signoff": {"status": "done"}}})
 
 ex2 = RecordingExecutor()
 ex2.state = ops
-s = workflow_runner.run(graph=g, executor=ex2, state_ops=ops)
+s = workflow_runner.run(graph=g, executor=ex2, state_ops=ops, host=ex2, eval_condition=ex2.evalCondition)
 print(f"run 2 (resume): dispatched={ex2.dispatched}  run.status={s.status}")
 wrong = "frontend" in ex2.dispatched
 print(f"--> has_ui='no', yet frontend dispatched on resume: {wrong}  "
@@ -163,19 +174,18 @@ print(f"--> has_ui='no', yet frontend dispatched on resume: {wrong}  "
 
 # ===========================================================================
 # D2 — NodeState.fields are dropped by persistence
-#      (lib/state/store.py:_serialize + CronosStateOps.write)
+#      (lib/state/store.py:_serialize + StateStoreOps.write)
 # ===========================================================================
 hr("D2  fields not persisted by the real StateStore (lib/state/store.py:41-63)")
 import tempfile  # noqa: E402
-from lib.state.store import StateStore  # noqa: E402
-from lib.state.events import EventLog  # noqa: E402
-sys.path.insert(0, str(REPO / "packages" / "delivery-workflow" / "adapters" / "cronos"))
-from adapters.cronos.adapter import CronosStateOps  # noqa: E402
+from delivery_workflow.lib.state.store import StateStore  # noqa: E402
+from delivery_workflow.lib.state.events import EventLog  # noqa: E402
+from delivery_workflow.lib.state.ops import StateStoreOps  # noqa: E402
 
 with tempfile.TemporaryDirectory() as td:
     st = StateStore(Path(td))
     st.write(fresh_state())
-    cops = CronosStateOps(st, EventLog(Path(td)))
+    cops = StateStoreOps(st, EventLog(Path(td)))
     cops.write({"nodes": {"analyze": {
         "status": "done", "attempt": 1, "artifact_paths": ["a.md"],
         "gate": None, "fields": {"has_ui": "no", "verdict": "pass"}}}})
@@ -227,7 +237,7 @@ print(f"--> has_ui spec-branch routing (delivery.workflow.yaml:212-213) dead: "
 # ===========================================================================
 hr("D4  Unknown agent status via adapter closed-vocabulary boundary (adapter.py dispatchAgent)")
 from types import SimpleNamespace as _NS  # noqa: E402
-from adapters.cronos.adapter import CronosAdapter  # noqa: E402
+from app.delivery_adapter import CronosAdapter  # noqa: E402  (R10c: host-owned)
 
 blk = parse_node_status('```node_status\n{"status": "WAIT", "artifact_paths": [],'
                         ' "produces": "x", "fields": {}, "open_questions": []}\n```')
@@ -246,7 +256,7 @@ print(f"adapter-boundary AgentResult: status={res4.status!r} "
 
 ex4 = RecordingExecutor(agent_results={"a": res4})
 g4 = IRGraph(nodes=[node("a")], edges=[], metadata={}, variables={})
-s4 = workflow_runner.run(graph=g4, executor=ex4, state_ops=None)
+s4 = workflow_runner.run(graph=g4, executor=ex4, state_ops=None, host=ex4, eval_condition=ex4.evalCondition)
 print(f"agent said 'WAIT'; node status recorded: {s4.nodes['a'].status!r}; "
       f"run status: {s4.status!r}")
 ok = (res4.status == "done" or s4.nodes["a"].status == "done"
@@ -271,7 +281,7 @@ g5 = IRGraph(
 ex5 = RecordingExecutor(agent_results={"a": AgentResult(
     status="done", artifact_paths=[], produces="x", fields={"go": "no"},
     open_questions=[], telemetry=TelemetryData(tokens=0, usd=0.0, seconds=0.0))})
-s5 = workflow_runner.run(graph=g5, executor=ex5, state_ops=None)
+s5 = workflow_runner.run(graph=g5, executor=ex5, state_ops=None, host=ex5, eval_condition=ex5.evalCondition)
 print(f"dispatched={ex5.dispatched}; 'b' never ran; run status={s5.status!r}; "
       f"'b' in state.nodes: {'b' in s5.nodes}")
 print(f"run-level stall detail: {getattr(s5, 'stall', None)!r}")
@@ -288,7 +298,7 @@ print(f"--> partial execution reported as success: {ok}  "
 # DEFECT CONFIRMED = the loop budget is still cut short.
 # ===========================================================================
 hr("D6  Loop attempt double-increment (single owner in dispatch.py since R8)")
-from ir import LoopPolicy  # noqa: E402
+from delivery_workflow.ir import LoopPolicy  # noqa: E402
 g6 = IRGraph(
     nodes=[node("r", loop=LoopPolicy(until="r.fields.verdict == 'pass'",
                                      max=4, on_exhaust="stop", stall=[]))],
@@ -296,7 +306,7 @@ g6 = IRGraph(
 ex6 = RecordingExecutor(agent_results={"r": AgentResult(
     status="done", artifact_paths=[], produces="x", fields={"verdict": "fail"},
     open_questions=[], telemetry=TelemetryData(tokens=0, usd=0.0, seconds=0.0))})
-s6 = workflow_runner.run(graph=g6, executor=ex6, state_ops=None)
+s6 = workflow_runner.run(graph=g6, executor=ex6, state_ops=None, host=ex6, eval_condition=ex6.evalCondition)
 print(f"loop.max=4, until never met -> executions={len(ex6.dispatched)}, "
       f"final attempt={s6.nodes['r'].attempt}")
 ok = len(ex6.dispatched) < 4
@@ -343,7 +353,7 @@ g7a = IRGraph(
            IREdge(source="r", target="s", when="", port=None)],
     metadata={}, variables={})
 ex7a = LoopOnceExec()
-workflow_runner.run(graph=g7a, executor=ex7a, state_ops=None)
+workflow_runner.run(graph=g7a, executor=ex7a, state_ops=None, host=ex7a, eval_condition=ex7a.evalCondition)
 print(f"(a) firing sibling: dispatched={ex7a.dispatched}")
 premature = (ex7a.dispatched.count("j") != 1
              or "s" not in ex7a.dispatched
@@ -360,7 +370,7 @@ g7b = IRGraph(
            IREdge(source="r", target="s", when="NEVER", port=None)],
     metadata={}, variables={})
 ex7b = LoopOnceExec()
-workflow_runner.run(graph=g7b, executor=ex7b, state_ops=None)
+workflow_runner.run(graph=g7b, executor=ex7b, state_ops=None, host=ex7b, eval_condition=ex7b.evalCondition)
 print(f"(b) excluded sibling: dispatched={ex7b.dispatched}")
 excl_broken = (ex7b.dispatched.count("j") != 1
                or "s" in ex7b.dispatched
@@ -420,7 +430,7 @@ print(f"--> successful agent classified {res8.status!r} (fence lost): {ok}  "
 # progress (the pre-R7 answer→halt→WAITING-forever livelock).
 # ===========================================================================
 hr("D9  'escalated' resume re-entry (runner/resume.py; bare run() stays sealed)")
-from runner import RaiseBudget, resume as workflow_resume  # noqa: E402
+from delivery_workflow.runner import RaiseBudget, resume as workflow_resume  # noqa: E402
 
 g9 = IRGraph(nodes=[node("a")], edges=[], metadata={}, variables={})
 st9 = fresh_state()
@@ -430,14 +440,14 @@ ex9 = RecordingExecutor()
 ex9.state = ops9
 
 # Half 1 — bare run() on the persisted escalation: sealed, no dispatch.
-s9 = workflow_runner.run(graph=g9, executor=ex9, state_ops=ops9)
+s9 = workflow_runner.run(graph=g9, executor=ex9, state_ops=ops9, host=ex9, eval_condition=ex9.evalCondition)
 sealed_ok = ex9.dispatched == [] and s9.status == "escalated"
 print(f"bare run(): dispatched={ex9.dispatched}, returned status={s9.status!r} "
       f"(sealed halt intact: {sealed_ok})")
 
 # Half 2 — the legal re-entry: RaiseBudget lifts the persisted ceiling and
 # re-enters; the runner must dispatch the pending work and finish.
-s9r = workflow_resume(g9, ex9, ops9, RaiseBudget(10.0))
+s9r = workflow_resume(g9, ex9, ops9, RaiseBudget(10.0), host=ex9, eval_condition=ex9.evalCondition)
 resumed_ok = ex9.dispatched == ["a"] and s9r.status == "done"
 print(f"resume(RaiseBudget(10.0)): dispatched={ex9.dispatched}, "
       f"final status={s9r.status!r}, persisted ceiling="

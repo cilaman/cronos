@@ -18,16 +18,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-# ---------------------------------------------------------------------------
-# Ensure packages/delivery-workflow is importable.
-# ---------------------------------------------------------------------------
-_BACKEND_DIR = Path(__file__).parent.parent  # backend/
-_SPACE_ROOT = _BACKEND_DIR.parent            # cronos-development/
-_DW_PKG = str(_SPACE_ROOT / "packages" / "delivery-workflow")
-if _DW_PKG not in sys.path:
-    sys.path.insert(0, _DW_PKG)
-
-from ir import IREdge, IRGraph, IRNode, LoopPolicy  # noqa: E402
+from delivery_workflow.ir import IREdge, IRGraph, IRNode, LoopPolicy  # noqa: E402
 
 from app.harnesses.model import (  # noqa: E402
     Harness,
@@ -433,6 +424,12 @@ class TestImportBoundary:
             "import lib.",
             "from adapters",
             "import adapters",
+            "from delivery_workflow.runner",
+            "import delivery_workflow.runner",
+            "from delivery_workflow.lib",
+            "import delivery_workflow.lib",
+            "from delivery_workflow.adapters",
+            "import delivery_workflow.adapters",
             "from app.worker",
             "from app.agent",
             "from app.storage",

@@ -24,7 +24,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "packages" / "delivery-workflow"))
 
 from app.delivery_driver import run_delivery_goal
 from app.models import TaskState
@@ -94,9 +93,9 @@ class _RecordingAdapter:
     """
 
     def __init__(self, run_dir: Path, dispatch_log: list, inputs_log: dict):
-        from adapters.cronos.adapter import CronosStateOps
-        from lib.state.events import EventLog
-        from lib.state.store import StateStore
+        from app.delivery_adapter import CronosStateOps
+        from delivery_workflow.lib.state.events import EventLog
+        from delivery_workflow.lib.state.store import StateStore
 
         run_dir.mkdir(parents=True, exist_ok=True)
         self.state = CronosStateOps(StateStore(run_dir), EventLog(run_dir))
@@ -111,7 +110,7 @@ class _RecordingAdapter:
         self.telemetry = _Telemetry()
 
     def dispatchAgent(self, agent_ref: str, inputs: dict):
-        from results import AgentResult, TelemetryData
+        from delivery_workflow.results import AgentResult, TelemetryData
 
         node_id = inputs.get("node_id", agent_ref)
         self._dispatch_log.append(node_id)
@@ -122,12 +121,12 @@ class _RecordingAdapter:
         )
 
     def runGate(self, gate, paths):
-        from results import GateResult
+        from delivery_workflow.results import GateResult
 
         return GateResult(decision="proceed", errors=[])
 
     def evalCondition(self, expr: str, scope: dict) -> bool:
-        from lib.conditions import eval_condition
+        from delivery_workflow.lib.conditions import eval_condition
 
         return eval_condition(expr, scope)
 
@@ -149,7 +148,7 @@ def _make_store():
 async def _drive(tmp_path, adapter, store, spec_yaml=SIGNOFF_SPEC_YAML, **kwargs):
     spec_file = tmp_path / "delivery.workflow.yaml"
     spec_file.write_text(spec_yaml)
-    with patch("adapters.cronos.adapter.CronosAdapter", return_value=adapter):
+    with patch("app.delivery_adapter.CronosAdapter", return_value=adapter):
         await run_delivery_goal(
             goal_id="goal-1", spec_path="delivery.workflow.yaml", store=store,
             trace_store=MagicMock(), space_id="space", space_dir=tmp_path,
@@ -267,8 +266,8 @@ async def test_reject_feedback_reaches_child_brief():
 async def test_escalated_run_resumes_and_progresses(tmp_path):
     """D7 host-side: a persisted 'escalated' run re-enters on user action
     (package Nothing() event) and makes progress — no WAITING livelock."""
-    from state_types import BudgetState, NodeState, WorkflowState
-    from lib.state.store import StateStore
+    from delivery_workflow.state_types import BudgetState, NodeState, WorkflowState
+    from delivery_workflow.lib.state.store import StateStore
 
     dispatch_log: list[str] = []
     inputs_log: dict[str, list] = {}

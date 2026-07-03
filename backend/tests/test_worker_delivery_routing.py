@@ -17,7 +17,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "packages" / "delivery-workflow"))
 
 from app.delivery_driver import detect_delivery_workflow_spec
 
@@ -29,12 +28,12 @@ from app.delivery_driver import detect_delivery_workflow_spec
 class TestDetectDeliveryWorkflowSpec:
     """Regression guard: the pure sentinel detector must not false-match."""
 
-    SENTINEL = "<!-- delivery-workflow: packages/delivery-workflow/delivery.workflow.yaml -->"
+    SENTINEL = "<!-- delivery-workflow: packages/delivery-workflow/src/delivery_workflow/delivery.workflow.yaml -->"
 
     def test_detects_sentinel(self):
         brief = f"# My Goal\n\n{self.SENTINEL}"
         path = detect_delivery_workflow_spec(brief)
-        assert path == "packages/delivery-workflow/delivery.workflow.yaml"
+        assert path == "packages/delivery-workflow/src/delivery_workflow/delivery.workflow.yaml"
 
     def test_returns_none_for_ordinary_brief(self):
         brief = "# Regular goal\n\nThis is an HTML <!-- comment --> inline."
@@ -124,7 +123,7 @@ async def test_sentinel_goal_delegates_to_delivery_driver():
     """A goal with the delivery-workflow sentinel must call run_delivery_goal."""
     sentinel_brief = (
         "# Delivery Goal\n\n"
-        "<!-- delivery-workflow: packages/delivery-workflow/delivery.workflow.yaml -->"
+        "<!-- delivery-workflow: packages/delivery-workflow/src/delivery_workflow/delivery.workflow.yaml -->"
     )
     executor = _make_run_executor(sentinel_brief)
 
@@ -139,7 +138,7 @@ async def test_sentinel_goal_delegates_to_delivery_driver():
             await executor.run_goal("goal-1", user_message=None)
 
     assert "spec_path" in called_with
-    assert called_with["spec_path"] == "packages/delivery-workflow/delivery.workflow.yaml"
+    assert called_with["spec_path"] == "packages/delivery-workflow/src/delivery_workflow/delivery.workflow.yaml"
     assert called_with["goal_id"] == "goal-1"
 
 

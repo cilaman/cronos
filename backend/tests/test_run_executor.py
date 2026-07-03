@@ -133,9 +133,9 @@ def _make_executor(task=None, store=None) -> tuple[RunExecutor, MagicMock, Magic
         memory_retrieval=memory_retrieval,
     )
     # Wire worker._Worker__run_task_body to executor's run_task_body for delegation
-    async def _worker_run_task_body(tid, msg, t):
+    async def _worker_run_task_body(tid, msg, t, verdict=None):
         ex.space_store = worker.space_store
-        await ex.run_task_body(tid, msg, t)
+        await ex.run_task_body(tid, msg, t, verdict=verdict)
     worker._Worker__run_task_body = _worker_run_task_body
 
     async def _worker_run_fd_inner(tid, msg, t):
@@ -143,16 +143,16 @@ def _make_executor(task=None, store=None) -> tuple[RunExecutor, MagicMock, Magic
         await ex.run_feature_decompose_inner(tid, msg, t)
     worker._Worker__run_feature_decompose_inner = _worker_run_fd_inner
 
-    async def _worker_execute_harness_body(tid, hid, sid, *, initial_run, space):
+    async def _worker_execute_harness_body(tid, hid, sid, *, initial_run, space, **kw):
         ex.space_store = worker.space_store
         ex.harness_store = worker.harness_store
-        return await ex.execute_harness_run_body(tid, hid, sid, initial_run=initial_run, space=space)
+        return await ex.execute_harness_run_body(tid, hid, sid, initial_run=initial_run, space=space, **kw)
     worker._Worker__execute_harness_run_body = _worker_execute_harness_body
 
-    async def _worker_execute_harness_run(tid, hid, sid, initial_run):
+    async def _worker_execute_harness_run(tid, hid, sid, initial_run, **kw):
         ex.space_store = worker.space_store
         ex.harness_store = worker.harness_store
-        return await ex.execute_harness_run(tid, hid, sid, initial_run=initial_run)
+        return await ex.execute_harness_run(tid, hid, sid, initial_run=initial_run, **kw)
     worker._execute_harness_run = _worker_execute_harness_run
 
     return ex, store, bus

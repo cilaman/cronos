@@ -21,7 +21,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "packages" / "delivery-workflow"))
 
 
 DELIVERY_SENTINEL_BRIEF = """\
@@ -93,8 +92,8 @@ edges:
 def _make_gate_loop_adapter(gate_decisions: list[str], dispatch_log: list[str]):
     """Synthetic ExecutorInterface: records agent dispatches; runGate returns the
     next decision from *gate_decisions* (last value repeats once exhausted)."""
-    from results import AgentResult, GateResult, TelemetryData
-    from state_types import BudgetState, NodeState, WorkflowState
+    from delivery_workflow.results import AgentResult, GateResult, TelemetryData
+    from delivery_workflow.state_types import BudgetState, NodeState, WorkflowState
 
     decisions = list(gate_decisions)
 
@@ -137,7 +136,7 @@ def _make_gate_loop_adapter(gate_decisions: list[str], dispatch_log: list[str]):
             return GateResult(decision=dec, errors=errors)
 
         def evalCondition(self, expr: str, scope: dict) -> bool:
-            from lib.conditions import eval_condition
+            from delivery_workflow.lib.conditions import eval_condition
             return eval_condition(expr, scope)
 
         def escalate(self, node_id: str, reason: str) -> None:
@@ -221,8 +220,8 @@ async def test_delivery_driver_e2e_needs_fix_loop(tmp_path):
       4. Asserts that implement was dispatched, then review, then implement again
          (loop-back), then review again (pass).
     """
-    from results import AgentResult, GateResult, TelemetryData
-    from state_types import BudgetState, WorkflowState
+    from delivery_workflow.results import AgentResult, GateResult, TelemetryData
+    from delivery_workflow.state_types import BudgetState, WorkflowState
 
     spec_file = tmp_path / "delivery.workflow.yaml"
     spec_file.write_text(MINIMAL_SPEC_YAML)
@@ -267,10 +266,10 @@ async def test_delivery_driver_e2e_needs_fix_loop(tmp_path):
 
     class _SyntheticAdapter:
         def __init__(self):
-            from lib.state.store import StateStore
-            from lib.state.events import EventLog
-            from lib.telemetry.sink import TelemetrySink
-            from runner.scope import build_scope as _bs
+            from delivery_workflow.lib.state.store import StateStore
+            from delivery_workflow.lib.state.events import EventLog
+            from delivery_workflow.lib.telemetry.sink import TelemetrySink
+            from delivery_workflow.runner.scope import build_scope as _bs
 
             self._state = WorkflowState(
                 spec="e2e-test", run_id="goal-1", status="running",
@@ -283,7 +282,7 @@ async def test_delivery_driver_e2e_needs_fix_loop(tmp_path):
                 def write(self, p):
                     if "status" in p: self._s.status = p["status"]
                     for nid, np in p.get("nodes", {}).items():
-                        from state_types import NodeState
+                        from delivery_workflow.state_types import NodeState
                         if nid not in self._s.nodes:
                             self._s.nodes[nid] = NodeState(status=np.get("status","pending"))
                         else:
@@ -311,7 +310,7 @@ async def test_delivery_driver_e2e_needs_fix_loop(tmp_path):
             return GateResult(decision="proceed", errors=[])
 
         def evalCondition(self, expr: str, scope: dict) -> bool:
-            from lib.conditions import eval_condition
+            from delivery_workflow.lib.conditions import eval_condition
             return eval_condition(expr, scope)
 
         def escalate(self, node_id: str, reason: str) -> None:
@@ -325,7 +324,7 @@ async def test_delivery_driver_e2e_needs_fix_loop(tmp_path):
     # loop-back (which is tested in test_runner_e2e_needs_fix.py).
     # We keep this as an integration smoke test.
 
-    with patch("adapters.cronos.adapter.CronosAdapter", return_value=synth):
+    with patch("app.delivery_adapter.CronosAdapter", return_value=synth):
         from app.delivery_driver import run_delivery_goal
         await run_delivery_goal(
             goal_id="goal-1",
@@ -366,7 +365,7 @@ async def test_gate_fix_loop_routes_to_producer_then_proceeds(tmp_path):
     dispatch_log: list[str] = []
     synth = _make_gate_loop_adapter(["needs_fix", "proceed"], dispatch_log)
 
-    with patch("adapters.cronos.adapter.CronosAdapter", return_value=synth):
+    with patch("app.delivery_adapter.CronosAdapter", return_value=synth):
         from app.delivery_driver import run_delivery_goal
         await run_delivery_goal(
             goal_id="goal-1", spec_path="delivery.workflow.yaml", store=store,
@@ -401,7 +400,7 @@ async def test_gate_fix_loop_exhaustion_parks_waiting(tmp_path):
     dispatch_log: list[str] = []
     synth = _make_gate_loop_adapter(["needs_fix"], dispatch_log)  # always fails
 
-    with patch("adapters.cronos.adapter.CronosAdapter", return_value=synth):
+    with patch("app.delivery_adapter.CronosAdapter", return_value=synth):
         from app.delivery_driver import run_delivery_goal
         await run_delivery_goal(
             goal_id="goal-1", spec_path="delivery.workflow.yaml", store=store,

@@ -17,7 +17,7 @@ import jsonschema
 import pytest
 import yaml
 
-SCHEMAS_DIR = pathlib.Path(__file__).parent.parent / "schemas"
+SCHEMAS_DIR = pathlib.Path(__file__).parent.parent / "src" / "delivery_workflow" / "schemas"
 
 ARTIFACT_CLASSES = [
     "research",

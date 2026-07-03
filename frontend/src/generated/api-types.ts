@@ -2881,7 +2881,7 @@ export interface components {
             /** Waiting Question */
             waiting_question?: string | null;
             /** Waiting Kind */
-            waiting_kind?: ("signoff" | "node_failed" | "stalled" | "escalated") | null;
+            waiting_kind?: ("signoff" | "node_failed" | "stalled" | "escalated" | "budget" | "loop") | null;
             /** Waiting Node Id */
             waiting_node_id?: string | null;
             /**
@@ -3022,7 +3022,7 @@ export interface components {
             /** Waiting Question */
             waiting_question?: string | null;
             /** Waiting Kind */
-            waiting_kind?: ("signoff" | "node_failed" | "stalled" | "escalated") | null;
+            waiting_kind?: ("signoff" | "node_failed" | "stalled" | "escalated" | "budget" | "loop") | null;
             /** Waiting Node Id */
             waiting_node_id?: string | null;
             /**

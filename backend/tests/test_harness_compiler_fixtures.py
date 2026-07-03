@@ -30,11 +30,8 @@ import yaml
 # ---------------------------------------------------------------------------
 _BACKEND_DIR = Path(__file__).parent.parent  # backend/
 _SPACE_ROOT = _BACKEND_DIR.parent            # cronos-development/
-_DW_PKG = str(_SPACE_ROOT / "packages" / "delivery-workflow")
-if _DW_PKG not in sys.path:
-    sys.path.insert(0, _DW_PKG)
 
-from ir import IRGraph, IRNode  # noqa: E402
+from delivery_workflow.ir import IRGraph, IRNode  # noqa: E402
 
 from app.harnesses.model import Harness  # noqa: E402
 from app.harnesses.compiler import compile as harness_compile  # noqa: E402

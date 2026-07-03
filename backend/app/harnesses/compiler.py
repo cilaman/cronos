@@ -19,24 +19,9 @@ No app.* imports, no runner/lib/adapters imports.
 from __future__ import annotations
 
 import logging
-import sys
-import os
 from typing import Literal
 
-# ---------------------------------------------------------------------------
-# sys.path bootstrap — make packages/delivery-workflow importable.
-# The backend is installed as a package, but the delivery-workflow package
-# lives outside the backend tree.  We locate the package root relative to
-# this file's location.
-# ---------------------------------------------------------------------------
-_THIS_FILE = os.path.abspath(__file__)
-# backend/app/harnesses/compiler.py → ../../.. = backend directory → ../../ = space root
-_SPACE_ROOT = os.path.normpath(os.path.join(_THIS_FILE, "..", "..", "..", "..", ".."))
-_DW_PKG = os.path.join(_SPACE_ROOT, "packages", "delivery-workflow")
-if _DW_PKG not in sys.path:
-    sys.path.insert(0, _DW_PKG)
-
-from ir import IREdge, IRGraph, IRNode, LoopPolicy  # noqa: E402
+from delivery_workflow.ir import IREdge, IRGraph, IRNode, LoopPolicy
 
 from .model import Harness, NodeType  # noqa: E402
 

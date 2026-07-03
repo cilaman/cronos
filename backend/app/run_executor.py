@@ -88,32 +88,31 @@ def _delivery_child_state_from_envelope(
     unknown     failed (unknown_status:<raw>)        WAITING
     no fence    failed (no envelope)                 WAITING
     ========== ==================================== ==============
+
+    The CLASSIFICATION is not re-implemented here: it derives from the
+    package's ``agent_result_from_envelope`` — the ONE closed-vocabulary
+    boundary every executor uses (R10e) — so the board-side child state can
+    never diverge from the workflow-side node status when the vocabulary or
+    normalization rules change.  Only the message WORDING stays local.
     """
+    from delivery_workflow.results import agent_result_from_envelope
+
+    result = agent_result_from_envelope(envelope, node_id="delivery-child")
+    if result.status in ("done", "needs_fix"):
+        return TaskState.DONE, None
+
     if envelope is None:
         return (
             TaskState.WAITING,
             "Delivery node emitted no node_status fence — the pipeline "
             "classified it failed.",
         )
-    raw = envelope.get("status")
-    status = raw.strip().lower() if isinstance(raw, str) else ""
-    open_qs = envelope.get("open_questions")
-    detail = (
-        "; ".join(str(q) for q in open_qs)
-        if isinstance(open_qs, list) and open_qs
-        else None
-    )
-    if status in ("done", "needs_fix"):
-        return TaskState.DONE, None
-    if status == "blocked":
+    # open_questions carry the envelope's own questions plus the package's
+    # ``unknown_status:<raw>`` marker for out-of-vocabulary statuses.
+    detail = "; ".join(result.open_questions) if result.open_questions else None
+    if result.status == "blocked":
         return TaskState.WAITING, detail or "Delivery node blocked awaiting input."
-    if status == "failed":
-        return TaskState.WAITING, detail or "Delivery node reported status=failed."
-    return (
-        TaskState.WAITING,
-        f"Delivery node reported unknown status {raw!r} — treated as failed "
-        f"(unknown_status:{raw}).",
-    )
+    return TaskState.WAITING, detail or "Delivery node reported status=failed."
 
 
 def _human_answers_section(scope: dict[str, Any]) -> str:
@@ -480,8 +479,16 @@ class RunExecutor:
         space_id: str,
         *,
         initial_run: bool,
+        user_message: str | None = None,
+        verdict: str | None = None,
     ) -> bool:
-        """Execute (initial_run=True) or resume (initial_run=False) a harness run."""
+        """Execute (initial_run=True) or resume (initial_run=False) a harness run.
+
+        ``user_message``/``verdict`` carry the user action that re-activated a
+        parked run (runner path only): a human-wait park is answered via
+        ``DeliveryRun.resume(HumanAnswer(...))`` — mirroring the delivery
+        driver's sign-off translation (D10: silence never becomes a yes).
+        """
         if self.harness_store is None or self.space_store is None:
             return False
 
@@ -495,11 +502,13 @@ class RunExecutor:
         async with bind_run_context(run_id=task_id, task_id=task_id):
             # Call through Worker mangled name so tests can patch _Worker__execute_harness_run_body.
             return await self._worker._Worker__execute_harness_run_body(
-                task_id, harness_id, space_id, initial_run=initial_run, space=space
+                task_id, harness_id, space_id, initial_run=initial_run, space=space,
+                user_message=user_message, verdict=verdict,
             )
 
     async def execute_harness_run_body(
-        self, task_id: str, harness_id: str, space_id: str, *, initial_run: bool, space: Any
+        self, task_id: str, harness_id: str, space_id: str, *, initial_run: bool, space: Any,
+        user_message: str | None = None, verdict: str | None = None,
     ) -> bool:
         space_store = self.space_store
         harness_store = self.harness_store
@@ -556,6 +565,7 @@ class RunExecutor:
             return await self._execute_harness_run_runner(
                 task_id, harness_id, space_id, initial_run=initial_run,
                 space=space, run_state_path=run_state_path, harness=harness,
+                user_message=user_message, verdict=verdict,
             )
 
         # ------------------------------------------------------------------
@@ -636,13 +646,33 @@ class RunExecutor:
         space: Any,
         run_state_path: Path,
         harness: Any,
+        user_message: str | None = None,
+        verdict: str | None = None,
     ) -> bool:
-        """Execute a harness run via the delivery-workflow runner (R11).
+        """Execute a harness run via the delivery-workflow runner (R11/R10d).
 
         Called when ``executor_variant == 'runner'``.  Compiles the Harness to
-        an IRGraph, constructs a HarnessExecutorAdapter, calls
-        ``runner.core.run()``, and maps the resulting WorkflowState back to a
-        RunState for finalization.
+        an IRGraph, constructs a HarnessExecutorAdapter, drives the package
+        ``DeliveryRun`` facade, persists the RunState snapshot for the UI/REST
+        overlay, and finalizes the tracking task from the returned ``Outcome``
+        via the shared table in ``app.delivery_outcomes`` — the SAME table the
+        delivery driver uses (R10d, kills D16).
+
+        Human-wait resume (R10d follow-up): a run parked on a human wait
+        persists ``RunState.waiting_node_id``; ``runstate_to_workflowstate``
+        rebuilds that park as run/node status 'blocked'.  On re-entry
+        (``initial_run=False``) with a user reply and/or an explicit verdict,
+        the reply is translated into ``DeliveryRun.resume(HumanAnswer(...))``
+        — the same typed event the delivery driver builds for a sign-off.
+        With NO reply and NO verdict the run is re-entered via ``start()``,
+        which is sealed on the rebuilt 'blocked' state, so the run re-parks
+        with the same question (silence never becomes a yes, D10).
+
+        Behavior change vs pre-R10d (intended): a workflow that terminates
+        ``failed``/``escalated``/``stalled``/``blocked`` now parks the
+        tracking task WAITING with the structured ``waiting_kind`` stamped
+        (node_failed / loop / budget / escalated / stalled / signoff) instead
+        of collapsing to DONE.  Only a runner-proven ``done`` finalizes DONE.
 
         The existing BFS HarnessExecutor is NOT touched (R12 — it remains
         importable and unchanged).
@@ -657,7 +687,7 @@ class RunExecutor:
         assert space_store is not None  # checked by caller
 
         log.info(
-            "%s harness run %r (harness=%r) via runner.core.run() [runner].",
+            "%s harness run %r (harness=%r) via DeliveryRun facade [runner].",
             "Starting" if initial_run else "Resuming",
             task_id,
             harness_id,
@@ -703,7 +733,7 @@ class RunExecutor:
         _worker_adapter = WorkerAdapter(self._worker)
 
         def _publish_cb(tid: str, event: dict) -> None:
-            # Fire-and-forget; we're in a sync call from runner.core.run().
+            # Fire-and-forget; we're in a sync call from the runner walker.
             import asyncio
             try:
                 loop = asyncio.get_event_loop()
@@ -723,29 +753,74 @@ class RunExecutor:
         )
 
         # ------------------------------------------------------------------
-        # 4. Run the runner (synchronous; runner.core.run() is not async).
+        # 4. Drive the package DeliveryRun facade (synchronous walker; the
+        #    adapter bridges blocking dispatches internally).  The adapter
+        #    implements both ports — NodeExecutor (dispatchAgent) and HostPort
+        #    (on_event) — and the facade returns the closed Outcome taxonomy.
         # ------------------------------------------------------------------
-        import sys
-        import os as _os
-        _SPACE_ROOT = str(Path(__file__).resolve().parent.parent.parent.parent)
-        _DW_PKG = _os.path.join(_SPACE_ROOT, "packages", "delivery-workflow")
-        if _DW_PKG not in sys.path:
-            sys.path.insert(0, _DW_PKG)
-
         try:
-            from runner.core import run as runner_run  # noqa: PLC0415
-            workflow_state = runner_run(ir_graph, adapter, state_ops=adapter.state)
+            from delivery_workflow import DeliveryRun  # noqa: PLC0415
+            from delivery_workflow.runner import HumanAnswer, ResumeError  # noqa: PLC0415
+
+            run = DeliveryRun(
+                ir_graph, executor=adapter, state_ops=adapter.state,
+                host=adapter, run_id=task_id,
+            )
+            # Human-wait resume translation (mirrors delivery_driver's
+            # sign-off table): a parked run + a user reply/verdict becomes
+            # exactly one typed HumanAnswer; no reply and no verdict falls
+            # through to start(), which is sealed on 'blocked' and re-parks.
+            parked_node = base_run_state.waiting_node_id
+            answer_text = (user_message or "").strip()
+            if (
+                not initial_run
+                and parked_node is not None
+                and adapter.state.read().status == "blocked"
+                and (answer_text or verdict in ("approve", "reject"))
+            ):
+                chosen = verdict if verdict in ("approve", "reject") else "approve"
+                log.info(
+                    "_execute_harness_run_runner: run %r resuming human wait "
+                    "%r (verdict=%s).", task_id, parked_node, chosen,
+                )
+                try:
+                    outcome = run.resume(
+                        HumanAnswer(
+                            node_id=parked_node, text=answer_text, verdict=chosen
+                        )
+                    )
+                except ResumeError as exc:
+                    log.warning(
+                        "_execute_harness_run_runner: HumanAnswer rejected for "
+                        "run %r node %r: %s — re-parking.", task_id, parked_node, exc,
+                    )
+                    outcome = run.outcome()
+            else:
+                outcome = run.start()
         except Exception:
             log.exception(
-                "_execute_harness_run_runner: runner.core.run() failed for harness run %s.",
+                "_execute_harness_run_runner: DeliveryRun.start() failed for harness run %s.",
                 task_id,
             )
             return True
 
         # ------------------------------------------------------------------
-        # 5. Map WorkflowState → RunState and persist.
+        # 5. Map WorkflowState → RunState and persist (the UI/REST overlay
+        #    vocabulary; terminal interpretation does NOT flow through this —
+        #    see step 6).  A blocked run pins the parked human node from the
+        #    Outcome so resume routing and the overlay have it (the node also
+        #    renders 'in_progress' like a BFS human wait, not 'pending').
         # ------------------------------------------------------------------
-        result_run_state = workflowstate_to_runstate(workflow_state, base_run_state)
+        waiting_node_id = outcome.node_id if outcome.kind == "blocked" else None
+        result_run_state = workflowstate_to_runstate(
+            adapter.state.read(), base_run_state, waiting_node_id=waiting_node_id,
+        )
+        # Clear a stale park pin: workflowstate_to_runstate falls back to the
+        # base RunState's waiting_node_id when the caller passes None, but a
+        # run that progressed past its human wait (answered sign-off) is no
+        # longer parked — leaving the pin set would make resume_harness_run
+        # re-enter a non-parked run forever.
+        result_run_state.waiting_node_id = waiting_node_id
 
         try:
             save_atomic(run_state_path, result_run_state)
@@ -757,78 +832,35 @@ class RunExecutor:
             )
 
         # ------------------------------------------------------------------
-        # 6. Finalize the Cronos task based on outcome.
+        # 6. Finalize the tracking task via the ONE shared Outcome→TaskState
+        #    table (R10d, kills D16): done→DONE; blocked→WAITING signoff;
+        #    failed→WAITING node_failed; stalled→WAITING stalled;
+        #    escalated→WAITING budget/loop/escalated; cancelled→WAITING.
         # ------------------------------------------------------------------
-        timestamp = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-        wf_status = workflow_state.status
+        from .delivery_outcomes import apply_outcome_to_task  # noqa: PLC0415
 
-        if wf_status == "blocked":
-            # Human-wait park: the adapter set waiting_node_id on the run state.
-            # Read it back from the persisted state.
-            waiting_node_id = result_run_state.waiting_node_id
-            log.info(
-                "Harness run %r parked at waiting_node_id=%r (runner path).",
-                task_id, waiting_node_id,
-            )
-            history_entry = (
-                f"```\n{timestamp} [harness]\n"
-                f"Waiting at node: {waiting_node_id}\n```"
-            )
-            try:
-                await self.store.finalize_run(
-                    task_id,
-                    new_state=TaskState.WAITING,
-                    session_id=None,
-                    waiting_question=f"Harness waiting at node: {waiting_node_id}",
-                    history_entry=history_entry,
-                )
-            except Exception:
-                log.exception("Failed to finalize harness run %s to WAITING (runner)", task_id)
-        elif wf_status == "stalled":
-            # R6: the runner proved the run incomplete (starved nodes or an
-            # exhausted gate fix-loop) and put the machine-readable detail at
-            # run level (workflow_state.stall → RunState.stall via
-            # state_mapping, harness run status 'failed').  The task still
-            # finalizes DONE here — the harness path's terminal collapse
-            # (failed/escalated → DONE, D16) is R10's shared-outcome-table fix
-            # — but the stall reason is surfaced in the history entry instead
-            # of being silently swallowed as a plain completion.
-            stall = getattr(workflow_state, "stall", None) or {}
-            detail = stall.get("reason") or "run drained without completing all nodes"
-            log.warning(
-                "Harness run %r stalled (runner path): %s", task_id, detail,
-            )
-            history_entry = (
-                f"```\n{timestamp} [harness]\nHarness run stalled: {detail}\n```"
-            )
-            try:
-                await self.store.finalize_run(
-                    task_id,
-                    new_state=TaskState.DONE,
-                    session_id=None,
-                    waiting_question=None,
-                    history_entry=history_entry,
-                )
-            except Exception:
-                log.exception("Failed to finalize stalled harness run %s (runner)", task_id)
-        else:
-            log.info("Harness run %r completed with status=%r (runner path).", task_id, wf_status)
-            history_entry = f"```\n{timestamp} [harness]\nHarness run completed.\n```"
-            try:
-                await self.store.finalize_run(
-                    task_id,
-                    new_state=TaskState.DONE,
-                    session_id=None,
-                    waiting_question=None,
-                    history_entry=history_entry,
-                )
-            except Exception:
-                log.exception("Failed to finalize harness run %s to DONE (runner)", task_id)
+        log.info(
+            "Harness run %r finished with outcome=%r (runner path).",
+            task_id, outcome.kind,
+        )
+        await apply_outcome_to_task(
+            self.store, task_id, outcome, subject="Harness run", source="harness",
+        )
 
         return True
 
-    async def resume_harness_run(self, task_id: str) -> bool:
-        """Resume a WAITING harness run (waiting_node_id is set in run-state)."""
+    async def resume_harness_run(
+        self,
+        task_id: str,
+        user_message: str | None = None,
+        verdict: str | None = None,
+    ) -> bool:
+        """Resume a WAITING harness run (waiting_node_id is set in run-state).
+
+        ``user_message``/``verdict`` carry the reply that re-activated the
+        parked run; the runner path turns them into a ``HumanAnswer`` resume
+        event (the BFS path keeps its own wait semantics and ignores them).
+        """
         if self.harness_store is None or self.space_store is None:
             return False
 
@@ -858,6 +890,8 @@ class RunExecutor:
                 run_state.harness_id,
                 task.space_id,
                 initial_run=False,
+                user_message=user_message,
+                verdict=verdict,
             )
 
     async def run_initial_harness_run(self, task_id: str) -> bool:
@@ -901,7 +935,9 @@ class RunExecutor:
 
     # ---- task run ----
 
-    async def run_task(self, task_id: str, user_message: str | None) -> None:
+    async def run_task(
+        self, task_id: str, user_message: str | None, verdict: str | None = None
+    ) -> None:
         task = self.store.get(task_id)
         if task is None:
             log.warning("Skipping unknown task %s", task_id)
@@ -909,11 +945,18 @@ class RunExecutor:
 
         async with bind_run_context(run_id=task_id, task_id=task_id):
             # Call through Worker mangled name so tests can patch _Worker__run_task_body.
-            await self._worker._Worker__run_task_body(task_id, user_message, task)
+            await self._worker._Worker__run_task_body(
+                task_id, user_message, task, verdict=verdict
+            )
 
-    async def run_task_body(self, task_id: str, user_message: str | None, task: Any) -> None:
+    async def run_task_body(
+        self, task_id: str, user_message: str | None, task: Any,
+        verdict: str | None = None,
+    ) -> None:
         w = self._worker
-        handled = await self.resume_harness_run(task_id)
+        handled = await self.resume_harness_run(
+            task_id, user_message=user_message, verdict=verdict
+        )
         if handled:
             log.info("Task %s handled as harness resume; skipping run_agent.", task_id)
             await self._publish(task_id, {
@@ -1520,7 +1563,7 @@ class RunExecutor:
         goal's SSE streams.  It is invoked from the delivery runner thread via
         ``asyncio.run_coroutine_threadsafe`` (see ``delivery_driver``), so it is a
         normal coroutine that returns the child's loaded ``RunTrace`` (or ``None``)
-        for the adapter to parse the delivery_status fence from.
+        for the adapter to read the structured ``node_status`` envelope from.
         """
         from .delivery_driver import DELIVERY_NODE_SENTINEL
         from .storage import slugify
@@ -1697,4 +1740,4 @@ class RunExecutor:
             except Exception:
                 log.exception("Failed to load trace for delivery child %s", child_id)
 
-        return {"trace": trace, "delivery": None}
+        return trace

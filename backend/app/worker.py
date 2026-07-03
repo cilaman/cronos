@@ -438,7 +438,7 @@ class Worker:
         elif task.type in ("feature", "fix") and task.feature_state == FeatureState.PROCESSING:
             await self._run_feature_decompose(task_id, user_message)
         else:
-            await self._run_task(task_id, user_message)
+            await self._run_task(task_id, user_message, verdict)
 
     async def _run_feature_decompose(self, task_id: str, user_message: str | None = None) -> None:
         """Decompose a feature/fix task — delegates to RunExecutor.run_feature_decompose."""
@@ -459,30 +459,43 @@ class Worker:
         space_id: str,
         *,
         initial_run: bool,
+        user_message: str | None = None,
+        verdict: str | None = None,
     ) -> bool:
         """Execute (or resume) a harness run — delegates to RunExecutor.execute_harness_run."""
         ex = self._ensure_executor()
         ex.space_store = self.space_store
         ex.harness_store = self.harness_store
         return await ex.execute_harness_run(
-            task_id, harness_id, space_id, initial_run=initial_run
+            task_id, harness_id, space_id, initial_run=initial_run,
+            user_message=user_message, verdict=verdict,
         )
 
-    async def __execute_harness_run_body(self, task_id: str, harness_id: str, space_id: str, *, initial_run: bool, space) -> bool:
+    async def __execute_harness_run_body(
+        self, task_id: str, harness_id: str, space_id: str, *, initial_run: bool, space,
+        user_message: str | None = None, verdict: str | None = None,
+    ) -> bool:
         """Backward-compat shim — delegates to RunExecutor.execute_harness_run_body."""
         ex = self._ensure_executor()
         ex.space_store = self.space_store
         ex.harness_store = self.harness_store
         return await ex.execute_harness_run_body(
-            task_id, harness_id, space_id, initial_run=initial_run, space=space
+            task_id, harness_id, space_id, initial_run=initial_run, space=space,
+            user_message=user_message, verdict=verdict,
         )
 
-    async def _resume_harness_run(self, task_id: str) -> bool:
+    async def _resume_harness_run(
+        self, task_id: str,
+        user_message: str | None = None,
+        verdict: str | None = None,
+    ) -> bool:
         """Resume a WAITING harness run — delegates to RunExecutor.resume_harness_run."""
         ex = self._ensure_executor()
         ex.space_store = self.space_store
         ex.harness_store = self.harness_store
-        return await ex.resume_harness_run(task_id)
+        return await ex.resume_harness_run(
+            task_id, user_message=user_message, verdict=verdict
+        )
 
     async def _run_initial_harness_run(self, task_id: str) -> bool:
         """Execute a freshly-triggered harness run — delegates to RunExecutor."""
@@ -491,20 +504,24 @@ class Worker:
         ex.harness_store = self.harness_store
         return await ex.run_initial_harness_run(task_id)
 
-    async def _run_task(self, task_id: str, user_message: str | None) -> None:
+    async def _run_task(
+        self, task_id: str, user_message: str | None, verdict: str | None = None
+    ) -> None:
         task = self.store.get(task_id)
         if task is None:
             log.warning("Skipping unknown task %s", task_id)
             return
 
         async with bind_run_context(run_id=task_id, task_id=task_id):
-            await self.__run_task_body(task_id, user_message, task)
+            await self.__run_task_body(task_id, user_message, task, verdict=verdict)
 
-    async def __run_task_body(self, task_id: str, user_message: str | None, task) -> None:
+    async def __run_task_body(
+        self, task_id: str, user_message: str | None, task, verdict: str | None = None
+    ) -> None:
         """Backward-compat shim — delegates to RunExecutor.run_task_body."""
         ex = self._ensure_executor()
         ex.space_store = self.space_store
-        await ex.run_task_body(task_id, user_message, task)
+        await ex.run_task_body(task_id, user_message, task, verdict=verdict)
 
     async def _finalize(
         self,

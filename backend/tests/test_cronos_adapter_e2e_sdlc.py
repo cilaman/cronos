@@ -26,21 +26,20 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import yaml
 
-_BUNDLE = Path(__file__).parent.parent.parent / "packages" / "delivery-workflow"
-if str(_BUNDLE) not in sys.path:
-    sys.path.insert(0, str(_BUNDLE))
 
-from adapters.cronos.adapter import CronosAdapter
-from lib.state.events import EventLog
-from lib.state.store import StateStore
-from state_types import BudgetState, WorkflowState
+from delivery_workflow.lib.conditions import eval_condition
+from app.delivery_adapter import CronosAdapter
+from delivery_workflow.lib.state.events import EventLog
+from delivery_workflow.lib.state.store import StateStore
+from delivery_workflow.state_types import BudgetState, WorkflowState
 
 
 # ---------------------------------------------------------------------------
 # Fixture loader
 # ---------------------------------------------------------------------------
 
-_FIXTURE_PATH = _BUNDLE / "adapters" / "cronos" / "fixtures" / "sdlc_ping.yaml"
+# R10c: the fixture moved to the backend suite with the adapter it exercises.
+_FIXTURE_PATH = Path(__file__).parent / "fixtures" / "sdlc_ping.yaml"
 
 
 def _load_fixture() -> dict:
@@ -173,7 +172,7 @@ async def _run_sdlc(run_dir: Path) -> dict:
     # -----------------------------------------------------------------------
     # g-scout gate
     # -----------------------------------------------------------------------
-    with patch("lib.gate.runGate",
+    with patch("delivery_workflow.lib.gate.runGate",
                return_value=_make_cronos_gate_result(_gate_for("g-scout"), "g-scout")):
         g_scout = adapter.runGate({"id": "g-scout", "checks": []}, scout_result.artifact_paths)
     assert g_scout.decision == "proceed"
@@ -195,7 +194,7 @@ async def _run_sdlc(run_dir: Path) -> dict:
     # -----------------------------------------------------------------------
     # g-analysis gate
     # -----------------------------------------------------------------------
-    with patch("lib.gate.runGate",
+    with patch("delivery_workflow.lib.gate.runGate",
                return_value=_make_cronos_gate_result(_gate_for("g-analysis"), "g-analysis")):
         g_analysis = adapter.runGate({"id": "g-analysis", "checks": []}, analyze_result.artifact_paths)
     assert g_analysis.decision == "proceed"
@@ -207,7 +206,7 @@ async def _run_sdlc(run_dir: Path) -> dict:
     scope_from_state = {
         "analyze.fields.has_ui": analyze_result.fields.get("has_ui", "false"),
     }
-    has_ui = adapter.evalCondition("analyze.fields.has_ui == 'true'", scope_from_state)
+    has_ui = eval_condition("analyze.fields.has_ui == 'true'", scope_from_state)
     assert has_ui is False, "Expected has_ui=false to skip frontend node"
 
     # -----------------------------------------------------------------------
@@ -236,7 +235,7 @@ async def _run_sdlc(run_dir: Path) -> dict:
     # -----------------------------------------------------------------------
     # g-design gate
     # -----------------------------------------------------------------------
-    with patch("lib.gate.runGate",
+    with patch("delivery_workflow.lib.gate.runGate",
                return_value=_make_cronos_gate_result(_gate_for("g-design"), "g-design")):
         g_design = adapter.runGate({"id": "g-design", "checks": []}, arch_result.artifact_paths)
     assert g_design.decision == "proceed"
@@ -274,7 +273,7 @@ async def _run_sdlc(run_dir: Path) -> dict:
     executed_path.append("implement")
 
     # g-build (after implement attempt 1)
-    with patch("lib.gate.runGate",
+    with patch("delivery_workflow.lib.gate.runGate",
                return_value=_make_cronos_gate_result(_gate_for("g-build"), "g-build")):
         g_build = adapter.runGate({"id": "g-build", "checks": []}, impl1.artifact_paths)
     assert g_build.decision == "proceed"
@@ -298,7 +297,7 @@ async def _run_sdlc(run_dir: Path) -> dict:
         "review.fields.verdict": review1.fields.get("verdict", ""),
         "review.fields.category": review1.fields.get("category", ""),
     }
-    routes_to_impl = adapter.evalCondition(
+    routes_to_impl = eval_condition(
         "review.fields.verdict == 'needs_fix' && review.fields.category == 'local'",
         review_scope,
     )
@@ -318,7 +317,7 @@ async def _run_sdlc(run_dir: Path) -> dict:
     executed_path.append("implement-2")
 
     # g-build attempt 2
-    with patch("lib.gate.runGate",
+    with patch("delivery_workflow.lib.gate.runGate",
                return_value=_make_cronos_gate_result(_gate_for("g-build"), "g-build")):
         adapter.runGate({"id": "g-build", "checks": []}, impl2.artifact_paths)
     executed_path.append("g-build-2")
@@ -338,13 +337,13 @@ async def _run_sdlc(run_dir: Path) -> dict:
         "review.fields.verdict": review2.fields.get("verdict", ""),
         "review.fields.category": review2.fields.get("category", ""),
     }
-    routes_to_testrun = adapter.evalCondition(
+    routes_to_testrun = eval_condition(
         "review.fields.verdict == 'pass'", review2_scope
     )
     assert routes_to_testrun is True
 
     # g-review
-    with patch("lib.gate.runGate",
+    with patch("delivery_workflow.lib.gate.runGate",
                return_value=_make_cronos_gate_result(_gate_for("g-review"), "g-review")):
         g_review = adapter.runGate({"id": "g-review", "checks": []}, review2.artifact_paths)
     assert g_review.decision == "proceed"
@@ -367,7 +366,7 @@ async def _run_sdlc(run_dir: Path) -> dict:
     # -----------------------------------------------------------------------
 
     # g-tests attempt 1: needs_fix
-    with patch("lib.gate.runGate",
+    with patch("delivery_workflow.lib.gate.runGate",
                return_value=_make_cronos_gate_result(_gate_for("g-tests_attempt1"), "g-tests")):
         g_tests1 = adapter.runGate({"id": "g-tests", "checks": []}, testrun.artifact_paths)
     assert g_tests1.decision == "needs_fix"
@@ -375,7 +374,7 @@ async def _run_sdlc(run_dir: Path) -> dict:
 
     # Loop: evalCondition checks convergence
     loop_scope = {"g-tests.decision": "needs_fix"}
-    should_loop = adapter.evalCondition("g-tests.decision == 'needs_fix'", loop_scope)
+    should_loop = eval_condition("g-tests.decision == 'needs_fix'", loop_scope)
     assert should_loop is True  # loop back
 
     # implement attempt 3 (second full implement pass after outcome-gate failure)
@@ -388,7 +387,7 @@ async def _run_sdlc(run_dir: Path) -> dict:
     executed_path.append("implement-3")
 
     # g-tests attempt 2: proceed
-    with patch("lib.gate.runGate",
+    with patch("delivery_workflow.lib.gate.runGate",
                return_value=_make_cronos_gate_result(_gate_for("g-tests_attempt2"), "g-tests")):
         g_tests2 = adapter.runGate({"id": "g-tests", "checks": []}, testrun.artifact_paths)
     assert g_tests2.decision == "proceed"
@@ -396,7 +395,7 @@ async def _run_sdlc(run_dir: Path) -> dict:
 
     # Loop exit check via evalCondition (convergence — not a counter).
     loop_scope2 = {"g-tests.decision": "proceed"}
-    loop_exits = not adapter.evalCondition("g-tests.decision == 'needs_fix'", loop_scope2)
+    loop_exits = not eval_condition("g-tests.decision == 'needs_fix'", loop_scope2)
     assert loop_exits is True  # loop done
 
     # -----------------------------------------------------------------------
@@ -412,7 +411,7 @@ async def _run_sdlc(run_dir: Path) -> dict:
     executed_path.append("doc")
 
     # g-doc
-    with patch("lib.gate.runGate",
+    with patch("delivery_workflow.lib.gate.runGate",
                return_value=_make_cronos_gate_result(_gate_for("g-doc"), "g-doc")):
         g_doc = adapter.runGate({"id": "g-doc", "checks": []}, doc_result.artifact_paths)
     assert g_doc.decision == "proceed"

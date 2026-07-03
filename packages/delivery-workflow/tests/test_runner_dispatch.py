@@ -1,15 +1,12 @@
 """Tests for runner/dispatch.py — all 8 node-kind dispatch handlers (I4)."""
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from ir import IRNode
-from results import AgentResult, ExecResult, GateResult, TelemetryData
-from runner.dispatch import NodeOutcome, dispatch_node
-from state_types import BudgetState, NodeState, WorkflowState
+from delivery_workflow.ir import IRNode
+from delivery_workflow.results import AgentResult, ExecResult, GateResult, TelemetryData
+from delivery_workflow.runner.dispatch import dispatch_node
+from delivery_workflow.state_types import BudgetState, NodeState, WorkflowState
 
 
 # ---------------------------------------------------------------------------
@@ -60,11 +57,14 @@ class _MockRuntime:
             return self._exec_result
         return ExecResult(status="done", exit_code=0, artifact_path="out/testrun-output.md")
 
-    def evalCondition(self, expr: str, scope: dict) -> bool:
-        return False
+    # HostPort (R10b): typed events replace the escalate() hook.
+    def on_event(self, event) -> None:
+        from delivery_workflow.events import RunBlocked, RunEscalated
 
-    def escalate(self, node_id: str, reason: str) -> None:
-        self.escalated.append((node_id, reason))
+        if isinstance(event, RunBlocked):
+            self.escalated.append((event.node_id, event.question))
+        elif isinstance(event, RunEscalated):
+            self.escalated.append((event.node_id, event.detail))
 
     @property
     def state(self):
@@ -95,7 +95,7 @@ class TestDispatchAgent:
     def test_agent_done_returns_done_outcome(self):
         rt = _MockRuntime()
         node = IRNode(id="scout", kind="agent", data={"agent": "scout"})
-        outcome = dispatch_node(node, {}, rt, _empty_state())
+        outcome = dispatch_node(node, {}, rt, _empty_state(), host=rt)
         assert outcome.status == "done"
         assert outcome.artifact_paths == ["out/report.md"]
         assert outcome.fields == {"verdict": "pass"}
@@ -111,7 +111,7 @@ class TestDispatchAgent:
             telemetry=TelemetryData(tokens=0, usd=0.0, seconds=0.0),
         ))
         node = IRNode(id="n", kind="agent")
-        outcome = dispatch_node(node, {}, rt, _empty_state())
+        outcome = dispatch_node(node, {}, rt, _empty_state(), host=rt)
         assert outcome.status == "blocked"
 
     def test_agent_failed_returns_failed(self):
@@ -125,7 +125,7 @@ class TestDispatchAgent:
             telemetry=TelemetryData(tokens=0, usd=0.0, seconds=0.0),
         ))
         node = IRNode(id="n", kind="agent")
-        outcome = dispatch_node(node, {}, rt, _empty_state())
+        outcome = dispatch_node(node, {}, rt, _empty_state(), host=rt)
         assert outcome.status == "failed"
 
     def test_agent_attempt_incremented(self):
@@ -133,13 +133,13 @@ class TestDispatchAgent:
         state = _empty_state()
         state.nodes["n"] = NodeState(status="done", attempt=2)
         node = IRNode(id="n", kind="agent")
-        outcome = dispatch_node(node, {}, rt, state)
+        outcome = dispatch_node(node, {}, rt, state, host=rt)
         assert outcome.attempt == 3
 
     def test_agent_ref_from_data(self):
         rt = _MockRuntime()
         node = IRNode(id="my-node", kind="agent", data={"agent": "my-custom-agent"})
-        dispatch_node(node, {}, rt, _empty_state())
+        dispatch_node(node, {}, rt, _empty_state(), host=rt)
         agent_ref, _ = rt.dispatched[0]
         assert agent_ref == "my-custom-agent"
 
@@ -149,7 +149,7 @@ class TestDispatchAgent:
             raise RuntimeError("dispatch failed")
         rt.dispatchAgent = boom
         node = IRNode(id="n", kind="agent")
-        outcome = dispatch_node(node, {}, rt, _empty_state())
+        outcome = dispatch_node(node, {}, rt, _empty_state(), host=rt)
         assert outcome.status == "failed"
 
 
@@ -161,7 +161,7 @@ class TestDispatchGate:
     def test_gate_proceed_returns_done(self):
         rt = _MockRuntime()
         node = IRNode(id="g-scout", kind="gate", data={"checks": [{"type": "schema"}]})
-        outcome = dispatch_node(node, {}, rt, _empty_state())
+        outcome = dispatch_node(node, {}, rt, _empty_state(), host=rt)
         assert outcome.status == "done"
         assert outcome.gate is not None
         assert outcome.gate["decision"] == "proceed"
@@ -176,7 +176,7 @@ class TestDispatchGate:
         rt = _MockRuntime()
         rt.set_gate_result(GateResult(decision="needs_fix", errors=["fail"]))
         node = IRNode(id="g", kind="gate")
-        outcome = dispatch_node(node, {}, rt, _empty_state())
+        outcome = dispatch_node(node, {}, rt, _empty_state(), host=rt)
         assert outcome.status == "needs_fix"
         assert outcome.gate["decision"] == "needs_fix"
         assert outcome.fields == {"decision": "needs_fix"}
@@ -187,14 +187,14 @@ class TestDispatchGate:
         rt = _MockRuntime()
         rt.set_gate_result(GateResult(decision="fail", errors=["schema violation"]))
         node = IRNode(id="g", kind="gate")
-        outcome = dispatch_node(node, {}, rt, _empty_state())
+        outcome = dispatch_node(node, {}, rt, _empty_state(), host=rt)
         assert outcome.status == "needs_fix"
         assert outcome.gate["decision"] == "fail"
 
     def test_gate_id_passed(self):
         rt = _MockRuntime()
         node = IRNode(id="g-review", kind="gate", data={})
-        dispatch_node(node, {}, rt, _empty_state())
+        dispatch_node(node, {}, rt, _empty_state(), host=rt)
         gate_config, _ = rt.gate_calls[0]
         assert gate_config["id"] == "g-review"
 
@@ -209,7 +209,7 @@ class TestDispatchGate:
             artifact_paths=[".cronos/pipeline/my-goal/scout-report-my-goal.md"],
         )
         node = IRNode(id="g-scout", kind="gate", data={"checks": [{"type": "schema"}]})
-        dispatch_node(node, {}, rt, state, incoming={"g-scout": ["scout"]})
+        dispatch_node(node, {}, rt, state, incoming={"g-scout": ["scout"]}, host=rt)
         _, artifact_paths = rt.gate_calls[0]
         assert artifact_paths == [
             ".cronos/pipeline/my-goal/scout-report-my-goal.md"
@@ -221,7 +221,7 @@ class TestDispatchGate:
         state = _empty_state()
         state.nodes["scout"] = NodeState(status="pending", artifact_paths=["x.md"])
         node = IRNode(id="g-scout", kind="gate", data={})
-        dispatch_node(node, {}, rt, state, incoming={"g-scout": ["scout"]})
+        dispatch_node(node, {}, rt, state, incoming={"g-scout": ["scout"]}, host=rt)
         _, artifact_paths = rt.gate_calls[0]
         assert artifact_paths == []
 
@@ -232,7 +232,7 @@ class TestDispatchGate:
         state = _empty_state()
         state.nodes["g"] = NodeState(status="running", artifact_paths=["own.md"])
         node = IRNode(id="g", kind="gate", data={})
-        dispatch_node(node, {}, rt, state)  # no incoming
+        dispatch_node(node, {}, rt, state, host=rt)  # no incoming
         _, artifact_paths = rt.gate_calls[0]
         assert artifact_paths == ["own.md"]
 
@@ -245,13 +245,13 @@ class TestDispatchHuman:
     def test_human_returns_blocked(self):
         rt = _MockRuntime()
         node = IRNode(id="release", kind="human", data={"prompt": "Release?"})
-        outcome = dispatch_node(node, {}, rt, _empty_state())
+        outcome = dispatch_node(node, {}, rt, _empty_state(), host=rt)
         assert outcome.status == "blocked"
 
     def test_human_calls_escalate(self):
         rt = _MockRuntime()
         node = IRNode(id="signoff", kind="human", data={"prompt": "OK?"})
-        dispatch_node(node, {}, rt, _empty_state())
+        dispatch_node(node, {}, rt, _empty_state(), host=rt)
         assert len(rt.escalated) == 1
         node_id, reason = rt.escalated[0]
         assert node_id == "signoff"
@@ -266,7 +266,7 @@ class TestDispatchDecision:
     def test_decision_returns_done_no_call(self):
         rt = _MockRuntime()
         node = IRNode(id="dec", kind="decision")
-        outcome = dispatch_node(node, {}, rt, _empty_state())
+        outcome = dispatch_node(node, {}, rt, _empty_state(), host=rt)
         assert outcome.status == "done"
         # No external calls made.
         assert rt.dispatched == []
@@ -282,21 +282,21 @@ class TestDispatchWait:
     def test_wait_human_blocks(self):
         rt = _MockRuntime()
         node = IRNode(id="wt", kind="wait", data={"mode": "human", "prompt": "Wait."})
-        outcome = dispatch_node(node, {}, rt, _empty_state())
+        outcome = dispatch_node(node, {}, rt, _empty_state(), host=rt)
         assert outcome.status == "blocked"
         assert len(rt.escalated) == 1
 
     def test_wait_timed_escalates(self):
         rt = _MockRuntime()
         node = IRNode(id="wt", kind="wait", data={"mode": "timed", "max_wait_seconds": 30})
-        outcome = dispatch_node(node, {}, rt, _empty_state())
+        outcome = dispatch_node(node, {}, rt, _empty_state(), host=rt)
         assert outcome.status == "escalated"
         assert len(rt.escalated) == 1
 
     def test_wait_default_mode_is_human(self):
         rt = _MockRuntime()
         node = IRNode(id="wt", kind="wait")  # no mode specified
-        outcome = dispatch_node(node, {}, rt, _empty_state())
+        outcome = dispatch_node(node, {}, rt, _empty_state(), host=rt)
         assert outcome.status == "blocked"
 
 
@@ -311,7 +311,7 @@ class TestDispatchAggregator:
         state.nodes["b"] = NodeState(status="done")
         rt = _MockRuntime()
         node = IRNode(id="agg", kind="aggregator", data={"mode": "all", "inputs": {"from": ["a", "b"]}})
-        outcome = dispatch_node(node, {}, rt, state)
+        outcome = dispatch_node(node, {}, rt, state, host=rt)
         assert outcome.status == "done"
 
     def test_aggregator_all_one_failed(self):
@@ -320,7 +320,7 @@ class TestDispatchAggregator:
         state.nodes["b"] = NodeState(status="failed")
         rt = _MockRuntime()
         node = IRNode(id="agg", kind="aggregator", data={"mode": "all", "inputs": {"from": ["a", "b"]}})
-        outcome = dispatch_node(node, {}, rt, state)
+        outcome = dispatch_node(node, {}, rt, state, host=rt)
         assert outcome.status == "failed"
 
     def test_aggregator_any_one_done(self):
@@ -329,7 +329,7 @@ class TestDispatchAggregator:
         state.nodes["b"] = NodeState(status="done")
         rt = _MockRuntime()
         node = IRNode(id="agg", kind="aggregator", data={"mode": "any", "inputs": {"from": ["a", "b"]}})
-        outcome = dispatch_node(node, {}, rt, state)
+        outcome = dispatch_node(node, {}, rt, state, host=rt)
         assert outcome.status == "done"
 
     def test_aggregator_any_all_failed(self):
@@ -338,13 +338,13 @@ class TestDispatchAggregator:
         state.nodes["b"] = NodeState(status="failed")
         rt = _MockRuntime()
         node = IRNode(id="agg", kind="aggregator", data={"mode": "any", "inputs": {"from": ["a", "b"]}})
-        outcome = dispatch_node(node, {}, rt, state)
+        outcome = dispatch_node(node, {}, rt, state, host=rt)
         assert outcome.status == "failed"
 
     def test_aggregator_no_preds_done(self):
         rt = _MockRuntime()
         node = IRNode(id="agg", kind="aggregator", data={})
-        outcome = dispatch_node(node, {}, rt, _empty_state())
+        outcome = dispatch_node(node, {}, rt, _empty_state(), host=rt)
         assert outcome.status == "done"
 
 
@@ -356,7 +356,7 @@ class TestDispatchTrigger:
     def test_trigger_immediate_done(self):
         rt = _MockRuntime()
         node = IRNode(id="start", kind="trigger")
-        outcome = dispatch_node(node, {}, rt, _empty_state())
+        outcome = dispatch_node(node, {}, rt, _empty_state(), host=rt)
         assert outcome.status == "done"
         assert rt.dispatched == []
         assert rt.gate_calls == []
@@ -366,7 +366,7 @@ class TestDispatchTrigger:
         state = _empty_state()
         state.nodes["start"] = NodeState(status="done", attempt=0)
         node = IRNode(id="start", kind="trigger")
-        outcome = dispatch_node(node, {}, rt, state)
+        outcome = dispatch_node(node, {}, rt, state, host=rt)
         assert outcome.attempt == 1
 
 
@@ -380,7 +380,7 @@ class TestDispatchUnknownKind:
         node = IRNode(id="x", kind="agent")  # type: ignore[arg-type]
         # Manually override kind to something invalid.
         object.__setattr__(node, "kind", "totally-unknown")
-        outcome = dispatch_node(node, {}, rt, _empty_state())
+        outcome = dispatch_node(node, {}, rt, _empty_state(), host=rt)
         assert outcome.status == "failed"
 
 
@@ -395,7 +395,7 @@ class TestDispatchExec:
             id="testrun", kind="exec",
             data={"command": "python -m pytest", "produces": {"class": "test"}},
         )
-        outcome = dispatch_node(node, {}, rt, _empty_state())
+        outcome = dispatch_node(node, {}, rt, _empty_state(), host=rt)
         assert outcome.status == "done"
         assert outcome.artifact_paths == ["out/testrun-output.md"]
         # The command and node id are forwarded to runExec.
@@ -408,14 +408,14 @@ class TestDispatchExec:
         rt = _MockRuntime()
         rt.set_exec_result(ExecResult(status="failed", exit_code=1, artifact_path="out/o.md"))
         node = IRNode(id="build", kind="exec", data={"command": "make"})
-        outcome = dispatch_node(node, {}, rt, _empty_state())
+        outcome = dispatch_node(node, {}, rt, _empty_state(), host=rt)
         assert outcome.status == "failed"
         assert outcome.fields == {"exit_code": 1}
 
     def test_exec_missing_command_fails_without_dispatch(self):
         rt = _MockRuntime()
         node = IRNode(id="n", kind="exec", data={})
-        outcome = dispatch_node(node, {}, rt, _empty_state())
+        outcome = dispatch_node(node, {}, rt, _empty_state(), host=rt)
         assert outcome.status == "failed"
         assert not hasattr(rt, "exec_calls")
 
@@ -425,6 +425,6 @@ class TestDispatchExec:
             id="testrun", kind="exec",
             data={"command": "pytest", "fail_on_nonzero": False},
         )
-        dispatch_node(node, {}, rt, _empty_state())
+        dispatch_node(node, {}, rt, _empty_state(), host=rt)
         _, _, inputs = rt.exec_calls[0]
         assert inputs["fail_on_nonzero"] is False

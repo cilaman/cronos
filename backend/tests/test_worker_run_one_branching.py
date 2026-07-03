@@ -186,7 +186,7 @@ async def test_run_one_feature_backlog_falls_through_to_run_task():
 
     await worker._run_one(task.id, None)
 
-    worker._run_task.assert_called_once_with(task.id, None)
+    worker._run_task.assert_called_once_with(task.id, None, None)
     worker._run_feature_decompose.assert_not_called()
     worker._run_goal.assert_not_called()
 
@@ -199,7 +199,7 @@ async def test_run_one_feature_planned_falls_through_to_run_task():
 
     await worker._run_one(task.id, None)
 
-    worker._run_task.assert_called_once_with(task.id, None)
+    worker._run_task.assert_called_once_with(task.id, None, None)
     worker._run_feature_decompose.assert_not_called()
     worker._run_goal.assert_not_called()
 
@@ -212,7 +212,7 @@ async def test_run_one_feature_waiting_falls_through_to_run_task():
 
     await worker._run_one(task.id, None)
 
-    worker._run_task.assert_called_once_with(task.id, None)
+    worker._run_task.assert_called_once_with(task.id, None, None)
     worker._run_feature_decompose.assert_not_called()
     worker._run_goal.assert_not_called()
 
@@ -225,7 +225,7 @@ async def test_run_one_feature_done_falls_through_to_run_task():
 
     await worker._run_one(task.id, None)
 
-    worker._run_task.assert_called_once_with(task.id, None)
+    worker._run_task.assert_called_once_with(task.id, None, None)
     worker._run_feature_decompose.assert_not_called()
     worker._run_goal.assert_not_called()
 
@@ -238,7 +238,7 @@ async def test_run_one_fix_planned_falls_through_to_run_task():
 
     await worker._run_one(task.id, None)
 
-    worker._run_task.assert_called_once_with(task.id, None)
+    worker._run_task.assert_called_once_with(task.id, None, None)
     worker._run_feature_decompose.assert_not_called()
     worker._run_goal.assert_not_called()
 
@@ -256,9 +256,21 @@ async def test_run_one_standard_task_calls_run_task():
 
     await worker._run_one(task.id, None)
 
-    worker._run_task.assert_called_once_with(task.id, None)
+    worker._run_task.assert_called_once_with(task.id, None, None)
     worker._run_goal.assert_not_called()
     worker._run_feature_decompose.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_run_one_task_passes_verdict():
+    """_run_task must receive the sign-off verdict too — a runner-path
+    harness human-wait park is answered via HumanAnswer (R10d follow-up)."""
+    task = _make_task(task_type="task")
+    worker = _make_worker(task)
+
+    await worker._run_one(task.id, "looks good", "approve")
+
+    worker._run_task.assert_called_once_with(task.id, "looks good", "approve")
 
 
 @pytest.mark.asyncio
@@ -269,6 +281,6 @@ async def test_run_one_issue_type_calls_run_task():
 
     await worker._run_one(task.id, None)
 
-    worker._run_task.assert_called_once_with(task.id, None)
+    worker._run_task.assert_called_once_with(task.id, None, None)
     worker._run_goal.assert_not_called()
     worker._run_feature_decompose.assert_not_called()

@@ -14,8 +14,8 @@ from unittest.mock import patch
 
 import pytest
 
-from lib.evals import EvalResult, run_eval_corpus
-from lib.evals.corpus import DEFAULT_EVAL_CMD
+from delivery_workflow.lib.evals import EvalResult, run_eval_corpus
+from delivery_workflow.lib.evals.corpus import DEFAULT_EVAL_CMD
 
 
 # ---------------------------------------------------------------------------
@@ -157,7 +157,7 @@ def test_cli_exits_with_corpus_exit_code(tmp_path):
     import subprocess as sp
     env = {**os.environ, "DELIVERY_EVAL_CMD": f"{sys.executable} -c 'import sys; sys.exit(0)'"}
     proc = sp.run(
-        [sys.executable, "-m", "lib.evals", "--repo-root", str(tmp_path)],
+        [sys.executable, "-m", "delivery_workflow.lib.evals", "--repo-root", str(tmp_path)],
         capture_output=True,
         cwd=str(PACKAGE_DIR),
         env=env,
@@ -171,7 +171,7 @@ def test_cli_json_flag_emits_json(tmp_path):
     import subprocess as sp
     env = {**os.environ, "DELIVERY_EVAL_CMD": f"{sys.executable} -c 'import sys; sys.exit(0)'"}
     proc = sp.run(
-        [sys.executable, "-m", "lib.evals", "--json"],
+        [sys.executable, "-m", "delivery_workflow.lib.evals", "--json"],
         capture_output=True,
         text=True,
         cwd=str(PACKAGE_DIR),

@@ -9,10 +9,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import spec_loader
-
+from delivery_workflow import spec_loader
 PACKAGE_ROOT = Path(__file__).parent.parent
-SPEC_PATH = PACKAGE_ROOT / "delivery.workflow.yaml"
+SPEC_PATH = PACKAGE_ROOT / "src" / "delivery_workflow" / "delivery.workflow.yaml"
 
 
 def _loaded() -> dict:
@@ -181,7 +180,7 @@ def test_security_to_g_security_connector_present():
 
 
 def test_security_reviewer_agent_file_exists():
-    agent_path = PACKAGE_ROOT / "agents" / "security-reviewer.md"
+    agent_path = PACKAGE_ROOT / "src" / "delivery_workflow" / "agents" / "security-reviewer.md"
     assert agent_path.exists(), (
         f"agents/security-reviewer.md not found at {agent_path}"
     )

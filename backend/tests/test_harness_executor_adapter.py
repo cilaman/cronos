@@ -2,7 +2,7 @@
 tests/test_harness_executor_adapter — Unit tests for HarnessExecutorAdapter.
 
 Covers R6 (ExecutorInterface compliance), R7 (telemetry event schema), and R8
-(escalate discriminator: human-wait park vs loop exhaust).
+(on_event discriminator: RunBlocked human-wait park vs RunEscalated, R10b).
 
 Also includes a snapshot test asserting that emitted telemetry payloads
 structurally equal a fixture captured from a reference BFS-path on the same
@@ -23,20 +23,17 @@ import pytest
 import sys
 from pathlib import Path
 
-_SPACE_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-_DW_PKG = _SPACE_ROOT / "packages" / "delivery-workflow"
-if str(_DW_PKG) not in sys.path:
-    sys.path.insert(0, str(_DW_PKG))
 
-from results import AgentResult, TelemetryData  # noqa: E402
-from state_types import BudgetState, NodeState as WfNodeState, WorkflowState  # noqa: E402
+from delivery_workflow.results import AgentResult, TelemetryData  # noqa: E402
+from delivery_workflow.state_types import BudgetState, NodeState as WfNodeState, WorkflowState  # noqa: E402
+
+from delivery_workflow.events import RunBlocked, RunEscalated  # noqa: E402
 
 from app.harnesses.executor_adapter import (  # noqa: E402
     HarnessExecutorAdapter,
     WorkerAdapter,
     _StateOps,
     _TelemetryOps,
-    _is_human_wait,
 )
 from app.harnesses.run_state import NodeState as HarnessNodeState, RunState  # noqa: E402
 from app.models import TaskState  # noqa: E402
@@ -179,13 +176,18 @@ class TestExecutorInterfaceCompliance:
         adapter = _make_adapter()
         assert callable(adapter.runGate)
 
-    def test_has_eval_condition(self) -> None:
+    def test_has_on_event(self) -> None:
         adapter = _make_adapter()
-        assert callable(adapter.evalCondition)
+        assert callable(adapter.on_event)
 
-    def test_has_escalate(self) -> None:
+    def test_eval_condition_and_escalate_left_the_surface(self) -> None:
+        """R10b port split: condition evaluation is runner-internal
+        (lib.conditions — app.harnesses.decision delegates to the same module,
+        so harness edge semantics are unchanged) and host notification is
+        HostPort.on_event."""
         adapter = _make_adapter()
-        assert callable(adapter.escalate)
+        assert not hasattr(adapter, "evalCondition")
+        assert not hasattr(adapter, "escalate")
 
     def test_protocol_isinstance_check(self) -> None:
         """WorkerAdapter Protocol isinstance check works (runtime_checkable)."""
@@ -265,52 +267,43 @@ class TestStateOps:
 
 
 # ---------------------------------------------------------------------------
-# evalCondition tests
+# Edge-condition path (R10b: runner-internal via lib.conditions; the harness
+# grammar in app.harnesses.decision delegates to the SAME module, so these
+# pin that the semantics the runner now applies match the harness grammar).
 # ---------------------------------------------------------------------------
 
 
-class TestEvalCondition:
-    """Tests for evalCondition delegating to decision.eval_condition."""
+class TestConditionPath:
+    """The runner-internal evaluator behaves as the harness grammar did."""
 
-    def test_empty_expr_returns_true(self) -> None:
-        adapter = _make_adapter()
-        assert adapter.evalCondition("", {}) is True
+    def test_harness_decision_delegates_to_lib_conditions(self) -> None:
+        from delivery_workflow.lib import conditions as lib_conditions
+
+        from app.harnesses import decision
+
+        assert decision.eval_condition is lib_conditions.eval_condition
 
     def test_equality_match(self) -> None:
-        adapter = _make_adapter()
-        assert adapter.evalCondition("x == foo", {"x": "foo"}) is True
+        from delivery_workflow.lib.conditions import eval_condition
 
-    def test_equality_no_match(self) -> None:
-        adapter = _make_adapter()
-        assert adapter.evalCondition("x == bar", {"x": "foo"}) is False
+        assert eval_condition("x == foo", {"x": "foo"}) is True
+        assert eval_condition("x == bar", {"x": "foo"}) is False
 
     def test_in_operator(self) -> None:
-        # The eval_condition 'in' operator uses comma-separated values: "x in v1,v2"
-        adapter = _make_adapter()
-        assert adapter.evalCondition("x in done,failed", {"x": "done"}) is True
+        from delivery_workflow.lib.conditions import eval_condition
 
-    def test_not_in_operator(self) -> None:
-        adapter = _make_adapter()
-        assert adapter.evalCondition("x in done,failed", {"x": "pending"}) is False
+        assert eval_condition("x in done,failed", {"x": "done"}) is True
+        assert eval_condition("x in done,failed", {"x": "pending"}) is False
 
     def test_invalid_expr_returns_false(self) -> None:
         """Malformed expressions log a warning and return False without raising."""
-        adapter = _make_adapter()
-        # A completely invalid expression should not crash.
-        result = adapter.evalCondition("!!!invalid!!!", {})
-        assert isinstance(result, bool)
+        from delivery_workflow.lib.conditions import eval_condition
 
-    def test_none_scope_raises_or_false(self) -> None:
-        """Edge case: scope is None-like — should not raise unhandled."""
-        adapter = _make_adapter()
-        try:
-            result = adapter.evalCondition("x == y", {})
-        except Exception:
-            pass  # Acceptable; test is that it doesn't crash the process.
+        assert eval_condition("!!!invalid!!!", {}) is False
 
 
 # ---------------------------------------------------------------------------
-# escalate() discriminator tests (R8, risk mitigation)
+# on_event() discriminator tests (R10b: typed events replace escalate())
 # ---------------------------------------------------------------------------
 
 
@@ -319,61 +312,60 @@ class TestEscalateDiscriminator:
 
     def test_human_wait_prefix_sets_blocked(self) -> None:
         adapter = _make_adapter()
-        adapter.escalate("wait-node-1", "[wait/human] wait-node-1: Waiting for human input.")
+        adapter.on_event(RunBlocked(node_id="wait-node-1", question="Waiting for human input."))
         ws = adapter.state.read()
         assert ws.status == "blocked"
 
     def test_human_prefix_sets_blocked(self) -> None:
         adapter = _make_adapter()
-        adapter.escalate("human-node", "[human] human-node: Human input required.")
+        adapter.on_event(RunBlocked(node_id="human-node", question="Human input required."))
         ws = adapter.state.read()
         assert ws.status == "blocked"
 
     def test_wait_colon_prefix_sets_blocked(self) -> None:
         adapter = _make_adapter()
-        adapter.escalate("wn", "wait: human approval needed")
+        adapter.on_event(RunBlocked(node_id="wn", question="human approval needed"))
         ws = adapter.state.read()
         assert ws.status == "blocked"
 
     def test_loop_exhaust_sets_escalated(self) -> None:
         adapter = _make_adapter()
-        adapter.escalate("loop-node", "max_attempts=10 exhausted")
+        adapter.on_event(RunEscalated(kind="loop", node_id="loop-node", detail="max_attempts=10 exhausted"))
         ws = adapter.state.read()
         assert ws.status == "escalated"
 
     def test_global_cap_sets_escalated(self) -> None:
         adapter = _make_adapter()
-        adapter.escalate("__runner__", "global_iteration_cap_exceeded")
+        adapter.on_event(RunEscalated(kind="iteration_cap", node_id="__runner__", detail="global_iteration_cap_exceeded"))
         ws = adapter.state.read()
         assert ws.status == "escalated"
 
     def test_loop_exhaust_does_not_set_waiting_node(self) -> None:
         """Loop exhaust must NOT set waiting_node_id on the RunState."""
         adapter = _make_adapter()
-        adapter.escalate("loop-node", "recurring_findings after 3 attempt(s)")
+        adapter.on_event(RunEscalated(kind="loop", node_id="loop-node", detail="recurring_findings after 3 attempt(s)"))
         # Convert back to RunState and check waiting_node_id is None.
         rs = adapter.to_run_state()
         assert rs.waiting_node_id is None
 
-    def test_is_human_wait_helper(self) -> None:
-        assert _is_human_wait("[wait/human] test") is True
-        assert _is_human_wait("[human] test") is True
-        assert _is_human_wait("wait: test") is True
-        assert _is_human_wait("max_attempts=10 exhausted") is False
-        assert _is_human_wait("global_iteration_cap_exceeded") is False
-        assert _is_human_wait("recurring_findings") is False
+    def test_typed_events_replaced_reason_prefix_sniffing(self) -> None:
+        """R10b: the _is_human_wait prefix sniff is gone — the event TYPE is
+        the discriminator (RunBlocked vs RunEscalated)."""
+        import app.harnesses.executor_adapter as mod
+
+        assert not hasattr(mod, "_is_human_wait")
 
     def test_human_wait_escalate_is_node_write_free(self) -> None:
-        """R9 single-writer (§5.8): escalate writes RUN status only — the node
+        """R9 single-writer (§5.8): on_event writes RUN status only — the node
         'blocked' status is written once, by the runner, from the dispatch
         handler's returned NodeOutcome.  A node sub-patch here would be a
         second out-of-band writer (the D11 double-write class)."""
         adapter = _make_adapter()
         before = {nid: ns.status for nid, ns in adapter.state.read().nodes.items()}
-        adapter.escalate("wait-1", "[wait/human] wait-1: Please review.")
+        adapter.on_event(RunBlocked(node_id="wait-1", question="Please review."))
         ws = adapter.state.read()
         assert ws.status == "blocked"
-        assert "wait-1" not in ws.nodes, "escalate must not create node state"
+        assert "wait-1" not in ws.nodes, "on_event must not create node state"
         assert {nid: ns.status for nid, ns in ws.nodes.items()} == before
 
 
@@ -665,7 +657,7 @@ class TestEscalateToRunState:
             nodes={"wait-1": HarnessNodeState(status="in_progress")}
         )
         adapter = _make_adapter(run_state=rs)
-        adapter.escalate("wait-1", "[wait/human] wait-1: Please review output.")
+        adapter.on_event(RunBlocked(node_id="wait-1", question="Please review output."))
 
         out = adapter.to_run_state()
         # Run status should be 'running' (blocked → running via mapping).
@@ -676,7 +668,7 @@ class TestEscalateToRunState:
     def test_loop_exhaust_round_trip(self) -> None:
         rs = _make_run_state()
         adapter = _make_adapter(run_state=rs)
-        adapter.escalate("loop-node", "max_attempts=10 exhausted")
+        adapter.on_event(RunEscalated(kind="loop", node_id="loop-node", detail="max_attempts=10 exhausted"))
 
         out = adapter.to_run_state()
         # Escalated → failed in RunState.

@@ -20,8 +20,16 @@ AgentModel = Literal["default", "sonnet", "opus", "haiku", "opus-4-8", "fable-5"
 TaskType = Literal["task", "goal", "issue", "feature", "fix"]
 
 # Structured waiting kinds (01-state-model.md §5.6). 'signoff' is the one the
-# UI keys on (Approve/Reject controls); the rest label delivery-driver parks.
-WaitingKind = Literal["signoff", "node_failed", "stalled", "escalated"]
+# UI keys on (Approve/Reject controls); the rest label workflow-host parks
+# stamped by the shared Outcome→TaskState table (app.delivery_outcomes, R10d):
+# 'budget' = budget-ceiling escalation (resume offers RaiseBudget) — RESERVED:
+# no production path emits a budget escalation yet (telemetry accumulation is
+# not wired through TelemetryOps.emit; see app.delivery_outcomes), 'loop' =
+# loop/iteration-cap exhaust (resume offers RetryFailed), 'escalated' = other
+# escalations (e.g. a timed wait deferred to the host).
+WaitingKind = Literal[
+    "signoff", "node_failed", "stalled", "escalated", "budget", "loop"
+]
 
 
 class FeatureState(str, Enum):

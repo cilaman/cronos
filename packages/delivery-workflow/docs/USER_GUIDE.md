@@ -170,9 +170,12 @@ flowchart TD
 
 ## Part 2 — Operating a pipeline
 
-> **Today this means running on Cronos.** The standalone runner is a future phase
-> ([Part 4](#part-4--integrating-a-runtime)). On Cronos, the `CronosAdapter`
-> ([`adapters/cronos/adapter.py`](../adapters/cronos/adapter.py)) is the executor.
+> **Two ways to run.** On Cronos, the `CronosAdapter`
+> (`backend/app/delivery_adapter.py` in the Cronos repo — host code since R10c) is the executor.
+> Standalone (R10e), no host at all: `python -m delivery_workflow run spec.yaml --workdir DIR`
+> drives the same engine with the in-package `LocalProcessExecutor` (spawns `claude -p <brief>`
+> per agent node); see the README's "Standalone usage" section for the CLI, resume grammar,
+> and per-Outcome exit codes.
 
 ### 1. Start a run
 
@@ -353,7 +356,7 @@ loop:
 A node with `recon: on` may dispatch the **scout** agent at its own startup for a transient,
 iteration-scoped map — useful for the implementor (fresh map of changing code), reviewer (invariants
 around the diff), and architect (re-design). Recon output is **transient context only**: it is *not*
-a gated artifact, *not* a DAG node, and *never* visible to `evalCondition`. Its telemetry counts
+a gated artifact, *not* a DAG node, and *never* visible to edge `when` conditions. Its telemetry counts
 against the node's budget. Don't add `Agent` to an agent's `tools` — the runtime grants it.
 Full contract: [`recon/README.md`](../recon/README.md).
 
@@ -375,29 +378,40 @@ delivery/v1 is portable because the agents, skills, and spec carry **no runtime-
 API calls**. A runtime adopts the pipeline by implementing one small interface; the package enforces
 the boundary so the portable core never imports a specific backend.
 
-### The 6-operation executor interface
+### The facade + two ports (R10b/R10e)
 
-Implement [`ExecutorInterface`](../interface.py) — a runtime-checkable Protocol:
+Hosts drive one object — the [`DeliveryRun`](../src/delivery_workflow/delivery_run.py) facade —
+and implement two small ports:
 
 ```python
-class ExecutorInterface(Protocol):
-    state: StateOps        # read()/write(patch) the WorkflowState
-    telemetry: TelemetryOps  # emit(node_id, {tokens, usd, seconds})
+from delivery_workflow import DeliveryRun, NodeExecutor, HostPort, HumanAnswer
 
+run = DeliveryRun(spec_path_or_graph, executor=my_executor, state_ops=my_ops, host=my_host)
+outcome = run.start()          # Outcome(kind=done|stalled|failed|blocked|escalated|cancelled)
+outcome = run.resume(HumanAnswer("signoff-scope", "yes", "approve"))
+outcome = run.outcome()        # pure read
+outcome = run.cancel()
+
+class NodeExecutor(Protocol):   # executes node work
     def dispatchAgent(self, agent_ref: str, inputs: dict) -> AgentResult: ...
     def runGate(self, gate: dict, artifact_paths: list[str]) -> GateResult: ...
-    def evalCondition(self, expr: str, scope: dict) -> bool: ...
-    def escalate(self, node_id: str, reason: str) -> None: ...
+    def runExec(self, node_id: str, command: str, inputs: dict) -> ExecResult: ...
+
+class HostPort(Protocol):       # receives typed run events
+    def on_event(self, event: RunEvent) -> None: ...
 ```
 
-| Operation | Your job |
+| Port / op | Your job |
 |---|---|
-| `dispatchAgent` | Run the named agent with the given inputs; return its `node_status` (or legacy `delivery_status`) as an `AgentResult` (`status`, `artifact_paths`, `produces`, `fields`, `open_questions`, `telemetry`). |
-| `runGate` | Execute the gate's checks against the artifacts; return a `GateResult` (`decision`, `errors`, `evidence`). |
-| `evalCondition` | Evaluate an edge `when` against a scope; return a bool. |
-| `state.read/write` | Load / atomically patch the `WorkflowState`. |
-| `telemetry.emit` | Record per-node telemetry; accumulate against the budget ceiling. |
-| `escalate` | Route a node to human intervention. |
+| `dispatchAgent` | Run the named agent with the given inputs; map its `node_status` fence through `agent_result_from_envelope` (the shared closed-vocabulary boundary) to an `AgentResult`. |
+| `runGate` | Execute the gate's checks against the artifacts; delegate to `lib.gate.runGate` and return a `GateResult` (`decision`, `errors`, `evidence`). |
+| `runExec` | Run a shell command to completion; delegate to `lib.exec_node.run_exec_command`. |
+| `on_event` | React to typed `RunEvent`s (`NodeStarted`/`NodeFinished`/`RunBlocked`/`RunStalled`/`RunFailed`/`RunEscalated`) — e.g. park a tracking task, stream progress. Optional (`NullHost`). |
+| `StateOps` | `read()`/`write(patch)` the `WorkflowState` — reuse `lib.state.ops.StateStoreOps` (its round-trip laws are conformance-tested in `lib/state/conformance.py`). |
+
+Edge/loop conditions are **runner-internal** (`lib.conditions`) — hosts no longer implement
+`evalCondition`; host notification flows through `on_event`, not `escalate`. Terminal handling is
+one table: translate the returned `Outcome` into your domain and never read `WorkflowState.nodes`.
 
 ### What the package gives you for free
 
@@ -422,25 +436,25 @@ The portable core **must not** import a specific backend. This is enforced two w
    core; runs in CI.
 2. **`test_import_boundary.py`** — AST-scans every module for forbidden imports.
 
-Your adapter is the *one* place allowed to import your backend, and only it. The reference adapter,
-[`adapters/cronos/`](../adapters/cronos/), is explicitly excluded from the rule and keeps all its
-`app.*` imports **lazy** (inside methods) so importing the bundle core never transitively pulls in
-Cronos. Mirror that pattern.
+Your adapter is host code: it lives in YOUR codebase (the Cronos one is
+`backend/app/delivery_adapter.py`, host-owned since R10c) and imports the package — never the
+other way around. The package itself ships `LocalProcessExecutor` + `LocalHostPort`
+(`local_executor.py`) as the reference implementation behind the standalone CLI.
 
 ### Worked example: the Cronos adapter
 
-[`adapters/cronos/adapter.py`](../adapters/cronos/adapter.py) is a complete, shipped reference:
+`backend/app/delivery_adapter.py` (Cronos repo) is a complete, shipped reference:
 
 | Portable op | Cronos mapping |
 |---|---|
-| `dispatchAgent` | Create a child task → poll to DONE/WAITING → load the run trace → parse `node_status` (primary) or `delivery_status` (legacy). |
-| `runGate` | Delegate to the Cronos gate engine; map its result to `GateResult`. |
-| `evalCondition` | Delegate to the harness decision evaluator. |
-| `state.read/write` | `CronosStateOps` → `StateStore` + `EventLog`. |
+| `dispatchAgent` | Create a child task → run it inline → load the run trace → map `trace.node_status` through `agent_result_from_envelope`. |
+| `runGate` | Delegate to `lib.gate.runGate`; map its result to `GateResult`. |
+| `runExec` | Delegate to `lib.exec_node.run_exec_command` (cwd = space dir, artifacts in the run dir). |
+| `state.read/write` | `CronosStateOps` = the package `lib.state.ops.StateStoreOps` (verbatim re-export). |
 | `telemetry.emit` | `CronosTelemetryOps` → `TelemetrySink` (with budget ceiling). |
-| `escalate` | Park the tracking task → WAITING with a `waiting_question` (idempotent). |
+| `on_event` | `RunBlocked`/`RunEscalated` park the tracking task → WAITING with a `waiting_question` (idempotent). |
 
-Read [`adapters/cronos/README.md`](../adapters/cronos/README.md) for the full operation-by-operation
+Read the `backend/app/delivery_adapter.py` module docstring for the full operation-by-operation
 walkthrough, including delivery-status fallback parsing and error handling.
 
 ### Build & test your runtime
@@ -448,7 +462,7 @@ walkthrough, including delivery-status fallback parsing and error handling.
 ```bash
 cd packages/delivery-workflow
 pip install -e ".[dev]"
-pytest tests/ -v          # 231 tests: interface, state, telemetry, spec loading, import boundary
+pytest tests/ -v          # interface, runner, facade, conformance, CLI, import boundary
 lint-imports              # verify you haven't crossed the boundary
 ```
 
@@ -461,6 +475,6 @@ leaning on the `lib/` helpers for state and telemetry.
 
 - **Reference tables** — [`reference.md`](reference.md)
 - **Agent contract & roster** — [`../agents/README.md`](../agents/README.md)
-- **Cronos adapter deep-dive** — [`../adapters/cronos/README.md`](../adapters/cronos/README.md)
+- **Cronos adapter deep-dive** — `backend/app/delivery_adapter.py` (module docstring, Cronos repo)
 - **Recon isolation contract** — [`../recon/README.md`](../recon/README.md)
 - **The shipped graph** — [`../delivery.workflow.yaml`](../delivery.workflow.yaml)

@@ -1,17 +1,13 @@
 """Tests for runner/core.py (I3)."""
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 
-import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from ir import IREdge, IRGraph, IRNode, LoopPolicy
-from results import AgentResult, GateResult, TelemetryData
-from runner import run
-from state_types import BudgetState, NodeState, WorkflowState
+from delivery_workflow.ir import IREdge, IRGraph, IRNode, LoopPolicy
+from delivery_workflow.results import AgentResult, GateResult, TelemetryData
+from delivery_workflow.runner import run
+from delivery_workflow.state_types import BudgetState, NodeState, WorkflowState
 
 
 # ---------------------------------------------------------------------------
@@ -54,13 +50,19 @@ class _RecordingRuntime:
             return True
         # Support "key == 'value'" style for tests.
         try:
-            from lib.conditions import eval_condition
+            from delivery_workflow.lib.conditions import eval_condition
             return eval_condition(expr, scope)
         except Exception:
             return False
 
-    def escalate(self, node_id: str, reason: str) -> None:
-        self.escalated.append((node_id, reason))
+    # HostPort (R10b): typed events replace the escalate() hook.
+    def on_event(self, event) -> None:
+        from delivery_workflow.events import RunBlocked, RunEscalated
+
+        if isinstance(event, RunBlocked):
+            self.escalated.append((event.node_id, event.question))
+        elif isinstance(event, RunEscalated):
+            self.escalated.append((event.node_id, event.detail))
 
     class _NullState:
         def read(self):
@@ -96,7 +98,7 @@ class TestRunBasic:
     def test_single_node_done(self):
         g = _simple_graph(1)
         rt = _RecordingRuntime()
-        state = run(g, rt)
+        state = run(g, rt, host=rt, eval_condition=rt.evalCondition)
         assert state.status == "done"
         assert "n0" in state.nodes
         assert state.nodes["n0"].status == "done"
@@ -104,7 +106,7 @@ class TestRunBasic:
     def test_linear_chain_all_done(self):
         g = _simple_graph(3)
         rt = _RecordingRuntime()
-        state = run(g, rt)
+        state = run(g, rt, host=rt, eval_condition=rt.evalCondition)
         assert state.status == "done"
         for i in range(3):
             assert state.nodes[f"n{i}"].status == "done"
@@ -112,7 +114,7 @@ class TestRunBasic:
     def test_dispatch_order_entry_first(self):
         g = _simple_graph(3)
         rt = _RecordingRuntime()
-        run(g, rt)
+        run(g, rt, host=rt, eval_condition=rt.evalCondition)
         dispatched_ids = [inp["node_id"] for _, inp in rt.dispatched]
         assert dispatched_ids.index("n0") < dispatched_ids.index("n1")
         assert dispatched_ids.index("n1") < dispatched_ids.index("n2")
@@ -126,7 +128,7 @@ class TestRunBasic:
             edges=[IREdge(source="scout", target="g-scout")],
         )
         rt = _RecordingRuntime()
-        state = run(g, rt)
+        state = run(g, rt, host=rt, eval_condition=rt.evalCondition)
         assert state.status == "done"
         assert len(rt.gate_calls) == 1
         assert state.nodes["g-scout"].gate is not None
@@ -137,7 +139,7 @@ class TestRunBasic:
             nodes=[IRNode(id="start", kind="trigger")],
         )
         rt = _RecordingRuntime()
-        state = run(g, rt)
+        state = run(g, rt, host=rt, eval_condition=rt.evalCondition)
         assert state.status == "done"
         assert state.nodes["start"].status == "done"
 
@@ -154,7 +156,7 @@ class TestRunBasic:
             ],
         )
         rt = _RecordingRuntime()
-        state = run(g, rt)
+        state = run(g, rt, host=rt, eval_condition=rt.evalCondition)
         assert state.status == "done"
         # decision node done with no external dispatch call.
         assert state.nodes["dec"].status == "done"
@@ -167,7 +169,7 @@ class TestRunBasic:
             nodes=[IRNode(id="release", kind="human", data={"prompt": "Sign off?"})],
         )
         rt = _RecordingRuntime()
-        state = run(g, rt)
+        state = run(g, rt, host=rt, eval_condition=rt.evalCondition)
         assert state.status == "blocked"
         assert state.nodes["release"].status == "blocked"
         assert len(rt.escalated) == 1
@@ -196,14 +198,14 @@ class TestRunBasic:
                 IREdge(source="g-scout", target="analyze", when="g-scout.decision == 'proceed'"),
             ],
         )
-        state = run(g, rt)
+        state = run(g, rt, host=rt, eval_condition=rt.evalCondition)
         # analyze should not run because the condition is not met.
         assert "analyze" not in state.nodes or state.nodes.get("analyze", NodeState(status="")).status != "done"
 
     def test_empty_graph_returns_done(self):
         g = IRGraph()
         rt = _RecordingRuntime()
-        state = run(g, rt)
+        state = run(g, rt, host=rt, eval_condition=rt.evalCondition)
         assert state.status == "done"
 
 
@@ -241,7 +243,7 @@ class TestCancelRaceGuard:
         g = _simple_graph(5)
         rt = _RecordingRuntime()
         state_ops = _CancelStateOps(cancel_after=1)
-        state = run(g, rt, state_ops=state_ops)
+        state = run(g, rt, state_ops=state_ops, host=rt, eval_condition=rt.evalCondition)
         # Should have halted early (not all 5 nodes dispatched).
         assert state.status == "cancelled"
         # At most 1 node should have been dispatched before cancellation.
@@ -277,7 +279,7 @@ class TestResumeSkipsDoneNodes:
         )
         g = _simple_graph(3)
         rt = _RecordingRuntime()
-        state = run(g, rt, state_ops=_PreloadedStateOps(preloaded))
+        state = run(g, rt, state_ops=_PreloadedStateOps(preloaded), host=rt, eval_condition=rt.evalCondition)
         # n0 was already done — should not be re-dispatched.
         dispatched_ids = [inp["node_id"] for _, inp in rt.dispatched]
         assert "n0" not in dispatched_ids
@@ -308,7 +310,7 @@ class TestSelfLoopCapFires:
                 telemetry=TelemetryData(tokens=0, usd=0.0, seconds=0.0),
             )
         })
-        state = run(g, rt)
+        state = run(g, rt, host=rt, eval_condition=rt.evalCondition)
         # Should have escalated after max=3 iterations.
         assert len(rt.escalated) >= 1
         # Escalated with a message about max iterations.
@@ -349,7 +351,7 @@ class TestResume:
             nodes={"n0": NodeState(status="done")},
         )
         rt = _RecordingRuntime()
-        state = run(g, rt, state_ops=_MemStateOps(seeded))
+        state = run(g, rt, state_ops=_MemStateOps(seeded), host=rt, eval_condition=rt.evalCondition)
 
         dispatched_ids = [inputs.get("node_id", ref) for ref, inputs in rt.dispatched]
         assert "n0" not in dispatched_ids  # skipped — already done
@@ -361,6 +363,6 @@ class TestResume:
         re-dispatched cold — this is the bug B1 fixes at the driver seam."""
         g = _simple_graph(2)
         rt = _RecordingRuntime()
-        run(g, rt)  # no state_ops
+        run(g, rt, host=rt, eval_condition=rt.evalCondition)  # no state_ops
         dispatched_ids = [inputs.get("node_id", ref) for ref, inputs in rt.dispatched]
         assert "n0" in dispatched_ids and "n1" in dispatched_ids

@@ -23,15 +23,17 @@ emits node_transition events with 'status' key to match the frontend
 SSE consumer schema.  Both paths emit 'from_status', 'node_id', 'type',
 and 'timestamp'.  Parity tests that compare events accept both conventions.
 
-Runner resume limitation
+Runner human-wait resume
 ------------------------
-The delivery-workflow runner (runner.core.run) does not implement BFS-style
-human-wait resume via waiting_node_id.  When all entry nodes are already
-dispatched (done in the resume WorkflowState), the runner exits with
-status='done' without re-entering from the wait node's successors.  This is
-a known gap (out-of-scope finding) -- in production, resume from human-wait
-always uses the BFS path (executor_variant stored in RunState).  Runner-path
-resume of human-wait is deferred to a future iteration.
+Runner-path human-wait resume is implemented via the package resume grammar:
+run_executor._execute_harness_run_runner translates the user's reply/verdict
+into DeliveryRun.resume(HumanAnswer(node_id=waiting_node_id, ...)) — the
+persisted RunState park (waiting_node_id + node 'in_progress') is rebuilt as
+a 'blocked' WorkflowState by state_mapping.runstate_to_workflowstate, so
+bare start() is sealed on the park (silence never approves, D10).  End-to-end
+progression is covered by
+tests/test_delivery_outcomes.py::test_harness_human_wait_resume_progresses_run;
+this suite still exercises the park itself (scenario 4) plus BFS resume.
 
 Scenarios
 ---------
@@ -56,12 +58,8 @@ import pytest
 # ---------------------------------------------------------------------------
 # Path bootstrap -- make packages/delivery-workflow importable.
 # ---------------------------------------------------------------------------
-_SPACE_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-_DW_PKG = _SPACE_ROOT / "packages" / "delivery-workflow"
-if str(_DW_PKG) not in sys.path:
-    sys.path.insert(0, str(_DW_PKG))
 
-from state_types import WorkflowState  # noqa: E402
+from delivery_workflow.state_types import WorkflowState  # noqa: E402
 
 from app.harnesses.compiler import compile as compile_harness  # noqa: E402
 from app.harnesses.executor import HarnessExecutor  # noqa: E402
@@ -279,7 +277,7 @@ def _run_runner(
 
     Returns (workflow_state, mapped_run_state, events).
     """
-    from runner.core import run as runner_run  # noqa: PLC0415
+    from delivery_workflow.runner.core import run as runner_run  # noqa: PLC0415
 
     events: list[dict] = []
     adapter, _worker = _make_runner_adapter(
@@ -592,9 +590,11 @@ class TestHumanWaitParity:
 
     Resume parity:
       BFS: re-run on the same tmp_path (loads parked RunState from disk); completes.
-      Runner: runner-path resume from human-wait is NOT supported in this iteration.
-        The runner's entry-node-only seeding means a fully-parked resume returns
-        immediately (documented as out-of-scope finding).
+      Runner: resume is translated into DeliveryRun.resume(HumanAnswer) by
+        run_executor._execute_harness_run_runner; end-to-end progression is
+        covered in tests/test_delivery_outcomes.py::
+        test_harness_human_wait_resume_progresses_run (this class covers the
+        park itself).
     """
 
     def test_bfs_parks_at_wait_node(

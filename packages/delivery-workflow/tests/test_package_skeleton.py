@@ -1,9 +1,15 @@
-"""Verify the packages/delivery-workflow/ directory structure matches spec §2."""
+"""Verify the packages/delivery-workflow/ directory structure matches spec §2.
+
+R10a: the package uses a src layout — importable source lives in
+``src/delivery_workflow/`` and is installed as the ``delivery_workflow``
+distribution; ``pyproject.toml`` / ``plugin.json`` / ``.importlinter`` /
+``tests/`` stay at the package root.
+"""
 import json
-import importlib
 from pathlib import Path
 
 PACKAGE_ROOT = Path(__file__).parent.parent
+SRC_ROOT = PACKAGE_ROOT / "src" / "delivery_workflow"
 
 
 def test_pyproject_toml_exists():
@@ -22,15 +28,13 @@ def test_required_directories_exist():
         "lib/state",
         "lib/telemetry",
         "runner",
-        "adapters/cronos",
-        "hooks",
         "schemas",
         "agents",
         "skills",
-        "tests",
     ]
     for rel in required:
-        assert (PACKAGE_ROOT / rel).is_dir(), f"Missing directory: {rel}"
+        assert (SRC_ROOT / rel).is_dir(), f"Missing directory: src/delivery_workflow/{rel}"
+    assert (PACKAGE_ROOT / "tests").is_dir()
 
 
 def test_init_files_exist():
@@ -40,11 +44,9 @@ def test_init_files_exist():
         "lib/state/__init__.py",
         "lib/telemetry/__init__.py",
         "runner/__init__.py",
-        "adapters/__init__.py",
-        "adapters/cronos/__init__.py",
     ]
     for rel in inits:
-        assert (PACKAGE_ROOT / rel).is_file(), f"Missing __init__.py: {rel}"
+        assert (SRC_ROOT / rel).is_file(), f"Missing __init__.py: src/delivery_workflow/{rel}"
 
 
 def test_plugin_json_exists_and_valid():
@@ -60,37 +62,49 @@ def test_importlinter_config_exists():
     assert (PACKAGE_ROOT / ".importlinter").is_file()
 
 
+def test_package_importable():
+    import delivery_workflow  # noqa: F401
+
+    assert delivery_workflow is not None
+
+
 def test_lib_importable():
-    import lib  # noqa: F401
+    from delivery_workflow import lib  # noqa: F401
 
     assert lib is not None
 
 
 def test_lib_state_importable():
-    import lib.state  # noqa: F401
+    from delivery_workflow.lib import state  # noqa: F401
 
-    assert lib.state is not None
+    assert state is not None
 
 
 def test_lib_telemetry_importable():
-    import lib.telemetry  # noqa: F401
+    from delivery_workflow.lib import telemetry  # noqa: F401
 
-    assert lib.telemetry is not None
+    assert telemetry is not None
 
 
 def test_runner_importable():
-    import runner  # noqa: F401
+    from delivery_workflow import runner  # noqa: F401
 
     assert runner is not None
 
 
-def test_adapters_importable():
-    import adapters  # noqa: F401
+def test_no_adapters_tree_in_package():
+    """R10c (02-package-boundary.md §2.3): host adapters live in their hosts.
+    The Cronos adapter is backend/app/delivery_adapter.py; the package ships
+    no adapters/ tree at all (null_runtime stays as the reference runtime)."""
+    import importlib.util
 
-    assert adapters is not None
+    assert not (SRC_ROOT / "adapters").exists()
+    assert importlib.util.find_spec("delivery_workflow.adapters") is None
 
 
-def test_adapters_cronos_importable():
-    import adapters.cronos  # noqa: F401
+def test_null_runtime_importable():
+    """The reference runtime kept its top-level home after the adapters/ tree
+    was deleted (R10c)."""
+    from delivery_workflow import null_runtime  # noqa: F401
 
-    assert adapters.cronos is not None
+    assert null_runtime is not None

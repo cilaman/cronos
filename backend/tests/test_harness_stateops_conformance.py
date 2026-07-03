@@ -23,16 +23,12 @@ import pytest
 # ---------------------------------------------------------------------------
 # Path bootstrap so delivery-workflow modules are importable in test context.
 # ---------------------------------------------------------------------------
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-_DW_PKG = _REPO_ROOT / "packages" / "delivery-workflow"
-if str(_DW_PKG) not in sys.path:
-    sys.path.insert(0, str(_DW_PKG))
 
-from lib.state.conformance import (  # noqa: E402
+from delivery_workflow.lib.state.conformance import (  # noqa: E402
     STATEOPS_CONFORMANCE_CHECKS,
     run_stateops_conformance,
 )
-from state_types import WorkflowState  # noqa: E402
+from delivery_workflow.state_types import WorkflowState  # noqa: E402
 
 from app.harnesses.executor_adapter import _StateOps  # noqa: E402
 

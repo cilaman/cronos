@@ -20,11 +20,11 @@ import pytest
 
 
 def test_lib_telemetry_importable():
-    from lib.telemetry import BudgetExceededSignal, TelemetrySink  # noqa: F401
+    from delivery_workflow.lib.telemetry import BudgetExceededSignal, TelemetrySink  # noqa: F401
 
 
 def test_telemetry_sink_emit_nonzero_tokens():
-    from lib.telemetry import TelemetrySink
+    from delivery_workflow.lib.telemetry import TelemetrySink
 
     sink = TelemetrySink()
     sink.emit("task-1", {"tokens": 1500.0, "usd": 0.0, "seconds": 12.5})
@@ -37,7 +37,7 @@ def test_telemetry_sink_emit_nonzero_tokens():
 
 
 def test_telemetry_sink_cumulative_usd():
-    from lib.telemetry import TelemetrySink
+    from delivery_workflow.lib.telemetry import TelemetrySink
 
     sink = TelemetrySink()
     sink.emit("t1", {"tokens": 100.0, "usd": 0.01, "seconds": 1.0})
@@ -46,7 +46,7 @@ def test_telemetry_sink_cumulative_usd():
 
 
 def test_budget_exceeded_signal_raised():
-    from lib.telemetry import BudgetExceededSignal, TelemetrySink
+    from delivery_workflow.lib.telemetry import BudgetExceededSignal, TelemetrySink
 
     sink = TelemetrySink(usd_ceiling=0.005)
     with pytest.raises(BudgetExceededSignal) as exc_info:
@@ -55,7 +55,7 @@ def test_budget_exceeded_signal_raised():
 
 
 def test_telemetry_sink_node_data_unknown_returns_none():
-    from lib.telemetry import TelemetrySink
+    from delivery_workflow.lib.telemetry import TelemetrySink
 
     sink = TelemetrySink()
     assert sink.node_data("no-such-node") is None
@@ -94,7 +94,7 @@ def test_emit_delivery_telemetry_no_error():
 
 def test_emit_delivery_telemetry_nonzero_tokens():
     """Verify TelemetrySink receives non-zero tokens from trace turns."""
-    from lib.telemetry import TelemetrySink
+    from delivery_workflow.lib.telemetry import TelemetrySink
 
     from app.run_side_effects import _emit_delivery_telemetry
 

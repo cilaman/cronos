@@ -23,26 +23,24 @@ import pytest
 
 
 def test_gate_importable():
-    """lib.gate should be importable; this confirms lib.verify is on sys.path."""
-    import lib.gate  # noqa: F401
+    """delivery_workflow.lib.gate should be importable (its lib.verify imports resolve)."""
+    from delivery_workflow.lib import gate
 
-    assert hasattr(lib.gate, "runGate")
-    assert callable(lib.gate.runGate)
+    assert hasattr(gate, "runGate")
+    assert callable(gate.runGate)
 
 
 def test_gate_imports_from_lib_verify():
     """gate.py's internal verify and split_frontmatter come from lib.verify after I4."""
-    import lib.verify
-    import lib.gate as gate_mod
-
-    # After I4, gate.py imports:
-    #   from lib.verify import split_frontmatter
-    #   from lib.verify import verify as _cc_verify
+    from delivery_workflow.lib import verify as verify_mod
+    import delivery_workflow.lib.gate as gate_mod  # After I4, gate.py imports:
+    #   from delivery_workflow.lib.verify import split_frontmatter
+    #   from delivery_workflow.lib.verify import verify as _cc_verify
     # Confirm the module-level bindings are identical objects (not just equal).
-    assert gate_mod._cc_verify is lib.verify.verify, (
+    assert gate_mod._cc_verify is verify_mod.verify, (
         "gate._cc_verify should be lib.verify.verify after I4 import flip"
     )
-    assert gate_mod.split_frontmatter is lib.verify.split_frontmatter, (
+    assert gate_mod.split_frontmatter is verify_mod.split_frontmatter, (
         "gate.split_frontmatter should be lib.verify.split_frontmatter after I4 import flip"
     )
 
@@ -54,7 +52,7 @@ def test_gate_imports_from_lib_verify():
 
 def test_rungate_importable_as_named_symbol():
     """runGate should be importable by name from lib.gate."""
-    from lib.gate import runGate  # noqa: F401
+    from delivery_workflow.lib.gate import runGate  # noqa: F401
 
     assert callable(runGate)
 
@@ -66,7 +64,7 @@ def test_rungate_importable_as_named_symbol():
 
 def test_rungate_empty_gate_returns_proceed():
     """runGate with zero checks should return decision='proceed'."""
-    from lib.gate import runGate, GateResult
+    from delivery_workflow.lib.gate import runGate, GateResult
 
     gate: dict = {"id": "smoke-empty", "checks": []}
     result = runGate(gate, [], space=None)
@@ -83,7 +81,7 @@ def test_rungate_empty_gate_returns_proceed():
 
 def test_rungate_traceability_no_required_ids(tmp_path: pathlib.Path):
     """runGate traceability check with no required_ids should return proceed."""
-    from lib.gate import runGate, GateResult
+    from delivery_workflow.lib.gate import runGate, GateResult
 
     # Create a minimal research-class artifact with YAML frontmatter
     artifact_content = textwrap.dedent("""\
@@ -147,7 +145,7 @@ def test_rungate_traceability_no_required_ids(tmp_path: pathlib.Path):
 
 def test_rungate_acceptance_no_traceability(tmp_path: pathlib.Path):
     """runGate acceptance check on artifact with no traceability[] returns proceed."""
-    from lib.gate import runGate, GateResult
+    from delivery_workflow.lib.gate import runGate, GateResult
 
     artifact_content = textwrap.dedent("""\
         ---
@@ -203,7 +201,7 @@ def test_rungate_acceptance_no_traceability(tmp_path: pathlib.Path):
 
 def test_gateresult_structure():
     """GateResult should have decision, errors, evidence and to_dict()."""
-    from lib.gate import GateResult
+    from delivery_workflow.lib.gate import GateResult
 
     r = GateResult(decision="proceed", errors=[], evidence={"foo": "bar"})
     assert r.decision == "proceed"
@@ -223,7 +221,7 @@ def test_gateresult_structure():
 
 def test_rungate_unknown_check_type_returns_fail():
     """runGate with an unknown check type should return decision='fail', not raise."""
-    from lib.gate import runGate, GateResult
+    from delivery_workflow.lib.gate import runGate, GateResult
 
     gate: dict = {
         "id": "smoke-unknown-check",

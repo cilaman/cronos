@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from lib.status_envelope import parse_status_envelope
+from delivery_workflow.lib.status_envelope import parse_status_envelope
 
 _NODE = """Review complete.
 

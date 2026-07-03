@@ -14,13 +14,10 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock
 
-_BUNDLE = Path(__file__).parent.parent.parent / "packages" / "delivery-workflow"
-if str(_BUNDLE) not in sys.path:
-    sys.path.insert(0, str(_BUNDLE))
 
-from adapters.cronos.adapter import CronosAdapter
-from lib.state.store import StateStore
-from state_types import BudgetState, WorkflowState
+from app.delivery_adapter import CronosAdapter
+from delivery_workflow.lib.state.store import StateStore
+from delivery_workflow.state_types import BudgetState, WorkflowState
 
 
 def _adapter(tmp_path: Path) -> CronosAdapter:

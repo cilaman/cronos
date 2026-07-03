@@ -5,7 +5,9 @@
 ### Install dev dependencies
 
 ```bash
-cd backend && pip install -e ".[dev]"
+# The sibling delivery-workflow package first (the backend dev extra depends
+# on it; it is NOT on PyPI — installing it locally first is required, same as CI):
+cd backend && pip install -e ../packages/delivery-workflow && pip install -e ".[dev]"
 ```
 
 ### Run backend tests

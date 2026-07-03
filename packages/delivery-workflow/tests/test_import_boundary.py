@@ -1,32 +1,30 @@
 """Verify that the portable delivery-workflow core never imports app.* or backend.*.
 
 Uses AST scanning — no import-linter process needed in the test environment.
-The CI step runs `lint-imports` separately against the .importlinter contract.
+The `delivery-workflow` CI job additionally runs `lint-imports` (step "Import
+boundary") against the .importlinter contract, so both enforcement paths run
+on every push; this AST test is the one that also runs locally under pytest.
 """
 import ast
 from pathlib import Path
 
 PACKAGE_ROOT = Path(__file__).parent.parent
+# R10a src layout: importable source lives under src/delivery_workflow/.
+SRC_ROOT = PACKAGE_ROOT / "src" / "delivery_workflow"
 FORBIDDEN_PREFIXES = ("app", "backend")
 
-# adapters/cronos is the portability seam — it IS allowed to import app.*.
-ALLOWED_PATHS = {PACKAGE_ROOT / "adapters" / "cronos"}
+# R10c: NO exceptions.  The Cronos adapter moved to the host
+# (backend/app/delivery_adapter.py) — the package contains zero host code.
+ALLOWED_PATHS: set[Path] = set()
 
 # The fixture file deliberately contains forbidden imports; exclude it from the clean check.
 FIXTURE_PATH = PACKAGE_ROOT / "tests" / "fixtures" / "forbidden_import_sample.py"
 
-# Known deferred/CLI-only residual imports that are accepted for SG7.
-# Each entry is (relative_path, line_number, description).
-# These are intentional runtime-gated imports that do not breach the portability
-# contract at module-import time — they are only executed when the user explicitly
-# invokes the --normalize CLI flag (lib/verify.py) which requires a backend context.
-# Follow-up SG: lift normalize.py to lib/ to remove this residual entirely.
-KNOWN_DEFERRED_RESIDUALS: set[tuple[str, int]] = {
-    # lib/verify.py:1409 — `from app.pipeline.normalize import normalize` is deferred
-    # inside `if args.normalize:` (CLI-only branch). At normal import time lib.verify
-    # does NOT load any app.* module (verified by test_lib_verify_portability.py).
-    ("lib/verify.py", 1409),
-}
+# Known deferred/CLI-only residual imports that are accepted.
+# Each entry is (relative_path, line_number).  Empty since R11 deleted the dead
+# CLI-only `from app.pipeline.normalize import normalize` in lib/verify.py (its
+# target module was removed upstream in 758190d).
+KNOWN_DEFERRED_RESIDUALS: set[tuple[str, int]] = set()
 
 
 def _is_allowed(path: Path) -> bool:
@@ -40,10 +38,7 @@ def _is_allowed(path: Path) -> bool:
 
 
 def _collect_source_files():
-    for p in PACKAGE_ROOT.rglob("*.py"):
-        parts = p.relative_to(PACKAGE_ROOT).parts
-        if "tests" in parts:
-            continue
+    for p in SRC_ROOT.rglob("*.py"):
         if _is_allowed(p):
             continue
         yield p
@@ -72,7 +67,7 @@ def _scan_violations(filepath: Path, rel_path: str) -> list[str]:
 def test_no_app_imports_in_portable_core():
     all_violations: dict[str, list[str]] = {}
     for py_file in _collect_source_files():
-        rel_path = str(py_file.relative_to(PACKAGE_ROOT))
+        rel_path = str(py_file.relative_to(SRC_ROOT))
         v = _scan_violations(py_file, rel_path)
         if v:
             all_violations[rel_path] = v

@@ -89,7 +89,7 @@ class TestWorkerRunIdBinding:
         worker.store.get = MagicMock(return_value=fake_task)
 
         # Intercept the inner body to capture context WITHOUT running the real body.
-        async def fake_body(task_id, user_message, task):
+        async def fake_body(task_id, user_message, task, verdict=None):
             captured_run_ids.append(_run_id_var.get())
 
         with patch.object(worker, "_Worker__run_task_body", fake_body):
@@ -184,7 +184,7 @@ class TestWorkerRunIdBinding:
 
         # Before reaching the None-space guard, the binding is NOT yet set
         # (guard comes first). Let's patch __execute_harness_run_body instead.
-        async def fake_body(task_id, harness_id, space_id, *, initial_run, space):
+        async def fake_body(task_id, harness_id, space_id, *, initial_run, space, **kw):
             captured.append(_run_id_var.get())
             return True
 
@@ -252,7 +252,7 @@ class TestWorkerRunIdBinding:
         fake_task.space_id = "sp1"
         worker.store.get = MagicMock(return_value=fake_task)
 
-        async def raise_in_body(task_id, user_message, task):
+        async def raise_in_body(task_id, user_message, task, verdict=None):
             raise RuntimeError("boom")
 
         with patch.object(worker, "_Worker__run_task_body", raise_in_body):

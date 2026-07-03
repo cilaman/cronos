@@ -18,26 +18,25 @@ dev = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+# R10a src layout: the importable distribution is src/delivery_workflow/.
+# Hatchling ships every file under the package directory, so the data assets
+# (delivery.workflow.yaml, schemas/, agents/, skills/, lib/schemas/) travel
+# with the wheel and resolve via Path(__file__) anchors (e.g. verify.SCHEMAS_DIR).
 [tool.hatch.build.targets.wheel]
-packages = ["lib", "runner", "adapters"]
-artifacts = [
-    "interface.py",
-    "results.py",
-    "state_types.py",
-    "null_runtime.py",
-    "spec_loader.py",
-]
+packages = ["src/delivery_workflow"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["."]
+pythonpath = ["src"]
 
 [tool.importlinter]
-root_packages = ["lib", "runner", "adapters"]
+root_packages = ["delivery_workflow"]
+# Required whenever forbidden_modules name external packages (app/backend are
+# not importable here); without it import-linter hard-errors before checking.
+include_external_packages = true
 
 [[tool.importlinter.contracts]]
-name = "No app.* imports from portable core"
+name = "No app.* imports anywhere in the delivery-workflow package"
 type = "forbidden"
-source_modules = ["lib", "runner"]
-forbidden_modules = ["app"]
-ignore_imports = ["lib.verify -> app"]
+source_modules = ["delivery_workflow"]
+forbidden_modules = ["app", "backend"]

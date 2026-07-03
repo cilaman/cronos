@@ -1,6 +1,10 @@
-"""I4 — CronosAdapter.evalCondition tests (R5).
+"""I4 — runner-internal condition-path tests (R5, re-anchored by R10b).
 
-Tests:
+R10b withdrew evalCondition from the executor surface: the runner evaluates
+edge/loop conditions via ``delivery_workflow.lib.conditions.eval_condition``
+directly, and ``CronosAdapter`` no longer has an ``evalCondition`` method.
+These tests pin the SAME semantics on the module the runner now calls:
+
 - Simple equality: "status == 'done'" → True/False
 - Dotted-path identifiers: "analyze.fields.has_ui == 'true'" → True
 - Hyphenated identifiers: "g-tests.status == 'done'" → True
@@ -8,7 +12,8 @@ Tests:
 - Unknown variable → False (sandboxed)
 - Typed scope values pass through un-coerced (R3): booleans compare
   against canonical true/false, numbers compare numerically
-- Also tests public eval_condition in decision.py directly
+- Also tests public eval_condition in decision.py directly (delegates to the
+  same module — harness semantics identical by construction)
 """
 from __future__ import annotations
 
@@ -18,116 +23,84 @@ from unittest.mock import MagicMock
 
 import pytest
 
-_BUNDLE = Path(__file__).parent.parent.parent / "packages" / "delivery-workflow"
-if str(_BUNDLE) not in sys.path:
-    sys.path.insert(0, str(_BUNDLE))
 
-from adapters.cronos.adapter import CronosAdapter
-from lib.state.store import StateStore
-from state_types import BudgetState, WorkflowState
+from app.delivery_adapter import CronosAdapter
+from delivery_workflow.lib.conditions import eval_condition
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _adapter(tmp_path: Path) -> CronosAdapter:
-    run_dir = tmp_path / "run"
-    run_dir.mkdir(parents=True)
-    ws = WorkflowState(
-        spec="ping", run_id="r1", status="running", budget=BudgetState(usd_ceiling=10.0)
-    )
-    StateStore(run_dir).write(ws)
-    return CronosAdapter(
-        store=MagicMock(),
-        trace_store=MagicMock(),
-        space_id="s1",
-        run_dir=run_dir,
-    )
+def test_adapter_has_no_eval_condition() -> None:
+    """R10b: the executor port is dispatchAgent/runGate/runExec only."""
+    assert not hasattr(CronosAdapter, "evalCondition")
 
 
 # ---------------------------------------------------------------------------
-# Tests: evalCondition via adapter
+# Tests: the runner-internal condition path (lib.conditions)
 # ---------------------------------------------------------------------------
 
 
-class TestEvalConditionAdapter:
-    def test_simple_equality_true(self, tmp_path: Path) -> None:
-        adapter = _adapter(tmp_path)
-        assert adapter.evalCondition("status == 'done'", {"status": "done"}) is True
+class TestEvalConditionRunnerPath:
+    def test_simple_equality_true(self) -> None:
+        assert eval_condition("status == 'done'", {"status": "done"}) is True
 
-    def test_simple_equality_false(self, tmp_path: Path) -> None:
-        adapter = _adapter(tmp_path)
-        assert adapter.evalCondition("status == 'done'", {"status": "running"}) is False
+    def test_simple_equality_false(self) -> None:
+        assert eval_condition("status == 'done'", {"status": "running"}) is False
 
-    def test_dotted_path_true(self, tmp_path: Path) -> None:
-        adapter = _adapter(tmp_path)
+    def test_dotted_path_true(self) -> None:
         # Dotted path: "analyze.fields.has_ui" as a scope key
         scope = {"analyze.fields.has_ui": "true"}
-        assert adapter.evalCondition("analyze.fields.has_ui == 'true'", scope) is True
+        assert eval_condition("analyze.fields.has_ui == 'true'", scope) is True
 
-    def test_dotted_path_false(self, tmp_path: Path) -> None:
-        adapter = _adapter(tmp_path)
+    def test_dotted_path_false(self) -> None:
         scope = {"analyze.fields.has_ui": "false"}
-        assert adapter.evalCondition("analyze.fields.has_ui == 'true'", scope) is False
+        assert eval_condition("analyze.fields.has_ui == 'true'", scope) is False
 
-    def test_hyphenated_identifier(self, tmp_path: Path) -> None:
-        adapter = _adapter(tmp_path)
+    def test_hyphenated_identifier(self) -> None:
         scope = {"g-tests.status": "done"}
-        assert adapter.evalCondition("g-tests.status == 'done'", scope) is True
+        assert eval_condition("g-tests.status == 'done'", scope) is True
 
-    def test_and_conjunction_all_true(self, tmp_path: Path) -> None:
-        adapter = _adapter(tmp_path)
+    def test_and_conjunction_all_true(self) -> None:
         scope = {"review.decision": "needs_fix", "review.category": "local"}
         expr = "review.decision == 'needs_fix' && review.category == 'local'"
-        assert adapter.evalCondition(expr, scope) is True
+        assert eval_condition(expr, scope) is True
 
-    def test_and_conjunction_one_false(self, tmp_path: Path) -> None:
-        adapter = _adapter(tmp_path)
+    def test_and_conjunction_one_false(self) -> None:
         scope = {"review.decision": "needs_fix", "review.category": "architectural"}
         expr = "review.decision == 'needs_fix' && review.category == 'local'"
-        assert adapter.evalCondition(expr, scope) is False
+        assert eval_condition(expr, scope) is False
 
-    def test_unknown_variable_returns_false(self, tmp_path: Path) -> None:
-        adapter = _adapter(tmp_path)
+    def test_unknown_variable_returns_false(self) -> None:
         assert (
-            adapter.evalCondition("nonexistent.field == 'foo'", {"other": "foo"})
+            eval_condition("nonexistent.field == 'foo'", {"other": "foo"})
             is False
         )
 
-    def test_typed_bool_passes_through(self, tmp_path: Path) -> None:
+    def test_typed_bool_passes_through(self) -> None:
         """R3 (kills D3): the adapter no longer str()-coerces the scope —
         a JSON boolean matches the canonical true/false tokens, and the
         Python-repr spelling 'False' no longer matches anything."""
-        adapter = _adapter(tmp_path)
         scope = {"has_ui": False}
-        assert adapter.evalCondition("has_ui == false", scope) is True
-        assert adapter.evalCondition("has_ui == true", scope) is False
-        assert adapter.evalCondition("has_ui == 'False'", scope) is False
+        assert eval_condition("has_ui == false", scope) is True
+        assert eval_condition("has_ui == true", scope) is False
+        assert eval_condition("has_ui == 'False'", scope) is False
 
-    def test_typed_number_passes_through(self, tmp_path: Path) -> None:
-        adapter = _adapter(tmp_path)
+    def test_typed_number_passes_through(self) -> None:
         scope = {"count": 3}
-        assert adapter.evalCondition("count == 3", scope) is True
-        assert adapter.evalCondition("count == 4", scope) is False
+        assert eval_condition("count == 3", scope) is True
+        assert eval_condition("count == 4", scope) is False
 
-    def test_exists_guard(self, tmp_path: Path) -> None:
-        adapter = _adapter(tmp_path)
-        assert adapter.evalCondition("exists(has_ui)", {"has_ui": False}) is True
-        assert adapter.evalCondition("exists(has_ui)", {}) is False
+    def test_exists_guard(self) -> None:
+        assert eval_condition("exists(has_ui)", {"has_ui": False}) is True
+        assert eval_condition("exists(has_ui)", {}) is False
 
-    def test_in_operator(self, tmp_path: Path) -> None:
-        adapter = _adapter(tmp_path)
+    def test_in_operator(self) -> None:
         scope = {"verdict": "needs_fix"}
-        assert adapter.evalCondition("verdict in needs_fix,fail", scope) is True
-        assert adapter.evalCondition("verdict in proceed,done", scope) is False
+        assert eval_condition("verdict in needs_fix,fail", scope) is True
+        assert eval_condition("verdict in proceed,done", scope) is False
 
-    def test_ne_operator(self, tmp_path: Path) -> None:
-        adapter = _adapter(tmp_path)
+    def test_ne_operator(self) -> None:
         scope = {"status": "done"}
-        assert adapter.evalCondition("status != 'running'", scope) is True
-        assert adapter.evalCondition("status != 'done'", scope) is False
+        assert eval_condition("status != 'running'", scope) is True
+        assert eval_condition("status != 'done'", scope) is False
 
 
 # ---------------------------------------------------------------------------

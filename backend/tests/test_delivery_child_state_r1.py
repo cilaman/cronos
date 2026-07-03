@@ -329,8 +329,8 @@ async def test_missing_fence_passes_waiting_override():
 async def test_clean_run_returns_fresh_trace():
     ex, _, worker = _make_executor()
     returned = await _run(ex, _agent_result(raw_events=_fence_events("done")))
-    assert returned["trace"] is not None
-    assert returned["trace"].node_status == {"status": "done"}
+    assert returned is not None
+    assert returned.node_status == {"status": "done"}
     worker.trace_store.load_latest.assert_awaited_once()
 
 
@@ -339,7 +339,7 @@ async def test_spawn_exception_suppresses_trace():
     """A stale trace from an earlier run must never classify this node."""
     ex, finalizer, worker = _make_executor()
     returned = await _run(ex, None, run_agent_raises=True)
-    assert returned["trace"] is None
+    assert returned is None
     worker.trace_store.load_latest.assert_not_awaited()
     # No envelope override on infra failure — generic WAITING path.
     kwargs = finalizer.finalize_child.await_args.kwargs
@@ -352,7 +352,7 @@ async def test_crash_suppresses_trace():
     returned = await _run(
         ex, _agent_result(raw_events=_fence_events("done"), exit_code=1)
     )
-    assert returned["trace"] is None
+    assert returned is None
     worker.trace_store.load_latest.assert_not_awaited()
 
 
@@ -362,5 +362,5 @@ async def test_stopped_suppresses_trace():
     returned = await _run(
         ex, _agent_result(raw_events=_fence_events("done"), stopped=True)
     )
-    assert returned["trace"] is None
+    assert returned is None
     worker.trace_store.load_latest.assert_not_awaited()

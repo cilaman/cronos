@@ -5,10 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from interface import TelemetryOps
-from lib.state.store import StateStore
-from lib.telemetry import BudgetExceededSignal, TelemetrySink
-from state_types import BudgetState, NodeState, WorkflowState
+from delivery_workflow.interface import TelemetryOps
+from delivery_workflow.lib.state.store import StateStore
+from delivery_workflow.lib.telemetry import BudgetExceededSignal, TelemetrySink
+from delivery_workflow.state_types import BudgetState, NodeState, WorkflowState
 
 
 # ---------------------------------------------------------------------------

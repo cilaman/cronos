@@ -13,9 +13,8 @@ import sys
 import pytest
 
 # Ensure packages/delivery-workflow is importable when run from repo root or tests dir
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from recon_lint import LintError, extract_root_identifiers, lint_edge_conditions
+from delivery_workflow.recon_lint import LintError, extract_root_identifiers, lint_edge_conditions
 
 
 # ---------------------------------------------------------------------------

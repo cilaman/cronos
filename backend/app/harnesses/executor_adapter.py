@@ -2,63 +2,66 @@
 backend/app/harnesses/executor_adapter — HarnessExecutorAdapter.
 
 Bridges the Cronos BFS runtime (WorkerProtocol / RunState) to the portable
-delivery-workflow ``ExecutorInterface`` so that ``runner.core.run()`` can
-drive a Cronos harness without touching any BFS executor logic.
+delivery-workflow ports — ``NodeExecutor`` (dispatchAgent) + ``HostPort``
+(on_event) since the R10b split — so that ``runner.core.run()`` can drive a
+Cronos harness without touching any BFS executor logic.
 
 Import boundary
 ---------------
 This file is in ``backend/app/harnesses/`` and MAY import from ``backend/app/``
 (unlike compiler.py which has a tighter R13 boundary).  It MUST NOT import from
-``packages/delivery-workflow/runner/*`` or ``packages/delivery-workflow/lib/*``
-other than what is needed to satisfy the ExecutorInterface protocol.
+``delivery_workflow.runner`` or ``delivery_workflow.lib`` other than what is
+needed to satisfy the executor/host port protocols.
+
+Edge conditions (R10b)
+----------------------
+The adapter no longer implements ``evalCondition`` — condition evaluation is
+runner-internal (``delivery_workflow.lib.conditions``).  Harness semantics are
+preserved by construction: ``app.harnesses.decision.eval_condition`` has
+delegated to that exact module since R3, so the runner evaluating harness edge
+``when`` expressions directly is byte-identical to the old executor round-trip
+(including the whitelisted grammar and missing-key-→-False behavior).
 
 WorkerAdapter Protocol
 ----------------------
 The adapter accepts any object that satisfies the ``WorkerAdapter`` Protocol
 below.  The real Worker satisfies it; tests inject lightweight stubs.
 
-escalate() discriminator
-------------------------
-``escalate(node_id, reason)`` is called in two semantically different situations
-by the runner:
+on_event() discriminator (R10b — replaces the escalate() reason-prefix sniff)
+-----------------------------------------------------------------------------
+The runner notifies the host with TYPED events:
 
-1. **Human-wait park** — reason starts with ``"[wait/human]"`` or ``"[human]"``.
-   The adapter marks the WorkflowState RUN status ``"blocked"`` (run level
-   only — the node status is written by the runner from the returned
-   NodeOutcome; R9 single-writer, §5.8) so runner.core.run() halts.
+1. ``RunBlocked(node_id, question)`` — human-wait park.  The adapter marks the
+   WorkflowState RUN status ``"blocked"`` (run level only — the node status is
+   written by the runner from the returned NodeOutcome; R9 single-writer,
+   §5.8) so runner.core.run() halts.
 
-2. **Loop exhaust / global cap** — any other reason.
-   The adapter marks the WorkflowState status as ``"escalated"`` (which causes
-   runner.core.run() to halt).  ``waiting_node_id`` is NOT set.
+2. ``RunEscalated(kind, node_id, detail)`` — loop exhaust / timed wait /
+   global cap.  The adapter marks the WorkflowState status ``"escalated"``.
+   ``waiting_node_id`` is NOT set.
+
+Other events (``NodeStarted``/``NodeFinished``/``RunFailed``/``RunStalled``)
+need no state effect here: run_executor finalizes the tracking task from the
+run's terminal ``Outcome`` via the shared table in ``app.delivery_outcomes``
+(R10d), and node-transition SSE is synthesized in ``dispatchAgent`` —
+forwarding the package NodeStarted/NodeFinished events as well would
+double-emit, so the SSE source stays here deliberately.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-import sys
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any, Callable, Protocol, runtime_checkable
 
-# ---------------------------------------------------------------------------
-# sys.path bootstrap — make packages/delivery-workflow importable.
-# ---------------------------------------------------------------------------
-_THIS_FILE = Path(__file__).resolve()
-# backend/app/harnesses/executor_adapter.py → 4 parents up = space root
-_SPACE_ROOT = _THIS_FILE.parent.parent.parent.parent.parent
-_DW_PKG = _SPACE_ROOT / "packages" / "delivery-workflow"
-_DW_PKG_STR = str(_DW_PKG)
-if _DW_PKG_STR not in sys.path:
-    sys.path.insert(0, _DW_PKG_STR)
+from delivery_workflow.events import RunBlocked, RunEscalated, RunEvent
+from delivery_workflow.results import AgentResult, GateResult
+from delivery_workflow.state_types import NodeState as WfNodeState
+from delivery_workflow.state_types import WorkflowState
 
-from results import AgentResult, GateResult  # noqa: E402
-from state_types import NodeState as WfNodeState  # noqa: E402
-from state_types import WorkflowState  # noqa: E402
-
-from ..models import TaskState  # noqa: E402
-from ..trace_parser import RunTrace  # noqa: E402
-from .decision import eval_condition as _eval_condition  # noqa: E402
+from ..models import TaskState
+from ..trace_parser import RunTrace
 from .run_state import RunState  # noqa: E402
 from .state_mapping import runstate_to_workflowstate, workflowstate_to_runstate  # noqa: E402
 
@@ -225,29 +228,16 @@ class _TelemetryOps:
 
 
 # ---------------------------------------------------------------------------
-# Human-wait discriminator
-# ---------------------------------------------------------------------------
-
-_HUMAN_WAIT_PREFIXES = ("[wait/human]", "[human]", "wait:")
-
-
-def _is_human_wait(reason: str) -> bool:
-    """Return True if *reason* indicates a human-wait park (not loop exhaust)."""
-    return any(reason.startswith(p) for p in _HUMAN_WAIT_PREFIXES)
-
-
-# ---------------------------------------------------------------------------
 # HarnessExecutorAdapter
 # ---------------------------------------------------------------------------
 
 
 class HarnessExecutorAdapter:
-    """Cronos-side implementation of the delivery-workflow ``ExecutorInterface``.
+    """Cronos-side NodeExecutor + HostPort for the delivery-workflow runner.
 
-    Wraps a ``WorkerAdapter`` instance for agent dispatch; delegates condition
-    evaluation to ``harnesses.decision.eval_condition``; bridges
-    ``escalate()`` to either human-wait parking or loop-exhaust signalling
-    depending on the ``reason`` string prefix.
+    Wraps a ``WorkerAdapter`` instance for agent dispatch; receives typed
+    ``RunEvent``s via ``on_event()`` (R10b) — ``RunBlocked`` parks the run
+    ``blocked``, ``RunEscalated`` marks it ``escalated``.
 
     Parameters
     ----------
@@ -426,61 +416,38 @@ class HarnessExecutorAdapter:
             f"Cronos harnesses do not support gate nodes; gate={gate!r}"
         )
 
-    def evalCondition(self, expr: str, scope: dict[str, Any]) -> bool:
-        """Evaluate a condition expression using the harness decision evaluator.
+    def on_event(self, event: RunEvent) -> None:
+        """HostPort (R10b): handle typed run events from the runner.
 
-        Delegates to ``harnesses.decision.eval_condition`` (whitelisted
-        grammar: ``==``, ``!=``, ``in``, ``&&``, ``||``).  No eval().
+        ``RunBlocked`` (human-wait park)
+            Marks the WorkflowState RUN status ``'blocked'`` so the runner
+            halts (the cancel-race guard needs the run-level write).  The
+            NODE status is deliberately NOT written here (R9 single-writer,
+            target §5.8): the runner is the only writer of node ``status`` —
+            the dispatch handler that emitted the event returns
+            ``NodeOutcome(status='blocked')`` and the runner persists it.
+            The caller (run_executor.py) sets ``RunState.waiting_node_id``
+            from ``Outcome.node_id`` when converting back via
+            ``workflowstate_to_runstate`` (R10d).
+
+        ``RunEscalated`` (loop exhaust / timed wait / global cap)
+            Sets ``state.status = 'escalated'``.  ``waiting_node_id`` is NOT
+            set.
+
+        Everything else is a notification with no state effect here (see the
+        module docstring).
         """
-        if not expr:
-            return True
-        try:
-            return _eval_condition(expr, scope)
-        except Exception as exc:
-            log.warning(
-                "evalCondition: failed to evaluate %r: %s — returning False.", expr, exc
-            )
-            return False
-
-    def escalate(self, node_id: str, reason: str) -> None:
-        """Handle escalation from the runner.
-
-        Discriminates between two call shapes (R-high-risk from design report):
-
-        Human-wait park (reason starts with '[wait/human]', '[human]', or 'wait:')
-        --------------------------------------------------------------------------
-        Marks the WorkflowState RUN status as ``'blocked'`` so the runner
-        halts (the cancel-race guard needs the run-level write).  The NODE
-        status is deliberately NOT written here (R9 single-writer, target
-        §5.8): the runner is the only writer of node ``status`` — the
-        dispatch handler that called escalate returns
-        ``NodeOutcome(status='blocked')`` and the runner persists it.  This
-        mirrors the package ``CronosAdapter.escalate``, which writes run
-        level only.  The caller (run_executor.py) is responsible for setting
-        ``RunState.waiting_node_id`` by converting back via
-        ``workflowstate_to_runstate``.
-
-        Loop exhaust / global cap (all other reasons)
-        -----------------------------------------------
-        Sets ``state.status = 'escalated'``.  ``waiting_node_id`` is NOT set.
-        """
-        log.info(
-            "HarnessExecutorAdapter.escalate: node=%r reason=%r", node_id, reason
-        )
-
-        if _is_human_wait(reason):
-            # Human-wait park: run-level status only (node status is the
-            # runner's, written from the returned NodeOutcome).
+        if isinstance(event, RunBlocked):
             self.state.write({"status": "blocked"})
             log.info(
-                "escalate: human-wait park — node=%r; run status=blocked.", node_id
+                "on_event: human-wait park — node=%r question=%r; run "
+                "status=blocked.", event.node_id, event.question,
             )
-        else:
-            # Loop exhaust or global cap: escalate the run.
+        elif isinstance(event, RunEscalated):
             self.state.write({"status": "escalated"})
             log.info(
-                "escalate: loop-exhaust or global cap — node=%r; run status=escalated.",
-                node_id,
+                "on_event: escalation (%s) — node=%r; run status=escalated.",
+                event.kind, event.node_id,
             )
 
     # ------------------------------------------------------------------
@@ -539,5 +506,5 @@ def _run_sync(coro: Any) -> Any:
 
 def _zero_telemetry():
     """Return a zeroed TelemetryData for AgentResult."""
-    from results import TelemetryData  # noqa: PLC0415
+    from delivery_workflow.results import TelemetryData  # noqa: PLC0415
     return TelemetryData(tokens=0, usd=0.0, seconds=0.0)
