@@ -35,16 +35,16 @@ from state_types import BudgetState, NodeState, WorkflowState
 # Helpers
 # ---------------------------------------------------------------------------
 
-_DS_FENCE = json.dumps(
-    {
-        "status": "done",
-        "artifact_paths": ["scout-report.md"],
-        "produces": "research",
-        "fields": {"has_ui": "false"},
-        "open_questions": [],
-        "telemetry": {"tokens": 500, "usd": 0.005, "seconds": 10},
-    }
-)
+_DS_ENVELOPE = {
+    "status": "done",
+    "artifact_paths": ["scout-report.md"],
+    "produces": "research",
+    "fields": {"has_ui": "false"},
+    "open_questions": [],
+    "telemetry": {"tokens": 500, "usd": 0.005, "seconds": 10},
+}
+
+_DS_FENCE = json.dumps(_DS_ENVELOPE)
 
 
 def _make_task(state_name: str) -> SimpleNamespace:
@@ -97,6 +97,8 @@ class TestAllSixOps:
             turns=[SimpleNamespace(input_tokens=200, output_tokens=100)],
             duration_seconds=8.0,
             final_text_snippet=f"```delivery_status\n{_DS_FENCE}\n```",
+            # R1: dispatchAgent reads the structured envelope, not the snippet.
+            node_status=_DS_ENVELOPE,
         )
         trace_store.load_latest = AsyncMock(return_value=trace)
 

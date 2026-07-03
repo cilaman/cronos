@@ -52,6 +52,71 @@ def _summarize_input(inp: Any) -> str:
 _MEMORY_FILE_RE = re.compile(r"[/\\]memory[/\\]([^/\\]+\.md)$")
 _FILE_PATH_RE = re.compile(r'"file_path"\s*:\s*"([^"]+)"')
 
+# ---------------------------------------------------------------------------
+# node_status envelope transport parser (R1 / D6)
+# ---------------------------------------------------------------------------
+# Deliberate, documented duplication of the package-side parser
+# (packages/delivery-workflow/lib/node_status.py): trace_parser must NOT
+# import the delivery-workflow package — it is not reliably on sys.path for
+# every backend entry point. This ~15-line transport parser stays until R10
+# consolidates the boundary. Transport-only: it returns the raw fence dict
+# and does not validate the status vocabulary — the vocabulary is closed at
+# the adapter boundary (CronosAdapter.dispatchAgent), never here.
+
+_STATUS_FENCE_RE = re.compile(
+    r"```(?:node_status|delivery_status)\s*\n(.*?)```",
+    re.DOTALL,
+)
+
+
+def parse_node_status_fence(text: str) -> dict[str, Any] | None:
+    """Return the last complete node_status/delivery_status fenced envelope.
+
+    Scans *text* for fenced blocks named ``node_status`` (preferred, emitted
+    by workflow agents) or ``delivery_status`` (legacy CC-v1). The **last**
+    complete fence wins — agents write prose first and the fence last.
+    Returns ``None`` when no fence is present or the winning fence is not
+    valid JSON / not a JSON object.
+    """
+    matches = _STATUS_FENCE_RE.findall(text or "")
+    if not matches:
+        return None
+    try:
+        data = json.loads(matches[-1].strip())
+    except json.JSONDecodeError:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def final_assistant_text(raw_events: list[dict[str, Any]]) -> str:
+    """Return the FULL text of the last non-empty assistant turn.
+
+    Single selection rule shared by ``extract_run_trace`` (which parses
+    ``RunTrace.node_status`` from it) and the delivery child finalization
+    (which derives the child's Kanban state from the same envelope, D13) —
+    the two consumers can never disagree about which text carries the fence.
+
+    Tool-only turns produce no text and never overwrite an earlier non-empty
+    turn ("last non-empty wins").
+    """
+    final = ""
+    for event in raw_events or []:
+        if not isinstance(event, dict) or event.get("type") != "assistant":
+            continue
+        msg = event.get("message") or {}
+        content = msg.get("content") or []
+        if not isinstance(content, list):
+            continue
+        parts = [
+            block.get("text", "")
+            for block in content
+            if isinstance(block, dict) and block.get("type") == "text"
+        ]
+        text = "\n".join(parts)
+        if text.strip():
+            final = text
+    return final
+
 _MEMORY_READ_TOOLS = frozenset({"Read"})
 _MEMORY_WRITE_TOOLS = frozenset({"Write", "Edit"})
 
@@ -145,6 +210,12 @@ class RunTrace(BaseModel):
     backtrack_count: int = 0
     final_text_snippet: str = ""
     had_crash: bool = False
+    # R1 (D6): structured node_status/delivery_status envelope parsed from the
+    # FULL final assistant text (untruncated) — the single classification
+    # channel for delivery-workflow nodes. None when the agent emitted no
+    # (valid) fence. final_text_snippet above stays a UI nicety and is never
+    # load-bearing for classification.
+    node_status: dict[str, Any] | None = None
     # Memory tracking
     memory_injected: list[str] = Field(default_factory=list)
     memory_used: list[str] = Field(default_factory=list)
@@ -184,7 +255,6 @@ def extract_run_trace(
 
     tool_call_index = 0
     turn_index = 0
-    final_text = ""
     real_model: str | None = None
 
     # Track unique tools in appearance order
@@ -253,7 +323,6 @@ def extract_run_trace(
                         tool_call_index += 1
 
             full_text = "\n".join(text_parts)
-            final_text = full_text  # keep updating; last non-empty wins
             turn = AssistantTurnTrace(
                 turn_index=turn_index,
                 text_snippet=_truncate(full_text, 2000),
@@ -289,6 +358,13 @@ def extract_run_trace(
 
         elif etype == "result":
             session_id = event.get("session_id") or session_id
+
+    # Final text: FULL text of the last non-empty assistant turn ("last
+    # non-empty wins" — the previous inline tracking overwrote with EMPTY when
+    # the last turn was tool-only, R1 latent-bug fix). The node_status envelope
+    # is parsed from this untruncated text so a fence after long prose is never
+    # lost to snippet truncation (D6).
+    final_text = final_assistant_text(raw_events)
 
     # ---------------------------------------------------------------------------
     # Compute quality signals
@@ -375,6 +451,7 @@ def extract_run_trace(
         backtrack_count=backtrack_count,
         final_text_snippet=_truncate(final_text, 2000),
         had_crash=had_crash,
+        node_status=parse_node_status_fence(final_text),
         memory_injected=memory_injected or [],
         memory_used=mem_used,
         memory_written=mem_written,

@@ -71,7 +71,12 @@ def _make_task(state_name: str, task_id: str | None = None) -> SimpleNamespace:
 
 
 def _make_trace(ds: dict, tokens: int = 1000) -> SimpleNamespace:
-    """Build a stub RunTrace from a delivery_status dict."""
+    """Build a stub RunTrace from a delivery_status dict.
+
+    Post-R1 the adapter reads the structured ``node_status`` field (populated
+    backend-side by parsing the fence from the FULL final text); the snippet
+    is kept for realism but is not load-bearing.
+    """
     ds_str = json.dumps(ds)
     fence = f"```delivery_status\n{ds_str}\n```"
     turn = SimpleNamespace(input_tokens=tokens // 2, output_tokens=tokens // 2)
@@ -79,6 +84,7 @@ def _make_trace(ds: dict, tokens: int = 1000) -> SimpleNamespace:
         turns=[turn],
         duration_seconds=10.0,
         final_text_snippet=fence,
+        node_status=ds,
     )
 
 

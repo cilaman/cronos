@@ -7317,6 +7317,18 @@
             "title": "Had Crash",
             "default": false
           },
+          "node_status": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Node Status"
+          },
           "memory_injected": {
             "items": {
               "type": "string"

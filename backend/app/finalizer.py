@@ -404,8 +404,20 @@ class Finalizer:
         *,
         started_at: datetime,
         memory_injected: list[str] | None = None,
+        state_override: TaskState | None = None,
+        waiting_question_override: str | None = None,
     ) -> TaskState:
-        """Finalize a child task run inside goal orchestration. Returns the new state."""
+        """Finalize a child task run inside goal orchestration. Returns the new state.
+
+        ``state_override`` (R1/D13, delivery-workflow children): when set, the
+        child's Kanban state comes from the caller — which derives it from the
+        same parsed ``node_status`` envelope that classifies the pipeline node —
+        instead of the generic STATUS-marker mapping.  Infra failures keep
+        their standard WAITING paths and take precedence over the override:
+        spawn exception / missing result are handled before it, and a user
+        stop or a non-zero exit code (crash) forces WAITING even when the
+        final text carries an envelope.
+        """
         ended_at = datetime.now(tz=UTC)
         timestamp = ended_at.strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -428,6 +440,19 @@ class Finalizer:
             if result.stopped:
                 new_state = TaskState.WAITING
                 waiting_question = "Stopped by user."
+            elif state_override is not None and result.exit_code != 0:
+                # Delivery child crashed: infra failure outranks the envelope
+                # (R1/D13) — unlike the generic chain below, where a parsed
+                # Status.DONE would beat the crash check.
+                new_state = TaskState.WAITING
+                waiting_question = _crash_waiting_question(result.exit_code)
+            elif state_override is not None:
+                new_state = state_override
+                waiting_question = (
+                    waiting_question_override
+                    if new_state == TaskState.WAITING
+                    else None
+                )
             elif result.status == Status.DONE:
                 new_state = TaskState.DONE
                 waiting_question = None

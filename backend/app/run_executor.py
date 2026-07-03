@@ -23,6 +23,7 @@ from .event_bus import EventBus
 from .logging_config import bind_run_context
 from .models import AiToolEntry, TaskState
 from .storage import InvalidTransition, TaskStore, USER_TRANSITIONS
+from .trace_parser import final_assistant_text, parse_node_status_fence
 
 from typing import TYPE_CHECKING, Any
 
@@ -64,6 +65,54 @@ def _is_clean_no_status(result: "AgentResult | None") -> bool:
         and not result.stopped
         and result.exit_code == 0
         and result.status is None
+    )
+
+
+def _delivery_child_state_from_envelope(
+    envelope: dict[str, Any] | None,
+) -> tuple[TaskState, str | None]:
+    """Map a parsed node_status envelope to the delivery child's Kanban state.
+
+    R1/D13: this is the board-side half of the single classification channel.
+    The table mirrors what the workflow layer does with the same envelope
+    (CronosAdapter.dispatchAgent closed vocabulary + runner/dispatch.py):
+
+    ========== ==================================== ==============
+    envelope    node classification                  child state
+    ========== ==================================== ==============
+    done        node done                            DONE
+    needs_fix   AgentResult needs_fix → node done    DONE
+                (verdict routes the fix loop)
+    blocked     node blocked (parked for human)      WAITING
+    failed      node failed                          WAITING
+    unknown     failed (unknown_status:<raw>)        WAITING
+    no fence    failed (no envelope)                 WAITING
+    ========== ==================================== ==============
+    """
+    if envelope is None:
+        return (
+            TaskState.WAITING,
+            "Delivery node emitted no node_status fence — the pipeline "
+            "classified it failed.",
+        )
+    raw = envelope.get("status")
+    status = raw.strip().lower() if isinstance(raw, str) else ""
+    open_qs = envelope.get("open_questions")
+    detail = (
+        "; ".join(str(q) for q in open_qs)
+        if isinstance(open_qs, list) and open_qs
+        else None
+    )
+    if status in ("done", "needs_fix"):
+        return TaskState.DONE, None
+    if status == "blocked":
+        return TaskState.WAITING, detail or "Delivery node blocked awaiting input."
+    if status == "failed":
+        return TaskState.WAITING, detail or "Delivery node reported status=failed."
+    return (
+        TaskState.WAITING,
+        f"Delivery node reported unknown status {raw!r} — treated as failed "
+        f"(unknown_status:{raw}).",
     )
 
 
@@ -1513,11 +1562,31 @@ class RunExecutor:
                 log.exception("Agent error on delivery child %s", child_id)
 
         w._current_child_id = None
+
+        # R1/D13: derive the delivery child's Kanban state from the SAME
+        # node_status envelope that classifies the pipeline node.  The envelope
+        # below is byte-identical to the ``trace.node_status`` the adapter
+        # reads (same selection: parse_node_status_fence(final_assistant_text)),
+        # so the board and the workflow node can no longer contradict each
+        # other.  Infra failures (spawn exception, missing result, user stop,
+        # crash) still force WAITING — enforced inside finalize_child.
+        state_override: TaskState | None = None
+        waiting_override: str | None = None
+        if run_exception is None and child_result is not None:
+            envelope = parse_node_status_fence(
+                final_assistant_text(child_result.raw_events)
+            )
+            state_override, waiting_override = _delivery_child_state_from_envelope(
+                envelope
+            )
+
         self._finalizer.space_store = self.space_store
         self._finalizer.pool = w._pool
         child_new_state = await self._finalizer.finalize_child(
             child_id, child_result, run_exception, started_at=child_started_at,
             memory_injected=child_memory_injected,
+            state_override=state_override,
+            waiting_question_override=waiting_override,
         )
 
         await self._publish(child_id, {
@@ -1535,12 +1604,23 @@ class RunExecutor:
             "new_state": child_new_state.value,
         })
 
-        # 4. Load the child's trace (telemetry).  The node outcome is read from
-        #    the agent's node_status/delivery_status fence by the adapter
-        #    (CronosAdapter.dispatchAgent → parse_status_envelope); the runner
-        #    does not derive it from a report artifact.
+        # 4. Load the child's trace (telemetry + node classification).  The
+        #    node outcome is read from the structured ``trace.node_status``
+        #    envelope by the adapter (CronosAdapter.dispatchAgent); the runner
+        #    does not derive it from a report artifact.  On infra failures the
+        #    trace is suppressed: load_latest would return a STALE trace from
+        #    an earlier run (record_telemetry never ran for this one) or a
+        #    fresh-but-crashed one, and crediting either would reopen the
+        #    misattribution class R1 closes — the adapter then classifies the
+        #    node failed, matching the child's WAITING board state (D13).
+        infra_failed = (
+            run_exception is not None
+            or child_result is None
+            or child_result.stopped
+            or child_result.exit_code != 0
+        )
         trace = None
-        if w.trace_store is not None:
+        if not infra_failed and w.trace_store is not None:
             try:
                 trace = await w.trace_store.load_latest(child.space_id, child_id)
             except Exception:

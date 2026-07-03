@@ -2,17 +2,18 @@
 
 dispatchAgent is now a *synchronous* thin shim: it calls the injected
 ``run_child(agent_ref, inputs)`` callback (which creates + executes the child on
-the Cronos main loop and returns the child's RunTrace), then parses the
-delivery_status fence + telemetry into an AgentResult. Child creation, brief
-tagging, and BACKLOG→ACTIVE transition now live in
-``RunExecutor.run_delivery_child`` (see test_run_delivery_child.py).
+the Cronos main loop and returns the child's RunTrace), then reads the
+structured ``trace.node_status`` envelope (R1 — parsed backend-side from the
+FULL final text, never from ``final_text_snippet``) + telemetry into an
+AgentResult. Child creation, brief tagging, and BACKLOG→ACTIVE transition now
+live in ``RunExecutor.run_delivery_child``.
 
 Tests:
-- Happy path: run_child returns a trace with a delivery_status fence → done
+- Happy path: run_child returns a trace with a node_status envelope → done
 - Telemetry summed per-turn
 - No run_child wired → failed
 - run_child returns None (no trace) → failed
-- >500-char delivery_status clipped → artifact fallback (DD-05)
+- No envelope → failed; mtime artifact scan is log-only (R1 demotion of DD-05)
 - run_child invoked with (agent_ref, inputs)
 """
 from __future__ import annotations
@@ -38,31 +39,33 @@ from state_types import BudgetState, WorkflowState
 # Helpers
 # ---------------------------------------------------------------------------
 
-_DS_SNIPPET = json.dumps(
-    {
-        "status": "done",
-        "artifact_paths": ["reports/scout.md"],
-        "produces": "research",
-        "fields": {"has_ui": False},
-        "open_questions": [],
-        "telemetry": {"tokens": 1200, "usd": 0.012, "seconds": 30},
-    }
-)
+_DS_ENVELOPE = {
+    "status": "done",
+    "artifact_paths": ["reports/scout.md"],
+    "produces": "research",
+    "fields": {"has_ui": False},
+    "open_questions": [],
+    "telemetry": {"tokens": 1200, "usd": 0.012, "seconds": 30},
+}
 
-_DS_FENCE = f"```delivery_status\n{_DS_SNIPPET}\n```"
+_DS_FENCE = f"```delivery_status\n{json.dumps(_DS_ENVELOPE)}\n```"
 
 
 def _make_trace(
+    node_status: dict | None = None,
     final_text: str = _DS_FENCE,
     input_tokens: int = 800,
     output_tokens: int = 400,
     duration_seconds: float = 15.0,
 ) -> SimpleNamespace:
+    """Stub RunTrace — post-R1 the structured ``node_status`` field carries the
+    envelope; ``final_text_snippet`` is a UI nicety and never load-bearing."""
     turn = SimpleNamespace(input_tokens=input_tokens, output_tokens=output_tokens)
     return SimpleNamespace(
         turns=[turn],
         duration_seconds=duration_seconds,
         final_text_snippet=final_text,
+        node_status=node_status,
     )
 
 
@@ -96,7 +99,9 @@ def _adapter(tmp_path: Path, run_child) -> CronosAdapter:
 
 class TestDispatchAgentHappyPath:
     def test_returns_done_result(self, tmp_path: Path) -> None:
-        adapter = _adapter(tmp_path, run_child=lambda ref, inp: _make_trace())
+        adapter = _adapter(
+            tmp_path, run_child=lambda ref, inp: _make_trace(_DS_ENVELOPE)
+        )
 
         result = adapter.dispatchAgent(
             "pipeline-scout", {"artifact_paths": ["docs/spec.md"]}
@@ -145,33 +150,42 @@ class TestDispatchAgentFailurePaths:
         assert result.open_questions
 
 
-class TestDispatchAgentDeliveryStatusFallback:
-    def test_long_ds_block_uses_artifact_fallback(self, tmp_path: Path) -> None:
-        """Regression: >500-char delivery_status block clipped by final_text_snippet.
-
-        The adapter must fall back to scanning *.md artifacts in run_dir (DD-05).
+class TestDispatchAgentNoEnvelope:
+    def test_missing_envelope_never_credits_artifact_scan(self, tmp_path: Path) -> None:
+        """R1 (D6): the mtime artifact scan (old DD-05 fallback) is demoted to a
+        log-only diagnostic.  A trace without ``node_status`` returns failed even
+        when a matching report with a valid fence sits in run_dir — the scan is
+        logged as "would have credited", never credited.
         """
-        long_fields = {f"field_{i}": f"value_{i}" for i in range(30)}
         long_ds_json = json.dumps(
             {
                 "status": "done",
                 "artifact_paths": ["reports/artifact.md"],
                 "produces": "research",
-                "fields": long_fields,
+                "fields": {},
                 "open_questions": [],
                 "telemetry": {"tokens": 500, "usd": 0.001, "seconds": 5},
             }
         )
-        assert len(long_ds_json) > 500, "test assumption: JSON >500 chars"
-        clipped_snippet = long_ds_json[:500]  # no complete fence
 
         adapter = _adapter(
-            tmp_path, run_child=lambda ref, inp: _make_trace(clipped_snippet)
+            tmp_path, run_child=lambda ref, inp: _make_trace(node_status=None)
         )
         run_dir = tmp_path / "run"
         report = run_dir / "scout-report.md"
         report.write_text(f"# Scout Report\n\n```delivery_status\n{long_ds_json}\n```\n")
 
-        result = adapter.dispatchAgent("pipeline-scout", {})
-        assert result.status == "done"
-        assert result.artifact_paths == ["reports/artifact.md"]
+        result = adapter.dispatchAgent("pipeline-scout", {"node_id": "scout"})
+        assert result.status == "failed"
+        assert "No node_status fence found" in result.open_questions[0]
+
+    def test_snippet_fence_is_not_load_bearing(self, tmp_path: Path) -> None:
+        """A fence visible only in final_text_snippet is ignored post-R1."""
+        adapter = _adapter(
+            tmp_path,
+            run_child=lambda ref, inp: _make_trace(
+                node_status=None, final_text=_DS_FENCE
+            ),
+        )
+        result = adapter.dispatchAgent("pipeline-scout", {"node_id": "scout"})
+        assert result.status == "failed"

@@ -306,7 +306,7 @@ def _enqueue_successors(
     in_degree: dict[str, int],
     work_list: list[str],
     executor: "ExecutorInterface",
-    scope: dict[str, str],
+    scope: dict[str, Any],
 ) -> None:
     """Evaluate outgoing edges from *node_id* and enqueue ready successors.
 

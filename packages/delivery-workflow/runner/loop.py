@@ -13,7 +13,7 @@ No app.* imports allowed (enforced by .importlinter).
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from ir import IRNode
 from state_types import NodeState, WorkflowState
@@ -27,7 +27,7 @@ log = logging.getLogger(__name__)
 def should_loop_back(
     node: IRNode,
     state: WorkflowState,
-    scope: dict[str, str],
+    scope: dict[str, Any],
     executor: "ExecutorInterface",
 ) -> bool:
     """Return True if this node should loop back (be re-executed).

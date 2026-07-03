@@ -377,9 +377,10 @@ def _resume_from_failed(adapter: Any, goal_id: str, run_dir: Path) -> str | None
 
     The runner re-dispatches any non-``done`` node on resume with no attempt
     ceiling, so a node that keeps failing (classically an OOM: exit -9) loops
-    OOM→WAITING→resume→OOM.  Since ``CronosStateOps.write`` does not persist node
-    ``fields`` and the runner overwrites node ``attempt`` on each dispatch, the
-    attempt count is kept in a sidecar file in ``run_dir``.
+    OOM→WAITING→resume→OOM.  Since the runner overwrites node ``attempt`` on
+    each dispatch, the attempt count is kept in a sidecar file in ``run_dir``.
+    (Scheduled for deletion in remediation step R7, when ``RetryFailed`` puts
+    the attempt ceiling into persisted state.)
 
     Returns a park reason (the caller parks the goal WAITING and skips the runner)
     once a failed node exceeds ``_MAX_FAILED_RESUMES``; otherwise ``None`` (let the

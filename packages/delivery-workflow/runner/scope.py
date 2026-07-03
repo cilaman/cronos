@@ -5,16 +5,29 @@ The scope dict is rebuilt from scratch on every work-list iteration to avoid
 stale-scope bugs after back-edge resets (design risk mitigation).
 
 Convention (load-bearing — must match dispatch.py and loop.py):
-  {node_id}.fields.{key}   — agent output field value (str)
+  {node_id}.fields.{key}   — agent output field value (typed scalar)
   {node_id}.status         — node status string
   {node_id}.decision       — gate/decision node outcome string
+
+Typed scope (R3 — kills D3): field values keep their native scalar type
+(bool/int/float/str, plus None) instead of being ``str()``-coerced, so a
+JSON boolean emitted by an agent (``fields: {"has_ui": true}``) routes
+``analyze.fields.has_ui == true`` edges correctly.  ``lib.conditions``
+compares typed values; hosts that need a purely textual view must render
+via ``lib.conditions.canonicalize_scope`` (booleans → ``true``/``false``,
+numbers unquoted), never ``str()``.
 """
 from __future__ import annotations
 
+from typing import Any
+
 from state_types import NodeState, WorkflowState
 
+#: Scalar types carried through the scope untouched.
+_SCALAR_TYPES = (bool, int, float, str)
 
-def build_scope(state: WorkflowState, scope_base: dict[str, str] | None = None) -> dict[str, str]:
+
+def build_scope(state: WorkflowState, scope_base: dict[str, Any] | None = None) -> dict[str, Any]:
     """Build a flat scope dict from completed nodes in *state*.
 
     Only nodes whose status == 'done' contribute to the scope.  Nodes with
@@ -31,11 +44,11 @@ def build_scope(state: WorkflowState, scope_base: dict[str, str] | None = None) 
 
     Returns
     -------
-    dict[str, str]
-        Flat scope where all values are strings (condition evaluator requires
-        ``dict[str, str]``).
+    dict[str, Any]
+        Flat scope whose values are typed scalars (bool/int/float/str/None).
+        Non-scalar field values (lists, dicts) fall back to ``str()``.
     """
-    scope: dict[str, str] = dict(scope_base or {})
+    scope: dict[str, Any] = dict(scope_base or {})
 
     for node_id, ns in state.nodes.items():
         if ns.status != "done":
@@ -45,7 +58,7 @@ def build_scope(state: WorkflowState, scope_base: dict[str, str] | None = None) 
     return scope
 
 
-def _emit_node_scope(node_id: str, ns: NodeState, scope: dict[str, str]) -> None:
+def _emit_node_scope(node_id: str, ns: NodeState, scope: dict[str, Any]) -> None:
     """Write a single done node's state into *scope* in-place."""
     scope[f"{node_id}.status"] = ns.status
 
@@ -55,7 +68,12 @@ def _emit_node_scope(node_id: str, ns: NodeState, scope: dict[str, str]) -> None
         if decision:
             scope[f"{node_id}.decision"] = decision
 
-    # Agent/arbitrary output fields.
+    # Agent/arbitrary output fields — typed scalars pass through (R3).
     if ns.fields:
         for key, val in ns.fields.items():
-            scope[f"{node_id}.fields.{key}"] = str(val)
+            if val is None or isinstance(val, _SCALAR_TYPES):
+                scope[f"{node_id}.fields.{key}"] = val
+            else:
+                # Non-scalar (list/dict) — no scalar model; keep the legacy
+                # textual fallback so `in`-style conditions stay evaluable.
+                scope[f"{node_id}.fields.{key}"] = str(val)

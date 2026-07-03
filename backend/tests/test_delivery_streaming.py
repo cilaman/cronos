@@ -109,6 +109,8 @@ def _ds_trace(status: str = "done") -> SimpleNamespace:
         turns=[SimpleNamespace(input_tokens=5, output_tokens=5)],
         duration_seconds=1.0,
         final_text_snippet=fence,
+        # R1: the adapter classifies from the structured envelope field.
+        node_status=ds,
     )
 
 
@@ -134,7 +136,12 @@ async def test_run_delivery_child_streams_and_finalizes():
 
     ex, bus, worker = _make_executor(store, worker=worker)
 
-    agent_result = SimpleNamespace(status=SimpleNamespace(value="done"))
+    agent_result = SimpleNamespace(
+        status=SimpleNamespace(value="done"),
+        stopped=False,
+        exit_code=0,
+        raw_events=[],
+    )
     with patch("app.worker.run_agent", AsyncMock(return_value=agent_result)):
         returned = await ex.run_delivery_child(
             "goal-1", "scout", {"node_id": "scout", "artifact_paths": ["docs/x.md"]},

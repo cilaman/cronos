@@ -62,12 +62,29 @@ class TestBuildScope:
         assert scope["review.fields.verdict"] == "pass"
         assert scope["review.fields.count"] == "3"
 
-    def test_fields_non_string_coerced(self):
-        ns = NodeState(status="done", fields={"count": 42, "flag": True})
+    def test_fields_keep_typed_scalars(self):
+        """R3 (kills D3): scalar field values pass through TYPED, not str()-coerced."""
+        ns = NodeState(status="done", fields={"count": 42, "flag": True, "score": 0.5})
         state = _state(("n", ns))
         scope = build_scope(state)
-        assert scope["n.fields.count"] == "42"
-        assert scope["n.fields.flag"] == "True"
+        assert scope["n.fields.count"] == 42 and isinstance(scope["n.fields.count"], int)
+        assert scope["n.fields.flag"] is True
+        assert scope["n.fields.score"] == 0.5
+
+    def test_fields_non_scalar_falls_back_to_str(self):
+        """Lists/dicts have no scalar model — legacy str() fallback retained."""
+        ns = NodeState(status="done", fields={"items": [1, 2]})
+        state = _state(("n", ns))
+        scope = build_scope(state)
+        assert scope["n.fields.items"] == "[1, 2]"
+
+    def test_fields_none_passes_through(self):
+        """A present-but-null field stays None (exists() sees it; canon form 'null')."""
+        ns = NodeState(status="done", fields={"maybe": None})
+        state = _state(("n", ns))
+        scope = build_scope(state)
+        assert "n.fields.maybe" in scope
+        assert scope["n.fields.maybe"] is None
 
     def test_scope_base_merged(self):
         state = _state()

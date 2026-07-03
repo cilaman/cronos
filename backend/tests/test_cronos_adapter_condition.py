@@ -6,7 +6,8 @@ Tests:
 - Hyphenated identifiers: "g-tests.status == 'done'" → True
 - && conjunction: "a == 'x' && b == 'y'" → True/False
 - Unknown variable → False (sandboxed)
-- Non-string scope values are coerced to str
+- Typed scope values pass through un-coerced (R3): booleans compare
+  against canonical true/false, numbers compare numerically
 - Also tests public eval_condition in decision.py directly
 """
 from __future__ import annotations
@@ -95,11 +96,26 @@ class TestEvalConditionAdapter:
             is False
         )
 
-    def test_non_string_coerced(self, tmp_path: Path) -> None:
+    def test_typed_bool_passes_through(self, tmp_path: Path) -> None:
+        """R3 (kills D3): the adapter no longer str()-coerces the scope —
+        a JSON boolean matches the canonical true/false tokens, and the
+        Python-repr spelling 'False' no longer matches anything."""
         adapter = _adapter(tmp_path)
-        # Boolean False → str "False"
         scope = {"has_ui": False}
-        assert adapter.evalCondition("has_ui == 'False'", scope) is True
+        assert adapter.evalCondition("has_ui == false", scope) is True
+        assert adapter.evalCondition("has_ui == true", scope) is False
+        assert adapter.evalCondition("has_ui == 'False'", scope) is False
+
+    def test_typed_number_passes_through(self, tmp_path: Path) -> None:
+        adapter = _adapter(tmp_path)
+        scope = {"count": 3}
+        assert adapter.evalCondition("count == 3", scope) is True
+        assert adapter.evalCondition("count == 4", scope) is False
+
+    def test_exists_guard(self, tmp_path: Path) -> None:
+        adapter = _adapter(tmp_path)
+        assert adapter.evalCondition("exists(has_ui)", {"has_ui": False}) is True
+        assert adapter.evalCondition("exists(has_ui)", {}) is False
 
     def test_in_operator(self, tmp_path: Path) -> None:
         adapter = _adapter(tmp_path)

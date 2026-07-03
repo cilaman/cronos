@@ -12,7 +12,9 @@ Design decisions implemented here:
   DD-02  dispatchAgent is async def; other ops sync.
   DD-03  Dispatch flow: create_task → goal ACTIVE → poll → trace → AgentResult.
   DD-04  Telemetry: sum per-turn tokens; usd = tokens * token_cost_usd.
-  DD-05  delivery_status parsed from final_text_snippet; fallback to artifact fence.
+  DD-05  (R1) node outcome read from the structured ``trace.node_status``
+         envelope (parsed backend-side from the FULL final text); closed
+         vocabulary at this boundary; mtime fallback scan demoted to log-only.
   DD-06  runGate delegates to lib.gate.runGate.
   DD-07  evalCondition delegates to lib.conditions.eval_condition.
   DD-08  state.write patches StateStore; node transitions appended to EventLog.
@@ -36,6 +38,13 @@ from results import AgentResult, ExecResult, GateResult, TelemetryData
 from state_types import BudgetState, NodeState, WorkflowState
 
 log = logging.getLogger(__name__)
+
+# Closed AgentResult status vocabulary enforced at the dispatchAgent boundary
+# (R1/D4, 01-state-model.md §5.1).  The fence transport format stays open
+# (lib/node_status.py); THIS is where unknown statuses become `failed` with an
+# `unknown_status:<raw>` marker instead of silently flowing to `done` via
+# runner/dispatch.py's else-branch.
+_AGENT_STATUS_VOCAB = frozenset({"done", "blocked", "needs_fix", "failed"})
 
 
 # ---------------------------------------------------------------------------
@@ -105,6 +114,15 @@ class CronosStateOps:
                     node.gate = ns_patch["gate"]
                 if "attempt" in ns_patch:
                     node.attempt = int(ns_patch["attempt"])
+                # Round-trip law (R2/D2): the runner writes `fields` with every
+                # node outcome; dropping them kills all field-based routing
+                # (has_ui, verdict, finding_class) after any resume.
+                if "fields" in ns_patch:
+                    node.fields = dict(ns_patch["fields"])
+                # Telemetry normally arrives via TelemetrySink, but honour it
+                # in patches too — everything written must read back (R2).
+                if "telemetry" in ns_patch and ns_patch["telemetry"] is not None:
+                    node.telemetry = dict(ns_patch["telemetry"])
                 state.nodes[node_id] = node
                 if "status" in ns_patch:
                     self._event_log.append(
@@ -133,6 +151,10 @@ class CronosStateOps:
                     node.gate = ns_patch["gate"]
                 if "attempt" in ns_patch:
                     node.attempt = int(ns_patch["attempt"])
+                if "fields" in ns_patch:
+                    node.fields = dict(ns_patch["fields"])
+                if "telemetry" in ns_patch and ns_patch["telemetry"] is not None:
+                    node.telemetry = dict(ns_patch["telemetry"])
 
         self._store.write(state)
 
@@ -274,11 +296,17 @@ class CronosAdapter:
         SSE streaming all happen in the injected ``run_child`` callback, which runs
         on the Cronos main event loop via ``run_coroutine_threadsafe`` (owned by
         the delivery driver).  Here we only translate the child's run trace into an
-        AgentResult (DD-04/DD-05):
+        AgentResult (DD-04, R1):
 
         1. Call ``run_child(agent_ref, inputs)`` → the child's loaded RunTrace.
-        2. Parse the delivery_status fence from ``trace.final_text_snippet`` (or
-           fall back to the newest artifact under run_dir).
+        2. Read the structured ``trace.node_status`` envelope (parsed by the
+           backend trace parser from the FULL, untruncated final assistant
+           text — never from ``final_text_snippet``, D6) and CLOSE the status
+           vocabulary: anything outside {done, blocked, needs_fix, failed}
+           maps to ``failed`` with an ``unknown_status:<raw>`` marker — never
+           silently to done (D4).  No envelope → failed; the old mtime
+           fallback scan is demoted to a log-only diagnostic (two-release
+           deprecation, then deleted).
         3. Sum per-turn tokens into TelemetryData.
 
         Returning a plain AgentResult (never a coroutine) keeps the sync runner's
@@ -325,39 +353,91 @@ class CronosAdapter:
                 telemetry=telem,
             )
 
-        # 3b. Fallback: delivery_status JSON fence in the agent's final text, then
-        #     the newest artifact under run_dir (non-CC-v1 agents).
-        ds = None
-        if trace is not None and getattr(trace, "final_text_snippet", None):
-            ds = parse_status_envelope(trace.final_text_snippet)
+        # 3b. Structured channel (R1): the backend trace parser extracts the
+        #     node_status/delivery_status envelope from the FULL final assistant
+        #     text into ``trace.node_status`` — no truncation sensitivity, no
+        #     mtime inference.  getattr with None default keeps legacy traces
+        #     (saved before the field existed) on the honest failure path.
+        node_id = str(inputs.get("node_id") or agent_ref)
+        ds = getattr(trace, "node_status", None) if trace is not None else None
+        if not isinstance(ds, dict):
+            ds = None
+
         if ds is None:
-            # Scope the artifact scan to this node's expected class (produces.class)
-            # so a sibling's newer report can never be mis-credited to this node (P2).
+            # DEPRECATED (log-only, two releases then delete): compute what the
+            # old mtime-newest artifact scan WOULD have credited, purely as a
+            # diagnostic.  It is never credited — the fence-in-trace is the
+            # only classification channel after R1 (D6).
             prod = inputs.get("produces")
             expected_class = (
                 prod.get("class") if isinstance(prod, dict)
                 else (prod if isinstance(prod, str) else None)
             )
-            ds = _fallback_delivery_status(
-                self._run_dir, slug=self._goal_slug, expected_class=expected_class
-            )
-
-        if ds is None:
+            try:
+                would = _fallback_delivery_status(
+                    self._run_dir, slug=self._goal_slug, expected_class=expected_class
+                )
+            except Exception:
+                would = None
+            if would is not None:
+                log.warning(
+                    "dispatchAgent[%s]: no node_status envelope on the run trace; "
+                    "the deprecated mtime fallback scan would have credited "
+                    "status=%r artifact_paths=%r produces=%r — NOT credited "
+                    "(R1: trace.node_status is the only classification channel).",
+                    node_id, would.status, would.artifact_paths, would.produces,
+                )
+            else:
+                log.warning(
+                    "dispatchAgent[%s]: no node_status envelope on the run trace; "
+                    "the deprecated mtime fallback scan found nothing either.",
+                    node_id,
+                )
             return AgentResult(
                 status="failed",
                 artifact_paths=[],
                 produces="",
                 fields={},
-                open_questions=["No node_status/delivery_status fence or CC-v1 report found in agent output"],
+                open_questions=[
+                    f"No node_status fence found in agent output for node '{node_id}' "
+                    "(trace.node_status is None)"
+                ],
+                telemetry=telem,
+            )
+
+        raw_status = ds.get("status")
+        status = raw_status.strip().lower() if isinstance(raw_status, str) else ""
+        raw_paths = ds.get("artifact_paths")
+        artifact_paths = [str(p) for p in raw_paths] if isinstance(raw_paths, list) else []
+        produces = str(ds.get("produces") or "")
+        fields = dict(ds.get("fields") or {}) if isinstance(ds.get("fields"), dict) else {}
+        raw_questions = ds.get("open_questions")
+        open_questions = [str(q) for q in raw_questions] if isinstance(raw_questions, list) else []
+
+        # Close the vocabulary at this boundary (R1/D4, target §5.1): a fence
+        # status outside the AgentResult vocabulary is a protocol error and
+        # maps to `failed` with an explicit marker — never silently to done.
+        if status not in _AGENT_STATUS_VOCAB:
+            log.warning(
+                "dispatchAgent[%s]: unknown node_status %r — mapping to 'failed' "
+                "(closed vocabulary: %s).",
+                node_id, raw_status, sorted(_AGENT_STATUS_VOCAB),
+            )
+            return AgentResult(
+                status="failed",
+                artifact_paths=artifact_paths,
+                produces=produces,
+                fields=fields,
+                open_questions=[f"unknown_status:{raw_status}"] + open_questions,
                 telemetry=telem,
             )
 
         return AgentResult(
-            status=ds.status,
-            artifact_paths=ds.artifact_paths,
-            produces=ds.produces,
-            fields=ds.fields,
-            open_questions=ds.open_questions,
+            status=status,
+            artifact_paths=artifact_paths,
+            produces=produces,
+            fields=fields,
+            open_questions=open_questions,
             telemetry=telem,
         )
 
@@ -532,12 +612,15 @@ class CronosAdapter:
 
         The orchestrator pre-builds ``scope`` from ``state.read().nodes``
         delivery_status fields; this op only evaluates the expression.
-        Non-string scope values are coerced to str for the whitelisted grammar.
+
+        Scope values pass through TYPED (R3 — kills D3): the evaluator
+        compares typed scalars, so a JSON boolean field matches ``== true``
+        / ``== false`` edges.  The former ``{k: str(v)}`` coercion turned
+        ``True`` into ``"True"``, which matched neither spec branch.
         """
         from lib.conditions import eval_condition
 
-        flat: dict[str, str] = {k: str(v) for k, v in scope.items()}
-        return eval_condition(expr, flat)
+        return eval_condition(expr, scope)
 
     # ------------------------------------------------------------------
     # escalate (R8, DD-10)

@@ -47,7 +47,7 @@ class NodeOutcome:
 
 def dispatch_node(
     node: IRNode,
-    scope: dict[str, str],
+    scope: dict[str, Any],
     executor: "ExecutorInterface",
     state: WorkflowState,
     incoming: dict[str, list[str]] | None = None,
@@ -103,7 +103,7 @@ def dispatch_node(
 
 def _dispatch_agent(
     node: IRNode,
-    scope: dict[str, str],
+    scope: dict[str, Any],
     executor: "ExecutorInterface",
     state: WorkflowState,
     attempt: int,
@@ -156,7 +156,7 @@ def _dispatch_agent(
 
 def _dispatch_gate(
     node: IRNode,
-    scope: dict[str, str],
+    scope: dict[str, Any],
     executor: "ExecutorInterface",
     state: WorkflowState,
     attempt: int,
@@ -211,7 +211,7 @@ def _dispatch_gate(
 
 def _dispatch_exec(
     node: IRNode,
-    scope: dict[str, str],
+    scope: dict[str, Any],
     executor: "ExecutorInterface",
     state: WorkflowState,
     attempt: int,
@@ -262,7 +262,7 @@ def _dispatch_exec(
 
 def _dispatch_human(
     node: IRNode,
-    scope: dict[str, str],
+    scope: dict[str, Any],
     executor: "ExecutorInterface",
     state: WorkflowState,
     attempt: int,
@@ -279,7 +279,7 @@ def _dispatch_human(
 
 def _dispatch_decision(
     node: IRNode,
-    scope: dict[str, str],
+    scope: dict[str, Any],
     executor: "ExecutorInterface",
     state: WorkflowState,
     attempt: int,
@@ -290,7 +290,7 @@ def _dispatch_decision(
 
 def _dispatch_wait(
     node: IRNode,
-    scope: dict[str, str],
+    scope: dict[str, Any],
     executor: "ExecutorInterface",
     state: WorkflowState,
     attempt: int,
@@ -322,7 +322,7 @@ def _dispatch_wait(
 
 def _dispatch_aggregator(
     node: IRNode,
-    scope: dict[str, str],
+    scope: dict[str, Any],
     executor: "ExecutorInterface",
     state: WorkflowState,
     attempt: int,
@@ -372,7 +372,7 @@ def _dispatch_aggregator(
 
 def _dispatch_trigger(
     node: IRNode,
-    scope: dict[str, str],
+    scope: dict[str, Any],
     executor: "ExecutorInterface",
     state: WorkflowState,
     attempt: int,

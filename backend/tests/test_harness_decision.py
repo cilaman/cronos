@@ -363,10 +363,19 @@ class TestEdgeMatchesVariable:
         # variable not in scope → lhs is None, rhs is "success"
         assert edge_matches(edge, ("variable", None), {}) is False
 
-    def test_missing_variable_not_equals_true(self) -> None:
-        """None != 'something' → True (variable is absent, which differs from value)."""
+    def test_missing_variable_not_equals_false(self) -> None:
+        """R3 breaking change: a missing key is False for EVERY operator,
+        including != (v1 evaluated None != rhs → True, which fired every
+        != edge whenever the key was lost).  Use exists(path) to route on
+        presence."""
         edge = _make_edge("e1", condition="result != success")
-        assert edge_matches(edge, ("variable", None), {}) is True
+        assert edge_matches(edge, ("variable", None), {}) is False
+
+    def test_exists_guard_matches_presence(self) -> None:
+        """R3: exists(path) routes on key presence."""
+        edge = _make_edge("e1", condition="exists(result)")
+        assert edge_matches(edge, ("variable", None), {"result": "anything"}) is True
+        assert edge_matches(edge, ("variable", None), {}) is False
 
     def test_invalid_grammar_returns_false(self) -> None:
         edge = _make_edge("e1", condition="result > 5")
@@ -698,9 +707,16 @@ class TestEvalConditionSimple:
     def test_missing_var_equals_false(self) -> None:
         assert eval_condition("status == done", {}) is False
 
-    def test_missing_var_not_equals_true(self) -> None:
-        """None != 'something' → True."""
-        assert eval_condition("status != done", {}) is True
+    def test_missing_var_not_equals_false(self) -> None:
+        """R3 breaking change: missing key → False for != too (was True in v1)."""
+        assert eval_condition("status != done", {}) is False
+
+    def test_exists_replaces_missing_key_not_equals(self) -> None:
+        """R3: exists()/!exists() are the explicit presence guards."""
+        assert eval_condition("exists(status)", {"status": "done"}) is True
+        assert eval_condition("exists(status)", {}) is False
+        assert eval_condition("!exists(status)", {}) is True
+        assert eval_condition("!exists(status)", {"status": "done"}) is False
 
 
 class TestEvalConditionDottedPath:

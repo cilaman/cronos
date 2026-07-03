@@ -2695,6 +2695,10 @@ export interface components {
              * @default false
              */
             had_crash: boolean;
+            /** Node Status */
+            node_status?: {
+                [key: string]: unknown;
+            } | null;
             /** Memory Injected */
             memory_injected?: string[];
             /** Memory Used */

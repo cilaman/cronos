@@ -28,6 +28,7 @@ def _deserialize(data: dict[str, Any]) -> WorkflowState:
             gate=ns.get("gate"),
             artifact_paths=list(ns.get("artifact_paths", [])),
             telemetry=ns.get("telemetry"),
+            fields=dict(ns.get("fields", {})),
         )
     return WorkflowState(
         spec=data["spec"],
@@ -50,6 +51,11 @@ def _serialize(state: WorkflowState) -> dict[str, Any]:
             entry["gate"] = ns.gate
         if ns.telemetry is not None:
             entry["telemetry"] = ns.telemetry
+        # Round-trip law (R2/D2): `fields` carry routing data (has_ui, verdict,
+        # finding_class, loop.until inputs) — dropping them kills all
+        # field-based routing after any resume.
+        if ns.fields:
+            entry["fields"] = ns.fields
         nodes[nid] = entry
     return {
         "spec": state.spec,
