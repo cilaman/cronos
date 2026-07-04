@@ -138,6 +138,7 @@ async def test_run_delivery_child_streams_and_finalizes():
         stopped=False,
         exit_code=0,
         raw_events=[],
+        context=None,
     )
     with patch("app.worker.run_agent", AsyncMock(return_value=agent_result)):
         returned = await ex.run_delivery_child(

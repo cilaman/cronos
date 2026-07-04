@@ -42,7 +42,11 @@ _AGENT_SLOTS = asyncio.Semaphore(_MAX_CONCURRENT_AGENTS)
 # itself prevent a -9. Keep it generous; never set it aggressively low.
 _NODE_MAX_OLD_SPACE_MB = os.environ.get("CRONOS_NODE_MAX_OLD_SPACE_MB", "2048")
 
-STATUS_CONTRACT = """You are an autonomous task executor. The user is not watching in real time.
+# The {long_job_signal} placeholder names each contract's own completion
+# signal for the too-long-for-one-turn case: a `WAIT` status block would be
+# outside the delivery node_status vocabulary and classify the node failed
+# (unknown_status:wait), so the delivery variant must say "blocked" instead.
+_ONE_SHOT_PREAMBLE = """You are an autonomous task executor. The user is not watching in real time.
 
 ## One-shot turn — no background work, no scheduled wakeups
 
@@ -54,10 +58,12 @@ there is NO mechanism to wake you when a background job finishes. Therefore:
   work whose result you need, and then end the turn — the child is orphaned, nothing
   reaps it, and the task hangs in WAITING forever waiting on a process nobody watches.
 - Long suites are fine in the foreground (the Bash timeout is raised for this). If a
-  job is genuinely too long for one turn, finish what you can and emit a `WAIT` status
-  block describing the remaining step — do NOT background it and exit.
+  job is genuinely too long for one turn, finish what you can and {long_job_signal}
+  describing the remaining step — do NOT background it and exit.
 
-## How to finish a task
+"""
+
+_CRONOS_FINISH = """## How to finish a task
 
 When all work is complete, invoke the **task-finalize** skill as your last action:
 
@@ -115,6 +121,43 @@ Deprecated rules:
 - Write STATUS only once.
 - Do NOT use markdown formatting: write STATUS: DONE not **STATUS: DONE**
 """
+
+STATUS_CONTRACT = (
+    _ONE_SHOT_PREAMBLE.format(long_job_signal="emit a `WAIT` status block")
+    + _CRONOS_FINISH
+)
+
+_DELIVERY_FINISH = """## How to finish a delivery node
+
+You are executing ONE node of a delivery workflow. Your completion signal is a
+fenced `node_status` JSON block emitted as the LAST thing in your final
+message, exactly once:
+
+```node_status
+{"status": "done", "artifact_paths": [], "produces": "<artifact class>", "fields": {}, "open_questions": []}
+```
+
+`status` MUST be one of:
+- `done` — work complete and the artifact written.
+- `needs_fix` — a judged artifact needs another fix round (verdict fields route the loop).
+- `blocked` — you need a human decision or input; put the question in `open_questions`.
+- `failed` — unrecoverable.
+
+Rules:
+- List every file you created or modified in `artifact_paths`.
+- Do NOT invoke /task-finalize and do NOT emit a `cronos_status` block — the
+  `node_status` fence replaces both for this task.
+- The fence must appear after all tool calls are done, only once, not wrapped
+  in additional markdown formatting.
+"""
+
+DELIVERY_NODE_CONTRACT = (
+    _ONE_SHOT_PREAMBLE.format(
+        long_job_signal='emit a `node_status` fence with status "blocked" '
+        "and an `open_questions` entry"
+    )
+    + _DELIVERY_FINISH
+)
 
 
 class Status(str, Enum):
@@ -600,9 +643,16 @@ async def _run_agent_body(
     ]
     for tool_dir in adopted_dirs:
         cmd += ["--add-dir", str(tool_dir)]
+    # A delivery-workflow runner child task (brief carries the delivery-node
+    # sentinel) finishes with a ``node_status`` fence — the only completion
+    # signal the delivery classifier reads — so it gets the delivery contract
+    # instead of the cronos_status one. The same flag routes needs_fix → DONE
+    # in the parse_status calls below.
+    is_delivery_node = "<!-- delivery-node:" in (task.brief or "")
+
     cmd += [
         "--append-system-prompt",
-        STATUS_CONTRACT,
+        DELIVERY_NODE_CONTRACT if is_delivery_node else STATUS_CONTRACT,
         "--append-system-prompt",
         _upgrade_instructions(),
     ]
@@ -803,23 +853,21 @@ async def _run_agent_body(
 
     stderr = b"".join(stderr_chunks).decode("utf-8", errors="replace")[-2000:]
 
-    # A delivery-workflow runner child task (brief carries the delivery-node
-    # sentinel) routes ``needs_fix`` → DONE so the runner can read the verdict
-    # from the artifact and loop back, rather than parking the child WAITING
-    # and halting the run.  All other tasks keep needs_fix → BLOCKED.
-    is_runner_task = "<!-- delivery-node:" in (task.brief or "")
-
+    # A delivery-workflow runner child task routes ``needs_fix`` → DONE so the
+    # runner can read the verdict from the artifact and loop back, rather than
+    # parking the child WAITING and halting the run.  All other tasks keep
+    # needs_fix → BLOCKED.
     final_text = "\n\n".join(final_text_parts).strip()
-    status, context = parse_status(final_text, is_runner_task=is_runner_task)
+    status, context = parse_status(final_text, is_runner_task=is_delivery_node)
     # Fallback: if the concatenated text buries an earlier STATUS marker, try
     # parsing just the last turn's text in isolation.
     if status is None and final_text_parts:
-        status, context = parse_status(final_text_parts[-1], is_runner_task=is_runner_task)
+        status, context = parse_status(final_text_parts[-1], is_runner_task=is_delivery_node)
     # Second fallback: scan all turns in reverse so a STATUS marker from turn N
     # is not lost when later turns pushed it outside the 10-line scan window.
     if status is None and len(final_text_parts) > 1:
         for turn_text in reversed(final_text_parts[:-1]):
-            status, context = parse_status(turn_text, is_runner_task=is_runner_task)
+            status, context = parse_status(turn_text, is_runner_task=is_delivery_node)
             if status is not None:
                 break
 

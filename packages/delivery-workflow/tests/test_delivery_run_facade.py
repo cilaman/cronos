@@ -371,6 +371,8 @@ def test_top_level_exports_cover_the_host_surface():
         "RunFailed", "RunEscalated", "RunEvent", "NullHost",
         "NodeExecutor", "HostPort", "StateOps",
         "HumanAnswer", "RetryFailed", "RaiseBudget", "Nothing", "ResumeError",
+        "AGENTS_DIR", "load_agent_definition", "return_contract",
+        "upstream_scope_section",
     ):
         assert hasattr(dw, name), f"delivery_workflow must export {name}"
         assert name in dw.__all__

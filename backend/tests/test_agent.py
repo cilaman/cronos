@@ -9,9 +9,11 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.agent import (
+    DELIVERY_NODE_CONTRACT,
     STATUS_CONTRACT,
     Status,
     _MODEL_CLI_NAMES,
+    _ONE_SHOT_PREAMBLE,
     _ensure_workspace_trusted,
     _extract_assistant_text,
     _load_adopted_dirs,
@@ -1297,6 +1299,99 @@ def test_valid_agent_models_includes_fable5():
 
 def test_model_cli_names_maps_fable5():
     assert _MODEL_CLI_NAMES["fable-5"] == "claude-fable-5"
+
+
+# ---------------------------------------------------------------------------
+# run_agent: delivery-node system contract selection
+# ---------------------------------------------------------------------------
+
+
+def _appended_system_prompts(argv: list) -> list[str]:
+    return [argv[i + 1] for i, a in enumerate(argv) if a == "--append-system-prompt"]
+
+
+async def _capture_spawn_argv(task, tmp_path, monkeypatch) -> list:
+    import app.agent as agent_module
+
+    (tmp_path / "spaces" / "space-xyz").mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(agent_module, "DATA_DIR", tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    captured: list = []
+
+    async def fake_exec(*args, **kwargs):
+        captured.extend(args)
+        return _FakeProc([], exit_code=0)
+
+    async def on_event(e):
+        pass
+
+    with patch("app.agent.asyncio.create_subprocess_exec", side_effect=fake_exec):
+        await run_agent(task, user_message=None, on_event=on_event)
+    return captured
+
+
+async def test_run_agent_delivery_node_gets_delivery_contract(tmp_path, monkeypatch):
+    """A delivery-node brief swaps STATUS_CONTRACT for DELIVERY_NODE_CONTRACT."""
+    task = _make_task().model_copy(
+        update={"brief": "Analyze the spec.\n\n<!-- delivery-node: analyze -->"}
+    )
+    argv = await _capture_spawn_argv(task, tmp_path, monkeypatch)
+
+    prompts = _appended_system_prompts(argv)
+    assert DELIVERY_NODE_CONTRACT in prompts
+    assert STATUS_CONTRACT not in prompts
+    # The cronos_status finish instructions must not reach a delivery child —
+    # its only recognized completion signal is the node_status fence.
+    assert not any("```cronos_status" in p for p in prompts)
+    assert not any("## How to finish a task" in p for p in prompts)
+
+
+async def test_run_agent_ordinary_task_gets_status_contract(tmp_path, monkeypatch):
+    """A task without the delivery-node sentinel keeps STATUS_CONTRACT verbatim."""
+    argv = await _capture_spawn_argv(_make_task(), tmp_path, monkeypatch)
+
+    prompts = _appended_system_prompts(argv)
+    assert STATUS_CONTRACT in prompts
+    assert DELIVERY_NODE_CONTRACT not in prompts
+
+
+def test_delivery_node_contract_names_node_status_fence():
+    """The delivery contract must teach the node_status fence and its vocabulary."""
+    assert "```node_status" in DELIVERY_NODE_CONTRACT
+    for word in ("done", "needs_fix", "blocked", "failed"):
+        assert f"`{word}`" in DELIVERY_NODE_CONTRACT
+    assert "open_questions" in DELIVERY_NODE_CONTRACT
+    assert "artifact_paths" in DELIVERY_NODE_CONTRACT
+    # It must explicitly forbid the cronos completion path.
+    assert "task-finalize" in DELIVERY_NODE_CONTRACT
+    assert "cronos_status" in DELIVERY_NODE_CONTRACT
+
+
+def test_delivery_node_contract_shares_one_shot_preamble():
+    """Both contracts open with the same no-background-work preamble; only the
+    long-job completion signal diverges (WAIT vs a blocked node_status fence)."""
+    assert DELIVERY_NODE_CONTRACT.startswith(
+        "You are an autonomous task executor."
+    )
+    assert "no background work, no scheduled wakeups" in DELIVERY_NODE_CONTRACT
+    common = _ONE_SHOT_PREAMBLE[: _ONE_SHOT_PREAMBLE.index("{long_job_signal}")]
+    assert STATUS_CONTRACT.startswith(common)
+    assert DELIVERY_NODE_CONTRACT.startswith(common)
+
+
+def test_delivery_node_contract_long_job_signal_stays_in_vocabulary():
+    """The long-job escape hatch must not steer a delivery child to a `WAIT`
+    status block — wait is outside the node_status vocabulary, so following it
+    would classify the node failed (unknown_status:wait) instead of parking it
+    blocked on the remaining-step question."""
+    assert "`WAIT` status block" not in DELIVERY_NODE_CONTRACT
+    assert (
+        'emit a `node_status` fence with status "blocked" and an '
+        "`open_questions` entry" in DELIVERY_NODE_CONTRACT
+    )
+    # The cronos contract keeps its own signal.
+    assert "emit a `WAIT` status block" in STATUS_CONTRACT
 
 
 # ---------------------------------------------------------------------------

@@ -70,6 +70,8 @@ def _is_clean_no_status(result: "AgentResult | None") -> bool:
 
 def _delivery_child_state_from_envelope(
     envelope: dict[str, Any] | None,
+    *,
+    agent_question: str | None = None,
 ) -> tuple[TaskState, str | None]:
     """Map a parsed node_status envelope to the delivery child's Kanban state.
 
@@ -89,6 +91,10 @@ def _delivery_child_state_from_envelope(
     no fence    failed (no envelope)                 WAITING
     ========== ==================================== ==============
 
+    On the no-fence row, *agent_question* (the agent's own STATUS summary,
+    when it asked one) is surfaced ahead of the fence diagnostic so the board
+    shows the real question instead of only the generic classifier message.
+
     The CLASSIFICATION is not re-implemented here: it derives from the
     package's ``agent_result_from_envelope`` — the ONE closed-vocabulary
     boundary every executor uses (R10e) — so the board-side child state can
@@ -102,6 +108,12 @@ def _delivery_child_state_from_envelope(
         return TaskState.DONE, None
 
     if envelope is None:
+        if agent_question:
+            return (
+                TaskState.WAITING,
+                f"{agent_question}\n\n(Delivery node emitted no node_status "
+                "fence — the pipeline classified it failed.)",
+            )
         return (
             TaskState.WAITING,
             "Delivery node emitted no node_status fence — the pipeline "
@@ -1565,6 +1577,12 @@ class RunExecutor:
         normal coroutine that returns the child's loaded ``RunTrace`` (or ``None``)
         for the adapter to read the structured ``node_status`` envelope from.
         """
+        from delivery_workflow.briefs import (
+            load_agent_definition,
+            return_contract,
+            upstream_scope_section,
+        )
+
         from .delivery_driver import DELIVERY_NODE_SENTINEL
         from .storage import slugify
         from .worker import _memory_injected_for_workspace
@@ -1577,28 +1595,45 @@ class RunExecutor:
             return None
         space_id = goal.space_id
 
-        # 1. Build the brief (mirrors the former adapter flow, R8 sentinel) and
-        #    create the child task.  CC-v1 agents are forbidden from inventing a
-        #    slug (they must use it verbatim), so hand them the goal slug (B4) —
-        #    the same value the fallback report scan is scoped to (B2).
+        # 1. Build the brief and create the child task.  The role definition,
+        #    upstream scope, and return contract are the shared package
+        #    sections (delivery_workflow.briefs) so the child hears the SAME
+        #    node_status vocabulary the pipeline classifies by; the sentinel
+        #    (R8) stays last.  CC-v1 agents are forbidden from inventing a
+        #    slug (they must use it verbatim), so hand them the goal slug
+        #    (B4) — the same value the fallback report scan is scoped to (B2).
         goal_slug = slugify(goal.title)
         artifact_lines = "\n".join(
             f"- {p}" for p in inputs.get("artifact_paths", [])
         )
         node_id = inputs.get("node_id", agent_ref)
         sentinel = DELIVERY_NODE_SENTINEL.format(node_id=node_id)
+        attempt = inputs.get("attempt", 1)
+        prod = inputs.get("produces")
+        produces = (
+            prod.get("class") if isinstance(prod, dict)
+            else (prod if isinstance(prod, str) else None)
+        )
         # R7/OD-2: human sign-off answers live in the typed scope as
         # `<node>.fields.answer` (with `<node>.fields.verdict`); render them
         # into the child brief so "no — change X" actually reaches the agent
         # prompt of the node the reject route re-runs.
         answer_section = _human_answers_section(inputs.get("scope") or {})
-        brief = (
-            f"# Agent: {agent_ref}\n\n"
-            f"slug: {goal_slug}\n\n"
-            f"{artifact_lines}\n\n"
-            f"{answer_section}"
-            f"{sentinel}"
-        ).strip()
+        sections = [
+            f"# Agent: {agent_ref}",
+            load_agent_definition(agent_ref) or "",
+            f"You are agent '{agent_ref}' executing workflow node "
+            f"'{node_id}' (attempt {attempt}).",
+            f"slug: {goal_slug}",
+            artifact_lines,
+            f"This node produces an artifact of class: {produces}"
+            if produces else "",
+            upstream_scope_section(inputs.get("scope")),
+            answer_section.strip(),
+            return_contract(produces),
+            sentinel,
+        ]
+        brief = "\n\n".join(s for s in sections if s)
         depends_on = inputs.get("depends_on") or None
 
         child = await self.store.create(
@@ -1690,8 +1725,10 @@ class RunExecutor:
             envelope = parse_node_status_fence(
                 final_assistant_text(child_result.raw_events)
             )
+            # child_result.context is the agent's own STATUS summary — on a
+            # no-fence run it carries the question the child actually asked.
             state_override, waiting_override = _delivery_child_state_from_envelope(
-                envelope
+                envelope, agent_question=child_result.context
             )
 
         self._finalizer.space_store = self.space_store

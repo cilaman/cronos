@@ -69,6 +69,33 @@ class TestEnvelopeStateMapping:
         assert state == TaskState.WAITING
         assert "no node_status fence" in q
 
+    def test_no_envelope_with_agent_question_puts_question_first(self):
+        state, q = _delivery_child_state_from_envelope(
+            None, agent_question="Which auth flow should I use?"
+        )
+        assert state == TaskState.WAITING
+        assert q.startswith("Which auth flow should I use?")
+        # The fence diagnostic stays, AFTER the agent's own question.
+        assert (
+            q.index("Which auth flow should I use?")
+            < q.index("no node_status fence")
+        )
+
+    def test_no_envelope_without_agent_question_keeps_legacy_message(self):
+        state, q = _delivery_child_state_from_envelope(None, agent_question=None)
+        assert state == TaskState.WAITING
+        assert q == (
+            "Delivery node emitted no node_status fence — the pipeline "
+            "classified it failed."
+        )
+
+    def test_agent_question_ignored_when_envelope_present(self):
+        state, q = _delivery_child_state_from_envelope(
+            {"status": "failed"}, agent_question="Which auth flow?"
+        )
+        assert state == TaskState.WAITING
+        assert "Which auth flow?" not in q
+
     def test_status_is_case_insensitive_for_known_values(self):
         state, _ = _delivery_child_state_from_envelope({"status": "Done"})
         assert state == TaskState.DONE
@@ -227,6 +254,7 @@ def _agent_result(
     raw_events: list[dict] | None = None,
     exit_code: int = 0,
     stopped: bool = False,
+    context: str | None = None,
 ) -> SimpleNamespace:
     return SimpleNamespace(
         status=Status.DONE,
@@ -236,6 +264,7 @@ def _agent_result(
         final_text="",
         session_id=None,
         stderr_tail="",
+        context=context,
     )
 
 
@@ -326,6 +355,22 @@ async def test_missing_fence_passes_waiting_override():
 
 
 @pytest.mark.asyncio
+async def test_missing_fence_surfaces_agent_question():
+    """A no-fence child that asked a real question (parse_status summary in
+    AgentResult.context) shows that question on the board, not only the
+    generic fence diagnostic."""
+    ex, finalizer, _ = _make_executor()
+    await _run(
+        ex, _agent_result(raw_events=[], context="Which DB should I use?")
+    )
+    kwargs = finalizer.finalize_child.await_args.kwargs
+    assert kwargs["state_override"] == TaskState.WAITING
+    q = kwargs["waiting_question_override"]
+    assert q.startswith("Which DB should I use?")
+    assert "no node_status fence" in q
+
+
+@pytest.mark.asyncio
 async def test_clean_run_returns_fresh_trace():
     ex, _, worker = _make_executor()
     returned = await _run(ex, _agent_result(raw_events=_fence_events("done")))
@@ -364,3 +409,113 @@ async def test_stopped_suppresses_trace():
     )
     assert returned is None
     worker.trace_store.load_latest.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# run_delivery_child — brief composition: the shared package sections
+# (delivery_workflow.briefs) so the child hears the node_status contract.
+# ---------------------------------------------------------------------------
+
+
+async def _run_with_inputs(ex: RunExecutor, agent_ref: str, inputs: dict) -> str:
+    run_agent = AsyncMock(
+        return_value=_agent_result(raw_events=_fence_events("done"))
+    )
+    with patch("app.worker.run_agent", run_agent):
+        await ex.run_delivery_child(
+            "goal-1", agent_ref, inputs,
+            cancel_event=asyncio.Event(), goal_context="",
+        )
+    return ex.store.create.await_args.kwargs["brief"]
+
+
+@pytest.mark.asyncio
+async def test_brief_contains_shared_sections_in_order():
+    ex, _, _ = _make_executor()
+    brief = await _run_with_inputs(
+        ex, "analyst",
+        {
+            "node_id": "analyze",
+            "attempt": 2,
+            "produces": {"class": "analysis"},
+            "scope": {"research.fields.topic": "auth"},
+            "artifact_paths": ["docs/research.md"],
+        },
+    )
+    contract_pos = brief.index("## Return contract")
+    positions = [
+        brief.index("# Agent: analyst"),
+        # A line from the packaged analyst role definition (agents/analyst.md).
+        brief.index("REQ-id"),
+        brief.index(
+            "You are agent 'analyst' executing workflow node 'analyze' "
+            "(attempt 2)."
+        ),
+        brief.index("slug: g"),
+        brief.index("- docs/research.md"),
+        brief.index("This node produces an artifact of class: analysis"),
+        brief.index('"research.fields.topic": "auth"'),
+        contract_pos,
+        # The role definition carries its own node_status example — anchor
+        # the contract's fence AFTER the header.
+        brief.index("```node_status", contract_pos),
+        brief.index("<!-- delivery-node: analyze -->"),
+    ]
+    assert positions == sorted(positions)
+    assert brief.splitlines()[0] == "# Agent: analyst"
+    assert brief.splitlines()[-1] == "<!-- delivery-node: analyze -->"
+
+
+@pytest.mark.asyncio
+async def test_brief_unknown_agent_ref_keeps_contract_and_sentinel():
+    """No packaged role definition → no role section, but the return
+    contract and sentinel are unconditional."""
+    ex, _, _ = _make_executor()
+    brief = await _run_with_inputs(
+        ex, "custom-thing", {"node_id": "custom-thing"},
+    )
+    assert "## Return contract" in brief
+    assert "```node_status" in brief
+    assert brief.splitlines()[-1] == "<!-- delivery-node: custom-thing -->"
+    # Header flows straight into the identity line — no role definition.
+    assert (
+        "# Agent: custom-thing\n\nYou are agent 'custom-thing'" in brief
+    )
+
+
+@pytest.mark.asyncio
+async def test_brief_omits_produces_line_when_absent():
+    ex, _, _ = _make_executor()
+    brief = await _run_with_inputs(ex, "scout", {"node_id": "scout"})
+    assert "This node produces an artifact of class:" not in brief
+    assert "## Return contract" in brief
+
+
+@pytest.mark.asyncio
+async def test_brief_carries_human_signoff_answers_before_contract():
+    """R7/OD-2: reject feedback in the scope (`<node>.fields.answer`) must
+    reach the re-run child's brief, ahead of the return contract."""
+    ex, _, _ = _make_executor()
+    brief = await _run_with_inputs(
+        ex, "architect",
+        {
+            "node_id": "design",
+            "scope": {
+                "signoff-design.fields.answer": "no — change X",
+                "signoff-design.fields.verdict": "reject",
+            },
+        },
+    )
+    section_pos = brief.index("## Human sign-off answers")
+    assert "- signoff-design (reject): no — change X" in brief
+    assert section_pos < brief.index("## Return contract")
+
+
+@pytest.mark.asyncio
+async def test_brief_omits_answer_section_when_scope_has_no_answers():
+    ex, _, _ = _make_executor()
+    brief = await _run_with_inputs(
+        ex, "architect",
+        {"node_id": "design", "scope": {"analyze.fields.has_ui": False}},
+    )
+    assert "## Human sign-off answers" not in brief

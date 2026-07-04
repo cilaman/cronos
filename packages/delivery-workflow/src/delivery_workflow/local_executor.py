@@ -29,10 +29,14 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Sequence, TextIO
 
+from delivery_workflow.briefs import (
+    load_agent_definition,
+    return_contract,
+    upstream_scope_section,
+)
 from delivery_workflow.lib.exec_node import run_exec_command
 from delivery_workflow.lib.node_status import parse_node_status
 from delivery_workflow.results import (
-    AGENT_STATUS_VOCAB,
     AgentResult,
     ExecResult,
     GateResult,
@@ -64,8 +68,11 @@ def compose_brief(agent_ref: str, inputs: dict[str, Any]) -> str:
     """Compose the child brief for one agent node.
 
     Mirrors what a host brief-composer provides: identity (agent/node/
-    attempt), the typed upstream scope, the declared artifact class, and the
-    node_status return-contract instruction (closed vocabulary).
+    attempt), the bundled role definition (which carries the routing-critical
+    ``fields`` protocol, e.g. the analyst's ``has_ui``), the typed upstream
+    scope, the declared artifact class, and the node_status return-contract
+    instruction (closed vocabulary).  The shared sections come from
+    ``delivery_workflow.briefs`` so the two composers cannot drift.
     """
     node_id = str(inputs.get("node_id") or agent_ref)
     attempt = inputs.get("attempt", 1)
@@ -79,29 +86,15 @@ def compose_brief(agent_ref: str, inputs: dict[str, Any]) -> str:
         "Work in the current directory.",
         "",
     ]
+    role = load_agent_definition(agent_ref)
+    if role:
+        lines += [role, ""]
     if produces:
         lines += [f"This node produces an artifact of class: {produces}", ""]
-    if scope:
-        lines += [
-            "## Upstream scope (outputs of completed workflow nodes)",
-            "```json",
-            json.dumps(scope, indent=2, sort_keys=True, default=str),
-            "```",
-            "",
-        ]
-    lines += [
-        "## Return contract",
-        "When finished, print exactly one fenced node_status block as the",
-        "LAST thing in your output:",
-        "",
-        "```node_status",
-        '{"status": "done", "artifact_paths": [], '
-        f'"produces": "{produces or ""}", "fields": {{}}, "open_questions": []}}',
-        "```",
-        "",
-        f"status MUST be one of: {', '.join(sorted(AGENT_STATUS_VOCAB))}.",
-        "List every file you created or modified in artifact_paths.",
-    ]
+    scope_section = upstream_scope_section(scope)
+    if scope_section:
+        lines += [scope_section, ""]
+    lines += [return_contract(produces)]
     return "\n".join(lines)
 
 
