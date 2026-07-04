@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING, Any, Sequence, TextIO
 
 from delivery_workflow.briefs import (
     load_agent_definition,
+    paired_skill_section,
     return_contract,
     upstream_scope_section,
 )
@@ -69,10 +70,11 @@ def compose_brief(agent_ref: str, inputs: dict[str, Any]) -> str:
 
     Mirrors what a host brief-composer provides: identity (agent/node/
     attempt), the bundled role definition (which carries the routing-critical
-    ``fields`` protocol, e.g. the analyst's ``has_ui``), the typed upstream
-    scope, the declared artifact class, and the node_status return-contract
-    instruction (closed vocabulary).  The shared sections come from
-    ``delivery_workflow.briefs`` so the two composers cannot drift.
+    ``fields`` protocol, e.g. the analyst's ``has_ui``), the inlined paired
+    skill (the method the role points at but cannot deliver on its own), the
+    typed upstream scope, the declared artifact class, and the node_status
+    return-contract instruction (closed vocabulary).  The shared sections come
+    from ``delivery_workflow.briefs`` so the two composers cannot drift.
     """
     node_id = str(inputs.get("node_id") or agent_ref)
     attempt = inputs.get("attempt", 1)
@@ -89,6 +91,9 @@ def compose_brief(agent_ref: str, inputs: dict[str, Any]) -> str:
     role = load_agent_definition(agent_ref)
     if role:
         lines += [role, ""]
+    skill = paired_skill_section(agent_ref)
+    if skill:
+        lines += [skill, ""]
     if produces:
         lines += [f"This node produces an artifact of class: {produces}", ""]
     scope_section = upstream_scope_section(scope)

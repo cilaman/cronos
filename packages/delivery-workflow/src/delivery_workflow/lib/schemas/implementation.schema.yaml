@@ -33,8 +33,8 @@ required:
   - blockers
   - next_consumer
   - metrics
-  - iteration_id
   - files_changed
+  - validation_command
   - validation_command_passed
 
 properties:
@@ -102,7 +102,16 @@ properties:
   iteration_id:
     type: string
     pattern: "^I[0-9]+$"
-    description: "UPPERCASE iteration ID matching the design plan (e.g. 'I2'). R-impl-1."
+    description: "UPPERCASE iteration ID matching the design plan (e.g. 'I2'). R-impl-1. Optional when iterations_completed is present (a consolidated multi-iteration report). R-impl-8."
+
+  iterations_completed:
+    type: array
+    minItems: 1
+    uniqueItems: true
+    items:
+      type: string
+      pattern: "^I[0-9]+$"
+    description: "UPPERCASE iteration IDs a consolidated report covers (e.g. ['I1', 'I2']). Present instead of iteration_id when one report executes several design iterations. R-impl-8."
 
   files_changed:
     type: array
@@ -111,9 +120,14 @@ properties:
       pattern: "^(?![/\\\\])(?![A-Za-z]:).*$"
     description: "Workspace-relative paths of source files created or modified by this iteration. R-impl-3: must be non-empty when status=done."
 
+  validation_command:
+    type: string
+    minLength: 1
+    description: "Exact shell command a gate re-executes from the SPACE ROOT (not the agent workspace) to validate the implementation. For a consolidated multi-iteration report, chain the per-iteration commands with '&&' or use the project's suite command; it must finish inside the gate's 300s re-execution timeout. Placeholder strings ('TODO', 'TBD', 'pending', 'run tests', 'tests') are rejected by the verifier. R-impl-7."
+
   validation_command_passed:
     type: boolean
-    description: "Whether the iteration's validation_command exited 0. R-impl-4: must be a real boolean. R-impl-5: false + status=done is incoherent."
+    description: "Whether validation_command exited 0 when the agent ran it. R-impl-4: must be a real boolean. R-impl-5: false + status=done is incoherent. Advisory only — the gate never trusts this flag; it re-executes validation_command (R6)."
 
   out_of_scope_findings:
     type: array
@@ -160,12 +174,16 @@ properties:
 # R7: workspace-relative forward-slash paths only.
 #
 # Implementation-class extensions (R-impl):
-#   R-impl-1: iteration_id matches ^I[0-9]+$ (uppercase).
+#   R-impl-1: iteration_id matches ^I[0-9]+$ (uppercase) when present.
 #   R-impl-2: slug ends with "--" + iteration_id.lower() when slug contains "--".
 #   R-impl-3: files_changed is non-empty when status=done.
 #   R-impl-4: validation_command_passed is a real boolean (not string).
 #   R-impl-5: validation_command_passed=false with status=done is rejected.
 #   R-impl-6: metrics.diff_lines_added / diff_lines_removed are non-negative integers.
+#   R-impl-7: validation_command is a non-empty, non-placeholder shell command the
+#             gate re-executes from the space root (placeholders per VALIDATION_COMMAND_PLACEHOLDERS).
+#   R-impl-8: the report identifies its iteration(s) — iteration_id (single) or a
+#             non-empty iterations_completed[] (consolidated); at least one is present.
 #
 # Required markdown sections:
 #   ## Summary, ## Files changed, ## Out-of-scope findings,

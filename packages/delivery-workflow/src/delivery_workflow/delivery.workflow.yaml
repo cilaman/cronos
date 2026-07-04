@@ -148,7 +148,12 @@ nodes:
           deps_python: "pip-audit -r requirements.txt -f json"
           deps_node: "npm audit --json"
         fail_on: [critical, high]
-        on_missing_scanner: fail
+        # skip (not fail): the runtime image ships none of semgrep/gitleaks/
+        # pip-audit, so a missing scanner must not hard-fail an otherwise-green
+        # run — the producing agent cannot install one. Installed scanners (e.g.
+        # npm audit) still run and can block on fail_on. Set fail only for a
+        # scanner the image guarantees (lib/security.py on_missing_scanner).
+        on_missing_scanner: skip
         reconcile: true
 
   # Deterministic test run — no LLM. The runner blocks on this synchronously, so

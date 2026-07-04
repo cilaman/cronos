@@ -120,6 +120,20 @@ def _tail(text: str, chars: int = 500) -> str:
     return text[-chars:] if len(text) > chars else text
 
 
+def _tool_missing(result: CommandResult) -> bool:
+    """True when the infra check's tool isn't installed in this image.
+
+    The lint/types/test checks re-run a fixed default tool (ruff/mypy/pytest).
+    Several are not shipped in the runtime image, so ``/bin/sh -c`` exits 127
+    ("command not found"). Routing that back to the producing agent cannot help
+    — the agent cannot install the tool — so a missing tool is advisory-skipped
+    (proceed) rather than looped needs_fix, mirroring lib.security's
+    on_missing_scanner=skip default. Real tool failures exit 1 (or the tool's own
+    code), never 127.
+    """
+    return result.exit_code == 127
+
+
 def _resolve_artifact_path(
     check: dict[str, Any], artifact_paths: list[str]
 ) -> str | None:
@@ -324,7 +338,15 @@ def _check_build(
 
     cmd = header.get("validation_command")  # type: ignore[union-attr]
     if not cmd or not isinstance(cmd, str) or not cmd.strip():
-        return "fail", ["impl-report has no validation_command — cannot re-execute"], {}
+        return (
+            "fail",
+            [
+                "impl-report header has no validation_command — add the exact "
+                "re-executable command to the YAML header (see implement skill §7); "
+                "cannot re-execute"
+            ],
+            {},
+        )
     if cmd.strip().lower() in _VALIDATION_CMD_PLACEHOLDERS:
         return "fail", [f"validation_command is a placeholder ({cmd!r})"], {}
 
@@ -373,6 +395,9 @@ def _check_lint(
             "timed_out": result.timed_out,
         }
     }
+    if _tool_missing(result):
+        evidence["lint"]["skipped"] = "tool not installed (exit 127)"
+        return "proceed", [], evidence
     if result.timed_out:
         return "needs_fix", ["lint command timed out after 300s"], evidence
     if result.exit_code != 0:
@@ -406,6 +431,9 @@ def _check_types(
             "timed_out": result.timed_out,
         }
     }
+    if _tool_missing(result):
+        evidence["types"]["skipped"] = "tool not installed (exit 127)"
+        return "proceed", [], evidence
     if result.timed_out:
         return "needs_fix", ["types command timed out after 300s"], evidence
     if result.exit_code != 0:
@@ -436,6 +464,15 @@ def _check_test(
     coverage_floor: int = check.get("coverage_floor", 80)
     cwd = space if space is not None else Path(".")
     result = _run_command(cmd, cwd)
+
+    if _tool_missing(result):
+        return "proceed", [], {
+            "test": {
+                "command": cmd,
+                "exit_code": result.exit_code,
+                "skipped": "tool not installed (exit 127)",
+            }
+        }
 
     combined = result.stdout_tail + result.stderr_tail
     coverage_pct = _parse_coverage_pct(combined)

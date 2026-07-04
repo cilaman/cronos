@@ -644,6 +644,14 @@ class TestLint:
         result = runGate(gate, [], space=tmp_path)
         assert result.evidence["lint"]["command"] == "echo custom-lint"
 
+    def test_missing_tool_exit_127_skips_proceed(self, tmp_path):
+        """An un-shipped linter (exit 127) is advisory-skipped, not needs_fix —
+        routing back to the producer cannot install the tool."""
+        gate = {"checks": [{"type": "lint", "command": "cronos-no-such-linter-xyz ."}]}
+        result = runGate(gate, [], space=tmp_path)
+        assert result.decision == "proceed"
+        assert result.evidence["lint"]["skipped"] == "tool not installed (exit 127)"
+
 
 class TestTypes:
     def test_exit_zero_proceeds(self, tmp_path):
@@ -668,6 +676,13 @@ class TestTypes:
         gate = {"checks": [{"type": "types", "command": "echo ok"}]}
         result = runGate(gate, [], space=tmp_path)
         assert "error_count" in result.evidence["types"]
+
+    def test_missing_tool_exit_127_skips_proceed(self, tmp_path):
+        """An un-shipped type-checker (exit 127) is advisory-skipped, not needs_fix."""
+        gate = {"checks": [{"type": "types", "command": "cronos-no-such-mypy-xyz ."}]}
+        result = runGate(gate, [], space=tmp_path)
+        assert result.decision == "proceed"
+        assert result.evidence["types"]["skipped"] == "tool not installed (exit 127)"
 
 
 # ---------------------------------------------------------------------------
@@ -718,6 +733,15 @@ class TestTestOutcome:
         gate = {"checks": [{"type": "test", "command": "exit 1", "coverage_floor": 0}]}
         result = runGate(gate, [], space=tmp_path)
         assert result.decision == "needs_fix"
+
+    def test_missing_tool_exit_127_skips_proceed(self, tmp_path):
+        """An un-shipped test runner (exit 127) is advisory-skipped, not needs_fix —
+        pytest is dev-only and absent from the runtime image; looping to the
+        producer cannot install it."""
+        gate = {"checks": [{"type": "test", "command": "cronos-no-such-pytest-xyz"}]}
+        result = runGate(gate, [], space=tmp_path)
+        assert result.decision == "proceed"
+        assert result.evidence["test"]["skipped"] == "tool not installed (exit 127)"
 
 
 # ---------------------------------------------------------------------------

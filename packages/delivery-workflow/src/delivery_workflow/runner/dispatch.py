@@ -228,11 +228,21 @@ def _dispatch_gate(
     # unreachable in final state.  A `needs_fix` gate still ROUTES: the runner
     # treats it as a terminal, routable outcome (fix edges fire from it), not
     # a halt.
+    #
+    # Carry the gate's errors into a SCOPED field so the fix-loop re-run of the
+    # producer sees WHY it failed (scope.py exposes `{gate}.fields.errors`);
+    # without it the looped-back agent only saw `{gate}.decision` and blindly
+    # reproduced the same rejected artifact.  Scope carries scalars only, so
+    # join the list into one plain str and cap it at 500 chars.  Set the key
+    # ONLY when there are errors — an empty-string field would pollute scope.
+    fields: dict[str, Any] = {"decision": result.decision}
+    if result.errors:
+        fields["errors"] = "; ".join(result.errors)[:500]
     return NodeOutcome(
         status="done" if result.decision == "proceed" else "needs_fix",
         attempt=attempt,
         gate=gate_dict,
-        fields={"decision": result.decision},
+        fields=fields,
     )
 
 

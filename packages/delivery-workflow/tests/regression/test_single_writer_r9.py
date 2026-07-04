@@ -289,7 +289,8 @@ class TestRunnerSingleWriter:
         write = gate_node_writes[0]
         assert write["status"] == "needs_fix"
         assert write["gate"]["decision"] == "needs_fix"
-        assert write["fields"] == {"decision": "needs_fix"}
+        # The gate's errors ride along in the scoped fields (fix-loop diagnostics).
+        assert write["fields"] == {"decision": "needs_fix", "errors": "bad"}
 
     def test_exec_node_fields_written_once(self, tmp_path):
         """The exec node's status/artifact_paths/exit_code are persisted by

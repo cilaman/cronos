@@ -15,16 +15,21 @@ exported here:
   R10e §2.3).
 - ``AGENT_STATUS_VOCAB`` / ``agent_result_from_envelope`` — the closed
   agent-status vocabulary boundary every executor maps through.
-- ``load_agent_definition`` / ``return_contract`` / ``upstream_scope_section``
-  (+ ``AGENTS_DIR``) — the shared brief-composition helpers every brief
-  composer builds from.
+- ``load_agent_definition`` / ``load_skill_definition`` /
+  ``paired_skill_section`` / ``return_contract`` / ``upstream_scope_section``
+  (+ ``AGENTS_DIR`` / ``SKILLS_DIR`` / ``PAIRED_SKILLS``) — the shared
+  brief-composition helpers every brief composer builds from.
 
 ``runner.run`` / ``runner.resume`` remain importable (the facade delegates to
 them) but are not a supported host surface.
 """
 from delivery_workflow.briefs import (  # noqa: F401
     AGENTS_DIR,
+    PAIRED_SKILLS,
+    SKILLS_DIR,
     load_agent_definition,
+    load_skill_definition,
+    paired_skill_section,
     return_contract,
     upstream_scope_section,
 )
@@ -88,7 +93,11 @@ __all__ = [
     "AGENT_STATUS_VOCAB",
     "agent_result_from_envelope",
     "AGENTS_DIR",
+    "SKILLS_DIR",
+    "PAIRED_SKILLS",
     "load_agent_definition",
+    "load_skill_definition",
+    "paired_skill_section",
     "return_contract",
     "upstream_scope_section",
 ]

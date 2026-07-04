@@ -1148,10 +1148,19 @@ def _enqueue_successors(
             # fields persist, R2), then re-enqueue it for another pass.
             dispatched.discard(target)
             reset_ids = [target, *_forward_downstream(forward_adjacency, target)]
+            # The back-edge SOURCE (node_id) just ran and its output ROUTED
+            # this loop-back — a gate's needs_fix decision, an until-loop's
+            # verdict.  It is forward-downstream of *target* (that is what
+            # closes the loop), so a blanket reset would zero it here, BEFORE
+            # the target re-runs and builds its scope — erasing exactly the
+            # fields the fix-loop re-run needs (e.g. `{gate}.fields.errors`).
+            # Keep node_id's NodeState; the forward flow reaches it again this
+            # pass (target → … → node_id, handled as a back-edge) and resets
+            # it fresh then.  Its stale edge records are still purged below.
             reset_downstream_nodes(
                 target,
                 state,
-                reset_ids,
+                [nid for nid in reset_ids if nid != node_id],
                 state_ops=state_ops,
             )
             # Edge records produced by the re-arming subtree are stale — the

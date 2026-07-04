@@ -43,6 +43,7 @@ class _SequencedRuntime:
         self._agent_seq = list(agent_sequence)
         self._gate_seq = list(gate_sequence or [])
         self.dispatch_log: list[tuple[str, int]] = []  # (node_id, attempt)
+        self.scope_log: list[tuple[str, int, dict]] = []  # (node_id, attempt, scope)
         self.gate_log: list[str] = []  # gate node ids
         self.escalated: list[tuple[str, str]] = []
         self.conditions: list[tuple[str, dict]] = []
@@ -51,6 +52,7 @@ class _SequencedRuntime:
         node_id = inputs.get("node_id", agent_ref)
         attempt = inputs.get("attempt", 1)
         self.dispatch_log.append((node_id, attempt))
+        self.scope_log.append((node_id, attempt, dict(inputs.get("scope") or {})))
 
         # Pop the first matching entry.
         for i, (expected_nid, result) in enumerate(self._agent_seq):
@@ -302,6 +304,59 @@ class TestGateFixLoop:
         assert len(producer_calls) == 2
         assert any(nid == "sink" for nid, _ in rt.dispatch_log)
         assert rt.escalated == []
+
+    def test_fix_loop_carries_gate_errors_into_producer_rerun(self):
+        """No blind retries: a gate's errors reach the looped-back producer's
+        re-dispatch scope as ``{gate}.fields.errors`` so it sees WHY it failed.
+
+        Reproduces the live g-build stall: the producer's SECOND (fix-loop)
+        dispatch previously saw only the gate decision — never the actionable
+        error string — and reproduced the same rejected artifact."""
+        graph = _make_gate_fix_loop_graph(max_iter=3)
+        rt = _SequencedRuntime(
+            agent_sequence=[],
+            gate_sequence=[
+                GateResult(
+                    decision="fail",
+                    errors=[
+                        "impl-report has no validation_command",
+                        "cannot re-execute",
+                    ],
+                ),
+                GateResult(decision="proceed", errors=[]),
+            ],
+        )
+        state = run(graph, rt, host=rt, eval_condition=rt.evalCondition)
+
+        assert state.status == "done"
+        producer_scopes = [s for nid, _att, s in rt.scope_log if nid == "producer"]
+        assert len(producer_scopes) == 2, "producer must re-run once via the fix edge"
+        # First pass: the gate has not run yet — nothing in scope from it.
+        assert "gate.fields.errors" not in producer_scopes[0]
+        # Fix-loop re-run: the joined, truncated error text is in scope.
+        assert producer_scopes[1].get("gate.fields.errors") == (
+            "impl-report has no validation_command; cannot re-execute"
+        )
+
+    def test_fix_loop_no_errors_adds_no_scope_key(self):
+        """A non-proceed gate with an empty errors list adds NO errors key —
+        the producer re-run scope never carries an empty ``gate.fields.errors``
+        (the decision alone still routes the fix edge)."""
+        graph = _make_gate_fix_loop_graph(max_iter=3)
+        rt = _SequencedRuntime(
+            agent_sequence=[],
+            gate_sequence=[
+                GateResult(decision="needs_fix", errors=[]),
+                GateResult(decision="proceed", errors=[]),
+            ],
+        )
+        state = run(graph, rt, host=rt, eval_condition=rt.evalCondition)
+
+        assert state.status == "done"
+        producer_scopes = [s for nid, _att, s in rt.scope_log if nid == "producer"]
+        assert len(producer_scopes) == 2
+        assert producer_scopes[1].get("gate.decision") == "needs_fix"
+        assert "gate.fields.errors" not in producer_scopes[1]
 
     def test_bounded_exhaustion_stalls_with_gate_detail(self):
         """A gate that never proceeds is capped at loop.max evaluations, then the

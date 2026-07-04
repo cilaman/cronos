@@ -882,11 +882,11 @@ def _check_design(result: VerifyResult, header: dict[str, Any]) -> None:
 def _check_implementation(
     result: VerifyResult, header: dict[str, Any], slug: str
 ) -> None:
-    """R-impl-1..6."""
+    """R-impl-1..8."""
     iter_id = header.get("iteration_id")
-    # R-impl-1: iteration_id matches ^I[0-9]+$
+    # R-impl-1: iteration_id matches ^I[0-9]+$ when present (now optional — a
+    # consolidated report identifies its iterations via iterations_completed[]).
     if iter_id is None:
-        # already reported by required-fields check
         pass
     elif not isinstance(iter_id, str) or not ITER_PATTERN.match(iter_id):
         result.fail(
@@ -902,6 +902,45 @@ def _check_implementation(
                     f"{expected_suffix!r} (convention: "
                     "slug=<goal_slug>--<iteration_id.lower()>)"
                 )
+
+    # R-impl-8: iterations_completed structure (when present) + iteration identity.
+    iters_done = header.get("iterations_completed")
+    has_iters_done = False
+    if iters_done is not None:
+        if not isinstance(iters_done, list):
+            result.fail("iterations_completed must be a list")
+        elif not iters_done:
+            result.fail("R-impl-8: iterations_completed must be non-empty when present")
+        else:
+            has_iters_done = True
+            for idx, iid in enumerate(iters_done):
+                if not isinstance(iid, str) or not ITER_PATTERN.match(iid):
+                    result.fail(
+                        f"R-impl-8: iterations_completed[{idx}] {iid!r} does not "
+                        "match pattern '^I[0-9]+$'"
+                    )
+    if iter_id is None and not has_iters_done:
+        result.fail(
+            "R-impl-8: report must set iteration_id (single iteration) or a "
+            "non-empty iterations_completed[] (consolidated multi-iteration report)"
+        )
+
+    # R-impl-7: validation_command is a non-empty, non-placeholder shell command.
+    # Total absence is reported by the required-fields check; here we reject the
+    # empty-string and placeholder cases so the value the build gate re-executes
+    # (R6) is always concrete.
+    vc = header.get("validation_command")
+    if vc is not None:
+        if not isinstance(vc, str) or not vc.strip():
+            result.fail(
+                "R-impl-7: validation_command must be a non-empty string (the exact "
+                "command a gate re-executes from the space root)"
+            )
+        elif vc.strip().lower() in VALIDATION_COMMAND_PLACEHOLDERS:
+            result.fail(
+                f"R-impl-7: validation_command is a placeholder ({vc!r}) — must be "
+                "a concrete executable command"
+            )
 
     # R-impl-3: files_changed non-empty when status=done
     files_changed = header.get("files_changed")

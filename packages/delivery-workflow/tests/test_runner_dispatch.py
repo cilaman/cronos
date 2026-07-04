@@ -179,7 +179,8 @@ class TestDispatchGate:
         outcome = dispatch_node(node, {}, rt, _empty_state(), host=rt)
         assert outcome.status == "needs_fix"
         assert outcome.gate["decision"] == "needs_fix"
-        assert outcome.fields == {"decision": "needs_fix"}
+        # Errors are carried into a scoped field so the fix-loop re-run sees WHY.
+        assert outcome.fields == {"decision": "needs_fix", "errors": "fail"}
 
     def test_gate_fail_decision_returns_needs_fix(self):
         """Any non-proceed decision (fail, retry, needs_fix) persists as the
@@ -190,6 +191,32 @@ class TestDispatchGate:
         outcome = dispatch_node(node, {}, rt, _empty_state(), host=rt)
         assert outcome.status == "needs_fix"
         assert outcome.gate["decision"] == "fail"
+
+    def test_gate_errors_carried_into_scoped_fields(self):
+        """Non-empty gate errors are joined into fields['errors'] so the
+        fix-loop re-run of the producer sees WHY (scope exposes
+        {gate}.fields.errors)."""
+        rt = _MockRuntime()
+        rt.set_gate_result(GateResult(decision="fail", errors=["a", "b", "c"]))
+        node = IRNode(id="g", kind="gate")
+        outcome = dispatch_node(node, {}, rt, _empty_state(), host=rt)
+        assert outcome.fields["errors"] == "a; b; c"
+
+    def test_gate_no_errors_adds_no_errors_field(self):
+        """An empty errors list adds NO 'errors' key — never a blank scope field."""
+        rt = _MockRuntime()
+        rt.set_gate_result(GateResult(decision="proceed", errors=[]))
+        node = IRNode(id="g", kind="gate")
+        outcome = dispatch_node(node, {}, rt, _empty_state(), host=rt)
+        assert "errors" not in outcome.fields
+
+    def test_gate_errors_truncated_at_500_chars(self):
+        """The joined errors string is capped at 500 chars (scope stays bounded)."""
+        rt = _MockRuntime()
+        rt.set_gate_result(GateResult(decision="fail", errors=["x" * 400, "y" * 400]))
+        node = IRNode(id="g", kind="gate")
+        outcome = dispatch_node(node, {}, rt, _empty_state(), host=rt)
+        assert len(outcome.fields["errors"]) == 500
 
     def test_gate_id_passed(self):
         rt = _MockRuntime()

@@ -6,6 +6,12 @@ the sections a child agent depends on cannot drift between runtimes:
 
 - ``load_agent_definition`` — the bundled role definition for an agent ref
   (``agents/<ref>.md``, frontmatter stripped).
+- ``load_skill_definition`` / ``paired_skill_section`` — the bundled paired
+  skill (``skills/<name>/SKILL.md``) inlined into the brief.  Role
+  definitions say "Load the ``<name>`` skill" but children run in project
+  workspaces where the packaged skills are not installed — inlining is the
+  only delivery path, otherwise the method (artifact header spec included)
+  silently never reaches the agent.
 - ``return_contract`` — the ``node_status`` fence instruction with the closed
   status vocabulary.  This IS the pipeline's only recognized completion
   signal (``results.agent_result_from_envelope``); a child that never hears
@@ -28,6 +34,25 @@ from delivery_workflow.results import AGENT_STATUS_VOCAB
 #: the assets resolve from the installed wheel.
 AGENTS_DIR: Path = Path(__file__).resolve().parent / "agents"
 
+#: Bundled method skills, one ``<name>/SKILL.md`` per paired skill.  Anchored
+#: the same way as ``AGENTS_DIR``.
+SKILLS_DIR: Path = Path(__file__).resolve().parent / "skills"
+
+#: Agent ref → paired-skill directory name (the ``agents/README.md`` roster).
+#: Scout and tester deliberately carry no paired skill.
+PAIRED_SKILLS: dict[str, str] = {
+    "analyst": "analysis",
+    "frontend-designer": "frontend",
+    "architect": "design",
+    "test-architect": "test-design",
+    "implementor": "implement",
+    "reviewer": "code-review",
+    "security-reviewer": "security-review",
+    "doc-sync": "doc",
+    "retro": "retro",
+    "improve": "improve",
+}
+
 #: Valid agent refs — doubles as the path-traversal guard for
 #: ``load_agent_definition`` (rejects ``../analyst``, ``a/b``, uppercase, …).
 _AGENT_REF_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
@@ -48,6 +73,45 @@ def load_agent_definition(agent_ref: str) -> str | None:
     except OSError:
         return None
     return _strip_frontmatter(text).strip()
+
+
+def load_skill_definition(agent_ref: str) -> str | None:
+    """Return the paired-skill method body for *agent_ref*, or ``None``.
+
+    Resolves via ``PAIRED_SKILLS`` and reads ``SKILLS_DIR/<name>/SKILL.md``,
+    stripping the leading YAML frontmatter block like
+    ``load_agent_definition``.  Returns ``None`` — never raises — when the
+    ref fails the traversal guard, has no paired skill (scout, tester), or
+    reading fails.
+    """
+    if not _AGENT_REF_RE.match(agent_ref):
+        return None
+    name = PAIRED_SKILLS.get(agent_ref)
+    if name is None:
+        return None
+    try:
+        text = (SKILLS_DIR / name / "SKILL.md").read_text(encoding="utf-8")
+    except OSError:
+        return None
+    return _strip_frontmatter(text).strip()
+
+
+def paired_skill_section(agent_ref: str) -> str:
+    """Return the inlined paired-skill brief section, or ``""``.
+
+    The heading tells the child NOT to go hunting for the skill on disk:
+    children run in project workspaces where the packaged skills do not
+    exist, so a "Load the X skill" role instruction alone dead-ends and the
+    method (artifact header spec included) never reaches the agent.
+    """
+    body = load_skill_definition(agent_ref)
+    if not body:
+        return ""
+    name = PAIRED_SKILLS[agent_ref]
+    return (
+        f"## Paired skill: {name} "
+        f"(inlined — do not search the filesystem for it)\n\n{body}"
+    )
 
 
 def return_contract(produces: str | None) -> str:

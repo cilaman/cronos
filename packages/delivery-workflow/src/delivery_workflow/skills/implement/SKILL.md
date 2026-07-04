@@ -47,6 +47,10 @@ Count `diff_lines_added` and `diff_lines_removed` (`git diff --stat` or line cou
 - The gate may still accept the diff; that is the harness's decision, not yours.
 
 ## 7. Write the implementation artifact
+The YAML header MUST carry:
+- `validation_command` — the **exact** shell command a gate re-executes from the **space root** (not your workspace) to re-validate this implementation. It must be concrete and re-runnable — never a placeholder (`TODO`, `TBD`, `pending`, `run tests`, `tests`). When one report covers multiple iterations, provide ONE aggregate command: chain the per-iteration `validation_command`s with `&&`, or use the project's suite command. It must finish well inside the gate's 300s re-execution timeout.
+- `validation_command_passed` — `true` only if you ran that command yourself (§5) and it exited 0. The gate re-executes `validation_command` and never trusts this flag; a missing `validation_command` fails the build gate.
+
 Body sections:
 - **Summary** — ≤ 3 sentences: what you implemented, the validation result, any scope or budget notes.
 - **Files changed** — one bullet per file with a line-count delta.

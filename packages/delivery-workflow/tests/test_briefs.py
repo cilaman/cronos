@@ -19,8 +19,12 @@ import yaml
 
 from delivery_workflow.briefs import (
     AGENTS_DIR,
+    PAIRED_SKILLS,
+    SKILLS_DIR,
     _strip_frontmatter,
     load_agent_definition,
+    load_skill_definition,
+    paired_skill_section,
     return_contract,
     upstream_scope_section,
 )
@@ -70,6 +74,60 @@ class TestLoadAgentDefinition:
         assert refs, "workflow spec declares no agent nodes"
         missing = [ref for ref in refs if load_agent_definition(ref) is None]
         assert missing == []
+
+
+class TestPairedSkills:
+    def test_mapping_is_a_bijection_onto_the_shipped_skill_dirs(self):
+        """Both directions: every ``PAIRED_SKILLS`` value resolves to a real
+        ``skills/<name>/SKILL.md`` (no dangling ref), and every shipped skill
+        is reachable from some agent (no orphaned method that never reaches a
+        child).  Scout and tester deliberately carry no skill, so no skill
+        dir is left unmapped."""
+        skill_dirs = {
+            p.name
+            for p in SKILLS_DIR.iterdir()
+            if (p / "SKILL.md").is_file()
+        }
+        assert skill_dirs, f"no skills found under {SKILLS_DIR}"
+        assert set(PAIRED_SKILLS.values()) == skill_dirs
+
+    def test_every_paired_skill_loads_frontmatter_stripped(self):
+        for ref, name in PAIRED_SKILLS.items():
+            body = load_skill_definition(ref)
+            assert body, f"{ref} → skills/{name}/SKILL.md did not load"
+            assert not body.startswith("---"), f"{name} kept its frontmatter"
+
+    def test_implementor_skill_carries_validation_command(self):
+        """The g-build gate re-executes the impl-report's validation_command;
+        the method (this skill) is where the agent learns to run and record
+        it, so the inlined body must carry that vocabulary."""
+        body = load_skill_definition("implementor")
+        assert body is not None
+        assert "validation_command" in body
+        assert not body.startswith("---")
+
+    @pytest.mark.parametrize("ref", ["scout", "tester"])
+    def test_unpaired_agent_has_no_skill(self, ref):
+        assert ref not in PAIRED_SKILLS
+        assert load_skill_definition(ref) is None
+        assert paired_skill_section(ref) == ""
+
+    def test_unknown_ref_is_none(self):
+        assert load_skill_definition("no-such-agent") is None
+        assert paired_skill_section("no-such-agent") == ""
+
+    @pytest.mark.parametrize("ref", ["../analyst", "a/b", "A.Nalyst"])
+    def test_traversal_refs_are_none(self, ref):
+        assert load_skill_definition(ref) is None
+        assert paired_skill_section(ref) == ""
+
+    def test_section_header_warns_off_the_filesystem(self):
+        section = paired_skill_section("implementor")
+        assert section.startswith(
+            "## Paired skill: implement (inlined"
+        )
+        assert "do not search the filesystem for it" in section
+        assert "validation_command" in section
 
 
 class TestStripFrontmatter:
@@ -165,7 +223,33 @@ class TestComposeBriefUsesHelpers:
         assert "has_ui" in brief
         assert brief.index(role) < brief.index("## Return contract")
 
+    def test_compose_brief_inlines_the_paired_skill(self):
+        """The role says 'Load the implement skill', but a standalone child
+        has no such skill on disk — the method (artifact header spec included)
+        must be inlined, after the role definition and before the contract."""
+        brief = compose_brief(
+            "implementor",
+            {"node_id": "impl", "produces": {"class": "implementation"}},
+        )
+        role = load_agent_definition("implementor")
+        section = paired_skill_section("implementor")
+        assert role is not None
+        assert section and section in brief
+        assert "validation_command" in brief
+        assert (
+            brief.index(role)
+            < brief.index("## Paired skill: implement")
+            < brief.index("## Return contract")
+        )
+
+    def test_compose_brief_omits_skill_for_unpaired_agent(self):
+        """scout has a role but no paired skill — no skill section appears."""
+        brief = compose_brief("scout", {"node_id": "scout"})
+        assert "## Paired skill:" not in brief
+        assert load_agent_definition("scout") in brief
+
     def test_compose_brief_unknown_ref_keeps_the_contract(self):
         brief = compose_brief("custom-thing", {"node_id": "custom-thing"})
         assert "## Return contract" in brief
         assert "```node_status" in brief
+        assert "## Paired skill:" not in brief

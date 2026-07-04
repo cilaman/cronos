@@ -24,6 +24,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from delivery_workflow.briefs import load_agent_definition
+
 from app.agent import Status
 from app.finalizer import Finalizer
 from app.models import TaskState
@@ -513,6 +515,37 @@ async def test_brief_contains_shared_sections_in_order():
     assert positions == sorted(positions)
     assert brief.splitlines()[0] == "# Agent: analyst"
     assert brief.splitlines()[-1] == "<!-- delivery-node: analyze -->"
+
+
+@pytest.mark.asyncio
+async def test_brief_inlines_paired_skill_between_role_and_contract():
+    """The role definition says 'Load the implement skill', but the child
+    runs in a project workspace where the packaged skill is not installed —
+    the method (artifact header spec included) must be inlined, after the
+    role definition and before the return contract."""
+    ex, _, _ = _make_executor()
+    brief = await _run_with_inputs(
+        ex, "implementor",
+        {"node_id": "impl", "produces": {"class": "implementation"}},
+    )
+    role = load_agent_definition("implementor")
+    assert role is not None
+    assert (
+        brief.index(role)
+        < brief.index("## Paired skill: implement")
+        < brief.index("## Return contract")
+    )
+    assert "validation_command" in brief
+    assert "do not search the filesystem for it" in brief
+
+
+@pytest.mark.asyncio
+async def test_brief_omits_paired_skill_for_unpaired_agent():
+    """scout carries a role definition but no paired skill — the inlined
+    skill section must be absent."""
+    ex, _, _ = _make_executor()
+    brief = await _run_with_inputs(ex, "scout", {"node_id": "scout"})
+    assert "## Paired skill:" not in brief
 
 
 @pytest.mark.asyncio

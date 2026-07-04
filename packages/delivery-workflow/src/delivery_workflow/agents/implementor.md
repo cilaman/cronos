@@ -36,6 +36,8 @@ Write the implementation artifact (class `implementation`) at the runtime-provid
 }
 ```
 
+The impl-report **header** must also carry `validation_command` — the exact command a gate re-executes from the space root to validate your work (see implement skill §7). A missing `validation_command` fails the build gate.
+
 ## Hard rules
 1. **One iteration, one run.** Execute exactly the assigned `iteration_id`. Do not bleed into other iterations.
 2. **Scope files are a hard boundary.** You may only Read/Edit/Write files listed in `scope_files[]`. A change outside that list is a scope escape — stop and surface it.

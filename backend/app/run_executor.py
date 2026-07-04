@@ -1579,6 +1579,7 @@ class RunExecutor:
         """
         from delivery_workflow.briefs import (
             load_agent_definition,
+            paired_skill_section,
             return_contract,
             upstream_scope_section,
         )
@@ -1596,9 +1597,10 @@ class RunExecutor:
         space_id = goal.space_id
 
         # 1. Build the brief and create the child task.  The role definition,
-        #    upstream scope, and return contract are the shared package
-        #    sections (delivery_workflow.briefs) so the child hears the SAME
-        #    node_status vocabulary the pipeline classifies by; the sentinel
+        #    inlined paired skill, upstream scope, and return contract are the
+        #    shared package sections (delivery_workflow.briefs) so the child
+        #    hears the SAME node_status vocabulary the pipeline classifies by
+        #    and the method the role points at; the sentinel
         #    (R8) stays last.  CC-v1 agents are forbidden from inventing a
         #    slug (they must use it verbatim), so hand them the goal slug
         #    (B4) — the same value the fallback report scan is scoped to (B2).
@@ -1622,6 +1624,7 @@ class RunExecutor:
         sections = [
             f"# Agent: {agent_ref}",
             load_agent_definition(agent_ref) or "",
+            paired_skill_section(agent_ref),
             f"You are agent '{agent_ref}' executing workflow node "
             f"'{node_id}' (attempt {attempt}).",
             f"slug: {goal_slug}",

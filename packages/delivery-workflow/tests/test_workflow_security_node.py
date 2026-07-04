@@ -78,6 +78,19 @@ def test_security_loop_has_until():
     assert loop.get("until"), "security loop must have an 'until' condition"
 
 
+def test_g_security_on_missing_scanner_is_skip():
+    """The runtime image ships no semgrep/gitleaks/pip-audit; on_missing_scanner
+    must be 'skip' so a missing scanner cannot hard-fail an otherwise-green run
+    (it would loop g-security to exhaustion and never reach testrun/doc/release)."""
+    spec = _loaded()
+    node = next(n for n in spec["nodes"] if n["id"] == "g-security")
+    sec_check = next(c for c in node["checks"] if c.get("type") == "security")
+    assert sec_check.get("on_missing_scanner") == "skip", (
+        "g-security on_missing_scanner must be 'skip' for un-shipped scanners; "
+        f"got {sec_check.get('on_missing_scanner')!r}"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Routing edges (DD-002 / REQ-005 AC4)
 # ---------------------------------------------------------------------------
