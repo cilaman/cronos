@@ -30,6 +30,7 @@ from app.agent import (
 )
 from app.models import Task, TaskState
 from app.storage import VALID_AGENT_MODELS
+from app.trace_parser import parse_node_status_fence
 
 
 # ---------------------------------------------------------------------------
@@ -1366,6 +1367,25 @@ def test_delivery_node_contract_names_node_status_fence():
     # It must explicitly forbid the cronos completion path.
     assert "task-finalize" in DELIVERY_NODE_CONTRACT
     assert "cronos_status" in DELIVERY_NODE_CONTRACT
+
+
+def test_delivery_node_contract_demands_fence_in_reply_text():
+    """The reply text is the classified surface — the contract must say a
+    fence only inside a written artifact does not count, and that the fence
+    comes after memory writes and housekeeping."""
+    assert "REPLY TEXT" in DELIVERY_NODE_CONTRACT
+    assert "only inside an artifact file" in DELIVERY_NODE_CONTRACT
+    assert "does NOT count" in DELIVERY_NODE_CONTRACT
+    assert "AFTER all other steps" in DELIVERY_NODE_CONTRACT
+    assert "memory writes" in DELIVERY_NODE_CONTRACT
+
+
+def test_delivery_node_contract_example_fence_never_parses():
+    """Echo-safety: agents restate the contract verbatim in planning turns,
+    and the turn-tolerant transport scans every turn — the shipped example
+    must never parse as a genuine envelope."""
+    assert "```node_status" in DELIVERY_NODE_CONTRACT
+    assert parse_node_status_fence(DELIVERY_NODE_CONTRACT) is None
 
 
 def test_delivery_node_contract_shares_one_shot_preamble():

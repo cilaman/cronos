@@ -69,6 +69,15 @@ _STATUS_FENCE_RE = re.compile(
     re.DOTALL,
 )
 
+# Strict variant for the turn-tolerance surfaces (earlier assistant turns,
+# Write tool content): current agents are taught ``node_status`` only — a
+# legacy ``delivery_status`` fence on those surfaces can only be a quote of
+# ANOTHER run's output and must never classify this run.
+_NODE_STATUS_FENCE_RE = re.compile(
+    r"```node_status\s*\n(.*?)```",
+    re.DOTALL,
+)
+
 
 def parse_node_status_fence(text: str) -> dict[str, Any] | None:
     """Return the last complete node_status/delivery_status fenced envelope.
@@ -92,10 +101,9 @@ def parse_node_status_fence(text: str) -> dict[str, Any] | None:
 def final_assistant_text(raw_events: list[dict[str, Any]]) -> str:
     """Return the FULL text of the last non-empty assistant turn.
 
-    Single selection rule shared by ``extract_run_trace`` (which parses
-    ``RunTrace.node_status`` from it) and the delivery child finalization
-    (which derives the child's Kanban state from the same envelope, D13) —
-    the two consumers can never disagree about which text carries the fence.
+    Kept for ``final_text_snippet`` (UI) and non-delivery callers.  The
+    node_status envelope is selected by ``parse_node_status_from_events``
+    below, which is turn-tolerant instead of final-message-only.
 
     Tool-only turns produce no text and never overwrite an earlier non-empty
     turn ("last non-empty wins").
@@ -117,6 +125,142 @@ def final_assistant_text(raw_events: list[dict[str, Any]]) -> str:
         if text.strip():
             final = text
     return final
+
+
+def _trailing_fence_envelope(content: Any) -> dict[str, Any] | None:
+    """Return the envelope when *content* ENDS with a complete node_status fence.
+
+    The strict matcher for the turn-tolerance surfaces (earlier assistant
+    turns, Write tool content).  Only a ``node_status`` fence at the very
+    tail counts (trailing whitespace allowed after the closing backticks) —
+    a fence quoted mid-text (the brief's contract example restated in a
+    planning turn, a MEMORY.md citing it, a 4-backtick quote block) is never
+    credited, and neither is a legacy ``delivery_status`` fence (only ever
+    seen quoted from OTHER runs' output on these surfaces).
+    """
+    if not isinstance(content, str):
+        return None
+    matches = list(_NODE_STATUS_FENCE_RE.finditer(content))
+    if not matches:
+        return None
+    last = matches[-1]
+    if last.end() != len(content.rstrip()):
+        return None
+    try:
+        data = json.loads(last.group(1).strip())
+    except json.JSONDecodeError:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _envelope_references_path(envelope: dict[str, Any], file_path: Any) -> bool:
+    """True when the envelope's ``artifact_paths`` names *file_path* itself.
+
+    Segment-boundary suffix match in either direction: agents Write with
+    absolute paths but list workspace-relative artifact paths (or vice
+    versa).
+    """
+    if not isinstance(file_path, str):
+        return False
+    written = file_path.strip().removeprefix("./")
+    if not written:
+        return False
+    paths = envelope.get("artifact_paths")
+    if not isinstance(paths, list):
+        return False
+    for entry in paths:
+        if not isinstance(entry, str):
+            continue
+        listed = entry.strip().removeprefix("./")
+        if not listed:
+            continue
+        if (
+            written == listed
+            or written.endswith("/" + listed)
+            or listed.endswith("/" + written)
+        ):
+            return True
+    return False
+
+
+def parse_node_status_from_events(
+    raw_events: list[dict[str, Any]],
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Select the run's node_status envelope from the full event stream.
+
+    Returns ``(envelope, transport)`` where transport is ``'assistant_text'``,
+    ``'written_artifact'`` or ``None``.  Single selection rule shared by
+    ``extract_run_trace`` (``RunTrace.node_status``) and the delivery child
+    finalization (Kanban state, D13) — the two consumers can never disagree
+    about which envelope classifies the run.
+
+    LLM fence compliance is probabilistic: trailing housekeeping turns
+    (memory compaction, git finalization) routinely push the fence out of
+    the FINAL assistant message, so selection is turn-tolerant.  Tolerance
+    must not credit fences the main agent never genuinely emitted, so
+    sidechain events (``parent_tool_use_id`` set — Task-tool subagents
+    interleaved into stream-json) are skipped entirely, and the channels
+    apply in precedence order:
+
+    1. ``'assistant_text'``, final turn — the last fence anywhere in the
+       last non-empty main-thread turn, legacy ``delivery_status`` accepted:
+       identical to the old final-text selection.
+    2. ``'assistant_text'``, earlier turns — the LAST earlier turn that ENDS
+       with a ``node_status`` fence.  The tail anchor and the node_status-only
+       name reject the brief's contract example restated in planning turns
+       and fences quoted from OTHER runs' output — both inert under
+       final-turn-only selection, so they must stay inert here.
+    3. ``'written_artifact'`` — the LAST Write tool input whose content ENDS
+       with a ``node_status`` fence whose ``artifact_paths`` names the
+       written file itself.  Role definitions teach agents to end their
+       artifact with the fence and to list every produced file, so a genuine
+       artifact tail is self-referencing — a memory/doc note that merely
+       quotes the contract example (empty ``artifact_paths``) is not.  The
+       content is agent-authored in THIS run's event stream, so there is no
+       cross-run misattribution (the R1 sin was crediting OTHER runs' files
+       via filesystem mtime scans — this reads only the transcript, never
+       the filesystem).  Edit inputs are never considered (fragment risk).
+    """
+    turn_texts: list[str] = []
+    artifact_envelope: dict[str, Any] | None = None
+    for event in raw_events or []:
+        if not isinstance(event, dict) or event.get("type") != "assistant":
+            continue
+        if event.get("parent_tool_use_id"):
+            continue
+        msg = event.get("message") or {}
+        content = msg.get("content") or []
+        if not isinstance(content, list):
+            continue
+        text_parts: list[str] = []
+        for block in content:
+            if not isinstance(block, dict):
+                continue
+            btype = block.get("type")
+            if btype == "text":
+                text_parts.append(block.get("text", ""))
+            elif btype == "tool_use" and block.get("name") == "Write":
+                inp = block.get("input")
+                if isinstance(inp, dict):
+                    candidate = _trailing_fence_envelope(inp.get("content"))
+                    if candidate is not None and _envelope_references_path(
+                        candidate, inp.get("file_path")
+                    ):
+                        artifact_envelope = candidate
+        text = "\n".join(text_parts)
+        if text.strip():
+            turn_texts.append(text)
+    if turn_texts:
+        envelope = parse_node_status_fence(turn_texts[-1])
+        if envelope is not None:
+            return envelope, "assistant_text"
+        for text in reversed(turn_texts[:-1]):
+            envelope = _trailing_fence_envelope(text)
+            if envelope is not None:
+                return envelope, "assistant_text"
+    if artifact_envelope is not None:
+        return artifact_envelope, "written_artifact"
+    return None, None
 
 _MEMORY_READ_TOOLS = frozenset({"Read"})
 _MEMORY_WRITE_TOOLS = frozenset({"Write", "Edit"})
@@ -211,11 +355,13 @@ class RunTrace(BaseModel):
     backtrack_count: int = 0
     final_text_snippet: str = ""
     had_crash: bool = False
-    # R1 (D6): structured node_status/delivery_status envelope parsed from the
-    # FULL final assistant text (untruncated) — the single classification
-    # channel for delivery-workflow nodes. None when the agent emitted no
-    # (valid) fence. final_text_snippet above stays a UI nicety and is never
-    # load-bearing for classification.
+    # R1 (D6): structured node_status/delivery_status envelope selected by
+    # parse_node_status_from_events (turn-tolerant with quoted-example and
+    # sidechain guards: final turn, else a fence ENDING an earlier main-thread
+    # turn, else a self-referencing fence ENDING Write tool content) — the
+    # single classification channel for delivery-workflow nodes. None when
+    # the agent emitted no (valid) fence. final_text_snippet above stays a UI
+    # nicety and is never load-bearing for classification.
     node_status: dict[str, Any] | None = None
     # Memory tracking
     memory_injected: list[str] = Field(default_factory=list)
@@ -362,9 +508,11 @@ def extract_run_trace(
 
     # Final text: FULL text of the last non-empty assistant turn ("last
     # non-empty wins" — the previous inline tracking overwrote with EMPTY when
-    # the last turn was tool-only, R1 latent-bug fix). The node_status envelope
-    # is parsed from this untruncated text so a fence after long prose is never
-    # lost to snippet truncation (D6).
+    # the last turn was tool-only, R1 latent-bug fix). UI snippet only — the
+    # node_status envelope is selected turn-tolerantly from the whole event
+    # stream by parse_node_status_from_events, so a fence emitted in an
+    # earlier turn (or at the tail of a Written artifact) survives trailing
+    # housekeeping turns and snippet truncation (D6).
     final_text = final_assistant_text(raw_events)
 
     # ---------------------------------------------------------------------------
@@ -452,7 +600,7 @@ def extract_run_trace(
         backtrack_count=backtrack_count,
         final_text_snippet=_truncate(final_text, 2000),
         had_crash=had_crash,
-        node_status=parse_node_status_fence(final_text),
+        node_status=parse_node_status_from_events(raw_events)[0],
         memory_injected=memory_injected or [],
         memory_used=mem_used,
         memory_written=mem_written,

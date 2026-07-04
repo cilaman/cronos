@@ -5,10 +5,11 @@ mapping while the pipeline node status came separately from fence parsing —
 the board could show the child DONE while the node read failed, or vice
 versa.  R1 derives both from the SAME parsed envelope:
 
-* ``run_delivery_child`` parses the envelope with the exact pair the trace
-  parser uses (``parse_node_status_fence(final_assistant_text(raw_events))``,
-  == ``trace.node_status``) and passes the mapped state to ``finalize_child``
-  as an override.
+* ``run_delivery_child`` parses the envelope with the exact selector the
+  trace parser uses (``parse_node_status_from_events(raw_events)``, ==
+  ``trace.node_status`` — turn-tolerant: any assistant turn, else a trailing
+  fence in Write tool content) and passes the mapped state to
+  ``finalize_child`` as an override.
 * Infra failures (spawn exception, missing result, user stop, crash) still
   force WAITING, and the loaded trace is suppressed for the adapter so a
   stale/crashed trace can never credit the node while the board says WAITING.
@@ -352,6 +353,54 @@ async def test_missing_fence_passes_waiting_override():
     kwargs = finalizer.finalize_child.await_args.kwargs
     assert kwargs["state_override"] == TaskState.WAITING
     assert "no node_status fence" in kwargs["waiting_question_override"]
+
+
+@pytest.mark.asyncio
+async def test_trailing_write_fence_passes_done_override():
+    """Turn-tolerant transport: no chat fence anywhere, but the agent Wrote
+    its artifact ending with a done fence, then closed with prose — the child
+    ends DONE, not WAITING (the production failure shape)."""
+    env = {
+        "status": "done",
+        "artifact_paths": ["frontend-report.md"],
+        "produces": "review",
+        "fields": {},
+        "open_questions": [],
+    }
+    events = [
+        {
+            "type": "assistant",
+            "message": {
+                "usage": {},
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "id": "tu-w",
+                        "name": "Write",
+                        "input": {
+                            "file_path": "frontend-report.md",
+                            "content": (
+                                "# Report\n\nfindings...\n\n"
+                                f"```node_status\n{json.dumps(env)}\n```\n"
+                            ),
+                        },
+                    }
+                ],
+            },
+        },
+        {
+            "type": "assistant",
+            "message": {
+                "usage": {},
+                "content": [{"type": "text", "text": "prose summary, no fence"}],
+            },
+        },
+    ]
+    ex, finalizer, _ = _make_executor()
+    await _run(ex, _agent_result(raw_events=events))
+    kwargs = finalizer.finalize_child.await_args.kwargs
+    assert kwargs["state_override"] == TaskState.DONE
+    assert kwargs["waiting_question_override"] is None
 
 
 @pytest.mark.asyncio

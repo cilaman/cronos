@@ -23,7 +23,7 @@ from .event_bus import EventBus
 from .logging_config import bind_run_context
 from .models import AiToolEntry, TaskState
 from .storage import InvalidTransition, TaskStore, USER_TRANSITIONS
-from .trace_parser import final_assistant_text, parse_node_status_fence
+from .trace_parser import parse_node_status_from_events
 
 from typing import TYPE_CHECKING, Any
 
@@ -1715,16 +1715,14 @@ class RunExecutor:
         # R1/D13: derive the delivery child's Kanban state from the SAME
         # node_status envelope that classifies the pipeline node.  The envelope
         # below is byte-identical to the ``trace.node_status`` the adapter
-        # reads (same selection: parse_node_status_fence(final_assistant_text)),
+        # reads (same selection: parse_node_status_from_events, turn-tolerant),
         # so the board and the workflow node can no longer contradict each
         # other.  Infra failures (spawn exception, missing result, user stop,
         # crash) still force WAITING — enforced inside finalize_child.
         state_override: TaskState | None = None
         waiting_override: str | None = None
         if run_exception is None and child_result is not None:
-            envelope = parse_node_status_fence(
-                final_assistant_text(child_result.raw_events)
-            )
+            envelope, _ = parse_node_status_from_events(child_result.raw_events)
             # child_result.context is the agent's own STATUS summary — on a
             # no-fence run it carries the question the child actually asked.
             state_override, waiting_override = _delivery_child_state_from_envelope(

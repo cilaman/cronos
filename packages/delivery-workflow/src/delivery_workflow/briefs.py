@@ -51,14 +51,23 @@ def load_agent_definition(agent_ref: str) -> str | None:
 
 
 def return_contract(produces: str | None) -> str:
-    """Return the ``## Return contract`` brief section for *produces*."""
+    """Return the ``## Return contract`` brief section for *produces*.
+
+    The example fence is deliberately NOT valid JSON (unquoted ``<status>``
+    placeholder): agents echo the contract verbatim in planning turns, and
+    turn-tolerant transports must never credit the echo as the run's real
+    envelope.
+    """
     lines = [
         "## Return contract",
-        "When finished, print exactly one fenced node_status block as the",
-        "LAST thing in your output:",
+        "When finished, print exactly one fenced node_status block in your",
+        "REPLY TEXT (the chat message) — a fence only inside an artifact file",
+        "you wrote does NOT count (ending the artifact with it too is fine).",
+        "Emit it AFTER all other steps, memory writes and housekeeping",
+        "included — the last thing you output before ending the turn:",
         "",
         "```node_status",
-        '{"status": "done", "artifact_paths": [], '
+        '{"status": <status>, "artifact_paths": [], '
         f'"produces": "{produces or ""}", "fields": {{}}, "open_questions": []}}',
         "```",
         "",

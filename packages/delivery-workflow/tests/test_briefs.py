@@ -24,6 +24,7 @@ from delivery_workflow.briefs import (
     return_contract,
     upstream_scope_section,
 )
+from delivery_workflow.lib.node_status import parse_node_status
 from delivery_workflow.local_executor import compose_brief
 from delivery_workflow.results import AGENT_STATUS_VOCAB
 
@@ -102,6 +103,25 @@ class TestReturnContract:
             'use status "blocked" and put the question in open_questions'
             in text
         )
+
+    def test_contract_demands_fence_in_reply_text_after_housekeeping(self):
+        """The reply text is the classified surface — a fence only at the
+        tail of a written artifact must not read as satisfying the contract,
+        and housekeeping turns must not displace it."""
+        text = return_contract("analysis")
+        assert "REPLY" in text and "chat message" in text
+        assert "only inside an artifact file" in text
+        assert "does NOT count" in text
+        assert "AFTER all other steps" in text
+        assert "memory writes and housekeeping" in text
+
+    def test_contract_example_fence_is_deliberately_unparseable(self):
+        """Echo-safety: agents restate the contract verbatim in planning
+        turns, and turn-tolerant transports scan every turn — the shipped
+        example must never parse as a genuine envelope."""
+        text = return_contract("analysis")
+        assert "```node_status" in text
+        assert parse_node_status(text) is None
 
 
 class TestUpstreamScopeSection:

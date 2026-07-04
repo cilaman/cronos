@@ -127,14 +127,18 @@ STATUS_CONTRACT = (
     + _CRONOS_FINISH
 )
 
+# The example fence below is deliberately NOT valid JSON (unquoted <status>
+# placeholder): agents echo this contract verbatim in planning turns, and a
+# parseable echo could be credited as the run's real envelope by the
+# turn-tolerant transport (trace_parser.parse_node_status_from_events).
 _DELIVERY_FINISH = """## How to finish a delivery node
 
 You are executing ONE node of a delivery workflow. Your completion signal is a
-fenced `node_status` JSON block emitted as the LAST thing in your final
-message, exactly once:
+fenced `node_status` JSON block printed in your REPLY TEXT (the chat message),
+exactly once:
 
 ```node_status
-{"status": "done", "artifact_paths": [], "produces": "<artifact class>", "fields": {}, "open_questions": []}
+{"status": <status>, "artifact_paths": [], "produces": "<artifact class>", "fields": {}, "open_questions": []}
 ```
 
 `status` MUST be one of:
@@ -147,8 +151,11 @@ Rules:
 - List every file you created or modified in `artifact_paths`.
 - Do NOT invoke /task-finalize and do NOT emit a `cronos_status` block — the
   `node_status` fence replaces both for this task.
-- The fence must appear after all tool calls are done, only once, not wrapped
-  in additional markdown formatting.
+- The fence must be in your reply text — a fence only inside an artifact file
+  you wrote does NOT count (though ending the artifact with it too is fine).
+- Emit the fence AFTER all other steps, including any memory writes or
+  housekeeping — the last thing you output before ending the turn, only once,
+  not wrapped in additional markdown formatting.
 """
 
 DELIVERY_NODE_CONTRACT = (
